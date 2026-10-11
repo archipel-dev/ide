@@ -52,8 +52,6 @@ mod layout {
     pub const TREE_MAIN_RS: Point = (150, 161);
     /// "Rename…" in the tree context menu opened on `TREE_MAIN_RS`.
     pub const TREE_MENU_RENAME: Point = (210, 413);
-    /// The Rename dialog's field (1440×900).
-    pub const RENAME_FIELD: Point = (720, 440);
     pub const PROJECT_HIDE_BUTTON: Point = (293, 58);
     pub const PROJECT_STRIPE_BUTTON: Point = (19, 62);
     pub const FIRST_TAB_CLOSE: Point = (419, 61);

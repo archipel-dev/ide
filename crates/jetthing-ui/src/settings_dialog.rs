@@ -549,18 +549,21 @@ fn page(
             ui.label(RichText::new("For current project").color(theme::TEXT_INFO));
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let forward = ui.add_enabled(
-                !dialog.forward.is_empty(),
-                crate::widgets::menu_button(egui::Button::new("→")),
+            let forward = ui.add(
+                archipel_kit::components::IconButton::new(
+                    archipel_kit::Glyph::ArrowRight,
+                    "Forward",
+                )
+                .enabled(!dialog.forward.is_empty()),
             );
-            let back = ui.add_enabled(
-                !dialog.back.is_empty(),
-                crate::widgets::menu_button(egui::Button::new("←")),
+            let back = ui.add(
+                archipel_kit::components::IconButton::new(archipel_kit::Glyph::ArrowLeft, "Back")
+                    .enabled(!dialog.back.is_empty()),
             );
-            if forward.on_hover_text("Forward").clicked() {
+            if forward.clicked() {
                 dialog.navigate(false);
             }
-            if back.on_hover_text("Back").clicked() {
+            if back.clicked() {
                 dialog.navigate(true);
             }
             let page_modified = registry

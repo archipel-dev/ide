@@ -2,19 +2,26 @@
 
 use crate::icons::{self, Icon};
 use crate::theme;
+use archipel_kit::behaviour::{Behaviour, Behaviours};
+use archipel_kit::components::{ListRow, MenuItem};
+use archipel_kit::parts::{State, Surface, Tone, row_pill};
+use archipel_kit::tokens::size;
+use archipel_kit::{Theme, cursor};
 use eframe::egui::{self, Color32, Rect, Sense, vec2};
 
-/// Rounded "island" container used for the editor and docked tool windows.
-pub fn island_frame() -> egui::Frame {
-    egui::Frame::new()
-        .fill(*theme::ISLAND)
-        .corner_radius(theme::ISLAND_RADIUS)
+/// Rounded "island" container used for the editor and docked tool windows: the kit's
+/// island surface without its inner padding (rows inset themselves), with the gap between
+/// islands as outer margin.
+pub fn island_frame(ctx: &egui::Context) -> egui::Frame {
+    Surface::Island
+        .frame(ctx)
+        .inner_margin(egui::Margin::ZERO)
         .outer_margin(egui::Margin::same(theme::ISLAND_GAP as i8))
 }
 
-/// Flat frame for chrome areas (toolbar, stripes, status bar).
-pub fn chrome_frame() -> egui::Frame {
-    egui::Frame::new().fill(*theme::FRAME)
+/// Flat frame for chrome areas (toolbar, stripes, status bar): the window frame color.
+pub fn chrome_frame(ctx: &egui::Context) -> egui::Frame {
+    egui::Frame::new().fill(Theme::colors(ctx).frame)
 }
 
 /// Like [`chrome_frame`] without a fill: the window clears to the frame color, so
@@ -58,24 +65,17 @@ pub fn tool_window_header(
     hide
 }
 
-/// Full-width list row with hover/selection painting.
+/// Full-width list row with hover/selection painting, for callers that paint the
+/// content themselves ([`row_text`]). Rows keep the arrow cursor (the kit's rule: rows
+/// select, buttons act). Prefer the kit's `ListRow` where its content model fits.
 pub fn list_row(ui: &mut egui::Ui, selected: bool) -> (Rect, egui::Response) {
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), ROW_HEIGHT), Sense::click());
-    keep_arrow_cursor(ui.ctx(), response.id);
-    let fill = if selected {
-        *theme::SELECTION
-    } else if response.hovered() {
-        *theme::HOVER
-    } else {
-        Color32::TRANSPARENT
-    };
-    if fill != Color32::TRANSPARENT {
-        ui.painter().rect_filled(
-            rect.shrink2(vec2(theme::layout::ROW_PILL_INSET, 0.0)),
-            theme::layout::ROW_PILL_RADIUS,
-            fill,
-        );
+    cursor::on_hover(&response, egui::CursorIcon::Default);
+    if ui.is_rect_visible(rect) {
+        let colors = Theme::colors(ui.ctx());
+        let state = State::of(&response).selected(selected);
+        row_pill(ui.painter(), rect, state.row_fill(&colors));
     }
     (rect, response)
 }
@@ -147,14 +147,11 @@ pub fn flat_widget(
     let chevron_width = if chevron { 18.0 } else { 0.0 };
     let width = 8.0 + icon_width + galley.size().x + chevron_width + 8.0;
     let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::click());
-    let fill = if response.is_pointer_button_down_on() {
-        *theme::PRESSED
-    } else if response.hovered() {
-        *theme::HOVER
-    } else {
-        Color32::TRANSPARENT
-    };
-    ui.painter().rect_filled(rect, 6.0, fill);
+    cursor::on_hover_action(&response);
+    let colors = Theme::colors(ui.ctx());
+    let fill = State::of(&response).flat_fill(&colors);
+    ui.painter()
+        .rect_filled(rect, archipel_kit::tokens::radius::ICON_BUTTON, fill);
     let mut x = rect.left() + 8.0;
     if let Some((icon, icon_color)) = icon {
         icons::paint(
@@ -173,13 +170,16 @@ pub fn flat_widget(
             ui.painter(),
             Rect::from_min_size(egui::pos2(x + 2.0, rect.center().y - 7.0), vec2(14.0, 14.0)),
             Icon::ChevronDown,
-            *theme::TEXT_SECONDARY,
+            colors.text_secondary,
         );
     }
     response
 }
 
-/// Single-line search/input field in the reference look.
+/// Single-line search/input field. It has the look of the kit's `TextField::search`
+/// (field surface, focus outline, placeholder color, 28 pt height) but keeps `id` on the
+/// text edit, because tool windows move keyboard focus by id (the kit's `TextField` has no
+/// id yet).
 pub fn search_field(
     ui: &mut egui::Ui,
     id: egui::Id,
@@ -187,21 +187,23 @@ pub fn search_field(
     hint: &str,
     width: f32,
 ) -> egui::Response {
-    let frame = egui::Frame::new()
-        .fill(*theme::FIELD)
-        .stroke(egui::Stroke::new(1.0_f32, theme::BORDER))
-        .corner_radius(4)
-        .inner_margin(egui::Margin::symmetric(6, 2));
-    frame
+    let ctx = ui.ctx().clone();
+    let colors = Theme::colors(&ctx);
+    let focused = ui.memory(|memory| memory.has_focus(id));
+    Surface::Field
+        .frame(&ctx)
+        .stroke(Surface::field_stroke(&ctx, focused, false))
         .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                icons::show(ui, Icon::Search, 14.0, *theme::TEXT_SECONDARY);
+            ui.set_min_height(size::CONTROL_HEIGHT - 2.0);
+            ui.horizontal_centered(|ui| {
+                icons::show(ui, Icon::Search, size::ICON, colors.text_placeholder);
                 ui.add(
                     egui::TextEdit::singleline(text)
                         .id(id)
                         .frame(false)
                         .desired_width(width)
-                        .hint_text(hint),
+                        .margin(vec2(0.0, 0.0))
+                        .hint_text(egui::RichText::new(hint).color(colors.text_placeholder)),
                 )
             })
             .inner
@@ -253,6 +255,10 @@ pub fn icon_label(
 
 /// What [`tree_row`] draws. Every tree and list in a tool window goes through it
 /// so rows share one inset, indent step, chevron column and icon alignment.
+///
+/// Rows are the kit's `ListRow`. A row that needs something the kit's row does not have
+/// yet (a checkbox slot, a custom icon painter) is drawn by the same parts with the same
+/// geometry, so mixed lists stay aligned; see `docs/ui-migration.md`.
 /// Paints a custom icon (badge) into the 16px icon slot of a [`TreeRow`].
 pub type IconPainter<'a> = &'a dyn Fn(&egui::Painter, Rect);
 
@@ -267,16 +273,35 @@ pub struct TreeRow<'a> {
     pub reserve: f32,
     /// Keeps the icon column empty so text lines up with sibling rows that have icons.
     pub reserve_icon: bool,
+    /// Icon and its color; the color picks the kit tone with the same value (icon gray by
+    /// default).
     pub icon: Option<(Icon, Color32)>,
     /// Custom icon painter (badges) in place of `icon`; gets the 16px icon rect.
     pub paint_icon: Option<IconPainter<'a>>,
     pub text: &'a str,
+    /// Used by rows drawn by hand; the kit's row uses its own label font.
     pub font: egui::FontId,
+    /// Label color; picks the kit tone with the same value (see `tone`).
     pub color: Color32,
+    /// Label tone, taking precedence over `color`.
+    pub tone: Option<Tone>,
     pub secondary: Option<(&'a str, Color32)>,
+    /// Tooltips, context menus, drag and drop: attached to the row's response.
+    pub behaviours: Behaviours<'a>,
+    /// Use the kit's expander: the chevron is its own button ("Expand name"), and a click
+    /// on it, a double-click or Left/Right on a focused row reports [`TreeRowOut::toggled`]
+    /// instead of a click on the row. Off by default so rows that test
+    /// [`TreeRowOut::on_chevron`] keep working until their area migrates.
+    pub kit_expander: bool,
 }
 
 impl<'a> TreeRow<'a> {
+    /// Adds a kit behaviour (`ContextMenu`, `DragSource`, `DropTarget`, `Tooltip` …).
+    pub fn with(mut self, behaviour: impl Behaviour + 'a) -> Self {
+        self.behaviours.push(behaviour);
+        self
+    }
+
     pub fn new(text: &'a str) -> Self {
         Self {
             depth: 0,
@@ -290,7 +315,10 @@ impl<'a> TreeRow<'a> {
             text,
             font: egui::FontId::proportional(theme::UI_FONT_SIZE),
             color: *theme::TEXT,
+            tone: None,
             secondary: None,
+            behaviours: Behaviours::default(),
+            kit_expander: false,
         }
     }
 }
@@ -307,6 +335,8 @@ pub struct TreeRowOut {
     /// End of the primary text (before any secondary text).
     pub text_end: f32,
     pub elided: bool,
+    /// The kit's expander asked to flip the node (see [`TreeRow::kit_expander`]).
+    pub toggled: bool,
 }
 
 impl TreeRowOut {
@@ -318,20 +348,82 @@ impl TreeRowOut {
     }
 }
 
+/// The kit tone whose color in the active theme is `color`, or `fallback`.
+pub fn tone_of(ctx: &egui::Context, color: Color32, fallback: Tone) -> Tone {
+    let colors = Theme::colors(ctx);
+    Tone::ALL
+        .into_iter()
+        .find(|tone| tone.color(&colors) == color)
+        .unwrap_or(fallback)
+}
+
+/// Gap between the chevron column and the content of a kit row.
+const CHEVRON_GAP: f32 = 2.0;
+
 /// Paints a row with the shared tree geometry; see [`TreeRow`].
 pub fn tree_row(ui: &mut egui::Ui, spec: TreeRow<'_>) -> TreeRowOut {
-    let (rect, response) = list_row(ui, spec.selected);
+    let ctx = ui.ctx().clone();
+    let colors = Theme::colors(&ctx);
     if let (false, Some(tint)) = (spec.selected, spec.tint) {
-        ui.painter().rect_filled(
-            rect.shrink2(vec2(theme::layout::ROW_PILL_INSET, 0.0)),
-            theme::layout::ROW_PILL_RADIUS,
-            tint,
-        );
+        // Under the row: the kit row paints on top and an opaque selection hides it.
+        let below = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), ROW_HEIGHT));
+        row_pill(ui.painter(), below, tint);
     }
+    let label_tone = spec
+        .tone
+        .unwrap_or_else(|| tone_of(&ctx, spec.color, Tone::Default));
+    let custom = spec.paint_icon.is_some() || spec.reserve > 0.0 || spec.reserve_icon;
+    let has_icon = spec.icon.is_some() || spec.paint_icon.is_some();
+    let behaviours = spec.behaviours;
+    let mut toggled = false;
+    let response = if custom {
+        let (rect, response) = list_row(ui, spec.selected);
+        response.widget_info(|| {
+            egui::WidgetInfo::selected(
+                egui::WidgetType::SelectableLabel,
+                true,
+                spec.selected,
+                spec.text,
+            )
+        });
+        let _ = rect;
+        behaviours.attach(ui, response)
+    } else {
+        let mut row = ListRow::new(spec.text)
+            .depth(spec.depth)
+            .expanded(spec.expanded.filter(|_| spec.kit_expander))
+            .selected(spec.selected)
+            .label_tone(label_tone);
+        if let Some((icon, color)) = spec.icon {
+            row = row.icon(icon).icon_tone(tone_of(&ctx, color, Tone::Icon));
+        }
+        if let Some((secondary, _)) = spec.secondary {
+            row = row.secondary(secondary);
+        }
+        let shown = row
+            .with(move |ui: &mut egui::Ui, response: egui::Response| {
+                behaviours.attach(ui, response)
+            })
+            .show(ui);
+        toggled = shown.toggled;
+        shown.response
+    };
+    let rect = response.rect;
     let cy = rect.center().y;
-    let mut x = rect.left() + theme::layout::indent(spec.depth);
-    let chevron = icon_rect(x, cy);
-    if let Some(expanded) = spec.expanded {
+    let chevron = Rect::from_min_size(
+        egui::pos2(
+            rect.left() + size::indent(spec.depth) - size::ROW_PILL_INSET,
+            cy - size::CHEVRON_COLUMN / 2.0,
+        ),
+        vec2(size::CHEVRON_COLUMN, size::CHEVRON_COLUMN),
+    );
+    let mut x = chevron.right() + CHEVRON_GAP;
+    let reserved = Rect::from_min_size(egui::pos2(x, cy - 7.0), vec2(spec.reserve, 14.0));
+    if spec.reserve > 0.0 {
+        x += spec.reserve + size::ICON_TEXT_GAP;
+    }
+    let icon = icon_rect(x, cy);
+    if let (Some(expanded), true) = (spec.expanded, custom || !spec.kit_expander) {
         icons::paint(
             ui.painter(),
             chevron,
@@ -340,36 +432,45 @@ pub fn tree_row(ui: &mut egui::Ui, spec: TreeRow<'_>) -> TreeRowOut {
             } else {
                 Icon::ChevronRight
             },
-            theme::TEXT_SECONDARY,
+            colors.text_secondary,
         );
     }
-    x += theme::layout::CHEVRON_COLUMN;
-    let reserved = Rect::from_min_size(egui::pos2(x, cy - 7.0), vec2(spec.reserve, 14.0));
-    if spec.reserve > 0.0 {
-        x += spec.reserve + theme::layout::ICON_TEXT_GAP;
+    if custom {
+        if let Some(paint) = spec.paint_icon {
+            paint(ui.painter(), icon);
+        } else if let Some((glyph, color)) = spec.icon {
+            icons::paint(ui.painter(), icon, glyph, color);
+        }
     }
-    let icon = icon_rect(x, cy);
-    if let Some(paint) = spec.paint_icon {
-        paint(ui.painter(), icon);
-    } else if let Some((glyph, color)) = spec.icon {
-        icons::paint(ui.painter(), icon, glyph, color);
-    }
-    if spec.reserve_icon || spec.icon.is_some() || spec.paint_icon.is_some() {
-        x += theme::layout::ICON_SIZE + theme::layout::ICON_TEXT_GAP;
+    if spec.reserve_icon || has_icon {
+        x += size::ICON + size::ICON_TEXT_GAP;
     }
     let text_start = x;
-    let (text_end, elided) =
-        row_text_elided(ui, rect, text_start, spec.text, spec.font, spec.color);
-    if let Some((secondary, color)) = spec.secondary {
-        row_text(
-            ui,
-            rect,
-            text_end + theme::layout::SECONDARY_GAP,
-            secondary,
-            egui::FontId::proportional(theme::UI_FONT_SIZE),
-            color,
-        );
-    }
+    let (text_end, elided) = if custom {
+        let (end, elided) = row_text_elided(ui, rect, text_start, spec.text, spec.font, spec.color);
+        if let Some((secondary, color)) = spec.secondary {
+            row_text(
+                ui,
+                rect,
+                end + size::SECONDARY_GAP,
+                secondary,
+                egui::FontId::proportional(theme::UI_FONT_SIZE),
+                color,
+            );
+        }
+        (end, elided)
+    } else {
+        let width = ui
+            .painter()
+            .layout_no_wrap(
+                spec.text.to_owned(),
+                egui::FontId::proportional(theme::UI_FONT_SIZE),
+                Color32::WHITE,
+            )
+            .size()
+            .x;
+        (text_start + width, text_start + width > rect.right() - 6.0)
+    };
     TreeRowOut {
         rect,
         response,
@@ -379,6 +480,7 @@ pub fn tree_row(ui: &mut egui::Ui, spec: TreeRow<'_>) -> TreeRowOut {
         text_start,
         text_end,
         elided,
+        toggled,
     }
 }
 
@@ -426,52 +528,10 @@ pub fn busy_spinner(ui: &mut egui::Ui, size: f32, color: Color32) {
         .request_repaint_after(std::time::Duration::from_secs_f64(STEP_SECONDS));
 }
 
-/// A borderless menu-style button (popup and dropdown entries) that still shows
-/// the hover and pressed fill; `Button::frame(false)` would paint nothing.
-pub fn menu_button(button: egui::Button<'_>) -> egui::Button<'_> {
-    button
-        .frame(true)
-        .frame_when_inactive(false)
-        .stroke(egui::Stroke::NONE)
-}
-
-fn arrow_cursor_ids() -> egui::Id {
-    egui::Id::new("widgets_arrow_cursor_ids")
-}
-
-/// Marks a clickable widget (list or tree row, tab) that keeps the arrow cursor
-/// on hover instead of the pointing hand buttons get.
-pub fn keep_arrow_cursor(ctx: &egui::Context, id: egui::Id) {
-    ctx.data_mut(|data| {
-        data.get_temp_mut_or_default::<Vec<egui::Id>>(arrow_cursor_ids())
-            .push(id);
-    });
-}
-
-/// Shows the pointing hand over hovered, enabled click-only widgets (buttons,
-/// links, icon buttons). Runs once at the end of the frame; widgets that set
-/// their own cursor, drag targets and rows marked with [`keep_arrow_cursor`]
-/// keep theirs.
-pub fn apply_pointer_cursor(ctx: &egui::Context) {
-    let arrow_ids = ctx.data_mut(|data| {
-        data.remove_temp::<Vec<egui::Id>>(arrow_cursor_ids())
-            .unwrap_or_default()
-    });
-    if ctx.output(|output| output.cursor_icon) != egui::CursorIcon::Default
-        || ctx.dragged_id().is_some()
-    {
-        return;
-    }
-    let hovered = ctx.interaction_snapshot(|snapshot| snapshot.hovered.clone());
-    let clickable = hovered.iter().any(|id| {
-        !arrow_ids.contains(id)
-            && ctx.read_response(*id).is_some_and(|response| {
-                response.enabled() && response.sense.senses_click() && !response.sense.senses_drag()
-            })
-    });
-    if clickable {
-        ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
-    }
+/// A menu or popup entry: the kit's `MenuItem` (selection-colored hover, arrow cursor,
+/// icon column). Add it with `ui.add(menu_item("Open"))`.
+pub fn menu_item(label: impl Into<String>) -> MenuItem {
+    MenuItem::new(label)
 }
 
 #[cfg(test)]
@@ -509,6 +569,7 @@ mod tests {
     /// previous frame) and returns the cursor of the second one.
     fn cursor_over(pointer: egui::Pos2, add: impl Fn(&mut egui::Ui)) -> egui::CursorIcon {
         let ctx = egui::Context::default();
+        crate::theme::install(&ctx);
         let input = || egui::RawInput {
             screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(400.0, 300.0))),
             events: vec![egui::Event::PointerMoved(pointer)],
@@ -518,7 +579,6 @@ mod tests {
         for _ in 0..2 {
             let output = ctx.run(input(), |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| add(ui));
-                apply_pointer_cursor(ctx);
             });
             cursor = output.platform_output.cursor_icon;
         }
@@ -596,33 +656,65 @@ mod tests {
         assert_eq!(first.rect.left(), second.rect.left());
         assert_eq!(first.icon.left(), second.icon.left());
         assert_eq!(first.rect.height(), theme::layout::ROW_HEIGHT);
+        assert_eq!(second.rect.height(), theme::layout::ROW_HEIGHT);
         // One indent step per depth, icon centred on the row.
-        assert_eq!(
-            nested.icon.left() - second.icon.left(),
-            theme::layout::TREE_INDENT
-        );
+        assert_eq!(nested.icon.left() - second.icon.left(), size::TREE_INDENT);
         assert_eq!(first.icon.center().y, first.rect.center().y);
+        // The kit's row: the chevron column starts one pill inset left of the indent, and
+        // the content follows it after a 2 pt gap.
         assert_eq!(
             first.icon.left() - first.rect.left(),
-            theme::layout::CONTENT_INSET + theme::layout::CHEVRON_COLUMN
+            theme::layout::CONTENT_INSET - size::ROW_PILL_INSET
+                + size::CHEVRON_COLUMN
+                + CHEVRON_GAP
         );
     }
 
     #[test]
-    fn buttons_show_the_pointing_hand_and_rows_keep_the_arrow() {
+    fn kit_buttons_show_the_pointing_hand_and_rows_keep_the_arrow() {
         let over_button = cursor_over(egui::pos2(20.0, 15.0), |ui| {
-            ui.add_sized(vec2(120.0, 30.0), egui::Button::new("Create"));
+            icons::button(ui, Icon::Refresh, "Refresh");
         });
         assert_eq!(over_button, egui::CursorIcon::PointingHand);
         let over_row = cursor_over(egui::pos2(20.0, 12.0), |ui| {
             list_row(ui, false);
         });
         assert_eq!(over_row, egui::CursorIcon::Default);
-        let over_disabled = cursor_over(egui::pos2(20.0, 15.0), |ui| {
-            ui.add_enabled_ui(false, |ui| {
-                ui.add_sized(vec2(120.0, 30.0), egui::Button::new("Create"));
-            });
+        let over_tree_row = cursor_over(egui::pos2(60.0, 12.0), |ui| {
+            tree_row(ui, TreeRow::new("name"));
         });
-        assert_eq!(over_disabled, egui::CursorIcon::Default);
+        assert_eq!(over_tree_row, egui::CursorIcon::Default);
+        let over_flat_widget = cursor_over(egui::pos2(20.0, 12.0), |ui| {
+            flat_widget(
+                ui,
+                None,
+                "main",
+                egui::FontId::proportional(13.0),
+                Color32::WHITE,
+                false,
+                24.0,
+            );
+        });
+        assert_eq!(over_flat_widget, egui::CursorIcon::PointingHand);
+    }
+
+    #[test]
+    fn tree_rows_pick_the_kit_tone_of_their_color() {
+        let ctx = egui::Context::default();
+        crate::theme::install(&ctx);
+        let colors = Theme::colors(&ctx);
+        // Tones that share a color (modified files and links) are interchangeable: the
+        // tone found draws the same color.
+        let found = tone_of(&ctx, colors.vcs_modified, Tone::Default);
+        assert_eq!(found.color(&colors), colors.vcs_modified);
+        assert_ne!(found, Tone::Default);
+        assert_eq!(
+            tone_of(&ctx, colors.text_strong, Tone::Default),
+            Tone::Strong
+        );
+        assert_eq!(
+            tone_of(&ctx, Color32::from_rgb(1, 2, 3), Tone::Icon),
+            Tone::Icon
+        );
     }
 }

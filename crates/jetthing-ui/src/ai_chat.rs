@@ -89,7 +89,7 @@ pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
         .min_width(280.0)
         .resizable(true)
         .show_separator_line(false)
-        .frame(island_frame())
+        .frame(island_frame(ctx))
         .show(ctx, |ui| {
             let enabled = app.state.ai.is_enabled();
             let has_turns = !app.state.ai.chat.turns.is_empty();

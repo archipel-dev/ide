@@ -62,39 +62,30 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_min_width(280.0);
                 let running = app.state.runner.is_running();
-                let run = ui.add_enabled(
-                    !running,
-                    crate::widgets::menu_button(egui::Button::new(format!("▶  {}", mark.label)))
-                        .shortcut_text(app.action_shortcut("RunClass").unwrap_or_default())
-                        .min_size(vec2(270.0, 24.0)),
+                let run = ui.add(
+                    crate::widgets::menu_item(mark.label.clone())
+                        .icon(Icon::Run)
+                        .shortcut(app.action_shortcut("RunClass").unwrap_or_default())
+                        .enabled(!running),
                 );
                 if run.clicked() {
                     action = Some(false);
                 }
-                let debug = ui.add_enabled(
-                    !app.state.is_debugging() && !running,
-                    crate::widgets::menu_button(egui::Button::new(format!("     Debug {target}")))
-                        .shortcut_text(keys::display("⌃D"))
-                        .min_size(vec2(270.0, 24.0)),
+                let debug = ui.add(
+                    crate::widgets::menu_item(format!("Debug {target}"))
+                        .icon(Icon::Debug)
+                        .shortcut(keys::display("⌃D"))
+                        .enabled(!app.state.is_debugging() && !running),
                 );
                 if debug.clicked() {
                     debug_action = true;
                 }
-                ui.add_enabled(
-                    false,
-                    crate::widgets::menu_button(egui::Button::new(format!(
-                        "     Run {target} with Coverage"
-                    )))
-                    .min_size(vec2(270.0, 24.0)),
+                ui.add(
+                    crate::widgets::menu_item(format!("Run {target} with Coverage")).enabled(false),
                 )
                 .on_disabled_hover_text("Code coverage is not available yet (IJ-RUN-069)");
                 if ui
-                    .add(
-                        crate::widgets::menu_button(egui::Button::new(
-                            "     Modify Run Configuration…",
-                        ))
-                        .min_size(vec2(270.0, 24.0)),
-                    )
+                    .add(crate::widgets::menu_item("Modify Run Configuration…"))
                     .clicked()
                 {
                     action = Some(true);

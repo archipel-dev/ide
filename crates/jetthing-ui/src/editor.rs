@@ -74,7 +74,7 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
     let mut hover = None;
     let caret_before = app.state.active_caret();
     egui::CentralPanel::default()
-        .frame(island_frame())
+        .frame(island_frame(ctx))
         .show(ctx, |ui| {
             let mut body = |app: &mut IdeApp, ui: &mut egui::Ui, strip: Option<&TabStrip>| {
                 let primary = strip.is_none_or(|strip| strip.primary);

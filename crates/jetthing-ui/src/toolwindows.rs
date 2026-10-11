@@ -4,6 +4,9 @@ use crate::icons::{self, Icon};
 use crate::popups::Dialog;
 use crate::widgets::{self, island_frame, tool_window_header};
 use crate::{IdeApp, theme};
+use archipel_kit::Tone;
+use archipel_kit::behaviour::{ContextMenu, DragSource, DropTarget};
+use archipel_kit::components::MenuItem;
 use eframe::egui::{self, Color32, Rect, RichText, vec2};
 use jetthing_core::project_view::{RowKind, TreeRow};
 use jetthing_core::{Anchor, ToolWindow};
@@ -29,7 +32,7 @@ pub fn left(app: &mut IdeApp, ctx: &egui::Context) {
         .min_width(160.0)
         .resizable(true)
         .show_separator_line(false)
-        .frame(island_frame())
+        .frame(island_frame(ctx))
         .show(ctx, |ui| {
             let android = window == ToolWindow::Project && app.state.android.project.is_some();
             let hide = if android {
@@ -88,7 +91,7 @@ pub fn bottom(app: &mut IdeApp, ctx: &egui::Context) {
         .min_height(jetthing_core::BOTTOM_MIN_HEIGHT)
         .resizable(true)
         .show_separator_line(false)
-        .frame(island_frame())
+        .frame(island_frame(ctx))
         .show(ctx, |ui| {
             ui.set_min_height(ui.available_height());
             match window {
@@ -139,6 +142,30 @@ pub fn change_color(kind: Option<ChangeKind>) -> Color32 {
     }
 }
 
+/// The kit tone of a file's version-control status (what [`change_color`] shows).
+fn change_tone(kind: Option<ChangeKind>) -> Tone {
+    match kind {
+        Some(ChangeKind::Modified | ChangeKind::Renamed) => Tone::Modified,
+        Some(ChangeKind::Added) => Tone::Added,
+        Some(ChangeKind::Untracked) => Tone::Untracked,
+        Some(ChangeKind::Deleted) => Tone::Ignored,
+        Some(ChangeKind::Conflicted) => Tone::Error,
+        None => Tone::Default,
+    }
+}
+
+/// `move_entry`, for the audit tests.
+#[cfg(test)]
+pub(crate) fn move_entry_for_tests(app: &mut IdeApp, source: &Path, directory: &Path) {
+    move_entry(app, source, directory)
+}
+
+/// The Project tool window body, for the audit tests.
+#[cfg(test)]
+pub(crate) fn project_tree_for_tests(app: &mut IdeApp, ui: &mut egui::Ui) {
+    project_tree(app, ui)
+}
+
 fn project_tree(app: &mut IdeApp, ui: &mut egui::Ui) {
     let Some(project) = app.state.project.as_ref() else {
         ui.add_space(16.0);
@@ -164,6 +191,7 @@ fn project_tree(app: &mut IdeApp, ui: &mut egui::Ui) {
     let mut preview = None;
     let mut dialog = None;
     let mut context_choice = None;
+    let mut moves: Vec<(PathBuf, PathBuf)> = Vec::new();
     // Like "Always Select Opened File": the selection follows the active
     // editor and the row scrolls into view when it is off-screen.
     let active = app
@@ -198,17 +226,19 @@ fn project_tree(app: &mut IdeApp, ui: &mut egui::Ui) {
         ui.spacing_mut().item_spacing.y = 0.0;
         for row in range {
             if row == 0 {
+                let mut dropped = None;
                 let out = widgets::tree_row(
                     ui,
                     widgets::TreeRow {
                         icon: Some((Icon::Folder, *icons::ICON)),
-                        font: theme::semibold(theme::UI_FONT_SIZE),
-                        color: *theme::TEXT_BRIGHT,
+                        tone: Some(Tone::Strong),
                         secondary: Some((&root_path, *theme::TEXT_INFO)),
                         ..widgets::TreeRow::new(&root_name)
-                    },
+                    }
+                    .with(tree_menu(app, Path::new(""), true, &mut context_choice))
+                    .with(DropTarget::new(&mut dropped)),
                 );
-                tree_context_menu(app, &out.response, Path::new(""), true, &mut context_choice);
+                moves.extend(dropped.map(|source| (source, PathBuf::new())));
                 if root_has_errors {
                     crate::problems_ui::squiggle(
                         ui.painter(),
@@ -255,23 +285,33 @@ fn project_tree(app: &mut IdeApp, ui: &mut egui::Ui) {
                     })
                     .flatten()
             });
-            let out = widgets::tree_row(
-                ui,
-                widgets::TreeRow {
-                    depth,
-                    expanded: is_dir.then_some(tree_row.expanded),
-                    selected,
-                    tint,
-                    icon: Some((icon, *icons::ICON)),
-                    color: if tree_row.excluded {
-                        icons::EXCLUDED.gamma_multiply(0.85)
-                    } else {
-                        change_color(kind)
-                    },
-                    ..widgets::TreeRow::new(&name)
-                },
-            );
-            let (rect, response, chevron) = (out.rect, out.response, out.chevron);
+            let mut dropped = None;
+            let mut row = widgets::TreeRow {
+                depth,
+                expanded: is_dir.then_some(tree_row.expanded),
+                selected,
+                tint,
+                icon: Some((icon, *icons::ICON)),
+                tone: Some(if tree_row.excluded {
+                    Tone::Warning
+                } else {
+                    change_tone(kind)
+                }),
+                kit_expander: true,
+                ..widgets::TreeRow::new(&name)
+            }
+            .with(tree_menu(app, path, *is_dir, &mut context_choice));
+            if *is_dir {
+                row = row.with(DropTarget::new(&mut dropped));
+            } else {
+                // Files can be dragged onto folders. Folders are not drag sources yet: the
+                // kit's `DragSource` registers the row a second time, after its chevron,
+                // which breaks the Tab order of expandable rows (see docs/ui-migration.md).
+                row = row.with(DragSource(path.clone()));
+            }
+            let out = widgets::tree_row(ui, row);
+            moves.extend(dropped.map(|source| (source, path.clone())));
+            let (rect, response) = (out.rect, out.response);
             if app.state.problems.has_errors(path) {
                 crate::problems_ui::squiggle(
                     ui.painter(),
@@ -289,8 +329,12 @@ fn project_tree(app: &mut IdeApp, ui: &mut egui::Ui) {
             if response.secondary_clicked() {
                 app.tree_selection = Some(path.clone());
             }
-            tree_context_menu(app, &response, path, *is_dir, &mut context_choice);
-            if response.clicked() {
+            // The kit's expander reports the chevron, a double-click on a folder and
+            // Left/Right on a focused row as `toggled`.
+            if out.toggled && *is_dir {
+                toggle = Some(path.clone());
+            }
+            if response.clicked() || out.toggled {
                 app.tree_selection = Some(path.clone());
                 // The tree takes the keyboard (Enter, Shift+Enter) from the editor.
                 ui.memory_mut(|memory| {
@@ -298,22 +342,13 @@ fn project_tree(app: &mut IdeApp, ui: &mut egui::Ui) {
                         memory.surrender_focus(id);
                     }
                 });
-                let on_chevron = response
-                    .interact_pointer_pos()
-                    .is_some_and(|pos| chevron.expand(4.0).contains(pos));
-                if *is_dir && on_chevron {
-                    toggle = Some(path.clone());
-                } else if !*is_dir {
-                    // A single click shows the file in the preview tab.
+                // A single click on a file shows it in the preview tab.
+                if response.clicked() && !*is_dir {
                     preview = Some(path.clone());
                 }
             }
-            if response.double_clicked() {
-                if *is_dir {
-                    toggle = Some(path.clone());
-                } else {
-                    open = Some(path.clone());
-                }
+            if response.double_clicked() && !*is_dir {
+                open = Some(path.clone());
             }
         }
     });
@@ -387,6 +422,9 @@ fn project_tree(app: &mut IdeApp, ui: &mut egui::Ui) {
     if let Some(dialog) = dialog {
         app.open_dialog(dialog);
     }
+    for (source, directory) in moves {
+        move_entry(app, &source, &directory);
+    }
     if let Some(path) = toggle {
         app.dispatch("project.toggleDirectory", json!({"path": path}));
     }
@@ -431,39 +469,40 @@ fn paint_virtual_row(
     row: &TreeRow,
     toggle_group: &mut Option<&'static str>,
 ) {
-    let out = widgets::tree_row(
-        ui,
-        widgets::TreeRow {
-            depth: row.depth + 1,
-            expanded: (row.kind == RowKind::Group).then_some(row.expanded),
-            icon: Some((Icon::Folder, *icons::ICON)),
-            ..widgets::TreeRow::new(&row.label)
-        },
-    );
+    let (mut new_scratch, mut copy_path) = (false, false);
+    let mut tree_row = widgets::TreeRow {
+        depth: row.depth + 1,
+        expanded: (row.kind == RowKind::Group).then_some(row.expanded),
+        icon: Some((Icon::Folder, *icons::ICON)),
+        ..widgets::TreeRow::new(&row.label)
+    };
+    if let (RowKind::Group, Some(group)) = (row.kind, row.group) {
+        if group == jetthing_core::project_view::GROUP_SCRATCHES {
+            tree_row = tree_row.with(ContextMenu::new(|ui| {
+                new_scratch = ui.add(MenuItem::new("New Scratch File")).clicked();
+            }));
+        }
+    } else if row.path.is_some() {
+        tree_row = tree_row.with(ContextMenu::new(|ui| {
+            copy_path = ui.add(MenuItem::new("Copy Path")).clicked();
+        }));
+    }
+    let out = widgets::tree_row(ui, tree_row);
     let response = if out.elided {
         out.response.on_hover_text(&row.label)
     } else {
         out.response
     };
-    if let (RowKind::Group, Some(group)) = (row.kind, row.group) {
-        if response.clicked() {
-            *toggle_group = Some(group);
-        }
-        response.context_menu(|ui| {
-            if group == jetthing_core::project_view::GROUP_SCRATCHES
-                && ui.button("New Scratch File").clicked()
-            {
-                app.dispatch("project.newScratch", Value::Null);
-                ui.close();
-            }
-        });
-    } else if let Some(path) = &row.path {
-        response.context_menu(|ui| {
-            if ui.button("Copy Path").clicked() {
-                ui.ctx().copy_text(path.display().to_string());
-                ui.close();
-            }
-        });
+    if let (RowKind::Group, Some(group)) = (row.kind, row.group)
+        && response.clicked()
+    {
+        *toggle_group = Some(group);
+    }
+    if new_scratch {
+        app.dispatch("project.newScratch", Value::Null);
+    }
+    if copy_path && let Some(path) = &row.path {
+        ui.ctx().copy_text(path.display().to_string());
     }
 }
 
@@ -485,15 +524,15 @@ fn new_entry_parent(path: &Path, is_dir: bool) -> PathBuf {
     }
 }
 
-/// Right-click menu of a Project tree node.
-fn tree_context_menu(
-    app: &IdeApp,
-    response: &egui::Response,
-    path: &Path,
+/// Right-click menu of a Project tree node, as a kit behaviour: the model's actions as
+/// `MenuItem`s; the chosen one lands in `chosen`.
+fn tree_menu<'a>(
+    app: &'a IdeApp,
+    path: &'a Path,
     is_dir: bool,
-    chosen: &mut Option<(String, crate::context_menus::Target)>,
-) {
-    response.context_menu(|ui| {
+    chosen: &'a mut Option<(String, crate::context_menus::Target)>,
+) -> ContextMenu<'a> {
+    ContextMenu::new(move |ui| {
         let target = crate::context_menus::Target::Tree {
             path: path.to_owned(),
             is_dir,
@@ -504,7 +543,21 @@ fn tree_context_menu(
         if let Some(action) = action {
             *chosen = Some((action, target));
         }
-    });
+    })
+}
+
+/// Moves `source` into `directory` (both project-relative) after a drag and drop in the
+/// tree: a cut and a paste, like the Move dialog. Dropping on its own parent or inside
+/// itself does nothing.
+fn move_entry(app: &mut IdeApp, source: &Path, directory: &Path) {
+    if source.as_os_str().is_empty()
+        || directory.starts_with(source)
+        || source.parent() == Some(directory)
+    {
+        return;
+    }
+    app.dispatch("project.cutPaths", json!({"paths": [source]}));
+    app.dispatch("project.paste", json!({"dir": directory}));
 }
 
 /// Paints a checkbox in the reference style and returns whether it was clicked.

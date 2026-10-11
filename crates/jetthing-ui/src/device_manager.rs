@@ -224,7 +224,7 @@ pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
         .min_width(280.0)
         .resizable(true)
         .show_separator_line(false)
-        .frame(widgets::island_frame())
+        .frame(widgets::island_frame(ctx))
         .show(ctx, |ui| {
             let hide = widgets::tool_window_header(ui, window.title(), |ui| {
                 if icons::button(ui, Icon::Refresh, "Refresh devices").clicked() {

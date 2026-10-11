@@ -42,14 +42,18 @@ mod layout {
     pub const NP_LOCATION: Point = (788, 211);
     pub const NP_CREATE: Point = (1060, 801);
     // New Project dialog in the 800×500 minimum window.
-    pub const NP_SMALL_GENERATOR_EMPTY: Point = (77, 163);
-    pub const NP_SMALL_NAME: Point = (540, 111);
-    pub const NP_SMALL_LOCATION: Point = (508, 145);
-    pub const NP_SMALL_CREATE: Point = (686, 475);
+    pub const NP_SMALL_GENERATOR_EMPTY: Point = (110, 141);
+    pub const NP_SMALL_NAME: Point = (520, 115);
+    pub const NP_SMALL_LOCATION: Point = (470, 171);
+    pub const NP_SMALL_CREATE: Point = (730, 441);
     // Workbench with the project tool window open (default width).
     pub const TREE_SRC_CHEVRON: Point = (80, 113);
     /// Second row under `src` of the rust-cargo fixture (`broken.rs` sorts first).
     pub const TREE_MAIN_RS: Point = (150, 161);
+    /// "Rename…" in the tree context menu opened on `TREE_MAIN_RS`.
+    pub const TREE_MENU_RENAME: Point = (200, 300);
+    /// The Rename dialog's field (1440×900).
+    pub const RENAME_FIELD: Point = (720, 440);
     pub const PROJECT_HIDE_BUTTON: Point = (293, 58);
     pub const PROJECT_STRIPE_BUTTON: Point = (19, 62);
     pub const FIRST_TAB_CLOSE: Point = (419, 61);
@@ -102,6 +106,7 @@ const SCENES: &[(&str, SceneFn)] = &[
         "new-project-in-minimum-window",
         new_project_in_minimum_window,
     ),
+    ("rename-from-context-menu", rename_from_context_menu),
     (
         "workbench-tree-tabs-popups-run",
         workbench_tree_tabs_popups_run,
@@ -536,6 +541,46 @@ fn new_project_in_minimum_window(d: &mut Driver) -> Result<()> {
     )?;
     if !location.join("tiny/README.md").is_file() {
         bail!("README.md was not generated");
+    }
+    Ok(())
+}
+
+/// Right-click a file in the Project tree, pick Rename…, type a new name and press
+/// Enter: the file is renamed on disk. Mouse for the menu, keyboard for the dialog.
+fn rename_from_context_menu(d: &mut Driver) -> Result<()> {
+    d.wait("/project", "project opened", |value| !value.is_null())?;
+    dismiss_first_run(d)?;
+    let root = PathBuf::from(
+        d.state()?["project"]
+            .as_str()
+            .context("project root in the state")?,
+    );
+    d.click(layout::TREE_SRC_CHEVRON, "src chevron")?;
+    d.wait("/projectTree/expanded", "src expanded", |value| {
+        value
+            .as_array()
+            .is_some_and(|dirs| dirs.iter().any(|dir| dir == "src"))
+    })?;
+    d.right_click(layout::TREE_MAIN_RS, "src/main.rs row")?;
+    d.expect("/popups/menu", Value::Bool(true), "tree context menu open")?;
+    d.screenshot("context-menu")?;
+    d.click(layout::TREE_MENU_RENAME, "Rename… menu item")?;
+    d.expect("/popups/dialog", "rename".into(), "Rename dialog open")?;
+    d.screenshot("rename-dialog")?;
+    d.key("ctrl+a")?;
+    d.type_text("renamed.rs")?;
+    d.key("Return")?;
+    d.expect("/popups/dialog", Value::Null, "Rename dialog closed by Enter")?;
+    let renamed = root.join("src/renamed.rs");
+    let deadline = Instant::now() + STATE_TIMEOUT;
+    while !renamed.is_file() {
+        if Instant::now() > deadline {
+            bail!("{} does not exist after Rename + Enter", renamed.display());
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    if root.join("src/main.rs").exists() {
+        bail!("src/main.rs still exists after the rename");
     }
     Ok(())
 }

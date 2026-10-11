@@ -11,6 +11,9 @@
   licensing, and observable behavior; do not copy JetBrains code, artwork, or branding.
 - No new ad-hoc egui painting in `jetthing-ui`: use `archipel-kit` components, parts and
   behaviours; if the kit lacks something, add it there. See `docs/ui-migration.md`.
+  `cargo xtask design-lint` fails on new `Color32::from_rgb*`, hex palettes, rounded
+  `rect_filled` or `CornerRadius::same` outside the kit; after migrating an area, lower
+  the baseline with `cargo xtask design-lint --update`.
 - Avoid panics on user-controlled input. Return structured, actionable errors.
 
 ## Required checks
@@ -20,6 +23,7 @@ cargo fmt --all --check
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo run -p xtask -- parity --check
+cargo run -p xtask -- design-lint
 ```
 
 Commit messages and PR titles must be Conventional Commits (`feat`, `fix`, `perf`,

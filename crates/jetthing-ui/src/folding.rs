@@ -1,7 +1,11 @@
 //! Maps document lines to visual rows when code-folding regions are collapsed,
 //! and paints gutter fold markers.
 
-use eframe::egui::{self, Color32, Stroke};
+use archipel_kit::icons::{self, Glyph};
+use archipel_kit::parts::row_pill;
+use archipel_kit::Theme;
+use archipel_kit::tokens::size::ROW_PILL_INSET;
+use eframe::egui::{self, Color32, Rect};
 use jetthing_core::Document;
 
 /// A collapsed region as rendered on its start row.
@@ -112,25 +116,44 @@ impl FoldView {
     }
 }
 
-/// Paints an IntelliJ-style chevron: `›` for a collapsed region, `⌄` for an
-/// expanded one.
-pub fn paint_marker(painter: &egui::Painter, center: egui::Pos2, collapsed: bool, color: Color32) {
-    let size = 3.5;
-    let stroke = Stroke::new(1.3_f32, color);
-    let points = if collapsed {
-        vec![
-            center + egui::vec2(-size / 2.0, -size),
-            center + egui::vec2(size / 2.0, 0.0),
-            center + egui::vec2(-size / 2.0, size),
-        ]
+/// Width and height of the gutter fold marker's hover pill.
+pub const MARKER_SIZE: f32 = 16.0;
+
+/// Paints the gutter fold marker: the kit chevron (`›` collapsed, `⌄` expanded) on a hover
+/// pill. Colors are the kit's editor tokens.
+pub fn paint_marker(
+    painter: &egui::Painter,
+    kit: &Theme,
+    center: egui::Pos2,
+    collapsed: bool,
+    hovered: bool,
+) {
+    let rect = Rect::from_center_size(center, egui::vec2(MARKER_SIZE, MARKER_SIZE));
+    let color = if hovered {
+        kit.colors.text
     } else {
-        vec![
-            center + egui::vec2(-size, -size / 2.0),
-            center + egui::vec2(0.0, size / 2.0),
-            center + egui::vec2(size, -size / 2.0),
-        ]
+        kit.editor.line_number_caret
     };
-    painter.add(egui::Shape::line(points, stroke));
+    if hovered {
+        // `row_pill` insets by the row pill inset on both sides.
+        row_pill(painter, rect.expand2(egui::vec2(ROW_PILL_INSET, 0.0)), kit.colors.hover);
+    }
+    let glyph = if collapsed {
+        Glyph::ChevronRight
+    } else {
+        Glyph::ChevronDown
+    };
+    icons::paint(painter, rect.shrink(2.0), glyph, color);
+}
+
+/// Colors of a collapsed region's placeholder box: (background, text), brighter under the
+/// pointer.
+pub fn placeholder_colors(kit: &Theme, hovered: bool) -> (Color32, Color32) {
+    if hovered {
+        (kit.colors.pressed, kit.colors.text)
+    } else {
+        (kit.editor.matched_brace, kit.editor.line_number_caret)
+    }
 }
 
 #[cfg(test)]

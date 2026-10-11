@@ -28,6 +28,19 @@ pub struct CodeActionItem {
 }
 
 impl CodeActionItem {
+    /// An action titled `title` that can run now (for views and tests that build lists by
+    /// hand).
+    pub fn new(title: impl Into<String>, quick_fix: bool) -> Self {
+        Self {
+            title: title.into(),
+            kind: None,
+            quick_fix,
+            preferred: false,
+            disabled: None,
+            raw: Value::Null,
+        }
+    }
+
     pub(crate) fn parse(raw: &Value) -> Option<Self> {
         let title = raw.get("title")?.as_str()?.to_owned();
         let kind = raw.get("kind").and_then(Value::as_str).map(String::from);

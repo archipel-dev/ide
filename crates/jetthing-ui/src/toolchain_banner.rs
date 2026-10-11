@@ -2,8 +2,9 @@
 //! open file's language lacks its SDK, build tool or language server (or,
 //! with no editor open, when the project does), with Set up.
 
-use crate::{IdeApp, icons::Icon, theme};
-use eframe::egui::{self, RichText};
+use crate::IdeApp;
+use archipel_kit::components::{Banner, Severity};
+use eframe::egui;
 use serde_json::json;
 
 pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
@@ -19,46 +20,26 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
     let Some(banner) = banner else {
         return;
     };
-    let mut action = None;
-    egui::Frame::new()
-        .fill(*theme::BANNER_WARNING)
-        .stroke(egui::Stroke::new(1.0_f32, *theme::BANNER_WARNING_BORDER))
-        .corner_radius(6)
-        .inner_margin(egui::Margin::symmetric(10, 6))
-        .outer_margin(egui::Margin::symmetric(6, 4))
-        .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                crate::icons::show(ui, Icon::Warning, 14.0, theme::WARNING);
-                ui.label(RichText::new(&banner.text).color(theme::TEXT_BRIGHT));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let link = |ui: &mut egui::Ui, text: &str| {
-                        ui.add(
-                            egui::Label::new(RichText::new(text).color(theme::MODIFIED))
-                                .sense(egui::Sense::click()),
-                        )
-                        .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .clicked()
-                    };
-                    if link(ui, "Dismiss") {
-                        action = Some((
-                            "toolchain.dismissBanner",
-                            json!({ "language": banner.language }),
-                        ));
-                    }
-                    ui.add_space(12.0);
-                    if banner.busy {
-                        ui.label(RichText::new("Setting up…").color(theme::TEXT_SECONDARY));
-                        ui.add(egui::Spinner::new().size(12.0).color(theme::TEXT_INFO));
-                    } else if link(ui, "Set up") {
-                        action = Some((
-                            "toolchain.setup",
-                            json!({ "components": banner.components }),
-                        ));
-                    }
-                });
-            });
-        });
-    if let Some((id, params)) = action {
-        app.dispatch(id, params);
+    // The kit banner has no progress slot: the text says what is happening instead.
+    let text = if banner.busy {
+        format!("{} Setting up…", banner.text)
+    } else {
+        banner.text.clone()
+    };
+    let mut view = Banner::new(Severity::Warning, text).dismissible(true);
+    if !banner.busy {
+        view = view.action("Set up");
+    }
+    let out = view.show(ui);
+    if out.dismissed {
+        app.dispatch(
+            "toolchain.dismissBanner",
+            json!({ "language": banner.language }),
+        );
+    } else if out.action.is_some() {
+        app.dispatch(
+            "toolchain.setup",
+            json!({ "components": banner.components }),
+        );
     }
 }

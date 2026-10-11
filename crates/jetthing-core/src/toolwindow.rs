@@ -169,6 +169,8 @@ pub struct ToolWindowLayout {
     bottom: Option<ToolWindow>,
     right: Option<ToolWindow>,
     bottom_height: Option<u32>,
+    /// The tool windows that were visible before the editor was maximised.
+    before_maximize: Option<[Option<ToolWindow>; 3]>,
 }
 
 /// Smallest bottom tool window height, in points.
@@ -243,6 +245,31 @@ impl ToolWindowLayout {
         }
     }
 
+    /// Whether the editor fills the window because [`Self::toggle_editor_maximized`] hid
+    /// the tool windows (and none was shown since).
+    pub fn is_editor_maximized(&self) -> bool {
+        self.before_maximize.is_some()
+            && self.left.is_none()
+            && self.bottom.is_none()
+            && self.right.is_none()
+    }
+
+    /// Maximises the editor (hides every tool window, remembering them) or restores the
+    /// tool windows hidden by an earlier maximise. With nothing to hide or restore it does
+    /// nothing.
+    pub fn toggle_editor_maximized(&mut self) {
+        if self.is_editor_maximized() {
+            if let Some([left, bottom, right]) = self.before_maximize.take() {
+                (self.left, self.bottom, self.right) = (left, bottom, right);
+            }
+        } else if self.left.is_some() || self.bottom.is_some() || self.right.is_some() {
+            self.before_maximize = Some([self.left, self.bottom, self.right]);
+            self.hide_all();
+        } else {
+            self.before_maximize = None;
+        }
+    }
+
     pub fn hide_all(&mut self) {
         self.left = None;
         self.bottom = None;
@@ -267,6 +294,25 @@ mod tests {
         layout.set_bottom_height(f32::NAN);
         layout.set_bottom_height(10.0);
         assert_eq!(layout.bottom_height(), Some(BOTTOM_MIN_HEIGHT));
+    }
+
+    #[test]
+    fn maximising_the_editor_hides_and_restores_the_tool_windows() {
+        let mut layout = ToolWindowLayout::default();
+        layout.toggle_editor_maximized();
+        assert!(!layout.is_editor_maximized(), "nothing to hide");
+        layout.show(ToolWindow::Project);
+        layout.show(ToolWindow::Terminal);
+        layout.toggle_editor_maximized();
+        assert!(layout.is_editor_maximized());
+        assert!(!layout.is_visible(ToolWindow::Project));
+        layout.toggle_editor_maximized();
+        assert!(!layout.is_editor_maximized());
+        assert!(layout.is_visible(ToolWindow::Project));
+        assert!(layout.is_visible(ToolWindow::Terminal));
+        layout.toggle_editor_maximized();
+        layout.show(ToolWindow::Commit);
+        assert!(!layout.is_editor_maximized(), "showing a window ends it");
     }
 
     #[test]

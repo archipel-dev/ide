@@ -5,16 +5,30 @@
 //! when one of them fixes a problem). Alt+Enter or a click on the bulb opens
 //! the popup. Requests and application live in `jetthing_core::code_actions`.
 
-use crate::{IdeApp, theme};
-use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Rect, Sense, vec2};
+use crate::IdeApp;
+use archipel_kit::components::{IconButton, ListRow};
+use archipel_kit::icons::Glyph;
+use archipel_kit::parts::{Surface, nav};
+use archipel_kit::{Theme, Tone};
+use eframe::egui::{self, Key, Modifiers, Pos2, Rect, vec2};
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 /// How long the caret must rest before actions are requested.
 const REST: Duration = Duration::from_millis(350);
-const BULB_YELLOW: Color32 = Color32::from_rgb(0xF2, 0xC5, 0x5C);
-const BULB_RED: Color32 = Color32::from_rgb(0xE5, 0x57, 0x65);
+/// Rows of an intention list a PgUp/PgDn moves by.
+const PAGE: usize = 8;
+
+/// The kit has no lightbulb glyph yet: a red error mark stands for a quick fix and the
+/// yellow weak-warning mark for an intention.
+fn bulb(quick_fix: bool) -> Glyph {
+    if quick_fix {
+        Glyph::Error
+    } else {
+        Glyph::WeakWarning
+    }
+}
 
 fn selected_id() -> egui::Id {
     egui::Id::new("intention_selected")
@@ -113,11 +127,12 @@ fn popup_keys(app: &mut IdeApp, ctx: &egui::Context, consume: &dyn Fn(Modifiers,
     let order = display_order(app);
     let count = order.len();
     let mut selected: usize = ctx.data(|data| data.get_temp(selected_id()).unwrap_or(0));
-    if consume(Modifiers::NONE, Key::ArrowDown) && count > 0 {
-        selected = (selected + 1) % count;
-    }
-    if consume(Modifiers::NONE, Key::ArrowUp) && count > 0 {
-        selected = (selected + count - 1) % count;
+    for key in nav::KEYS {
+        if consume(Modifiers::NONE, key)
+            && let Some(next) = nav::step(key, Some(selected), count, PAGE)
+        {
+            selected = next;
+        }
     }
     ctx.data_mut(|data| data.insert_temp(selected_id(), selected));
     if consume(Modifiers::NONE, Key::Escape) {
@@ -131,16 +146,6 @@ fn popup_keys(app: &mut IdeApp, ctx: &egui::Context, consume: &dyn Fn(Modifiers,
     }
 }
 
-/// Paints a lightbulb centred on `center`.
-fn paint_bulb(painter: &egui::Painter, center: Pos2, color: Color32) {
-    painter.circle_filled(center + vec2(0.0, -1.5), 4.5, color);
-    painter.rect_filled(
-        Rect::from_center_size(center + vec2(0.0, 4.5), vec2(4.0, 2.5)),
-        0.5,
-        theme::TEXT_SECONDARY,
-    );
-}
-
 /// The lightbulb at the caret line; a click opens the popup.
 pub fn lightbulb(app: &mut IdeApp, ui: &mut egui::Ui, anchor: Option<Pos2>) {
     let (Some(anchor), Some(list)) = (anchor, app.state.current_code_actions()) else {
@@ -149,22 +154,16 @@ pub fn lightbulb(app: &mut IdeApp, ui: &mut egui::Ui, anchor: Option<Pos2>) {
     if list.items.is_empty() {
         return;
     }
-    let color = if list.has_quick_fix() {
-        BULB_RED
-    } else {
-        BULB_YELLOW
-    };
-    let rect = Rect::from_center_size(anchor, vec2(18.0, 18.0));
-    let response = ui.interact(rect, egui::Id::new("intention_bulb"), Sense::click());
-    if response.hovered() {
-        ui.painter().rect_filled(rect, 4.0, theme::HOVER);
-    }
-    paint_bulb(ui.painter(), anchor, color);
     let tooltip = format!(
         "Show Context Actions ({})",
         crate::keys::display("⌥↩").replace('↩', "Enter")
     );
-    if response.on_hover_text(tooltip).clicked() {
+    let rect = Rect::from_center_size(anchor, vec2(20.0, 20.0));
+    let response = ui.put(
+        rect,
+        IconButton::new(bulb(list.has_quick_fix()), tooltip).small(true),
+    );
+    if response.clicked() {
         ui.ctx()
             .data_mut(|data| data.insert_temp(selected_id(), 0usize));
         app.state.code_actions.popup = true;
@@ -185,76 +184,56 @@ pub fn popup(app: &mut IdeApp, ctx: &egui::Context) {
         .caret_screen_pos
         .unwrap_or_else(|| ctx.content_rect().center());
     let mut apply = None;
+    let colors = Theme::colors(ctx);
     let response = egui::Area::new(egui::Id::new("intention_popup"))
         .order(egui::Order::Foreground)
+        .sense(egui::Sense::hover())
         .fixed_pos(anchor + vec2(-24.0, 4.0))
         .show(ctx, |ui| {
-            egui::Frame::popup(ui.style())
-                .inner_margin(egui::Margin::same(4))
-                .show(ui, |ui| {
-                    ui.set_min_width(320.0);
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    let font = egui::FontId::proportional(theme::UI_FONT_SIZE);
-                    let width = order
-                        .iter()
-                        .map(|&index| {
-                            ui.painter()
-                                .layout_no_wrap(
-                                    list.items[index].title.clone(),
-                                    font.clone(),
-                                    *theme::TEXT,
-                                )
-                                .size()
-                                .x
+            Surface::Popup.frame(ctx).show(ui, |ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                let font = egui::TextStyle::Body.resolve(ui.style());
+                let width = order
+                    .iter()
+                    .map(|&index| {
+                        ui.painter()
+                            .layout_no_wrap(
+                                list.items[index].title.clone(),
+                                font.clone(),
+                                colors.text,
+                            )
+                            .size()
+                            .x
+                    })
+                    .fold(320.0_f32, f32::max)
+                    .min(720.0)
+                    + 56.0;
+                ui.set_width(width);
+                for (row, &index) in order.iter().enumerate() {
+                    let item = &list.items[index];
+                    let shown = ListRow::new(item.title.as_str())
+                        .flat(true)
+                        .icon(bulb(item.quick_fix))
+                        .selected(row == selected)
+                        .enabled(item.disabled.is_none())
+                        .label_tone(if item.disabled.is_some() {
+                            Tone::Disabled
+                        } else {
+                            Tone::Strong
                         })
-                        .fold(320.0_f32, f32::max)
-                        .min(720.0)
-                        + 48.0;
-                    for (row, &index) in order.iter().enumerate() {
-                        let item = &list.items[index];
-                        let (rect, response) =
-                            ui.allocate_exact_size(vec2(width, 24.0), Sense::click());
-                        if row == selected {
-                            ui.painter()
-                                .rect_filled(rect, 4.0, theme::COMPLETION_SELECTION);
-                        } else if response.hovered() {
-                            ui.painter().rect_filled(rect, 4.0, theme::HOVER);
-                        }
-                        let color = if item.quick_fix {
-                            BULB_RED
-                        } else {
-                            BULB_YELLOW
-                        };
-                        paint_bulb(
-                            ui.painter(),
-                            egui::pos2(rect.left() + 14.0, rect.center().y),
-                            color,
-                        );
-                        let text_color = if item.disabled.is_some() {
-                            theme::TEXT_DISABLED
-                        } else {
-                            theme::TEXT_BRIGHT
-                        };
-                        crate::widgets::row_text(
-                            ui,
-                            rect,
-                            rect.left() + 30.0,
-                            &item.title,
-                            font.clone(),
-                            text_color,
-                        );
-                        let response = match &item.disabled {
-                            Some(reason) => response.on_hover_text(reason),
-                            None => response,
-                        };
-                        if response.clicked() {
-                            apply = Some(index);
-                        }
+                        .show(ui);
+                    let response = match &item.disabled {
+                        Some(reason) => shown.response.on_hover_text(reason),
+                        None => shown.response,
+                    };
+                    if response.clicked() {
+                        apply = Some(index);
                     }
-                    if order.is_empty() {
-                        ui.label(egui::RichText::new("No actions").color(theme::TEXT_SECONDARY));
-                    }
-                });
+                }
+                if order.is_empty() {
+                    ui.label(egui::RichText::new("No actions").color(colors.text_secondary));
+                }
+            });
         })
         .response;
     if let Some(index) = apply {

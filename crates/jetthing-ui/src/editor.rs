@@ -2,10 +2,13 @@
 
 use crate::editor_keys;
 use crate::folding::{CollapsedRow, FoldView};
-use crate::icons::{self, Icon};
+use crate::icons::Icon;
 use crate::markdown_ui;
 use crate::problems_ui;
+use crate::tab_strip;
 use crate::widgets::island_frame;
+use archipel_kit::behaviour::{Behaviour, ContextMenu, DropTarget};
+use archipel_kit::components::MenuItem;
 use crate::{IdeApp, theme};
 use eframe::egui::{self, Color32, Rect, Sense, Stroke, vec2};
 use jetthing_core::Document;
@@ -486,136 +489,102 @@ struct TabStrip {
 const TAB_DRAG: &str = "jt_tab_drag";
 
 fn tabs(app: &mut IdeApp, ui: &mut egui::Ui, strip: Option<&TabStrip>) {
-    let (bar, _) =
-        ui.allocate_exact_size(vec2(ui.available_width(), TAB_BAR_HEIGHT), Sense::hover());
+    let (bar, bar_response) =
+        ui.allocate_exact_size(vec2(ui.available_width(), TAB_BAR_HEIGHT), Sense::click());
+    bar_response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Editor tabs")
+    });
     let mut x = bar.left() + 6.0;
     let mut activate = None;
     let mut close = None;
     let mut tab_action = None;
-    let font = egui::FontId::proportional(theme::UI_FONT_SIZE);
+    let mut maximize = false;
+    let mut tab_action_bar: Option<&'static str> = None;
+    let mut moved: Option<(usize, usize)> = None;
     let indices: Vec<usize> = match strip {
         Some(strip) => strip.indices.clone(),
         None => (0..app.state.documents.len()).collect(),
     };
     let primary = strip.is_none_or(|strip| strip.primary);
-    for index in indices {
+    let dragged = ui
+        .ctx()
+        .data(|data| data.get_temp::<usize>(egui::Id::new(TAB_DRAG)))
+        .filter(|index| indices.contains(index));
+    let pointer = ui.input(|input| input.pointer.interact_pos());
+    // Where a drop would insert: the document index the tab goes before.
+    let mut insert_before = None;
+    let mut drop_marker = None;
+    let colors = archipel_kit::Theme::colors(ui.ctx());
+    for (position, &index) in indices.iter().enumerate() {
         let doc = &app.state.documents[index];
         let name = IdeApp::file_name(&doc.path);
         let preview = app.state.is_preview(index);
         let active = app.state.active_document == Some(index)
             && !app.state.diff_active
             && app.state.plugin_host.active_tab.is_none();
-        let color = if active {
-            *theme::TEXT_BRIGHT
-        } else {
-            *theme::TEXT_SECONDARY
-        };
-        let galley = if preview {
-            // Preview tabs are italic until they become permanent.
-            let mut job = egui::text::LayoutJob::default();
-            job.append(
-                &name,
-                0.0,
-                egui::TextFormat {
-                    font_id: font.clone(),
-                    color,
-                    italics: true,
-                    ..Default::default()
-                },
-            );
-            ui.painter().layout_job(job)
-        } else {
-            ui.painter()
-                .layout_no_wrap(name.clone(), font.clone(), color)
-        };
-        let width = 10.0 + 16.0 + 6.0 + galley.size().x + 6.0 + 16.0 + 8.0;
-        let rect = Rect::from_min_size(egui::pos2(x, bar.top() + 5.0), vec2(width, 28.0));
-        x += width + 2.0;
+        let tab_width = tab_strip::width(ui, &name, preview);
+        let rect = Rect::from_min_size(
+            egui::pos2(x, bar.top() + 5.0),
+            vec2(tab_width, tab_strip::TAB_HEIGHT),
+        );
+        x += tab_width + 2.0;
         if rect.left() > bar.right() {
             break;
         }
-        let response = ui.interact(
-            rect,
-            egui::Id::new(("editor_tab", index)),
-            Sense::click_and_drag(),
-        );
-        if response.drag_started() {
-            ui.ctx()
-                .data_mut(|data| data.insert_temp(egui::Id::new(TAB_DRAG), index));
-        }
-        let fill = if active {
-            *theme::TAB_SELECTED
-        } else if response.hovered() {
-            *theme::HOVER
-        } else {
-            Color32::TRANSPARENT
-        };
-        ui.painter().rect_filled(rect, 6.0, fill);
-        if active {
-            ui.painter().rect_stroke(
+        let tooltip = doc.path.display().to_string();
+        let pinned = app.state.is_pinned(index);
+        let out = tab_strip::show(
+            ui,
+            &tab_strip::Tab {
+                id: egui::Id::new(("editor_tab", &doc.path)),
                 rect,
-                6.0,
-                Stroke::new(1.0_f32, theme::TAB_SELECTED_BORDER),
-                egui::StrokeKind::Inside,
-            );
-        }
-        let layout = TabLayout::new(rect, galley.size());
-        icons::paint(
-            ui.painter(),
-            layout.icon,
-            app.file_icon(&doc.path),
-            *icons::ICON,
+                name: &name,
+                icon: app.file_icon(&doc.path).kit(),
+                tooltip: &tooltip,
+                active,
+                preview,
+                modified: doc.text.is_dirty(),
+                pinned,
+                drag: Some(index),
+                dragging: dragged == Some(index),
+            },
         );
-        let text_rect = layout.text;
-        ui.painter().galley(layout.text.min, galley, color);
         if app.state.problems.has_errors(&doc.path) {
             problems_ui::squiggle(
                 ui.painter(),
-                text_rect.left(),
-                text_rect.right(),
+                out.text.left(),
+                out.text.right(),
                 rect.center().y + 8.0,
                 *theme::editor::ERROR_EFFECT,
             );
         }
-        let close_rect = layout.close;
-        let dirty = doc.text.is_dirty();
-        let pinned = app.state.is_pinned(index);
-        let pointer_on_close = response
-            .hover_pos()
-            .is_some_and(|pos| close_rect.expand(2.0).contains(pos));
-        if pinned {
-            // Pinned tabs show a pin in place of the close button; clicking it unpins.
-            if pointer_on_close {
-                ui.painter()
-                    .rect_filled(close_rect.expand(2.0), 4.0, theme::HOVER);
-            }
-            icons::paint(
-                ui.painter(),
-                close_rect.shrink(1.0),
-                Icon::Pin,
-                theme::TEXT_SECONDARY,
-            );
-        } else if response.hovered() || active {
-            if pointer_on_close {
-                ui.painter()
-                    .rect_filled(close_rect.expand(2.0), 4.0, theme::HOVER);
-            }
-            icons::paint(
-                ui.painter(),
-                close_rect.shrink(2.0),
-                Icon::Close,
-                *theme::TEXT_SECONDARY,
-            );
-        } else if dirty {
-            ui.painter()
-                .circle_filled(close_rect.center(), 3.0, theme::TEXT_SECONDARY);
+        let response = out.response.clone();
+        if response.drag_started() {
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(egui::Id::new(TAB_DRAG), index));
         }
-        if dirty && (response.hovered() || active) && !pointer_on_close {
-            ui.painter()
-                .circle_filled(layout.modified_dot, 2.5, theme::MODIFIED);
+        if let Some(from) = dragged.filter(|from| *from != index) {
+            // A drop on a tab inserts before or after it, by the pointer's side.
+            let mut dropped: Option<tab_strip::TabDrag> = None;
+            DropTarget::new(&mut dropped).attach(ui, response.clone());
+            let after = pointer.is_some_and(|pos| pos.x >= rect.center().x);
+            let before = if after {
+                indices
+                    .get(position + 1)
+                    .copied()
+                    .unwrap_or(index + 1)
+            } else {
+                index
+            };
+            if response.contains_pointer() {
+                insert_before = Some(before);
+                drop_marker = Some(if after { rect.right() } else { rect.left() });
+            }
+            if dropped.is_some() {
+                moved = Some((from, before));
+            }
         }
-        let response = response.on_hover_text(doc.path.display().to_string());
-        response.context_menu(|ui| {
+        ContextMenu::new(|ui| {
             let target = crate::context_menus::Target::Tab(index);
             let model = app.context_menu_model(&target);
             let mut chosen = None;
@@ -623,22 +592,19 @@ fn tabs(app: &mut IdeApp, ui: &mut egui::Ui, strip: Option<&TabStrip>) {
             if let Some(action) = chosen {
                 tab_action = Some((action, target));
             }
-        });
-        if response.clicked() {
-            if pointer_on_close && pinned {
-                tab_action = Some((
-                    "PinActiveTabToggle".to_owned(),
-                    crate::context_menus::Target::Tab(index),
-                ));
-            } else if pointer_on_close {
-                close = Some(index);
-            } else {
-                activate = Some(index);
-            }
-        }
-        if response.middle_clicked() {
+        })
+        .attach(ui, response);
+        if out.unpinned {
+            tab_action = Some((
+                "PinActiveTabToggle".to_owned(),
+                crate::context_menus::Target::Tab(index),
+            ));
+        } else if out.closed {
             close = Some(index);
+        } else if out.clicked {
+            activate = Some(index);
         }
+        maximize |= out.double_clicked;
     }
     if !primary {
         // Only the focused group shows the diff and plugin tabs.
@@ -656,14 +622,92 @@ fn tabs(app: &mut IdeApp, ui: &mut egui::Ui, strip: Option<&TabStrip>) {
     if primary {
         crate::plugin_ui::editor_tabs(app, ui, bar, x);
     }
+    // The empty part of the bar: a drop appends, a right click opens the bar's own menu
+    // (never the first tab's), and nothing else happens.
+    let tail = Rect::from_min_max(egui::pos2(x.min(bar.right()), bar.top()), bar.right_bottom());
+    if let Some(from) = dragged {
+        let end = indices.last().map_or(0, |last| last + 1);
+        let tail_response = ui.interact(tail, egui::Id::new("editor_tab_tail"), Sense::hover());
+        let mut dropped: Option<tab_strip::TabDrag> = None;
+        DropTarget::new(&mut dropped).attach(ui, tail_response.clone());
+        if tail_response.contains_pointer() {
+            insert_before = Some(end);
+            drop_marker = Some(x - 1.0);
+        }
+        if dropped.is_some() {
+            moved = Some((from, end));
+        }
+    }
+    if let (Some(_), Some(marker_x)) = (insert_before, drop_marker) {
+        // The insertion marker: a thin accent bar between two tabs.
+        let marker = Rect::from_min_max(
+            egui::pos2(marker_x - 5.0, bar.top() + 3.0),
+            egui::pos2(marker_x + 5.0, bar.bottom() - 3.0),
+        );
+        archipel_kit::parts::row_pill(ui.painter(), marker, colors.focus_ring);
+    }
+    ContextMenu::new(|ui| tab_bar_menu(app, ui, &mut tab_action_bar)).attach(ui, bar_response);
     if let Some((action, target)) = tab_action {
         let ctx = ui.ctx().clone();
         app.run_context_action(&action, &target, &ctx);
+    } else if let Some(command) = tab_action_bar {
+        app.dispatch(command, Value::Null);
+    } else if let Some((from, before)) = moved {
+        app.dispatch("editor.moveTab", json!({"from": from, "before": before}));
+    } else if maximize {
+        app.dispatch("editor.toggleMaximize", Value::Null);
     } else if let Some(index) = close {
         app.dispatch("editor.close", json!({"index": index}));
     } else if let Some(index) = activate {
         app.dispatch("editor.activate", json!({"index": index}));
         ui.memory_mut(|memory| memory.request_focus(editor_id()));
+    }
+}
+
+/// The tab bar alone, for the audit and interaction tests.
+#[cfg(test)]
+pub(crate) fn tabs_for_tests(app: &mut IdeApp, ui: &mut egui::Ui) {
+    tabs(app, ui, None);
+}
+
+/// The tab bar with the drag-and-drop pass that applies a drop outside it.
+#[cfg(test)]
+pub(crate) fn tabs_with_drag_for_tests(app: &mut IdeApp, ui: &mut egui::Ui) {
+    tabs(app, ui, None);
+    let area = ui.max_rect();
+    tab_drag(app, ui.ctx(), &[(app.state.splits.focused_id(), area)]);
+}
+
+/// The menu on the empty part of the tab bar: actions for the whole bar, none for a
+/// single tab (UX-012).
+fn tab_bar_menu(app: &IdeApp, ui: &mut egui::Ui, chosen: &mut Option<&'static str>) {
+    let maximized = app.state.tool_windows.is_editor_maximized();
+    let entries: [(&str, &'static str); 5] = [
+        ("Close All Tabs", "editor.closeAll"),
+        ("Reopen Closed Tab", "editor.reopenClosed"),
+        ("Split Right", "editor.splitRight"),
+        ("Split Down", "editor.splitDown"),
+        (
+            if maximized {
+                "Restore Editor Size"
+            } else {
+                "Maximize Editor"
+            },
+            "editor.toggleMaximize",
+        ),
+    ];
+    ui.set_min_width(200.0);
+    for (label, command) in entries {
+        if ui
+            .add(
+                MenuItem::new(label)
+                    .enabled(app.commands.is_enabled(command, &app.state)),
+            )
+            .clicked()
+        {
+            *chosen = Some(command);
+            ui.close();
+        }
     }
 }
 
@@ -836,6 +880,31 @@ fn dividers(app: &mut IdeApp, ui: &mut egui::Ui, area: Rect) {
 /// Fraction of a group's width/height that turns a tab drop into a split.
 const DROP_EDGE_FRACTION: f32 = 0.25;
 
+/// The dragged tab follows the pointer: a small tab-like card on the tooltip surface.
+fn drag_ghost(ctx: &egui::Context, app: &IdeApp, path: &std::path::Path, pos: egui::Pos2) {
+    let name = IdeApp::file_name(path);
+    let icon = app.file_icon(path).kit();
+    egui::Area::new(egui::Id::new("jt_tab_ghost"))
+        .order(egui::Order::Tooltip)
+        .interactable(false)
+        .fixed_pos(pos + vec2(12.0, 8.0))
+        .show(ctx, |ui| {
+            archipel_kit::parts::Surface::Tooltip
+                .frame(ctx)
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        archipel_kit::icons::show(
+                            ui,
+                            icon,
+                            archipel_kit::tokens::size::ICON,
+                            archipel_kit::Theme::colors(ctx).icon,
+                        );
+                        ui.label(name);
+                    });
+                });
+        });
+}
+
 /// A tab dragged over the editor: highlights the drop target (an edge splits,
 /// another group's area moves the tab there) and applies it on release.
 fn tab_drag(app: &mut IdeApp, ctx: &egui::Context, groups: &[(jetthing_split::GroupId, Rect)]) {
@@ -879,7 +948,16 @@ fn tab_drag(app: &mut IdeApp, ctx: &egui::Context, groups: &[(jetthing_split::Gr
                 egui::Order::Foreground,
                 egui::Id::new("jt_tab_drop"),
             ));
-            painter.rect_filled(zone, 4.0, theme::TAB_SELECTED_BORDER.gamma_multiply(0.35));
+            // `row_pill` insets by the row pill inset on both sides.
+            let kit = archipel_kit::Theme::colors(ctx);
+            archipel_kit::parts::row_pill(
+                &painter,
+                zone.expand2(vec2(archipel_kit::tokens::size::ROW_PILL_INSET, 0.0)),
+                kit.focus_ring.gamma_multiply(0.35),
+            );
+        }
+        if let Some(pos) = pos {
+            drag_ghost(ctx, app, &path, pos);
         }
         ctx.request_repaint();
         return;
@@ -908,36 +986,6 @@ fn tab_drag(app: &mut IdeApp, ctx: &egui::Context, groups: &[(jetthing_split::Gr
     }
 }
 
-/// Geometry of one editor tab: file icon, title, close button, and the
-/// modified badge shown while the close button is visible. The badge sits on
-/// the icon's top-right corner so it never covers the title.
-struct TabLayout {
-    icon: Rect,
-    text: Rect,
-    close: Rect,
-    modified_dot: egui::Pos2,
-}
-
-impl TabLayout {
-    fn new(rect: Rect, text_size: egui::Vec2) -> Self {
-        let icon = Rect::from_min_size(rect.left_center() + vec2(10.0, -8.0), vec2(16.0, 16.0));
-        let text = Rect::from_min_size(
-            rect.left_center() + vec2(32.0, -text_size.y / 2.0),
-            text_size,
-        );
-        let close = Rect::from_min_size(
-            egui::pos2(rect.right() - 24.0, rect.center().y - 8.0),
-            vec2(16.0, 16.0),
-        );
-        Self {
-            icon,
-            text,
-            close,
-            modified_dot: icon.right_top() + vec2(-1.0, 2.0),
-        }
-    }
-}
-
 /// The diff viewer's tab, after the document tabs. Returns (clicked, closed, x after
 /// the tab).
 fn diff_tab(
@@ -948,72 +996,31 @@ fn diff_tab(
     tooltip: &str,
     active: bool,
 ) -> (bool, bool, f32) {
-    let font = egui::FontId::proportional(theme::UI_FONT_SIZE);
-    let color = if active {
-        *theme::TEXT_BRIGHT
-    } else {
-        *theme::TEXT_SECONDARY
-    };
-    let galley = ui.painter().layout_no_wrap(title.to_owned(), font, color);
-    let width = 10.0 + 16.0 + 6.0 + galley.size().x + 6.0 + 16.0 + 8.0;
-    let rect = Rect::from_min_size(egui::pos2(x, bar.top() + 5.0), vec2(width, 28.0));
+    let width = tab_strip::width(ui, title, false);
+    let rect = Rect::from_min_size(
+        egui::pos2(x, bar.top() + 5.0),
+        vec2(width, tab_strip::TAB_HEIGHT),
+    );
     if rect.left() > bar.right() {
         return (false, false, rect.right() + 2.0);
     }
-    let response = ui.interact(rect, egui::Id::new("editor_diff_tab"), Sense::click());
-    let fill = if active {
-        *theme::TAB_SELECTED
-    } else if response.hovered() {
-        *theme::HOVER
-    } else {
-        Color32::TRANSPARENT
-    };
-    ui.painter().rect_filled(rect, 6.0, fill);
-    if active {
-        ui.painter().rect_stroke(
+    let out = tab_strip::show(
+        ui,
+        &tab_strip::Tab {
+            id: egui::Id::new("editor_diff_tab"),
             rect,
-            6.0,
-            Stroke::new(1.0_f32, theme::TAB_SELECTED_BORDER),
-            egui::StrokeKind::Inside,
-        );
-    }
-    icons::paint(
-        ui.painter(),
-        Rect::from_min_size(rect.left_center() + vec2(10.0, -8.0), vec2(16.0, 16.0)),
-        Icon::Commit,
-        *icons::ICON,
+            name: title,
+            icon: Icon::Commit.kit(),
+            tooltip,
+            active,
+            preview: false,
+            modified: false,
+            pinned: false,
+            drag: None,
+            dragging: false,
+        },
     );
-    ui.painter().galley(
-        rect.left_center() + vec2(32.0, -galley.size().y / 2.0),
-        galley,
-        color,
-    );
-    let close_rect = Rect::from_min_size(
-        egui::pos2(rect.right() - 24.0, rect.center().y - 8.0),
-        vec2(16.0, 16.0),
-    );
-    let on_close = response
-        .hover_pos()
-        .is_some_and(|pos| close_rect.expand(2.0).contains(pos));
-    if response.hovered() || active {
-        if on_close {
-            ui.painter()
-                .rect_filled(close_rect.expand(2.0), 4.0, theme::HOVER);
-        }
-        icons::paint(
-            ui.painter(),
-            close_rect.shrink(2.0),
-            Icon::Close,
-            *theme::TEXT_SECONDARY,
-        );
-    }
-    let response = response.on_hover_text(tooltip);
-    let clicked = response.clicked();
-    (
-        clicked && !on_close,
-        (clicked && on_close) || response.middle_clicked(),
-        rect.right() + 2.0,
-    )
+    (out.clicked, out.closed, rect.right() + 2.0)
 }
 
 pub(crate) fn highlighted_line_job(
@@ -1107,25 +1114,22 @@ fn paint_collapsed_tail(
     char_width: f32,
     font: &egui::FontId,
     row_height: f32,
+    kit: &archipel_kit::Theme,
+    hovered: bool,
 ) {
-    let folded = crate::syntax::attributes("FOLDED_TEXT_ATTRIBUTES");
     let width = row.placeholder.chars().count() as f32 * char_width;
-    let to_color = |rgba: jetthing_language::Rgba| Color32::from_rgb(rgba.r, rgba.g, rgba.b);
+    let (background, foreground) = crate::folding::placeholder_colors(kit, hovered);
     painter.rect_filled(
         Rect::from_min_size(origin + vec2(0.0, 3.0), vec2(width, row_height - 6.0)),
         3.0,
-        folded
-            .background
-            .map_or(*theme::editor::MATCHED_BRACE, to_color),
+        background,
     );
     painter.text(
         origin + vec2(0.0, row_height / 2.0),
         egui::Align2::LEFT_CENTER,
         &row.placeholder,
         font.clone(),
-        folded
-            .foreground
-            .map_or(*theme::editor::LINE_NUMBER_CARET, to_color),
+        foreground,
     );
     let end_line_start = document.text.line_to_char(row.end_line).unwrap_or(0);
     let end_text = document.text.line(row.end_line).unwrap_or_default();
@@ -1490,6 +1494,13 @@ fn editor_surface(
             let line_text = document.text.line(line).unwrap_or_default();
             let length = line_text.trim_end_matches(['\r', '\n']).chars().count();
             let column = (position.x - rect.left() - text_left) / char_width;
+            // Over a diagnostic only its tooltip shows (UX-018), never a second
+            // popup with documentation for another symbol.
+            if column >= 0.0
+                && !problems_ui::problems_at(problems, line, column as usize, length).is_empty()
+            {
+                return None;
+            }
             (column >= 0.0 && (column as usize) < length).then(|| {
                 (
                     document.text.line_to_char(line).unwrap_or(0) + column as usize,
@@ -1755,6 +1766,25 @@ fn editor_surface(
         } else {
             Vec::new()
         };
+        // Fold affordances under the pointer: the gutter marker of a region's first line and
+        // a collapsed region's placeholder both highlight and show the hand.
+        let kit_theme = archipel_kit::Theme::current(ui.ctx());
+        let pointer_line = response
+            .hover_pos()
+            .map(|pointer| (pointer, folds.row_to_line(row_at(pointer))));
+        let fold_marker_hover = pointer_line.and_then(|(pointer, line)| {
+            let on_marker = layout.in_fold_column(pointer.x - rect.left())
+                && markers.iter().any(|(start, _)| *start == line);
+            on_marker.then_some(line)
+        });
+        let fold_placeholder_hover = pointer_line.and_then(|(pointer, line)| {
+            let row = folds.collapsed_on(line)?;
+            let line_start = document.text.line_to_char(line).unwrap_or(0);
+            let column = (pointer.x - rect.left() - text_left) / char_width;
+            let start = row.start_char.saturating_sub(line_start) as f32;
+            (column >= start && column <= start + row.placeholder.chars().count() as f32)
+                .then_some(line)
+        });
         // I-beam over the text only. The gutter keeps the arrow, and its clickable
         // marks (run icons, fold markers, change bars, blame) show the hand.
         if let Some(pointer) = response.hover_pos() {
@@ -1765,7 +1795,9 @@ fn editor_surface(
                 || crate::change_popup::in_marker_column(x, layout.width)
                     && jetthing_core::hunk_at_line(changes, line).is_some()
                 || blame.is_some() && x < blame_width;
-            ui.ctx().set_cursor_icon(if x >= gutter_width {
+            ui.ctx().set_cursor_icon(if fold_placeholder_hover.is_some() {
+                egui::CursorIcon::PointingHand
+            } else if x >= gutter_width {
                 egui::CursorIcon::Text
             } else if clickable {
                 egui::CursorIcon::PointingHand
@@ -1843,9 +1875,10 @@ fn editor_surface(
             {
                 crate::folding::paint_marker(
                     &painter,
+                    &kit_theme,
                     egui::pos2(rect.left() + layout.fold_center, y + row_height / 2.0),
                     collapsed,
-                    *theme::editor::LINE_NUMBER_CARET,
+                    fold_marker_hover == Some(line),
                 );
             }
             // Indent guides every four columns of leading whitespace.
@@ -2003,6 +2036,8 @@ fn editor_surface(
                     char_width,
                     &font,
                     row_height,
+                    &kit_theme,
+                    fold_placeholder_hover == Some(line),
                 );
             }
 
@@ -2443,23 +2478,6 @@ mod tests {
         assert_eq!(middle, egui::CornerRadius::ZERO);
         let last = selection_corners(false, true);
         assert_eq!((last.nw, last.ne, last.sw, last.se), (0, 0, 2, 2));
-    }
-
-    #[test]
-    fn modified_badge_does_not_cover_the_tab_title() {
-        for text_width in [20.0, 87.0, 240.0] {
-            let width = 10.0 + 16.0 + 6.0 + text_width + 6.0 + 16.0 + 8.0;
-            let rect = Rect::from_min_size(egui::pos2(100.0, 5.0), vec2(width, 28.0));
-            let layout = TabLayout::new(rect, vec2(text_width, 16.0));
-            let badge = Rect::from_center_size(layout.modified_dot, vec2(5.0, 5.0));
-            assert!(
-                !badge.intersects(layout.text),
-                "badge over title at {text_width}"
-            );
-            assert!(!badge.intersects(layout.close));
-            assert!(!layout.text.intersects(layout.close));
-            assert!(rect.contains_rect(badge));
-        }
     }
 
     #[test]

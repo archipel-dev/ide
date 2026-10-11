@@ -144,7 +144,6 @@ pub mod tokens {
         /// `EditorTabs.underlinedBorderColor`.
         TAB_SELECTED_BORDER = ["ui:EditorTabs.underlinedBorderColor"] or 0x2E4D89;
         /// `Banner.warningBackground` (editor notification banners).
-        BANNER_WARNING = ["ui:Banner.warningBackground"] or 0x44321D;
         /// `Banner.warningBorderColor`.
         BANNER_WARNING_BORDER = ["ui:Banner.warningBorderColor"] or 0x694820;
         /// Editor `TEXT` background.

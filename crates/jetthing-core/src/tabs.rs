@@ -170,6 +170,27 @@ impl IdeState {
         Ok(())
     }
 
+    /// Moves the tab at `from` so it sits before the tab that is at `before` now
+    /// (`before == len` appends). Pinned tabs stay leftmost, so a drop across the
+    /// pinned boundary lands on its own side of it. The active tab stays active.
+    pub fn move_tab(&mut self, from: usize, before: usize) -> Result<(), String> {
+        let count = self.documents.len();
+        if from >= count || before > count {
+            return Err("document does not exist".into());
+        }
+        let active = self
+            .active_document
+            .and_then(|index| self.documents.get(index))
+            .map(|document| document.path.clone());
+        let document = self.documents.remove(from);
+        let at = if before > from { before - 1 } else { before };
+        self.documents.insert(at, document);
+        self.sort_pinned_first();
+        self.active_document =
+            active.and_then(|path| self.documents.iter().position(|d| d.path == path));
+        Ok(())
+    }
+
     pub(crate) fn sort_pinned_first(&mut self) {
         let active = self
             .active_document
@@ -289,6 +310,43 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             },
         ))
         .expect("unique built-in id");
+    registry
+        .register(Command::new(
+            spec(
+                "editor.moveTab",
+                "Move Tab",
+                "Editor",
+                None,
+                r#"{"from":"number","before":"number"}"#,
+            ),
+            |state: &IdeState| state.documents.len() > 1,
+            |state: &mut IdeState, params| {
+                state
+                    .move_tab(
+                        usize_param(&params, "from")?,
+                        usize_param(&params, "before")?,
+                    )
+                    .map_err(CommandError::Failed)?;
+                Ok(Value::Null)
+            },
+        ))
+        .expect("unique built-in id");
+    registry
+        .register(Command::new(
+            spec(
+                "editor.toggleMaximize",
+                "Maximize Editor",
+                "Editor",
+                None,
+                "{}",
+            ),
+            |_: &IdeState| true,
+            |state: &mut IdeState, _| {
+                state.tool_windows.toggle_editor_maximized();
+                Ok(json!({"maximized": state.tool_windows.is_editor_maximized()}))
+            },
+        ))
+        .expect("unique built-in id");
     for (id, label, shortcut, forward) in [
         ("editor.nextTab", "Select Next Tab", "⇧⌘]", true),
         ("editor.previousTab", "Select Previous Tab", "⇧⌘[", false),
@@ -338,6 +396,32 @@ mod tests {
             .iter()
             .map(|d| d.path.display().to_string())
             .collect()
+    }
+
+    #[test]
+    fn move_tab_reorders_and_keeps_pinned_leftmost_and_the_active_tab() {
+        let (mut state, commands, root) = project(&["a", "b", "c"], "move");
+        let active = state.documents[state.active_document.unwrap()].path.clone();
+        commands
+            .execute("editor.moveTab", &mut state, json!({"from": 2, "before": 0}))
+            .unwrap();
+        assert_eq!(names(&state), ["c", "a", "b"]);
+        assert_eq!(state.documents[state.active_document.unwrap()].path, active);
+        commands
+            .execute("editor.moveTab", &mut state, json!({"from": 0, "before": 3}))
+            .unwrap();
+        assert_eq!(names(&state), ["a", "b", "c"]);
+        state.set_pinned(0, true).unwrap();
+        commands
+            .execute("editor.moveTab", &mut state, json!({"from": 2, "before": 0}))
+            .unwrap();
+        assert_eq!(names(&state), ["a", "c", "b"]);
+        assert!(
+            commands
+                .execute("editor.moveTab", &mut state, json!({"from": 9, "before": 0}))
+                .is_err()
+        );
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

@@ -1,12 +1,11 @@
 //! Editor notification for a file that changed on disk while it has unsaved
 //! edits, offering the two resolutions as typed commands.
 
-use crate::{IdeApp, theme};
-use eframe::egui::{self, RichText, vec2};
+use crate::IdeApp;
+use archipel_kit::components::{Banner, Severity};
+use eframe::egui;
 use jetthing_core::DiskConflict;
 use serde_json::Value;
-
-pub const HEIGHT: f32 = 34.0;
 
 /// Message and actions for a conflict: (text, [(label, command id)]).
 pub fn content(name: &str, conflict: DiskConflict) -> (String, [(&'static str, &'static str); 2]) {
@@ -41,38 +40,11 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         return;
     };
     let (message, actions) = content(&IdeApp::file_name(&document.path), conflict);
-    let mut clicked = None;
-    egui::Frame::new()
-        .fill(*theme::BANNER_WARNING)
-        .stroke(egui::Stroke::new(1.0_f32, theme::BANNER_WARNING_BORDER))
-        .corner_radius(6.0)
-        .inner_margin(egui::Margin::symmetric(10, 0))
-        .show(ui, |ui| {
-            let size = vec2(ui.available_width(), HEIGHT);
-            ui.allocate_ui_with_layout(
-                size,
-                egui::Layout::left_to_right(egui::Align::Center),
-                |ui| {
-                    ui.set_min_size(size);
-                    ui.label(RichText::new(message).color(theme::TEXT));
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        for (label, command) in actions.iter().rev() {
-                            let link = ui.add(
-                                egui::Label::new(RichText::new(*label).color(theme::MODIFIED))
-                                    .sense(egui::Sense::click()),
-                            );
-                            if link
-                                .on_hover_cursor(egui::CursorIcon::PointingHand)
-                                .clicked()
-                            {
-                                clicked = Some(*command);
-                            }
-                            ui.add_space(8.0);
-                        }
-                    });
-                },
-            );
-        });
+    let out = Banner::new(Severity::Warning, message)
+        .action(actions[0].0)
+        .action(actions[1].0)
+        .show(ui);
+    let clicked = out.action.map(|index| actions[index].1);
     ui.add_space(4.0);
     if let Some(command) = clicked {
         app.dispatch(command, Value::Null);

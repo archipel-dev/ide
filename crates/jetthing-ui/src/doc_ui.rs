@@ -6,6 +6,7 @@
 //! darker band, like the reference IDE's documentation popup.
 
 use crate::{IdeApp, theme};
+use archipel_kit::parts::Surface;
 use eframe::egui::{self, Color32, FontId, Rect, RichText, Stroke, pos2, text::LayoutJob, vec2};
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use serde_json::{Value, json};
@@ -27,6 +28,8 @@ pub struct DocView {
     anchor: Option<egui::Pos2>,
     /// Screen rect of the last popup, so moving onto it keeps it open.
     rect: Option<Rect>,
+    /// The user clicked into the popup: it stays until Escape or a click outside.
+    pinned: bool,
 }
 
 /// One rendered block.
@@ -253,17 +256,9 @@ pub fn render_markdown(ui: &mut egui::Ui, markdown: &str) {
     }
 }
 
-fn popup_frame() -> egui::Frame {
-    egui::Frame::new()
-        .fill(*theme::POPUP)
-        .stroke(Stroke::new(1.0_f32, theme::POPUP_BORDER))
-        .corner_radius(8)
-        .shadow(egui::epaint::Shadow {
-            offset: [0, 4],
-            blur: 12,
-            spread: 0,
-            color: Color32::from_black_alpha(90),
-        })
+fn popup_frame(ctx: &egui::Context) -> egui::Frame {
+    Surface::Popup
+        .frame(ctx)
         .inner_margin(egui::Margin::same(12))
 }
 
@@ -279,9 +274,10 @@ fn doc_popup(ctx: &egui::Context, id: &str, pos: egui::Pos2, markdown: &str) -> 
     // longer document shown in the same place.
     egui::Area::new(egui::Id::new(id).with(markdown))
         .order(egui::Order::Foreground)
+        .sense(egui::Sense::hover())
         .fixed_pos(pos2(x, y))
         .show(ctx, |ui| {
-            popup_frame().show(ui, |ui| {
+            popup_frame(ctx).show(ui, |ui| {
                 ui.set_width(POPUP_WIDTH - 24.0);
                 egui::ScrollArea::vertical()
                     .max_height(POPUP_MAX_HEIGHT)
@@ -303,9 +299,10 @@ pub fn show_completion_panel(app: &mut IdeApp, ctx: &egui::Context, lookup: Opti
             // Resolving: keep the panel's place without flicker.
             egui::Area::new(egui::Id::new("completion_docs"))
                 .order(egui::Order::Foreground)
+                .sense(egui::Sense::hover())
                 .fixed_pos(pos2(lookup.right() + 4.0, lookup.top()))
                 .show(ctx, |ui| {
-                    popup_frame().show(ui, |ui| {
+                    popup_frame(ctx).show(ui, |ui| {
                         ui.label(RichText::new("No documentation").color(theme::TEXT_INFO));
                     });
                 });
@@ -333,10 +330,37 @@ pub fn show_quick_doc(app: &mut IdeApp, ctx: &egui::Context) {
         app.caret_screen_pos
     };
     let Some(anchor) = anchor else {
+        // Nowhere to show it: a popup nobody can see must not hold Escape.
+        app.dispatch("language.closeQuickDoc", Value::Null);
+        app.doc_view.pinned = false;
         return;
     };
     let rect = doc_popup(ctx, "quick_doc", anchor + vec2(-8.0, 4.0), &popup.markdown);
     app.doc_view.rect = Some(rect);
+    let pressed = ctx.input(|input| input.pointer.primary_pressed())
+        && ctx
+            .input(|input| input.pointer.interact_pos())
+            .is_some_and(|pos| rect.contains(pos));
+    if pressed {
+        // Clicking into the documentation focuses it (to select and copy text).
+        app.doc_view.pinned = true;
+    }
+}
+
+/// True when `offset` lies on the identifier that `requested` is part of.
+fn on_same_identifier(app: &IdeApp, requested: usize, offset: usize) -> bool {
+    if requested == offset {
+        return true;
+    }
+    let Some(document) = app
+        .state
+        .active_document
+        .and_then(|index| app.state.documents.get(index))
+    else {
+        return false;
+    };
+    let (start, end) = jetthing_text::ops::word_at(&document.text, requested);
+    (start..end).contains(&offset)
 }
 
 /// Parameter info above the caret line: every overload on its own line, the
@@ -361,10 +385,11 @@ pub fn show_parameter_info(app: &mut IdeApp, ctx: &egui::Context) {
     };
     egui::Area::new(egui::Id::new("parameter_info"))
         .order(egui::Order::Foreground)
+        .sense(egui::Sense::hover())
         .pivot(pivot)
         .fixed_pos(pos2(caret.x - 12.0, y))
         .show(ctx, |ui| {
-            popup_frame()
+            popup_frame(ctx)
                 .inner_margin(egui::Margin::symmetric(10, 6))
                 .show(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 2.0;
@@ -415,15 +440,27 @@ pub fn track_hover(app: &mut IdeApp, ctx: &egui::Context, hover: Option<(usize, 
         || app.find_popup.open
         || app.dialog.is_some()
         || ctx.input(|input| input.pointer.any_down());
-    if let Some(popup) = &app.state.docs.popup
-        && popup.from_mouse
-        && !over_popup
-        && hover.map(|(offset, _)| offset) != app.doc_view.requested
-    {
-        app.dispatch("language.closeQuickDoc", Value::Null);
-        app.doc_view.requested = None;
+    let pressed_outside = ctx.input(|input| input.pointer.primary_pressed())
+        && pointer.is_some_and(|pointer| !app.doc_view.rect.is_some_and(|r| r.contains(pointer)));
+    match app.state.docs.popup.as_ref().map(|popup| popup.from_mouse) {
+        Some(true) => {
+            let on_symbol = hover.zip(app.doc_view.requested).is_some_and(
+                |((offset, _), requested)| on_same_identifier(app, requested, offset),
+            );
+            if pressed_outside {
+                app.doc_view.pinned = false;
+            }
+            // One hover popup at a time: it closes when the pointer leaves both the
+            // identifier and the popup, unless the user clicked into it.
+            if !over_popup && !on_symbol && !app.doc_view.pinned {
+                app.dispatch("language.closeQuickDoc", Value::Null);
+                app.doc_view.requested = None;
+            }
+        }
+        _ => app.doc_view.pinned = false,
     }
-    let Some((offset, pos)) = hover.filter(|_| !busy && !over_popup) else {
+    let Some((offset, pos)) = hover.filter(|_| !busy && !over_popup && !app.doc_view.pinned)
+    else {
         app.doc_view.resting = None;
         return;
     };
@@ -454,6 +491,50 @@ pub fn track_hover(app: &mut IdeApp, ctx: &egui::Context, hover: Option<(usize, 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn app_with_mouse_popup() -> IdeApp {
+        let mut app = IdeApp::new(None, Vec::new());
+        app.state.docs.popup = Some(jetthing_core::QuickDoc {
+            path: "A.java".into(),
+            offset: 3,
+            markdown: "docs".into(),
+            from_mouse: true,
+        });
+        app.doc_view.requested = Some(3);
+        app
+    }
+
+    #[test]
+    fn mouse_popup_closes_when_the_pointer_leaves_the_symbol() {
+        let mut app = app_with_mouse_popup();
+        track_hover(&mut app, &egui::Context::default(), None);
+        assert!(app.state.docs.popup.is_none());
+    }
+
+    #[test]
+    fn a_pinned_mouse_popup_stays_until_a_click_outside() {
+        let mut app = app_with_mouse_popup();
+        app.doc_view.pinned = true;
+        let ctx = egui::Context::default();
+        track_hover(&mut app, &ctx, None);
+        assert!(app.state.docs.popup.is_some(), "clicked into: stays");
+        app.doc_view.rect = Some(Rect::from_min_size(pos2(10.0, 10.0), vec2(50.0, 50.0)));
+        ctx.begin_pass(egui::RawInput {
+            events: vec![
+                egui::Event::PointerMoved(pos2(400.0, 400.0)),
+                egui::Event::PointerButton {
+                    pos: pos2(400.0, 400.0),
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+            ..Default::default()
+        });
+        track_hover(&mut app, &ctx, None);
+        let _ = ctx.end_pass();
+        assert!(app.state.docs.popup.is_none(), "a press outside unpins and closes");
+    }
 
     #[test]
     fn markdown_splits_into_definition_text_and_lists() {

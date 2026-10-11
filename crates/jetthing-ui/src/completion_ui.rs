@@ -6,140 +6,61 @@
 //! so labels line up with the identifier being completed.
 
 use crate::{IdeApp, theme};
-use eframe::egui::{self, Color32, FontId, Rect, Sense, Stroke, pos2, text::LayoutJob, vec2};
+use archipel_kit::components::ListRow;
+use archipel_kit::icons::{Glyph, Icon, Symbol, SymbolKind as Kind};
+use archipel_kit::parts::{Slot, Surface};
+use archipel_kit::tokens::size;
+use archipel_kit::{Theme, Tone};
+use eframe::egui::{self, FontId, Rect, pos2};
 use jetthing_lsp::completion::{self as ranking, kind_name};
 use jetthing_lsp::lsp_types::CompletionItem;
 use serde_json::json;
 
-const ROW_HEIGHT: f32 = 24.0;
+const ROW_HEIGHT: f32 = size::ROW_HEIGHT;
 const VISIBLE_ROWS: usize = 11;
 const ICON_COLUMN: f32 = 26.0;
 const FOOTER_HEIGHT: f32 = 26.0;
 const MIN_WIDTH: f32 = 520.0;
 const MAX_WIDTH: f32 = 720.0;
-/// Matched characters (blue, like the reference lookup's match highlight).
-const MATCHED: Color32 = Color32::from_rgb(0x56, 0xA8, 0xF5);
-
-/// Kind icon: an original letter-in-circle glyph with a per-kind color.
-fn kind_glyph(kind: &str) -> Option<(char, Color32)> {
-    let method = Color32::from_rgb(0xE5, 0x6A, 0x6A);
-    let field = Color32::from_rgb(0xD9, 0xA3, 0x43);
-    let class = Color32::from_rgb(0x56, 0x8A, 0xF2);
-    let interface = Color32::from_rgb(0x5F, 0xB8, 0x65);
-    let variable = Color32::from_rgb(0xA8, 0x86, 0xD9);
+/// Kit code-symbol icon for an LSP completion kind; `None` for plain text and keywords.
+fn kind_icon(kind: &str) -> Option<Icon> {
+    let symbol = |kind| Icon::Symbol(Symbol::new(kind));
     Some(match kind {
-        "method" | "function" | "constructor" => ('m', method),
-        "field" => ('f', field),
-        "property" => ('p', field),
-        "variable" | "value" | "reference" => ('v', variable),
-        "constant" | "enumMember" => ('c', field),
-        "class" | "struct" => ('C', class),
-        "interface" => ('I', interface),
-        "enum" => ('E', class),
-        "module" | "file" => ('M', *theme::TEXT_SECONDARY),
-        "typeParameter" => ('T', interface),
-        "snippet" => ('s', *theme::TEXT_SECONDARY),
-        "event" | "operator" => ('o', *theme::TEXT_SECONDARY),
+        "method" => symbol(Kind::Method),
+        "function" => symbol(Kind::Function),
+        "constructor" => symbol(Kind::Constructor),
+        "field" => symbol(Kind::Field),
+        "property" => symbol(Kind::Property),
+        "variable" | "value" | "reference" => symbol(Kind::Variable),
+        "constant" => symbol(Kind::Constant),
+        "enumMember" => symbol(Kind::EnumMember),
+        "class" => symbol(Kind::Class),
+        "struct" => symbol(Kind::Struct),
+        "interface" => symbol(Kind::Interface),
+        "enum" => symbol(Kind::Enum),
+        "module" | "file" => symbol(Kind::Module),
+        "typeParameter" => symbol(Kind::TypeParameter),
+        "snippet" => Icon::Glyph(Glyph::Code),
+        "event" | "operator" => symbol(Kind::Function),
         _ => return None,
     })
 }
 
-fn paint_kind_icon(painter: &egui::Painter, center: egui::Pos2, kind: &str) {
-    let Some((letter, color)) = kind_glyph(kind) else {
-        return;
-    };
-    painter.circle(
-        center,
-        6.5,
-        color.gamma_multiply(0.18),
-        Stroke::new(1.2_f32, color),
-    );
-    painter.text(
-        center + vec2(0.0, -0.5),
-        egui::Align2::CENTER_CENTER,
-        letter,
-        theme::mono_bold(9.5),
-        color,
-    );
-}
-
-/// Label with the matched characters in bold and highlighted.
-fn label_job(label: &str, matched: &[usize], deprecated: bool, selected: bool) -> LayoutJob {
-    let mut job = LayoutJob::default();
-    let normal = if selected {
-        *theme::TEXT_BRIGHT
-    } else {
-        *theme::editor::TEXT
-    };
-    let strike = if deprecated {
-        Stroke::new(1.0_f32, *theme::TEXT_SECONDARY)
-    } else {
-        Stroke::NONE
-    };
-    let mut buffer = String::new();
-    let mut buffer_matched = false;
-    // Parameter lists (`name(String arg)`) are grey, like the reference lookup.
-    let params_start = label.chars().position(|c| c == '(').unwrap_or(usize::MAX);
-    let grey = *theme::TEXT_INFO;
-    let flush = |job: &mut LayoutJob, text: &mut String, matched: bool, params: bool| {
-        if text.is_empty() {
-            return;
-        }
-        let format = egui::TextFormat {
-            font_id: if matched {
-                theme::mono_bold(theme::EDITOR_FONT_SIZE)
-            } else {
-                FontId::monospace(theme::EDITOR_FONT_SIZE)
-            },
-            color: if params {
-                grey
-            } else if matched {
-                MATCHED
-            } else {
-                normal
-            },
-            strikethrough: strike,
-            ..Default::default()
-        };
-        job.append(text, 0.0, format);
-        text.clear();
-    };
-    for (index, c) in label.chars().enumerate() {
-        let is_matched = matched.contains(&index);
-        if is_matched != buffer_matched || index == params_start {
-            flush(&mut job, &mut buffer, buffer_matched, index > params_start);
-            buffer_matched = is_matched;
-        }
-        buffer.push(c);
-    }
-    flush(
-        &mut job,
-        &mut buffer,
-        buffer_matched,
-        label.chars().count() > params_start,
-    );
-    job
-}
-
 struct Row {
     label: String,
-    matched: Vec<usize>,
     detail: Option<String>,
     type_text: Option<String>,
     kind: &'static str,
-    deprecated: bool,
 }
 
-fn row_for(item: &CompletionItem, matched: &[usize]) -> Row {
+fn row_for(item: &CompletionItem) -> Row {
     Row {
         label: item.label.clone(),
-        matched: matched.to_vec(),
         detail: ranking::label_detail(item).map(str::to_owned),
         type_text: ranking::type_text(item)
             .filter(|_| item.label_details.is_some() || ranking::label_detail(item).is_none())
             .map(str::to_owned),
         kind: kind_name(item.kind),
-        deprecated: ranking::is_deprecated(item),
     }
 }
 
@@ -175,7 +96,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) -> Option<Rect> {
     let rows: Vec<Row> = session
         .ranked
         .iter()
-        .map(|ranked| row_for(&session.items[ranked.index], &ranked.label_positions))
+        .map(|ranked| row_for(&session.items[ranked.index]))
         .collect();
     let selected = session.selected;
     let prefix_chars = session.prefix.chars().count() as f32;
@@ -215,44 +136,74 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) -> Option<Rect> {
     }
 
     let mut clicked = None;
+    let colors = Theme::colors(ctx);
     let area = egui::Area::new(egui::Id::new("completion_popup"))
         .order(egui::Order::Foreground)
+        .sense(egui::Sense::hover())
         .fixed_pos(pos2(x, y))
         .show(ctx, |ui| {
-            egui::Frame::new()
-                .fill(*theme::POPUP)
-                .stroke(Stroke::new(1.0_f32, *theme::POPUP_BORDER))
-                .corner_radius(8)
-                .shadow(egui::epaint::Shadow {
-                    offset: [0, 4],
-                    blur: 12,
-                    spread: 0,
-                    color: Color32::from_black_alpha(90),
-                })
-                .inner_margin(egui::Margin::same(1))
-                .show(ui, |ui| {
-                    ui.set_width(content_width);
-                    egui::ScrollArea::vertical()
-                        .max_height(visible as f32 * ROW_HEIGHT)
-                        .auto_shrink([false, true])
-                        .show(ui, |ui| {
-                            ui.spacing_mut().item_spacing.y = 0.0;
-                            for (index, row) in rows.iter().enumerate() {
-                                let (rect, response) = ui.allocate_exact_size(
-                                    vec2(ui.available_width(), ROW_HEIGHT),
-                                    Sense::click(),
-                                );
-                                paint_row(ui, rect, row, index == selected, response.hovered());
-                                if index == selected {
-                                    ui.scroll_to_rect(rect, None);
-                                }
-                                if response.clicked() {
-                                    clicked = Some(index);
-                                }
+            Surface::Popup.frame(ctx).show(ui, |ui| {
+                ui.set_width(content_width);
+                ui.spacing_mut().item_spacing.y = 0.0;
+                // The editor keeps keyboard focus while the popup is open: Up/Down/
+                // Enter/Tab reach the list as `completion.*` commands from the editor keys.
+                // Keep the selected row in view (the rows are virtualized, so this is an
+                // offset, not a `scroll_to_rect`).
+                let view_height = visible as f32 * ROW_HEIGHT;
+                let offset_id = egui::Id::new("completion_scroll");
+                let (last_selected, last_offset): (usize, f32) =
+                    ctx.data(|data| data.get_temp(offset_id).unwrap_or((usize::MAX, 0.0)));
+                let top = selected as f32 * ROW_HEIGHT;
+                let mut area = egui::ScrollArea::vertical()
+                    .id_salt("completion_rows")
+                    .max_height(view_height)
+                    .auto_shrink([false, true]);
+                if last_selected != selected {
+                    if top < last_offset {
+                        area = area.vertical_scroll_offset(top);
+                    } else if top + ROW_HEIGHT > last_offset + view_height {
+                        area = area.vertical_scroll_offset(top + ROW_HEIGHT - view_height);
+                    }
+                }
+                let scrolled = area.show_rows(ui, ROW_HEIGHT, rows.len(), |ui, range| {
+                        for index in range {
+                            let row = &rows[index];
+                            let mut view = ListRow::new(row.label.as_str())
+                                .flat(true)
+                                .selected(index == selected);
+                            if let Some(icon) = kind_icon(row.kind) {
+                                view = view.icon(icon);
                             }
-                        });
-                    footer(ui, &small, indexing.as_deref());
+                            if let Some(detail) = &row.detail {
+                                view = view.secondary(detail.as_str());
+                            }
+                            if let Some(type_text) = &row.type_text {
+                                view = view
+                                    .trailing(Slot::text_tone(type_text.as_str(), Tone::Secondary));
+                            }
+                            if view.show(ui).response.clicked() {
+                                clicked = Some(index);
+                            }
+                        }
                 });
+                ctx.data_mut(|data| {
+                    data.insert_temp(offset_id, (selected, scrolled.state.offset.y))
+                });
+                ui.separator();
+                let (hint, color) = match indexing.as_deref() {
+                    Some(status) => (indexing_notice(status), colors.warning),
+                    None => (shortcut_hint(), colors.text_secondary),
+                };
+                ui.add_space(2.0);
+                ui.horizontal(|ui| {
+                    ui.add_space(12.0);
+                    ui.label(
+                        egui::RichText::new(hint)
+                            .size(small.size - 0.5)
+                            .color(color),
+                    );
+                });
+            });
         });
     if let Some(row) = clicked {
         app.dispatch("completion.accept", json!({"row": row}));
@@ -260,97 +211,12 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) -> Option<Rect> {
     Some(area.response.rect)
 }
 
-fn paint_row(ui: &egui::Ui, rect: Rect, row: &Row, selected: bool, hovered: bool) {
-    let painter = ui.painter().with_clip_rect(rect);
-    if selected {
-        painter.rect_filled(
-            rect.shrink2(vec2(4.0, 1.0)),
-            4.0,
-            *theme::COMPLETION_SELECTION,
-        );
-    } else if hovered {
-        painter.rect_filled(rect.shrink2(vec2(4.0, 1.0)), 4.0, *theme::HOVER);
+fn shortcut_hint() -> String {
+    if cfg!(target_os = "macos") {
+        "⏎ inserts, ⇥ replaces the word at the caret, ⎋ closes".to_owned()
+    } else {
+        "Enter inserts, Tab replaces the word at the caret, Esc closes".to_owned()
     }
-    paint_kind_icon(
-        &painter,
-        pos2(rect.left() + ICON_COLUMN / 2.0 + 4.0, rect.center().y),
-        row.kind,
-    );
-    let mut x = rect.left() + ICON_COLUMN + 6.0;
-    let label = painter.layout_job(label_job(
-        &row.label,
-        &row.matched,
-        row.deprecated,
-        selected,
-    ));
-    let label_width = label.size().x;
-    painter.galley(
-        pos2(x, rect.center().y - label.size().y / 2.0),
-        label,
-        *theme::TEXT,
-    );
-    x += label_width;
-    let grey = *theme::TEXT_INFO;
-    let right_edge = rect.right() - 12.0;
-    let mut type_left = right_edge;
-    if let Some(type_text) = &row.type_text {
-        let galley = painter.layout_no_wrap(
-            type_text.clone(),
-            FontId::monospace(theme::EDITOR_FONT_SIZE - 1.0),
-            grey,
-        );
-        type_left = (right_edge - galley.size().x).max(x + 24.0);
-        painter.galley(
-            pos2(type_left, rect.center().y - galley.size().y / 2.0),
-            galley,
-            grey,
-        );
-    }
-    if let Some(detail) = &row.detail {
-        let clip = Rect::from_min_max(rect.min, pos2(type_left - 12.0, rect.max.y));
-        let galley = painter.layout_no_wrap(
-            detail.clone(),
-            FontId::monospace(theme::EDITOR_FONT_SIZE),
-            grey,
-        );
-        painter.with_clip_rect(clip).galley(
-            pos2(x, rect.center().y - galley.size().y / 2.0),
-            galley,
-            grey,
-        );
-    }
-}
-
-/// The footer hint, or the indexing notice while the language server is
-/// still importing the project (`indexing` is its progress, e.g.
-/// "jdtls: Building 0%").
-fn footer(ui: &mut egui::Ui, font: &FontId, indexing: Option<&str>) {
-    let (rect, _) =
-        ui.allocate_exact_size(vec2(ui.available_width(), FOOTER_HEIGHT), Sense::hover());
-    let painter = ui.painter();
-    painter.hline(
-        rect.x_range(),
-        rect.top(),
-        Stroke::new(1.0_f32, *theme::POPUP_BORDER),
-    );
-    let (hint, color) = match indexing {
-        Some(status) => (indexing_notice(status), *theme::WARNING),
-        None if cfg!(target_os = "macos") => (
-            "⏎ inserts, ⇥ replaces the word at the caret, ⎋ closes".to_owned(),
-            *theme::TEXT_INFO,
-        ),
-        None => (
-            "Enter inserts, Tab replaces the word at the caret, Esc closes".to_owned(),
-            *theme::TEXT_INFO,
-        ),
-    };
-    painter.with_clip_rect(rect).text(
-        pos2(rect.left() + 12.0, rect.center().y),
-        egui::Align2::LEFT_CENTER,
-        hint,
-        FontId::proportional(font.size - 0.5),
-        color,
-    );
 }
 
 /// "Indexing… results may be incomplete (jdtls: Building 0%)".
@@ -371,34 +237,13 @@ mod tests {
     }
 
     #[test]
-    fn matched_characters_are_split_into_bold_sections() {
-        let job = label_job("getRequiredField", &[0, 3, 11], false, false);
-        assert_eq!(job.text, "getRequiredField");
-        // g | et | R | equired | F | ield
-        assert_eq!(job.sections.len(), 6);
-        assert_eq!(
-            job.sections[0].format.font_id,
-            theme::mono_bold(theme::EDITOR_FONT_SIZE)
-        );
-    }
-
-    #[test]
-    fn parameter_lists_in_labels_are_grey() {
-        let job = label_job("main(String[] args)", &[0], false, false);
-        assert_eq!(job.text, "main(String[] args)");
-        let last = job.sections.last().unwrap();
-        assert_eq!(last.format.color, *theme::TEXT_INFO);
-        assert_ne!(job.sections[0].format.color, *theme::TEXT_INFO);
-    }
-
-    #[test]
     fn rows_use_label_details_for_signature_and_type() {
         let item: CompletionItem = serde_json::from_value(json!({
             "label": "greeting", "kind": 2, "detail": "App.greeting(String name) : String",
             "labelDetails": {"detail": "(String name)", "description": "String"}
         }))
         .unwrap();
-        let row = row_for(&item, &[]);
+        let row = row_for(&item);
         assert_eq!(row.detail.as_deref(), Some("(String name)"));
         assert_eq!(row.type_text.as_deref(), Some("String"));
         assert_eq!(row.kind, "method");
@@ -406,10 +251,10 @@ mod tests {
             serde_json::from_value(json!({"label": "len", "detail": "fn(&self) -> usize"}))
                 .unwrap();
         assert_eq!(
-            row_for(&plain, &[]).type_text.as_deref(),
+            row_for(&plain).type_text.as_deref(),
             Some("fn(&self) -> usize")
         );
-        assert!(kind_glyph("method").is_some());
-        assert!(kind_glyph("text").is_none());
+        assert!(kind_icon("method").is_some());
+        assert!(kind_icon("text").is_none());
     }
 }

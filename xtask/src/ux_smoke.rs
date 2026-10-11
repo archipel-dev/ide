@@ -51,7 +51,7 @@ mod layout {
     /// Second row under `src` of the rust-cargo fixture (`broken.rs` sorts first).
     pub const TREE_MAIN_RS: Point = (150, 161);
     /// "Rename…" in the tree context menu opened on `TREE_MAIN_RS`.
-    pub const TREE_MENU_RENAME: Point = (200, 300);
+    pub const TREE_MENU_RENAME: Point = (210, 413);
     /// The Rename dialog's field (1440×900).
     pub const RENAME_FIELD: Point = (720, 440);
     pub const PROJECT_HIDE_BUTTON: Point = (293, 58);

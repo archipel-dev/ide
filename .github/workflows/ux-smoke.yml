@@ -1,0 +1,46 @@
+name: UX smoke
+
+# Optional, non-blocking: drives the golden paths with real X input (xdotool
+# under Xvfb) and fails when a control a user needs is not visible or clickable.
+# Runs on pull requests that touch the UI and on demand.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "crates/jetthing-ui/**"
+      - "crates/jetthing-app/**"
+      - "xtask/src/ux_smoke.rs"
+      - ".github/workflows/ux-smoke.yml"
+
+concurrency:
+  group: ux-smoke-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ux-smoke:
+    name: mouse-driven golden paths (Xvfb, xdotool)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Xvfb, xdotool and Mesa
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xdotool libxkbcommon-x11-0 libgl1-mesa-dri libegl1 libgl1
+      - run: cargo run -p xtask -- ux-smoke --out target/ux-smoke/out
+        env:
+          JETTHING_RENDERER: glow
+          LIBGL_ALWAYS_SOFTWARE: "1"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ux-smoke
+          path: |
+            target/ux-smoke/out/*.png
+            target/ux-smoke/work/*/app.log
+          if-no-files-found: warn

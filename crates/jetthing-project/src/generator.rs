@@ -137,6 +137,12 @@ pub fn create_project_with(
             "Java group/package: {group}"
         )));
     }
+    // A location typed into the wizard usually does not exist yet; create it
+    // like the reference IDE does instead of failing with an OS error.
+    std::fs::create_dir_all(parent).map_err(|source| ProjectError::CreateLocation {
+        path: parent.to_owned(),
+        source,
+    })?;
     let parent = parent.canonicalize()?;
     if !parent.is_dir() {
         return Err(ProjectError::NotDirectory(parent));
@@ -377,6 +383,22 @@ fn valid_package(group: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_missing_location_is_created_like_the_wizard_promises() {
+        let parent = std::env::temp_dir()
+            .join(format!(
+                "jetthing-generators-missing-{}",
+                std::process::id()
+            ))
+            .join("nested")
+            .join("location");
+        let _ = std::fs::remove_dir_all(parent.parent().unwrap().parent().unwrap());
+        let project = create_project(&parent, "fresh", ProjectKind::RustBinary, "").unwrap();
+        assert!(project.root().join("Cargo.toml").is_file());
+        let _ = std::fs::remove_dir_all(parent.parent().unwrap().parent().unwrap());
+    }
+
     #[test]
     fn templates_and_collisions_are_safe() {
         let parent =

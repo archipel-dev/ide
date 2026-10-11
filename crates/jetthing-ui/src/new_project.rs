@@ -7,8 +7,18 @@ use eframe::egui::{self, RichText, vec2};
 use jetthing_core::JdkChoice;
 use serde_json::json;
 
-/// Height of the generator list and form row; the button row sits below it.
+/// Preferred height of the generator list and form row; the button row sits below it.
 const CONTENT_HEIGHT: f32 = 420.0;
+
+/// Room the dialog needs around the content row: title, button row, margins and
+/// a gap to the window edges. Taller content would push Create/Cancel off-screen.
+const CHROME_HEIGHT: f32 = 150.0;
+
+/// Content row height that still leaves the button row visible in a window of
+/// `screen_height` points (the minimum window is 800×500).
+fn content_height(screen_height: f32) -> f32 {
+    (screen_height - CHROME_HEIGHT).clamp(200.0, CONTENT_HEIGHT)
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Preset {
@@ -215,14 +225,15 @@ pub fn show(
     let enter = ctx.memory(|m| fields.iter().any(|id| m.has_focus(egui::Id::new(id))))
         && !egui::Popup::is_any_open(ctx)
         && ctx.input(|input| input.key_pressed(egui::Key::Enter));
+    let content_height = content_height(ctx.content_rect().height());
     popup_frame(ctx, "dialog_new_project", 780.0, |ui| {
         title(ui, "New Project");
         ui.horizontal_top(|ui| {
             // Bound the row: the vertical separator below grows to the available height,
             // which would otherwise push the Create/Cancel row off-screen.
-            ui.set_max_height(CONTENT_HEIGHT);
+            ui.set_max_height(content_height);
             ui.allocate_ui_with_layout(
-                vec2(210.0, CONTENT_HEIGHT),
+                vec2(210.0, content_height),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
                     ui.set_width(210.0);
@@ -256,7 +267,7 @@ pub fn show(
             ui.separator();
             egui::ScrollArea::vertical()
                 .id_salt("new_project_form")
-                .max_height(CONTENT_HEIGHT)
+                .max_height(content_height)
                 .auto_shrink([false, true])
                 .show(ui, |ui| {
                     ui.vertical(|ui| {
@@ -462,4 +473,17 @@ pub fn show(
         }
     }
     keep
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn content_shrinks_so_the_button_row_fits_small_windows() {
+        assert_eq!(content_height(900.0), CONTENT_HEIGHT);
+        // The minimum window height must still show Create/Cancel.
+        assert!(content_height(500.0) + CHROME_HEIGHT <= 500.0);
+        assert!(content_height(100.0) >= 200.0);
+    }
 }

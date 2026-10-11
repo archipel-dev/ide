@@ -37,6 +37,9 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     let width = 460.0;
     let screen = ctx.content_rect();
     let mut action: Option<(&str, Value)> = None;
+    // Modal: the welcome buttons behind it stay inert until a choice is made,
+    // otherwise a click on "New Project" stacks a second dialog on top.
+    crate::popups::modal_backdrop(ctx, "first_run_backdrop");
     egui::Area::new(egui::Id::new("first_run_dialog"))
         .order(egui::Order::Foreground)
         .fixed_pos(egui::pos2(

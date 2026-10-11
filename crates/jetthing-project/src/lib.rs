@@ -17,6 +17,13 @@ pub use watcher::{FileChanges, ProjectWatcher};
 pub enum ProjectError {
     #[error("project path is not a directory: {0}")]
     NotDirectory(PathBuf),
+    #[error("there is no directory at {0}")]
+    NotFound(PathBuf),
+    #[error("cannot create the project location {path}: {source}")]
+    CreateLocation {
+        path: PathBuf,
+        source: std::io::Error,
+    },
     #[error("path is outside the project: {0}")]
     OutsideRoot(PathBuf),
     #[error("file is not valid UTF-8: {0}")]
@@ -111,7 +118,13 @@ pub struct Project {
 
 impl Project {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, ProjectError> {
-        let root = path.as_ref().canonicalize()?;
+        let path = path.as_ref();
+        if !path.exists() {
+            // Name the path: the bare OS error ("No such file or directory")
+            // leaves the user guessing which field was wrong.
+            return Err(ProjectError::NotFound(path.to_owned()));
+        }
+        let root = path.canonicalize()?;
         if !root.is_dir() {
             return Err(ProjectError::NotDirectory(root));
         }
@@ -481,6 +494,14 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn opening_a_missing_directory_names_the_path() {
+        let missing = std::env::temp_dir().join("jetthing-definitely-missing-dir");
+        let error = Project::open(&missing).unwrap_err().to_string();
+        assert!(error.contains("no directory at"), "{error}");
+        assert!(error.contains("jetthing-definitely-missing-dir"), "{error}");
+    }
 
     #[cfg(unix)]
     #[test]

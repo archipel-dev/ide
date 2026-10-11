@@ -126,6 +126,22 @@ pub(crate) fn popup_frame(
         .response
 }
 
+/// Dims the workbench and swallows clicks behind a modal dialog, so nothing
+/// underneath can be activated while it is open (see `docs/ux/interaction-spec.md`).
+/// Draw it before the dialog's own `Order::Foreground` area.
+pub(crate) fn modal_backdrop(ctx: &egui::Context, id: &str) {
+    let screen = ctx.content_rect();
+    egui::Area::new(egui::Id::new(id))
+        .order(egui::Order::Middle)
+        .fixed_pos(screen.min)
+        .interactable(true)
+        .show(ctx, |ui| {
+            let (rect, _) = ui.allocate_exact_size(screen.size(), Sense::click_and_drag());
+            ui.painter()
+                .rect_filled(rect, 0.0, egui::Color32::from_black_alpha(80));
+        });
+}
+
 pub(crate) fn title(ui: &mut egui::Ui, text: &str) {
     ui.label(
         RichText::new(text)

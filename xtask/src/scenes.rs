@@ -211,7 +211,7 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
     Ok(())
 }
 
-fn build_app(release: bool) -> Result<PathBuf> {
+pub(crate) fn build_app(release: bool) -> Result<PathBuf> {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
     let mut command = Command::new(cargo);
     command.args(["build", "-p", "jetthing-app"]);
@@ -233,13 +233,13 @@ fn build_app(release: bool) -> Result<PathBuf> {
 
 /// The X display scenes render on. Uses `$DISPLAY` when set; otherwise starts
 /// Xvfb on Linux. Other platforms use their native window system.
-struct Display {
-    name: Option<String>,
+pub(crate) struct Display {
+    pub(crate) name: Option<String>,
     xvfb: Option<Child>,
 }
 
 impl Display {
-    fn acquire() -> Result<Self> {
+    pub(crate) fn acquire() -> Result<Self> {
         if let Some(name) = std::env::var("DISPLAY").ok().filter(|d| !d.is_empty()) {
             return Ok(Self {
                 name: Some(name),
@@ -296,7 +296,7 @@ impl Drop for Display {
 }
 
 /// Kills the IDE when a scene ends, however it ends.
-struct AppProcess(Child);
+pub(crate) struct AppProcess(pub(crate) Child);
 
 impl Drop for AppProcess {
     fn drop(&mut self) {
@@ -355,7 +355,7 @@ fn run_scene(
     Ok(())
 }
 
-fn connect(socket: &Path, app: &mut Child, scene_dir: &Path) -> Result<ControlClient> {
+pub(crate) fn connect(socket: &Path, app: &mut Child, scene_dir: &Path) -> Result<ControlClient> {
     let started = Instant::now();
     loop {
         if let Ok(client) = ControlClient::connect(socket) {
@@ -505,7 +505,7 @@ pub fn fixture_files(name: &str) -> Result<Vec<(&'static str, &'static str)>> {
 }
 
 /// Writes the fixture and commits it to a fresh Git repository on `master`.
-fn create_fixture(name: &str, dir: &Path) -> Result<PathBuf> {
+pub(crate) fn create_fixture(name: &str, dir: &Path) -> Result<PathBuf> {
     for (path, contents) in fixture_files(name)? {
         let target = dir.join(path);
         if let Some(parent) = target.parent() {

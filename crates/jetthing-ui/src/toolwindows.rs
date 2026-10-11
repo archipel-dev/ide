@@ -399,6 +399,14 @@ fn project_tree(app: &mut IdeApp, ui: &mut egui::Ui) {
     }
     if let Some(path) = open {
         app.dispatch("editor.openFile", json!({"path": path}));
+        // The single click that preceded a double click already showed the
+        // file as a preview (focus kept in the tree), so the focus-follows-file
+        // rule sees no change. A deliberate open always lands in the editor.
+        app.keep_tree_focus = false;
+        // Deferred by one frame: egui surrenders focus from any widget created
+        // later in the frame of a click elsewhere (`SurrenderFocusOn::Clicks`),
+        // which is exactly what a request made during the click frame runs into.
+        app.focus_editor_next_frame = true;
     }
     if let Some(path) = open_right {
         app.dispatch("editor.openInRightSplit", json!({"path": path}));

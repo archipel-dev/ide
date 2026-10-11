@@ -401,6 +401,11 @@ impl IdeApp {
                 "customize": self.state.first_run_open,
                 "crashReport": self.state.crash_report.is_some(),
                 "menu": egui::Popup::is_any_open(ctx),
+                "settings": self.settings_dialog.is_some(),
+            },
+            "window": {
+                "width": ctx.content_rect().width(),
+                "height": ctx.content_rect().height(),
             },
             "findInFiles": {
                 "query": self.state.search_query,

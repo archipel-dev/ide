@@ -35,12 +35,12 @@ mod layout {
     pub type Point = (i32, i32);
     // Welcome screen.
     pub const WELCOME_NEW_PROJECT: Point = (318, 204);
-    pub const FIRST_RUN_SKIP: Point = (672, 411);
+    pub const FIRST_RUN_SKIP: Point = (753, 577);
     // New Project dialog (1440×900).
-    pub const NP_GENERATOR_RUST_APP: Point = (440, 587);
-    pub const NP_NAME: Point = (850, 231);
-    pub const NP_LOCATION: Point = (820, 265);
-    pub const NP_CREATE: Point = (1006, 665);
+    pub const NP_GENERATOR_RUST_APP: Point = (420, 445);
+    pub const NP_NAME: Point = (846, 155);
+    pub const NP_LOCATION: Point = (788, 211);
+    pub const NP_CREATE: Point = (1060, 801);
     // New Project dialog in the 800×500 minimum window.
     pub const NP_SMALL_GENERATOR_EMPTY: Point = (77, 163);
     pub const NP_SMALL_NAME: Point = (540, 111);

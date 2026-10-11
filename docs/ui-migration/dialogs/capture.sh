@@ -8,7 +8,7 @@ WORK=$(mktemp -d); export HOME=$WORK/home; mkdir -p "$HOME"
 pgrep -f "Xvfb :77" >/dev/null || { Xvfb :77 -screen 0 1440x900x24 >/dev/null 2>&1 & sleep 2; }
 "$BIN" >"$WORK/app.log" 2>&1 & APP=$!
 trap 'kill $APP 2>/dev/null || true' EXIT
-sleep 20
+sleep 20; xdotool windowfocus --sync "$(xdotool search --onlyvisible --class jetthing | head -1)"
 move() { xdotool mousemove "$1" "$2"; sleep 0.6; }
 click() { move "$1" "$2"; xdotool click 1; sleep 1; }
 shot() { import -window root "$OUT-$1.png"; }

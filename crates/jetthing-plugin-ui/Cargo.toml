@@ -3,8 +3,7 @@ name = "jetthing-plugin-ui"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "egui view helpers for Jetthing plugins (UI layer; engine crates stay egui-free)."
+description = "Compatibility shim re-exporting archipel-plugin-ui."
 
 [dependencies]
-egui.workspace = true
-jetthing-plugin-api = { path = "../jetthing-plugin-api" }
+archipel-plugin-ui.workspace = true

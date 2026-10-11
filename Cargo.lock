@@ -261,6 +261,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "archipel-command"
+version = "0.1.0"
+source = "git+https://github.com/archipel-dev/sdk?branch=main#24a06d4c22e591ebdb7db296761459c5a9998cca"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "archipel-icons"
 version = "0.1.0"
 source = "git+https://github.com/archipel-dev/kit?branch=main#89e6bb6682c87507b8e328877321cdebea267919"
@@ -276,6 +286,39 @@ dependencies = [
  "archipel-icons",
  "egui",
  "egui_kittest",
+]
+
+[[package]]
+name = "archipel-plugin-api"
+version = "0.1.0"
+source = "git+https://github.com/archipel-dev/sdk?branch=main#24a06d4c22e591ebdb7db296761459c5a9998cca"
+dependencies = [
+ "archipel-command",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "toml",
+]
+
+[[package]]
+name = "archipel-plugin-testing"
+version = "0.1.0"
+source = "git+https://github.com/archipel-dev/sdk?branch=main#24a06d4c22e591ebdb7db296761459c5a9998cca"
+dependencies = [
+ "archipel-kit",
+ "archipel-plugin-api",
+ "archipel-plugin-ui",
+ "egui",
+]
+
+[[package]]
+name = "archipel-plugin-ui"
+version = "0.1.0"
+source = "git+https://github.com/archipel-dev/sdk?branch=main#24a06d4c22e591ebdb7db296761459c5a9998cca"
+dependencies = [
+ "archipel-kit",
+ "archipel-plugin-api",
+ "egui",
 ]
 
 [[package]]
@@ -922,7 +965,7 @@ checksum = "fe6d2e5af09e8c8ad56c969f2157a3d4238cebc7c55f0a517728c38f7b200f81"
 dependencies = [
  "serde",
  "termcolor",
- "unicode-width 0.1.14",
+ "unicode-width 0.2.2",
 ]
 
 [[package]]
@@ -938,7 +981,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
 dependencies = [
  "lazy_static",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3051,9 +3094,7 @@ dependencies = [
 name = "jetthing-command"
 version = "0.0.9"
 dependencies = [
- "serde",
- "serde_json",
- "thiserror 2.0.21",
+ "archipel-command",
 ]
 
 [[package]]
@@ -3195,17 +3236,14 @@ dependencies = [
 name = "jetthing-plugin-api"
 version = "0.0.9"
 dependencies = [
- "jetthing-command",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "toml",
+ "archipel-plugin-api",
 ]
 
 [[package]]
 name = "jetthing-plugin-hello"
 version = "0.0.9"
 dependencies = [
+ "archipel-plugin-testing",
  "jetthing-plugin-api",
  "jetthing-plugin-ui",
 ]
@@ -3227,8 +3265,7 @@ dependencies = [
 name = "jetthing-plugin-ui"
 version = "0.0.9"
 dependencies = [
- "egui",
- "jetthing-plugin-api",
+ "archipel-plugin-ui",
 ]
 
 [[package]]

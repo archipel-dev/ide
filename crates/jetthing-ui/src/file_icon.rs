@@ -21,7 +21,7 @@ impl IdeApp {
     pub(crate) fn file_icon(&self, path: &Path) -> Icon {
         let name = Self::file_name(path);
         let icon = Icon::for_file(&name);
-        if !matches!(icon, Icon::JavaType(_)) {
+        if !icon.is_java_type() {
             return icon;
         }
         if let Some(document) = self.state.documents.iter().find(|d| d.path == path) {
@@ -47,7 +47,7 @@ impl IdeApp {
             .and_then(|mut file| file.read(&mut buffer))
             .unwrap_or(0);
         let text = String::from_utf8_lossy(&buffer[..read]);
-        let kind = TypeKind::peek_java(&text);
+        let kind = archipel_kit::icons::peek_java(&text);
         cache.0.insert(path.to_owned(), (modified, kind));
         Icon::JavaType(kind)
     }

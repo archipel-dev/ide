@@ -9,6 +9,8 @@
 - Never claim parity without reproducible evidence recorded in `docs/parity/`.
 - Preserve clean-room boundaries: use public documentation, public source with compatible
   licensing, and observable behavior; do not copy JetBrains code, artwork, or branding.
+- No new ad-hoc egui painting in `jetthing-ui`: use `archipel-kit` components, parts and
+  behaviours; if the kit lacks something, add it there. See `docs/ui-migration.md`.
 - Avoid panics on user-controlled input. Return structured, actionable errors.
 
 ## Required checks

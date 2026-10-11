@@ -18,7 +18,7 @@ pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
         .min_width(240.0)
         .resizable(true)
         .show_separator_line(false)
-        .frame(widgets::island_frame())
+        .frame(widgets::island_frame(ctx))
         .show(ctx, |ui| {
             let mirroring = app.state.android.mirror.is_running();
             let mut toggle = false;

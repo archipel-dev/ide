@@ -4,6 +4,7 @@ use crate::icons;
 use crate::native_dialog::Purpose;
 use crate::widgets::row_text;
 use crate::{IdeApp, theme};
+use archipel_kit::parts::Surface;
 use eframe::egui::{self, Rect, RichText, Sense, vec2};
 use jetthing_core::{JavaKind, KotlinKind};
 use serde_json::json;
@@ -101,6 +102,8 @@ pub fn parse_line_column(input: &str) -> Option<(usize, Option<usize>)> {
     Some((line, column))
 }
 
+/// A modal dialog box near the top of the window, on the kit's dialog surface
+/// (`Surface::Dialog`: island radius, popup fill and border, dialog padding).
 pub(crate) fn popup_frame(
     ctx: &egui::Context,
     id: &str,
@@ -115,13 +118,12 @@ pub(crate) fn popup_frame(
             screen.top() + screen.height() * 0.2,
         ))
         .show(ctx, |ui| {
-            egui::Frame::popup(ui.style())
-                .corner_radius(10)
-                .inner_margin(egui::Margin::same(12))
-                .show(ui, |ui| {
-                    ui.set_width(width - 24.0);
-                    add(ui);
-                });
+            let frame = Surface::Dialog.frame(ctx);
+            let padding = frame.inner_margin.sum().x;
+            frame.show(ui, |ui| {
+                ui.set_width(width - padding);
+                add(ui);
+            });
         })
         .response
 }

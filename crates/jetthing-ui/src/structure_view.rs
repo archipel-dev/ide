@@ -2,9 +2,13 @@
 //! code part of the navigation-bar breadcrumbs, all from the language
 //! analysis' tags-query structure.
 
+use crate::icons::Icon;
 use crate::widgets;
 use crate::{IdeApp, theme};
-use eframe::egui::{self, Color32};
+use archipel_kit::behaviour::ContextMenu;
+use archipel_kit::components::{ListRow, MenuItem, VirtualList};
+use archipel_kit::icons::{Glyph, Symbol, SymbolKind as Kind};
+use eframe::egui;
 use jetthing_core::Document;
 use jetthing_language::{StructureItem, SymbolKind, structure};
 use serde_json::json;
@@ -80,40 +84,30 @@ pub fn flatten<'a>(
     }
 }
 
-/// Badge letter and color per kind (original drawings: a filled circle with a letter).
-fn badge(kind: SymbolKind) -> (&'static str, Color32) {
+/// The kit icon of a structure item: its code symbol (class, method, field …), or a glyph
+/// for kinds that are not code (markup tags, document sections).
+pub fn icon(kind: SymbolKind) -> archipel_kit::Icon {
+    let symbol = |kind| archipel_kit::Icon::Symbol(Symbol::new(kind));
     match kind {
-        SymbolKind::Class => ("C", Color32::from_rgb(0x54, 0x8A, 0xF7)),
-        SymbolKind::Interface => ("I", Color32::from_rgb(0x5F, 0xB8, 0x65)),
-        SymbolKind::Enum => ("E", Color32::from_rgb(0xD5, 0x96, 0x37)),
-        SymbolKind::Function | SymbolKind::Method | SymbolKind::Constructor => {
-            ("m", Color32::from_rgb(0xE5, 0x6A, 0x73))
-        }
-        SymbolKind::Field => ("f", Color32::from_rgb(0xC7, 0x7D, 0xBB)),
-        SymbolKind::Constant => ("c", Color32::from_rgb(0xC7, 0x7D, 0xBB)),
-        SymbolKind::Module => ("M", Color32::from_rgb(0x86, 0x8A, 0x91)),
-        SymbolKind::Type => ("T", Color32::from_rgb(0x2A, 0xAC, 0xB8)),
-        SymbolKind::Macro => ("!", Color32::from_rgb(0x86, 0x8A, 0x91)),
-        SymbolKind::Tag => ("<", Color32::from_rgb(0xD5, 0xB7, 0x78)),
-        SymbolKind::Key => ("k", Color32::from_rgb(0xC7, 0x7D, 0xBB)),
-        SymbolKind::Heading => ("#", Color32::from_rgb(0x86, 0x8A, 0x91)),
-        SymbolKind::Other => ("•", Color32::from_rgb(0x86, 0x8A, 0x91)),
+        SymbolKind::Class => symbol(Kind::Class),
+        SymbolKind::Interface => symbol(Kind::Interface),
+        SymbolKind::Enum => symbol(Kind::Enum),
+        SymbolKind::Function => symbol(Kind::Function),
+        SymbolKind::Method => symbol(Kind::Method),
+        SymbolKind::Constructor => symbol(Kind::Constructor),
+        SymbolKind::Field => symbol(Kind::Field),
+        SymbolKind::Constant => symbol(Kind::Constant),
+        SymbolKind::Module => symbol(Kind::Module),
+        SymbolKind::Type => symbol(Kind::Struct),
+        SymbolKind::Macro => symbol(Kind::Function),
+        SymbolKind::Key => symbol(Kind::Property),
+        SymbolKind::Tag => archipel_kit::Icon::Glyph(Glyph::Code),
+        SymbolKind::Heading => archipel_kit::Icon::Glyph(Glyph::FileText),
+        SymbolKind::Other => symbol(Kind::Variable),
     }
 }
 
-pub fn paint_badge(painter: &egui::Painter, center: egui::Pos2, kind: SymbolKind) {
-    let (letter, color) = badge(kind);
-    painter.circle_filled(center, 7.0, color.gamma_multiply(0.85));
-    painter.text(
-        center,
-        egui::Align2::CENTER_CENTER,
-        letter,
-        egui::FontId::proportional(10.0),
-        *theme::editor::BACKGROUND,
-    );
-}
-
-/// Paints one structure row; returns its response and the chevron rect.
+/// Paints one structure row (the File Structure popup); returns its geometry.
 /// `expanded` draws a chevron for items with children (the tool window collapses them).
 pub fn row(
     ui: &mut egui::Ui,
@@ -122,18 +116,14 @@ pub fn row(
     selected: bool,
     expanded: Option<bool>,
 ) -> widgets::TreeRowOut {
-    let kind = item.kind;
-    let paint = move |painter: &egui::Painter, rect: egui::Rect| {
-        paint_badge(painter, rect.center(), kind);
-    };
     widgets::tree_row(
         ui,
         widgets::TreeRow {
             depth,
             expanded,
             selected,
-            paint_icon: Some(&paint),
-            color: *theme::TEXT_BRIGHT,
+            icon: Some((Icon::Kit(icon(item.kind)), *theme::ICON)),
+            tone: Some(archipel_kit::Tone::Strong),
             secondary: item
                 .detail
                 .as_deref()
@@ -145,6 +135,13 @@ pub fn row(
 
 /// Moves the caret to the item's name and focuses the editor.
 pub fn navigate(app: &mut IdeApp, ctx: &egui::Context, item: &StructureItem) {
+    goto(app, item);
+    ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
+}
+
+/// Moves the caret to the item's name, leaving keyboard focus where it is (arrow keys in
+/// the Structure window follow the caret without stealing focus).
+fn goto(app: &mut IdeApp, item: &StructureItem) {
     let Some(document) = app
         .state
         .active_document
@@ -161,7 +158,6 @@ pub fn navigate(app: &mut IdeApp, ctx: &egui::Context, item: &StructureItem) {
         "editor.gotoLine",
         json!({"line": item.line + 1, "column": column + 1}),
     );
-    ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
 }
 
 /// The innermost item containing the primary caret (to highlight in lists).
@@ -203,7 +199,15 @@ fn crumb_label(name: &str) -> String {
     }
 }
 
-/// Structure tool window body.
+/// What a Structure row's context menu asked for.
+#[derive(Clone, Copy)]
+enum Choice {
+    Navigate,
+    CopyName,
+}
+
+/// Structure tool window body: the kit's virtualized list of `ListRow`s, with a context
+/// menu on every row. Expanding and collapsing is kept per file.
 pub fn tool_window(app: &mut IdeApp, ui: &mut egui::Ui) {
     let Some(document) = app
         .state
@@ -225,47 +229,105 @@ pub fn tool_window(app: &mut IdeApp, ui: &mut egui::Ui) {
     let mut collapsed: std::collections::HashSet<usize> = ui
         .data(|data| data.get_temp(collapsed_id))
         .unwrap_or_default();
-    let mut clicked = None;
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            let mut hidden_below = None;
-            for (depth, item) in &rows {
-                if let Some(limit) = hidden_below {
-                    if *depth > limit {
-                        continue;
-                    }
-                    hidden_below = None;
-                }
-                let key = item.name_range.start;
-                let is_collapsed = collapsed.contains(&key);
-                let selected = current.as_ref() == Some(&item.name_range);
-                let has_children = !item.children.is_empty();
-                let out = row(
-                    ui,
-                    *depth,
-                    item,
-                    selected,
-                    has_children.then_some(!is_collapsed),
-                );
-                if has_children && is_collapsed {
-                    hidden_below = Some(*depth);
-                }
-                if out.response.clicked() {
-                    if has_children && out.on_chevron() {
-                        if !collapsed.remove(&key) {
-                            collapsed.insert(key);
-                        }
-                    } else {
-                        clicked = Some((*item).clone());
-                    }
-                }
+    let key = |item: &StructureItem| item.name_range.start;
+    // Children of a collapsed node are not visible rows.
+    let mut visible: Vec<(usize, &StructureItem)> = Vec::new();
+    let mut hidden_below = None;
+    for (depth, item) in &rows {
+        if let Some(limit) = hidden_below {
+            if *depth > limit {
+                continue;
             }
+            hidden_below = None;
+        }
+        visible.push((*depth, *item));
+        if !item.children.is_empty() && collapsed.contains(&key(item)) {
+            hidden_below = Some(*depth);
+        }
+    }
+    // The selection follows the caret; a click or arrow key moves the caret.
+    let mut selected = visible
+        .iter()
+        .position(|(_, item)| current.as_ref() == Some(&item.name_range));
+    let chosen = std::cell::Cell::new(None::<(usize, Choice)>);
+    let out = VirtualList::new(("structure", &document.path), visible.len(), &mut selected)
+        .name("Structure")
+        .height(ui.available_height())
+        .show(ui, |index| {
+            let (depth, item) = visible[index];
+            let mut row = ListRow::new(&item.name)
+                .icon(icon(item.kind))
+                .depth(depth)
+                .expanded((!item.children.is_empty()).then(|| !collapsed.contains(&key(item))));
+            if let Some(detail) = &item.detail {
+                row = row.secondary(detail);
+            }
+            row.with(ContextMenu::new({
+                let chosen = &chosen;
+                move |ui| {
+                    if ui.add(MenuItem::new("Navigate to Source")).clicked() {
+                        chosen.set(Some((index, Choice::Navigate)));
+                    }
+                    if ui.add(MenuItem::new("Copy Name")).clicked() {
+                        chosen.set(Some((index, Choice::CopyName)));
+                    }
+                }
+            }))
         });
+    let mut toggle = out.toggled;
+    if out.response.has_focus()
+        && let Some(index) = selected
+    {
+        // The list reports Up/Down/Home/End itself; Left and Right fold and unfold.
+        let (depth, item) = visible[index];
+        let (left, right) = ui.input(|input| {
+            (
+                input.key_pressed(egui::Key::ArrowLeft),
+                input.key_pressed(egui::Key::ArrowRight),
+            )
+        });
+        let folded = collapsed.contains(&key(item));
+        if !item.children.is_empty() && ((right && folded) || (left && !folded)) {
+            toggle = Some(index);
+        } else if left && let Some(parent) = visible[..index].iter().rposition(|(d, _)| *d < depth)
+        {
+            selected = Some(parent);
+        }
+    }
+    if let Some(index) = toggle
+        && !collapsed.remove(&key(visible[index].1))
+    {
+        collapsed.insert(key(visible[index].1));
+    }
+    let by_key = ui.input(|input| {
+        use egui::Key::*;
+        [ArrowUp, ArrowDown, ArrowLeft, Home, End, PageUp, PageDown]
+            .into_iter()
+            .any(|key| input.key_pressed(key))
+    });
+    let target = |index: usize| (*visible[index].1).clone();
+    let navigate_to = match (out.activated, selected) {
+        (Some(index), _) => Some((target(index), true)),
+        (None, Some(index)) if out.selection_changed && toggle.is_none() => {
+            Some((target(index), !by_key))
+        }
+        _ => None,
+    };
+    let from_menu = match chosen.get() {
+        Some((index, Choice::Navigate)) => Some((target(index), true)),
+        Some((index, Choice::CopyName)) => {
+            ui.ctx().copy_text(visible[index].1.name.clone());
+            None
+        }
+        None => None,
+    };
     ui.data_mut(|data| data.insert_temp(collapsed_id, collapsed));
-    if let Some(item) = clicked {
-        navigate(app, ui.ctx(), &item);
+    if let Some((item, focus_editor)) = from_menu.or(navigate_to) {
+        if focus_editor {
+            navigate(app, ui.ctx(), &item);
+        } else {
+            goto(app, &item);
+        }
     }
 }
 

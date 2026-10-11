@@ -8,7 +8,15 @@
 //! Tokens dereference to the active theme's color, so `theme::TEXT` can be passed to
 //! egui wherever a color is expected and switching the theme takes effect on the next
 //! frame without touching call sites.
+//!
+//! The kit (`archipel-kit`) owns the workbench palette: every token with a kit
+//! counterpart takes the kit's value, and the editor tokens (which follow the user's
+//! color scheme, something the kit does not know) feed the kit's `EditorColors`. The
+//! result is one [`archipel_kit::Theme`] per palette ([`Palette::theme`]) that is applied
+//! to the egui context, so kit components and the IDE's own painting always agree.
 
+use archipel_kit::Theme;
+use archipel_kit::theme::Colors;
 use eframe::egui::Color32;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -131,8 +139,6 @@ pub mod tokens {
         COMPLETION_SELECTION = ["ui:CompletionPopup.selectionBackground"] or 0x113A5C;
         /// Default icon stroke (`Gray11` dark, `icon-default-stroke` light).
         ICON = ["palette:Gray11"] ["palette:icon-default-stroke"] or 0xCED0D6;
-        /// Folder icon fill (`Gray4` dark, `Gray12` light).
-        FOLDER_FILL = ["palette:Gray4"] ["palette:Gray12"] or 0x43454A;
         /// `EditorTabs.underlinedTabBackground` (selected editor tab).
         TAB_SELECTED = ["ui:EditorTabs.underlinedTabBackground"] or 0x233558;
         /// `EditorTabs.underlinedBorderColor`.
@@ -191,10 +197,117 @@ pub struct Palette {
     /// Editor color scheme the editor tokens (and `crate::syntax`) use.
     pub scheme: String,
     pub colors: Vec<Color32>,
+    /// The kit theme the egui context uses for this palette: kit workbench colors and the
+    /// editor colors of `scheme`.
+    pub theme: Theme,
+    /// Tokens whose spec value differs from the kit's; the kit's value is used.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub overridden: Vec<Override>,
     /// Token names that fell back to the built-in value (empty for complete data;
     /// asserted by the tests).
     #[cfg_attr(not(test), allow(dead_code))]
     pub missing: Vec<&'static str>,
+}
+
+/// A token whose spec value was replaced by the kit's.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Override {
+    pub token: &'static str,
+    pub spec: Color32,
+    pub kit: Color32,
+}
+
+/// The kit's value of a workbench token, if the kit has a counterpart.
+fn kit_color(token: &str, c: &Colors) -> Option<Color32> {
+    Some(match token {
+        "FRAME" => c.frame,
+        "ISLAND" => c.island,
+        "POPUP" => c.popup,
+        "POPUP_BORDER" => c.popup_border,
+        "TEXT" => c.text,
+        "TEXT_BRIGHT" => c.text_strong,
+        "TEXT_SECONDARY" => c.text_secondary,
+        "TEXT_INFO" => c.text_placeholder,
+        "TEXT_DISABLED" => c.text_disabled,
+        "HOVER" => c.hover,
+        "PRESSED" => c.pressed,
+        "SELECTION" => c.selection,
+        "ACCENT" => c.accent,
+        "SELECTION_DISABLED" => c.accent_disabled,
+        "NOTIFICATION" => c.notification,
+        "BORDER" => c.border,
+        "FIELD" => c.field,
+        "TOOLBAR_SEPARATOR" => c.separator,
+        "RUN_GREEN" => c.run,
+        "STOP_RED" => c.stop,
+        "ERROR" => c.error,
+        "WARNING" => c.warning,
+        "SUCCESS" => c.success,
+        "MODIFIED" => c.vcs_modified,
+        "LINK" => c.link,
+        "ADDED" => c.vcs_added,
+        "UNTRACKED" => c.vcs_untracked,
+        "MUTED" => c.vcs_ignored,
+        "COMPLETION_SELECTION" => c.selection_popup,
+        "ICON" => c.icon,
+        "TAB_SELECTED" => c.tab_selected,
+        "TAB_SELECTED_BORDER" => c.tab_selected_border,
+        "BANNER_WARNING" => c.banner_warning.background,
+        "BANNER_WARNING_BORDER" => c.banner_warning.border,
+        _ => return None,
+    })
+}
+
+/// Hands an editor token's color to the kit theme.
+fn set_editor(theme: &mut Theme, token: &str, color: Color32) {
+    let e = &mut theme.editor;
+    match token {
+        "EDITOR_BACKGROUND" => e.background = color,
+        "EDITOR_TEXT" => e.text = color,
+        "EDITOR_CARET" => e.caret = color,
+        "EDITOR_CARET_ROW" => e.caret_row = color,
+        "EDITOR_LINE_NUMBER" => e.line_number = color,
+        "EDITOR_LINE_NUMBER_CARET" => e.line_number_caret = color,
+        "EDITOR_SELECTION" => e.selection = color,
+        "EDITOR_BACKGROUND_PANEL" => e.background_panel = color,
+        "EDITOR_SEARCH_RESULT" => e.search_result = color,
+        "EDITOR_RENAME_OCCURRENCE" => e.rename_occurrence = color,
+        "EDITOR_MATCHED_BRACE" => e.matched_brace = color,
+        "EDITOR_INDENT_GUIDE" => e.indent_guide = color,
+        "EDITOR_ERROR_EFFECT" => e.error_effect = color,
+        "EDITOR_WARNING_EFFECT" => e.warning_effect = color,
+        "EDITOR_BREAKPOINT_LINE" => e.breakpoint_line = color,
+        "EDITOR_EXECUTION_LINE" => e.execution_line = color,
+        "EDITOR_INLINE_VALUE" => e.inline_value = color,
+        "EDITOR_WEAK_WARNING_EFFECT" => e.weak_warning_effect = color,
+        "EDITOR_ERROR_STRIPE" => e.error_stripe = color,
+        "EDITOR_WARNING_STRIPE" => e.warning_stripe = color,
+        _ => {}
+    }
+}
+
+/// Builds the kit theme for a palette and makes `colors` agree with it: workbench tokens
+/// take the kit's values, editor tokens go into the kit's editor colors.
+fn reconcile(name: &str, dark: bool, colors: &mut [Color32]) -> (Theme, Vec<Override>) {
+    let mut theme = if dark { Theme::dark() } else { Theme::light() };
+    theme.name = name.to_owned();
+    let mut overridden = Vec::new();
+    for (index, spec) in tokens::SPECS.iter().enumerate() {
+        match kit_color(spec.name, &theme.colors) {
+            Some(kit) => {
+                if colors[index] != kit {
+                    overridden.push(Override {
+                        token: spec.name,
+                        spec: colors[index],
+                        kit,
+                    });
+                }
+                colors[index] = kit;
+            }
+            None => set_editor(&mut theme, spec.name, colors[index]),
+        }
+    }
+    (theme, overridden)
 }
 
 #[derive(Deserialize)]
@@ -270,13 +383,17 @@ fn fallback_color(value: u32) -> Color32 {
 impl Palette {
     /// The built-in Islands Dark values (used if the data cannot be read).
     pub fn builtin_dark() -> Self {
+        let mut colors: Vec<Color32> = tokens::SPECS
+            .iter()
+            .map(|spec| fallback_color(spec.fallback))
+            .collect();
+        let (theme, overridden) = reconcile("Islands Dark", true, &mut colors);
         Self {
             dark: true,
             scheme: "Islands Dark".into(),
-            colors: tokens::SPECS
-                .iter()
-                .map(|spec| fallback_color(spec.fallback))
-                .collect(),
+            colors,
+            theme,
+            overridden,
             missing: Vec::new(),
         }
     }
@@ -284,6 +401,7 @@ impl Palette {
     /// Resolves every token for `theme` from the spec data, with the editor colors
     /// from `scheme` (default: the theme's own editor scheme).
     pub fn from_spec(theme: &str, scheme: Option<&str>) -> Result<Self, String> {
+        let theme_name = theme;
         let themes: ThemesFile = serde_json::from_str(THEMES_JSON).map_err(|e| e.to_string())?;
         let schemes: SchemesFile = serde_json::from_str(SCHEMES_JSON).map_err(|e| e.to_string())?;
         let data = themes
@@ -348,7 +466,7 @@ impl Palette {
             }
         };
         let mut missing = Vec::new();
-        let colors = tokens::SPECS
+        let mut colors: Vec<Color32> = tokens::SPECS
             .iter()
             .map(|spec| {
                 let keys = if !data.dark && !spec.light.is_empty() {
@@ -362,10 +480,13 @@ impl Palette {
                 })
             })
             .collect();
+        let (theme, overridden) = reconcile(theme_name, data.dark, &mut colors);
         Ok(Self {
             dark: data.dark,
             scheme: scheme_name.unwrap_or("Islands Dark").to_owned(),
             colors,
+            theme,
+            overridden,
             missing,
         })
     }
@@ -415,6 +536,11 @@ fn palette(theme: &str, scheme: Option<&str>) -> Result<&'static Palette, String
     let palette: &'static Palette = Box::leak(Box::new(Palette::from_spec(theme, scheme)?));
     cache.insert(key, palette);
     Ok(palette)
+}
+
+/// The kit theme of the active palette, to apply to an egui context.
+pub fn kit_theme() -> Theme {
+    active().theme.clone()
 }
 
 pub fn active() -> &'static Palette {
@@ -467,6 +593,54 @@ mod tests {
             palette.get(tokens::HOVER),
             Color32::from_rgba_unmultiplied(0, 0, 0, 0x12)
         );
+    }
+
+    #[test]
+    fn kit_theme_and_tokens_agree_for_every_theme() {
+        for name in THEMES {
+            let palette = Palette::from_spec(name, None).unwrap();
+            let (theme, colors) = (&palette.theme, &palette.theme.colors);
+            assert_eq!(theme.dark, palette.dark, "{name}");
+            assert_eq!(theme.name, name);
+            assert_eq!(colors.frame, palette.get(tokens::FRAME), "{name}");
+            assert_eq!(colors.island, palette.get(tokens::ISLAND), "{name}");
+            assert_eq!(colors.text, palette.get(tokens::TEXT), "{name}");
+            assert_eq!(colors.selection, palette.get(tokens::SELECTION), "{name}");
+            assert_eq!(colors.vcs_modified, palette.get(tokens::MODIFIED), "{name}");
+            assert_eq!(
+                colors.banner_warning.border,
+                palette.get(tokens::BANNER_WARNING_BORDER),
+                "{name}"
+            );
+            // The editor colors follow the color scheme, not the kit's defaults.
+            let editor = &theme.editor;
+            assert_eq!(editor.background, palette.get(tokens::EDITOR_BACKGROUND));
+            assert_eq!(editor.selection, palette.get(tokens::EDITOR_SELECTION));
+            assert_eq!(
+                editor.error_stripe,
+                palette.get(tokens::EDITOR_ERROR_STRIPE)
+            );
+        }
+        let darcula = Palette::from_spec("Islands Dark", Some("Darcula")).unwrap();
+        assert_eq!(
+            darcula.theme.editor.background,
+            darcula.get(tokens::EDITOR_BACKGROUND)
+        );
+    }
+
+    /// Prints where the spec data and the kit disagree (the kit wins); the PR description
+    /// lists them. Run with `--nocapture`.
+    #[test]
+    fn spec_values_the_kit_overrides() {
+        for name in THEMES {
+            let palette = Palette::from_spec(name, None).unwrap();
+            for item in &palette.overridden {
+                eprintln!(
+                    "{name}: {} spec {:?} -> kit {:?}",
+                    item.token, item.spec, item.kit
+                );
+            }
+        }
     }
 
     #[test]

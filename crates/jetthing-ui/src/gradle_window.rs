@@ -199,7 +199,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         .min_width(220.0)
         .resizable(true)
         .show_separator_line(false)
-        .frame(island_frame())
+        .frame(island_frame(ctx))
         .show(ctx, |ui| content(app, ui));
 }
 

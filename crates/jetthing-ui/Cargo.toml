@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+archipel-icons.workspace = true
+archipel-kit.workspace = true
 eframe.workspace = true
 egui.workspace = true
 egui_extras = { version = "0.33", default-features = false, features = ["file", "image"] }
@@ -39,3 +41,6 @@ serde_json.workspace = true
 [[bench]]
 name = "typing"
 harness = false
+
+[dev-dependencies]
+archipel-kit = { workspace = true, features = ["testing"] }

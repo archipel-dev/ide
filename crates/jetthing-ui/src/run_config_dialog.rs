@@ -462,9 +462,10 @@ fn list(ui: &mut egui::Ui, state: &mut State) {
             ui.label(RichText::new("Add New Configuration").color(theme::TEXT_INFO));
             for type_id in RunTarget::TYPE_IDS {
                 let target = RunTarget::template(type_id).expect("known type");
-                let item = crate::widgets::menu_button(egui::Button::new(target.type_name()))
-                    .min_size(vec2(180.0, 24.0));
-                if ui.add(item).clicked() {
+                if ui
+                    .add(crate::widgets::menu_item(target.type_name()))
+                    .clicked()
+                {
                     let name = unique_name(&state.drafts, "Unnamed");
                     if let Some(draft) = Draft::new(type_id, name) {
                         state.drafts.push(draft);

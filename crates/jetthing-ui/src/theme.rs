@@ -3,29 +3,28 @@
 //! Color tokens resolve against the active theme (Islands Dark or Islands Light) from
 //! `docs/spec/data/themes.json` and `docs/spec/data/color-schemes.json`; see
 //! `theme_engine` for the keys behind each token.
-//! Fonts are Inter and JetBrains Mono, both bundled under the SIL Open Font License.
+//! Fonts are Inter and JetBrains Mono, both bundled under the SIL Open Font License by
+//! `archipel-kit`, which also owns the palette values, the layout measurements below and
+//! the egui visuals: [`install`] and [`apply_settings`] hand the kit a `Theme` built from
+//! the active palette.
 
-use eframe::egui::{self, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, Stroke};
-use std::sync::Arc;
-
-const fn hex(rgb: u32) -> Color32 {
-    Color32::from_rgb((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
-}
+use archipel_kit::tokens::{radius, size, typography};
+use eframe::egui::{self, Color32, FontFamily};
 
 // Workbench color tokens; values come from the active theme (see `theme_engine`).
 pub use crate::theme_engine::Token;
 pub use crate::theme_engine::tokens::{
     ACCENT, ADDED, BANNER_WARNING, BANNER_WARNING_BORDER, BORDER, COMPLETION_SELECTION, ERROR,
-    FIELD, FOLDER_FILL, FRAME, HOVER, ICON, ISLAND, LINK, MODIFIED, MUTED, NOTIFICATION, POPUP,
-    POPUP_BORDER, PRESSED, RUN_GREEN, SELECTION, SELECTION_DISABLED, STOP_RED, SUCCESS,
-    TAB_SELECTED, TAB_SELECTED_BORDER, TEXT, TEXT_BRIGHT, TEXT_DISABLED, TEXT_INFO, TEXT_SECONDARY,
+    FIELD, FRAME, HOVER, ICON, ISLAND, LINK, MODIFIED, MUTED, NOTIFICATION, POPUP, POPUP_BORDER,
+    PRESSED, RUN_GREEN, SELECTION, SELECTION_DISABLED, STOP_RED, SUCCESS, TAB_SELECTED,
+    TAB_SELECTED_BORDER, TEXT, TEXT_BRIGHT, TEXT_DISABLED, TEXT_INFO, TEXT_SECONDARY,
     TOOLBAR_SEPARATOR, UNTRACKED, WARNING,
 };
 
-/// `Island.arc` is 20 (diameter); egui radii are half of that.
-pub const ISLAND_RADIUS: u8 = 10;
-/// Half of `Island.borderWidth.compact`.
-pub const ISLAND_GAP: f32 = 2.0;
+/// Corner radius of an island (kit token).
+pub const ISLAND_RADIUS: u8 = radius::ISLAND;
+/// Margin on each side of an island: half of the kit's gap between islands.
+pub const ISLAND_GAP: f32 = size::ISLAND_GAP / 2.0;
 
 pub mod editor {
     //! Editor colors of the active theme's color scheme. Syntax colors are resolved
@@ -57,65 +56,35 @@ pub mod editor {
 
 pub mod layout {
     //! Layout tokens shared by every tool window, so panels line up with each other.
-    //!
-    //! Values come from the Islands Dark spec (`docs/spec/data/themes.json`) where it has
-    //! one; the rest are measured from the reference UI and noted below.
+    //! They are the kit's (`archipel_kit::tokens`), re-exported under the IDE's names.
 
-    /// Left/right inset of tool-window content (`Tree.border` = `4,12,4,12`).
-    pub const CONTENT_INSET: f32 = 12.0;
-    /// Horizontal inset of the selection/hover pill inside a row (`List.border` = `4,0,4,0`).
-    pub const ROW_PILL_INSET: f32 = 4.0;
-    /// Corner radius of the selection/hover pill.
-    pub const ROW_PILL_RADIUS: f32 = 4.0;
-    /// `Tree.rowHeight` / `List.rowHeight`.
-    pub const ROW_HEIGHT: f32 = 24.0;
-    /// `Tree.leftChildIndent` (7) + `Tree.rightChildIndent` (11).
-    pub const TREE_INDENT: f32 = 18.0;
-    /// Width of the expander column; leaf rows reserve it too, so icons align.
-    pub const CHEVRON_COLUMN: f32 = 16.0;
-    /// Icon edge length (12 px glyph in a 16 px box).
-    pub const ICON_SIZE: f32 = 16.0;
+    use archipel_kit::tokens::size;
+
+    /// Left/right inset of tool-window content.
+    pub const CONTENT_INSET: f32 = size::CONTENT_INSET;
+    /// List and tree row height.
+    pub const ROW_HEIGHT: f32 = size::ROW_HEIGHT;
+    /// Icon edge length.
+    pub const ICON_SIZE: f32 = size::ICON;
     /// Gap between an icon and its text.
-    pub const ICON_TEXT_GAP: f32 = 6.0;
-    /// Gap between a primary and its secondary text in a row.
-    pub const SECONDARY_GAP: f32 = 8.0;
+    pub const ICON_TEXT_GAP: f32 = size::ICON_TEXT_GAP;
     /// Tool-window title bar height.
-    pub const TOOLBAR_HEIGHT: f32 = 31.0;
+    pub const TOOLBAR_HEIGHT: f32 = size::HEADER_HEIGHT;
     /// Square icon-button size in toolbars and headers.
-    pub const ICON_BUTTON: f32 = 26.0;
+    pub const ICON_BUTTON: f32 = size::ICON_BUTTON;
     /// Space before the first toolbar button so its glyph lines up with the content inset.
     pub const TOOLBAR_LEAD: f32 = CONTENT_INSET - (ICON_BUTTON - ICON_SIZE) / 2.0;
-    /// Gap between toolbar items (`ToolBar.horizontalToolbarInsets.compact` = `2,4,2,4`).
-    pub const TOOLBAR_GAP: f32 = 4.0;
+    /// Gap between toolbar items.
+    pub const TOOLBAR_GAP: f32 = size::TOOLBAR_GAP;
     /// Vertical gap between stacked sections inside a tool window.
-    pub const SECTION_SPACING: f32 = 8.0;
+    pub const SECTION_SPACING: f32 = size::SECTION_SPACING;
     /// Padding inside dialog frames.
-    pub const DIALOG_PADDING: f32 = 14.0;
-    /// Distance from a row's left edge to the first column at `depth`.
-    pub fn indent(depth: usize) -> f32 {
-        CONTENT_INSET + depth as f32 * TREE_INDENT
-    }
+    pub const DIALOG_PADDING: f32 = size::DIALOG_PADDING;
 }
 
-/// Avatar gradient start colors (`RecentProject.ColorN.Avatar.Start`).
-const AVATAR_COLORS: [Color32; 9] = [
-    hex(0xE08855),
-    hex(0xB08B14),
-    hex(0xA1A359),
-    hex(0x3B92B8),
-    hex(0x3574F0),
-    hex(0xC84D8F),
-    hex(0x955AE0),
-    hex(0x24A394),
-    hex(0x5FAD65),
-];
-
-/// Stable avatar color for a project name, like the project widget's badge.
+/// Stable avatar color for a project name, like the project widget's badge (the kit's).
 pub fn avatar_color(name: &str) -> Color32 {
-    let hash = name.bytes().fold(0u32, |acc, byte| {
-        acc.wrapping_mul(31).wrapping_add(byte as u32)
-    });
-    AVATAR_COLORS[hash as usize % AVATAR_COLORS.len()]
+    archipel_kit::theme::avatar_color(name)
 }
 
 /// Project badge initials: first letters of the first two words, else the first two letters.
@@ -136,11 +105,11 @@ pub fn project_initials(name: &str) -> String {
     initials.to_uppercase()
 }
 
-pub const UI_FONT_SIZE: f32 = 13.0;
-pub const EDITOR_FONT_SIZE: f32 = 13.0;
-pub const SEMIBOLD: &str = "semibold";
+pub const UI_FONT_SIZE: f32 = typography::BODY;
+pub const EDITOR_FONT_SIZE: f32 = typography::CODE;
+pub const SEMIBOLD: &str = typography::SEMIBOLD;
 /// Bold monospace family (completion matches).
-pub const MONO_BOLD: &str = "mono-bold";
+pub const MONO_BOLD: &str = typography::MONO_BOLD;
 
 pub fn mono_bold(size: f32) -> egui::FontId {
     egui::FontId::new(size, FontFamily::Name(MONO_BOLD.into()))
@@ -192,7 +161,7 @@ pub fn apply_settings(ctx: &egui::Context, settings: &jetthing_core::Settings) {
     let scheme = settings.text(ids::EDITOR_SCHEME).filter(|s| !s.is_empty());
     // Settings validate the names; an error leaves the previous theme active.
     if let Ok(true) = crate::theme_engine::set_active(&theme, scheme.as_deref()) {
-        apply_visuals(ctx);
+        apply_kit_theme(ctx);
     }
     sync_window_theme(ctx);
     let line_height = settings
@@ -227,86 +196,18 @@ pub fn apply_settings(ctx: &egui::Context, settings: &jetthing_core::Settings) {
     }
 }
 
+/// Installs the kit (fonts, spacing, egui visuals) with the active theme. Call once at
+/// startup; the kit's cursor rules and components then work everywhere in the IDE.
 pub fn install(ctx: &egui::Context) {
-    let mut fonts = FontDefinitions::default();
-    fonts.font_data.insert(
-        "inter".into(),
-        Arc::new(FontData::from_static(include_bytes!(
-            "../assets/fonts/Inter-Regular.ttf"
-        ))),
-    );
-    fonts.font_data.insert(
-        "inter-semibold".into(),
-        Arc::new(FontData::from_static(include_bytes!(
-            "../assets/fonts/Inter-SemiBold.ttf"
-        ))),
-    );
-    fonts.font_data.insert(
-        "jetbrains-mono".into(),
-        Arc::new(FontData::from_static(include_bytes!(
-            "../assets/fonts/JetBrainsMono-Regular.ttf"
-        ))),
-    );
-    fonts.font_data.insert(
-        "jetbrains-mono-bold".into(),
-        Arc::new(FontData::from_static(include_bytes!(
-            "../assets/fonts/JetBrainsMono-Bold.ttf"
-        ))),
-    );
-    // Keep egui's bundled fonts as fallbacks for symbols such as ⌘ and ⇧.
-    let fallbacks = fonts
-        .families
-        .get(&FontFamily::Proportional)
-        .cloned()
-        .unwrap_or_default();
-    fonts
-        .families
-        .entry(FontFamily::Proportional)
-        .or_default()
-        .insert(0, "inter".into());
-    fonts
-        .families
-        .entry(FontFamily::Monospace)
-        .or_default()
-        .insert(0, "jetbrains-mono".into());
-    let mut mono_bold_family = vec!["jetbrains-mono-bold".to_owned()];
-    mono_bold_family.extend(
-        fonts
-            .families
-            .get(&FontFamily::Monospace)
-            .cloned()
-            .unwrap_or_default(),
-    );
-    fonts
-        .families
-        .insert(FontFamily::Name(MONO_BOLD.into()), mono_bold_family);
-    let mut semibold_family = vec!["inter-semibold".to_owned()];
-    semibold_family.extend(fallbacks);
-    fonts
-        .families
-        .insert(FontFamily::Name(SEMIBOLD.into()), semibold_family);
-    ctx.set_fonts(fonts);
-
-    ctx.style_mut(|style| {
-        use egui::{FontId, TextStyle};
-        style.text_styles = [
-            (TextStyle::Small, FontId::proportional(UI_FONT_SIZE - 2.0)),
-            (TextStyle::Body, FontId::proportional(UI_FONT_SIZE)),
-            (TextStyle::Button, FontId::proportional(UI_FONT_SIZE)),
-            (TextStyle::Heading, semibold(UI_FONT_SIZE)),
-            (TextStyle::Monospace, FontId::monospace(EDITOR_FONT_SIZE)),
-        ]
-        .into();
-        style.spacing.item_spacing = egui::vec2(6.0, 4.0);
-        style.spacing.button_padding = egui::vec2(8.0, 3.0);
-        style.spacing.interact_size.y = 24.0;
-        style.spacing.scroll = egui::style::ScrollStyle::floating();
-        style.interaction.selectable_labels = false;
-    });
-    apply_visuals(ctx);
+    archipel_kit::install(ctx, crate::theme_engine::kit_theme());
 }
 
-/// Rebuilds egui's visuals from the active theme's tokens.
+/// Applies the active palette's kit theme: components read it with
+/// `archipel_kit::Theme::colors(ctx)`, and plain egui widgets follow its visuals.
+fn apply_kit_theme(ctx: &egui::Context) {
+    crate::theme_engine::kit_theme().apply(ctx);
+}
+
 /// Window appearance for a theme: dark NSAppearance (title bar, native dialogs)
 /// for dark themes, light otherwise.
 pub fn window_theme(dark: bool) -> egui::SystemTheme {
@@ -332,67 +233,6 @@ fn sync_window_theme(ctx: &egui::Context) {
     }
 }
 
-fn apply_visuals(ctx: &egui::Context) {
-    let dark = crate::theme_engine::active().dark;
-    ctx.style_mut(|style| {
-        let visuals = &mut style.visuals;
-        *visuals = if dark {
-            egui::Visuals::dark()
-        } else {
-            egui::Visuals::light()
-        };
-        visuals.override_text_color = Some(*TEXT);
-        visuals.panel_fill = *FRAME;
-        visuals.window_fill = *POPUP;
-        visuals.window_stroke = Stroke::new(1.0_f32, POPUP_BORDER);
-        visuals.window_corner_radius = CornerRadius::same(8);
-        visuals.menu_corner_radius = CornerRadius::same(8);
-        visuals.window_shadow = egui::Shadow {
-            offset: [0, 4],
-            blur: 16,
-            spread: 0,
-            color: Color32::from_black_alpha(90),
-        };
-        visuals.popup_shadow = visuals.window_shadow;
-        visuals.extreme_bg_color = *FIELD;
-        visuals.faint_bg_color = *HOVER;
-        visuals.code_bg_color = *ISLAND;
-        visuals.hyperlink_color = *MODIFIED;
-        visuals.selection.bg_fill = *SELECTION;
-        visuals.selection.stroke = Stroke::new(1.0_f32, TEXT_BRIGHT);
-        visuals.text_cursor.stroke = Stroke::new(1.5_f32, editor::CARET);
-        visuals.error_fg_color = *ERROR;
-        visuals.warn_fg_color = *WARNING;
-        visuals.resize_corner_size = 0.0;
-
-        let radius = CornerRadius::same(4);
-        let widgets = &mut visuals.widgets;
-        widgets.noninteractive.bg_fill = *FRAME;
-        widgets.noninteractive.weak_bg_fill = *FRAME;
-        widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, POPUP_BORDER);
-        widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, TEXT);
-        widgets.noninteractive.corner_radius = radius;
-        widgets.inactive.bg_fill = *FIELD;
-        widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
-        widgets.inactive.bg_stroke = Stroke::new(1.0_f32, BORDER);
-        widgets.inactive.fg_stroke = Stroke::new(1.0_f32, TEXT);
-        widgets.inactive.corner_radius = radius;
-        widgets.hovered.bg_fill = *FIELD;
-        widgets.hovered.weak_bg_fill = *HOVER;
-        widgets.hovered.bg_stroke = Stroke::new(1.0_f32, BORDER);
-        widgets.hovered.fg_stroke = Stroke::new(1.0_f32, TEXT_BRIGHT);
-        widgets.hovered.corner_radius = radius;
-        widgets.hovered.expansion = 0.0;
-        widgets.active.bg_fill = *FIELD;
-        widgets.active.weak_bg_fill = *PRESSED;
-        widgets.active.bg_stroke = Stroke::new(2.0_f32, ACCENT);
-        widgets.active.fg_stroke = Stroke::new(1.0_f32, TEXT_BRIGHT);
-        widgets.active.corner_radius = radius;
-        widgets.active.expansion = 0.0;
-        widgets.open = widgets.active;
-    });
-}
-
 #[cfg(test)]
 mod tests {
     #[test]
@@ -413,10 +253,5 @@ mod tests {
     #[test]
     fn avatar_color_is_stable() {
         assert_eq!(avatar_color("jetthing"), avatar_color("jetthing"));
-    }
-
-    #[test]
-    fn hex_decodes_channels() {
-        assert_eq!(hex(0x26282C), Color32::from_rgb(0x26, 0x28, 0x2C));
     }
 }

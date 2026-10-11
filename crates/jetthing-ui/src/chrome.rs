@@ -29,7 +29,7 @@ pub fn main_toolbar(app: &mut IdeApp, ctx: &egui::Context) {
     egui::TopBottomPanel::top("main_toolbar")
         .exact_height(TOOLBAR_HEIGHT)
         .show_separator_line(false)
-        .frame(chrome_frame())
+        .frame(chrome_frame(ctx))
         .show(ctx, |ui| {
             let bar = ui.max_rect();
             let glow = app
@@ -716,7 +716,7 @@ pub fn right_stripe(app: &mut IdeApp, ctx: &egui::Context) {
         .exact_width(STRIPE_WIDTH)
         .resizable(false)
         .show_separator_line(false)
-        .frame(chrome_frame().inner_margin(egui::Margin::symmetric(4, 6)))
+        .frame(chrome_frame(ctx).inner_margin(egui::Margin::symmetric(4, 6)))
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
             for (window, icon) in windows {
@@ -782,7 +782,7 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
     egui::TopBottomPanel::bottom("status_bar")
         .exact_height(STATUS_BAR_HEIGHT)
         .show_separator_line(false)
-        .frame(chrome_frame().inner_margin(egui::Margin::symmetric(8, 0)))
+        .frame(chrome_frame(ctx).inner_margin(egui::Margin::symmetric(8, 0)))
         .show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
@@ -842,7 +842,12 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                 for (kind, name) in code_crumbs {
                     icons::show(ui, Icon::ChevronRight, 12.0, theme::TEXT_INFO);
                     let (rect, _) = ui.allocate_exact_size(vec2(20.0, 22.0), Sense::hover());
-                    crate::structure_view::paint_badge(ui.painter(), rect.center(), kind);
+                    icons::paint(
+                        ui.painter(),
+                        Rect::from_center_size(rect.center(), vec2(14.0, 14.0)),
+                        Icon::Kit(crate::structure_view::icon(kind)),
+                        theme::ICON,
+                    );
                     widgets::flat_widget(ui, None, &name, font.clone(), theme::TEXT, false, 22.0);
                 }
 

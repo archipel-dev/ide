@@ -3403,6 +3403,8 @@ dependencies = [
 name = "jetthing-ui"
 version = "0.0.9"
 dependencies = [
+ "archipel-icons",
+ "archipel-kit",
  "eframe",
  "egui",
  "egui_extras",

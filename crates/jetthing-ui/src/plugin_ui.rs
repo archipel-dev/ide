@@ -200,7 +200,7 @@ pub fn right_side(app: &mut IdeApp, ctx: &egui::Context) {
         .exact_width(STRIPE_WIDTH)
         .resizable(false)
         .show_separator_line(false)
-        .frame(chrome_frame())
+        .frame(chrome_frame(ctx))
         .show(ctx, |ui| {
             ui.add_space(6.0);
             ui.vertical_centered(|ui| {
@@ -264,7 +264,7 @@ pub fn right_side(app: &mut IdeApp, ctx: &egui::Context) {
         .min_width(180.0)
         .resizable(true)
         .show_separator_line(false)
-        .frame(island_frame())
+        .frame(island_frame(ctx))
         .show(ctx, |ui| {
             if tool_window_header(ui, &title, |_| {}) {
                 app.dispatch(
@@ -536,7 +536,7 @@ pub fn app_window(app: &mut IdeApp, ctx: &egui::Context, plugin: &str) {
     egui::TopBottomPanel::top("app_toolbar")
         .exact_height(TOOLBAR_HEIGHT)
         .show_separator_line(false)
-        .frame(chrome_frame())
+        .frame(chrome_frame(ctx))
         .show(ctx, |ui| {
             let bar = ui.max_rect();
             let drag = ui.interact(
@@ -570,7 +570,7 @@ pub fn app_window(app: &mut IdeApp, ctx: &egui::Context, plugin: &str) {
     egui::TopBottomPanel::bottom("app_status_bar")
         .exact_height(STATUS_BAR_HEIGHT)
         .show_separator_line(false)
-        .frame(chrome_frame().inner_margin(egui::Margin::symmetric(8, 0)))
+        .frame(chrome_frame(ctx).inner_margin(egui::Margin::symmetric(8, 0)))
         .show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
                 let font = egui::FontId::proportional(theme::UI_FONT_SIZE - 1.0);
@@ -585,7 +585,7 @@ pub fn app_window(app: &mut IdeApp, ctx: &egui::Context, plugin: &str) {
             });
         });
     egui::CentralPanel::default()
-        .frame(island_frame())
+        .frame(island_frame(ctx))
         .show(ctx, |ui| {
             // Editor tabs opened by the app share the window with its main view.
             if !app.state.plugin_host.tabs.is_empty() {

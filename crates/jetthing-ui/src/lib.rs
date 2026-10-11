@@ -85,6 +85,8 @@ mod toolbar_gradient;
 mod toolchain_banner;
 mod toolchain_status;
 mod toolwindows;
+#[cfg(test)]
+mod ui_audit;
 mod welcome;
 mod widgets;
 
@@ -1061,7 +1063,6 @@ impl IdeApp {
         if self.state.updates.is_busy() {
             ctx.request_repaint_after(Duration::from_millis(200));
         }
-        widgets::apply_pointer_cursor(ctx);
         self.control_after_frame(ctx);
     }
 

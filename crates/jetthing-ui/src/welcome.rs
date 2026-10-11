@@ -44,10 +44,10 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         .exact_width(230.0)
         .resizable(false)
         .show_separator_line(false)
-        .frame(widgets::chrome_frame().inner_margin(egui::Margin::symmetric(12, 8)))
+        .frame(widgets::chrome_frame(ctx).inner_margin(egui::Margin::symmetric(12, 8)))
         .show(ctx, |ui| nav_column(app, ui));
     egui::CentralPanel::default()
-        .frame(widgets::island_frame().inner_margin(32))
+        .frame(widgets::island_frame(ctx).inner_margin(32))
         .show(ctx, |ui| match app.welcome.page {
             Page::Projects => projects_page(app, ui, &mut open, &mut remove),
             Page::Customize => info_page(
@@ -83,7 +83,7 @@ fn title_strip(ctx: &egui::Context) {
     egui::TopBottomPanel::top("welcome_title")
         .exact_height(chrome::TOOLBAR_HEIGHT)
         .show_separator_line(false)
-        .frame(widgets::chrome_frame())
+        .frame(widgets::chrome_frame(ctx))
         .show(ctx, |ui| {
             let bar = ui.max_rect();
             let drag = ui.interact(bar, egui::Id::new("welcome_drag"), Sense::click_and_drag());

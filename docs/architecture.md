@@ -6,6 +6,12 @@ window, GPU rendering, IME/input handling, accessibility work in progress upstre
 and fast delivery of the first usable slice. It is not an architectural dependency:
 no crate below `jetthing-ui` imports UI types.
 
+> **Archipel SDK.** `jetthing-command`, `jetthing-plugin-api` and `jetthing-plugin-ui` are thin
+> re-export shims over `archipel-command`, `archipel-plugin-api` and `archipel-plugin-ui` from the
+> [`archipel-dev/sdk`](https://github.com/archipel-dev/sdk) repository (git dependency on `main`).
+> The SDK is the source of truth for these APIs; change them there, not here. The shims keep the
+> old crate names so that dependents compile unchanged.
+
 ## Layers
 
 - `jetthing-command`: typed command metadata, JSON parameters/results, discovery,

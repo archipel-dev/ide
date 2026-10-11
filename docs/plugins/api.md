@@ -16,6 +16,12 @@ plugins** ([wasm.md](wasm.md)).
 | `jetthing-core` (`plugin_host`) | engine | `PluginHost` implementation, command routing, plugin tool window/tab state, `plugin.*` commands |
 | `jetthing-ui` (`plugin_ui`, `plugin_manager`) | UI | renders contributions in the workbench, the Settings › Plugins page, standalone window |
 
+The SDK ([`archipel-dev/sdk`](https://github.com/archipel-dev/sdk)) is the source of truth for
+these crates: `jetthing-command`, `jetthing-plugin-api` and `jetthing-plugin-ui` only re-export
+`archipel-command`, `archipel-plugin-api` and `archipel-plugin-ui`. Plugin tests can use the SDK's
+`archipel-plugin-testing` (fake host, conformance and audit helpers). Manifests are named
+`archipel-plugin.toml`; `jetthing-plugin.toml` (and legacy `plugin.toml`) are still read.
+
 Engine crates never see egui. A view is rendered into an opaque `ViewFrame`, and
 the egui host puts its `&mut egui::Ui` inside. `jetthing_plugin_ui::ui(frame)`
 gives it back to the plugin.

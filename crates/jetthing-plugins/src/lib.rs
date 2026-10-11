@@ -195,17 +195,15 @@ impl PluginRegistry {
         Ok(())
     }
 
-    /// Loads every `<dir>/<plugin>/jetthing-plugin.toml` (or legacy
-    /// `plugin.toml`) below `root`. Entries previously discovered from `root`
+    /// Loads every `<dir>/<plugin>/archipel-plugin.toml` (or
+    /// `jetthing-plugin.toml`, or legacy `plugin.toml`) below `root`. Entries previously discovered from `root`
     /// are replaced. Problems are collected in [`Self::problems`].
     pub fn discover(&mut self, root: &Path) {
         // Entries still present on disk are kept as they are, so active
         // plugins survive a rediscovery; vanished ones are dropped.
         self.entries.retain(|entry| match &entry.source {
             PluginSource::Directory(dir) if dir.parent() == Some(root) => {
-                [MANIFEST_FILE, LEGACY_MANIFEST_FILE]
-                    .iter()
-                    .any(|name| dir.join(name).is_file())
+                MANIFEST_FILES.iter().any(|name| dir.join(name).is_file())
             }
             _ => true,
         });
@@ -221,7 +219,7 @@ impl PluginRegistry {
             .collect();
         dirs.sort();
         for dir in dirs {
-            let Some(path) = [MANIFEST_FILE, LEGACY_MANIFEST_FILE]
+            let Some(path) = MANIFEST_FILES
                 .iter()
                 .map(|name| dir.join(name))
                 .find(|path| path.is_file())
@@ -477,6 +475,29 @@ mod tests {
         assert!(instance.activate(&mut host).is_ok());
         registry.restore_instance("a.app", instance);
         assert!(registry.take_instance("a.app").is_some());
+    }
+
+    #[test]
+    fn discovers_archipel_and_jetthing_manifests() {
+        let root = std::env::temp_dir().join(format!("jetthing-manifests-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        for (dir, file, id) in [
+            ("new", "archipel-plugin.toml", "x.archipel"),
+            ("old", "jetthing-plugin.toml", "x.jetthing"),
+        ] {
+            fs::create_dir_all(root.join(dir)).unwrap();
+            fs::write(
+                root.join(dir).join(file),
+                format!("id='{id}'\nname='N'\nversion='1'\napi_version=1\n"),
+            )
+            .unwrap();
+        }
+        let mut registry = PluginRegistry::default();
+        registry.discover(&root);
+        assert!(registry.problems.is_empty(), "{:?}", registry.problems);
+        assert!(registry.get("x.archipel").is_some());
+        assert!(registry.get("x.jetthing").is_some());
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

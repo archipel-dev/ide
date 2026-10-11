@@ -8,3 +8,6 @@ description = "Minimal example plugin: a command, a tool window, an editor tab, 
 [dependencies]
 jetthing-plugin-api = { path = "../../crates/jetthing-plugin-api" }
 jetthing-plugin-ui = { path = "../../crates/jetthing-plugin-ui" }
+
+[dev-dependencies]
+archipel-plugin-testing.workspace = true

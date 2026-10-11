@@ -56,6 +56,8 @@ mod layout {
     /// first one (an insertion point before it).
     pub const TAB_SECOND: Point = (505, 61);
     pub const TAB_FIRST_LEFT_HALF: Point = (345, 61);
+    /// The first tab once the editor is maximised (the tool window is gone).
+    pub const TAB_FIRST_MAXIMISED: Point = (120, 61);
     pub const PROJECT_HIDE_BUTTON: Point = (293, 58);
     pub const PROJECT_STRIPE_BUTTON: Point = (19, 62);
     pub const FIRST_TAB_CLOSE: Point = (419, 61);
@@ -169,7 +171,10 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
                 let _ = fs::remove_file(entry.path());
             }
         }
-        let project = if *name == "workbench-tree-tabs-popups-run" {
+        let project = if matches!(
+            *name,
+            "workbench-tree-tabs-popups-run" | "editor-tabs-drag-and-maximize"
+        ) {
             Some(create_fixture("rust-cargo", &work.join("rust-cargo"))?)
         } else {
             None
@@ -718,7 +723,7 @@ fn editor_tabs_drag_and_maximize(d: &mut Driver) -> Result<()> {
     d.screenshot("tabs-reordered")?;
     d.double_click(layout::TAB_FIRST_LEFT_HALF, "a tab")?;
     d.expect("/toolWindows/left", Value::Null, "editor maximised")?;
-    d.double_click(layout::TAB_FIRST_LEFT_HALF, "a tab")?;
+    d.double_click(layout::TAB_FIRST_MAXIMISED, "a tab")?;
     d.expect("/toolWindows/left", "project".into(), "editor restored")?;
     Ok(())
 }

@@ -145,7 +145,6 @@ pub mod tokens {
         TAB_SELECTED_BORDER = ["ui:EditorTabs.underlinedBorderColor"] or 0x2E4D89;
         /// `Banner.warningBackground` (editor notification banners).
         /// `Banner.warningBorderColor`.
-        BANNER_WARNING_BORDER = ["ui:Banner.warningBorderColor"] or 0x694820;
         /// Editor `TEXT` background.
         EDITOR_BACKGROUND = ["attr:TEXT.BACKGROUND"] or 0x191A1C;
         /// Editor `TEXT` foreground.
@@ -606,11 +605,6 @@ mod tests {
             assert_eq!(colors.text, palette.get(tokens::TEXT), "{name}");
             assert_eq!(colors.selection, palette.get(tokens::SELECTION), "{name}");
             assert_eq!(colors.vcs_modified, palette.get(tokens::MODIFIED), "{name}");
-            assert_eq!(
-                colors.banner_warning.border,
-                palette.get(tokens::BANNER_WARNING_BORDER),
-                "{name}"
-            );
             // The editor colors follow the color scheme, not the kit's defaults.
             let editor = &theme.editor;
             assert_eq!(editor.background, palette.get(tokens::EDITOR_BACKGROUND));

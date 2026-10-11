@@ -3,9 +3,13 @@
 //! `jetthing_core::quick_nav`.
 
 use crate::icons::{self, Icon};
-use crate::widgets::{self, list_row, row_text};
-use crate::{IdeApp, theme};
-use eframe::egui::{self, Key, Modifiers, Rect, Sense, Stroke, vec2};
+use crate::widgets::{self, row_text};
+use crate::{IdeApp, popup_row, popup_stack};
+use archipel_kit::components::{IconButton, ListRow, Tab, TabBar};
+use archipel_kit::parts::{Surface, Tone, scroll_vertical};
+use archipel_kit::tokens::size;
+use archipel_kit::{Glyph, Theme};
+use eframe::egui::{self, Key, Modifiers, Rect, vec2};
 use jetthing_core::{NavigationItem, ToolWindow};
 use serde_json::{Value, json};
 
@@ -54,26 +58,90 @@ pub fn handle_shortcuts(app: &mut IdeApp, ctx: &egui::Context) {
     }
 }
 
+fn filter_id() -> egui::Id {
+    egui::Id::new("navigation_choice_filter")
+}
+
+/// Items of the chooser that match what was typed (indices into its items).
+fn visible_items(list: &jetthing_core::NavigationList, filter: &str) -> Vec<usize> {
+    list.items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| {
+            filter.is_empty()
+                || jetthing_core::quick_nav::matches(filter, &IdeApp::file_name(&item.path))
+                || item
+                    .line_text
+                    .to_lowercase()
+                    .contains(&filter.to_lowercase())
+        })
+        .map(|(index, _)| index)
+        .collect()
+}
+
+/// The chooser's keys: ↑/↓ (wrapping), Home/End, PageUp/PageDown, Enter, and typing to
+/// filter the rows. Escape is the popup stack's.
 fn choices_keys(app: &mut IdeApp, ctx: &egui::Context, consume: &dyn Fn(Modifiers, Key) -> bool) {
-    let count = app
-        .state
-        .navigation
-        .choices
-        .as_ref()
-        .map_or(0, |list| list.items.len());
-    let mut selected: usize = ctx.data(|data| data.get_temp(selected_id()).unwrap_or(0));
-    if consume(Modifiers::NONE, Key::ArrowDown) && count > 0 {
-        selected = (selected + 1) % count;
-    }
-    if consume(Modifiers::NONE, Key::ArrowUp) && count > 0 {
-        selected = (selected + count - 1) % count;
-    }
-    ctx.data_mut(|data| data.insert_temp(selected_id(), selected));
-    if consume(Modifiers::NONE, Key::Escape) {
-        app.state.navigation.choices = None;
+    let Some(list) = app.state.navigation.choices.as_ref() else {
         return;
+    };
+    let mut filter: String = ctx
+        .data(|data| data.get_temp(filter_id()))
+        .unwrap_or_default();
+    let mut selected: usize = ctx.data(|data| data.get_temp(selected_id()).unwrap_or(0));
+    let visible = visible_items(list, &filter);
+    let len = visible.len() as isize;
+    let mut position = visible
+        .iter()
+        .position(|index| *index == selected)
+        .map_or(0, |p| p as isize);
+    if len > 0 {
+        for (key, step) in [
+            (Key::ArrowDown, 1),
+            (Key::ArrowUp, -1),
+            (Key::PageDown, POPUP_ROWS as isize),
+            (Key::PageUp, -(POPUP_ROWS as isize)),
+        ] {
+            if consume(Modifiers::NONE, key) {
+                position = if step.abs() == 1 {
+                    (position + step).rem_euclid(len)
+                } else {
+                    (position + step).clamp(0, len - 1)
+                };
+            }
+        }
+        if consume(Modifiers::NONE, Key::Home) {
+            position = 0;
+        }
+        if consume(Modifiers::NONE, Key::End) {
+            position = len - 1;
+        }
     }
-    if consume(Modifiers::NONE, Key::Enter) {
+    let before = filter.clone();
+    ctx.input_mut(|input| {
+        input.events.retain(|event| match event {
+            egui::Event::Text(text) if !text.chars().any(char::is_control) => {
+                filter.push_str(text);
+                false
+            }
+            _ => true,
+        });
+    });
+    if consume(Modifiers::NONE, Key::Backspace) {
+        filter.pop();
+    }
+    if filter != before {
+        position = 0;
+    }
+    let visible = visible_items(list, &filter);
+    if let Some(index) = visible.get(position.max(0) as usize) {
+        selected = *index;
+    }
+    ctx.data_mut(|data| {
+        data.insert_temp(selected_id(), selected);
+        data.insert_temp(filter_id(), filter);
+    });
+    if consume(Modifiers::NONE, Key::Enter) && visible.contains(&selected) {
         open_choice(app, ctx, selected);
     }
 }
@@ -105,253 +173,261 @@ fn goto(app: &mut IdeApp, ctx: &egui::Context, item: &NavigationItem) {
 /// anchored below the caret.
 pub fn choices_popup(app: &mut IdeApp, ctx: &egui::Context) {
     let Some(list) = app.state.navigation.choices.clone() else {
-        ctx.data_mut(|data| data.remove::<usize>(selected_id()));
+        ctx.data_mut(|data| {
+            data.remove::<usize>(selected_id());
+            data.remove::<String>(filter_id());
+        });
         return;
     };
     let selected: usize = ctx.data(|data| data.get_temp(selected_id()).unwrap_or(0));
+    let filter: String = ctx
+        .data(|data| data.get_temp(filter_id()))
+        .unwrap_or_default();
+    let visible = visible_items(&list, &filter);
     let anchor = app
         .caret_screen_pos
         .unwrap_or_else(|| ctx.content_rect().center());
+    let colors = Theme::colors(ctx);
     let mut open = None;
-    let mut close = false;
     let response = egui::Area::new(egui::Id::new("navigation_choices"))
         .order(egui::Order::Foreground)
         .fixed_pos(anchor + vec2(-20.0, 4.0))
         .show(ctx, |ui| {
-            egui::Frame::popup(ui.style())
-                .inner_margin(egui::Margin::same(4))
-                .show(ui, |ui| {
-                    ui.set_width(620.0);
-                    ui.horizontal(|ui| {
-                        ui.add_space(6.0);
+            Surface::Popup.frame(ctx).show(ui, |ui| {
+                ui.set_width(620.0);
+                ui.horizontal(|ui| {
+                    ui.add_space(10.0);
+                    ui.label(
+                        egui::RichText::new(&list.title)
+                            .font(archipel_kit::tokens::typography::semibold(
+                                ui.ctx(),
+                                archipel_kit::tokens::typography::BODY,
+                            ))
+                            .color(colors.text_strong),
+                    );
+                    let count = widgets::pluralize(visible.len(), "result", "results");
+                    let suffix = if list.truncated { "+" } else { "" };
+                    ui.label(
+                        egui::RichText::new(format!("{count}{suffix}"))
+                            .color(colors.text_secondary),
+                    );
+                    if !filter.is_empty() {
                         ui.label(
-                            egui::RichText::new(&list.title)
-                                .font(theme::semibold(theme::UI_FONT_SIZE))
-                                .color(theme::TEXT_BRIGHT),
+                            egui::RichText::new(format!("· filter: {filter}"))
+                                .color(colors.text_secondary),
                         );
-                        let count = widgets::pluralize(list.items.len(), "result", "results");
-                        let suffix = if list.truncated { "+" } else { "" };
-                        ui.label(
-                            egui::RichText::new(format!("{count}{suffix}")).color(theme::TEXT_INFO),
-                        );
-                    });
-                    ui.add_space(2.0);
-                    egui::ScrollArea::vertical()
-                        .max_height(POPUP_ROWS as f32 * 22.0)
-                        .show(ui, |ui| {
-                            ui.spacing_mut().item_spacing.y = 0.0;
-                            for (index, item) in list.items.iter().enumerate() {
-                                let (rect, response) = ui.allocate_exact_size(
-                                    vec2(ui.available_width(), 22.0),
-                                    Sense::click(),
-                                );
-                                if index == selected {
-                                    ui.painter().rect_filled(
-                                        rect,
-                                        4.0,
-                                        theme::COMPLETION_SELECTION,
-                                    );
-                                    ui.scroll_to_rect(rect, None);
-                                } else if response.hovered() {
-                                    ui.painter().rect_filled(rect, 4.0, theme::HOVER);
-                                }
-                                item_row(ui, rect, item, true);
-                                if response.clicked() {
-                                    open = Some(index);
-                                }
-                            }
-                        });
+                    }
                 });
+                ui.add_space(2.0);
+                scroll_vertical()
+                    .id_salt("navigation_choices_list")
+                    .max_height(POPUP_ROWS as f32 * size::ROW_HEIGHT)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 0.0;
+                        for index in visible.iter().copied() {
+                            let item = &list.items[index];
+                            let (rect, response) = choice_row(ui, index == selected, true, item);
+                            if index == selected {
+                                ui.scroll_to_rect(rect, None);
+                            }
+                            if response.clicked() {
+                                open = Some(index);
+                            }
+                        }
+                    });
+            })
         })
         .response;
-    if ctx.input(|input| input.pointer.any_pressed())
-        && !response.contains_pointer()
-        && open.is_none()
-    {
-        close = true;
-    }
+    let outside = popup_stack::pressed_outside(ctx, response.rect, None, None);
     if let Some(index) = open {
         open_choice(app, ctx, index);
-    } else if close {
+    } else if outside || popup_stack::window_focus_lost(ctx) {
         app.state.navigation.choices = None;
     }
 }
 
-/// `icon  file:line  code` row shared by the popup and the usages view.
+/// A chooser row, named like the location it opens.
+fn choice_row(
+    ui: &mut egui::Ui,
+    selected: bool,
+    enabled: bool,
+    item: &NavigationItem,
+) -> (Rect, egui::Response) {
+    let name = format!("{} {}", IdeApp::file_name(&item.path), item.line + 1);
+    let (rect, response) = popup_row::row(ui, selected, enabled, &name);
+    if ui.is_rect_visible(rect) {
+        item_row(ui, rect, item, true);
+    }
+    (rect, response)
+}
+
+/// A usage row in the Find tool window's usages view.
+fn usage_row(ui: &mut egui::Ui, enabled: bool, item: &NavigationItem) -> egui::Response {
+    let name = format!(
+        "Usage in {} line {}",
+        IdeApp::file_name(&item.path),
+        item.line + 1
+    );
+    let (rect, response) = popup_row::row(ui, false, enabled, &name);
+    if ui.is_rect_visible(rect) {
+        let inner = Rect::from_min_max(egui::pos2(rect.left() + 22.0, rect.top()), rect.max);
+        item_row(ui, inner, item, false);
+    }
+    response
+}
+
+/// `icon  file:line  code` row shared by the popup and the usages view. The symbol in
+/// the code preview is emphasised with the editor's search-result background.
 fn item_row(ui: &egui::Ui, rect: Rect, item: &NavigationItem, with_file: bool) {
+    let colors = Theme::colors(ui.ctx());
     let name = crate::IdeApp::file_name(&item.path);
-    let ui_font = egui::FontId::proportional(theme::UI_FONT_SIZE);
-    let mono = egui::FontId::monospace(theme::EDITOR_FONT_SIZE);
-    let mut x = rect.left() + 8.0;
+    let ui_font = egui::FontId::proportional(archipel_kit::tokens::typography::BODY);
+    let mono = egui::FontId::monospace(archipel_kit::tokens::typography::CODE);
+    let mut x = rect.left() + size::ROW_PILL_INSET + 6.0;
     if with_file {
         icons::paint(
             ui.painter(),
-            Rect::from_min_size(egui::pos2(x, rect.center().y - 8.0), vec2(16.0, 16.0)),
+            widgets::icon_rect(x, rect.center().y),
             Icon::for_file(&name),
-            icons::ICON,
+            colors.icon,
         );
-        x += 22.0;
+        x += size::ICON + size::ICON_TEXT_GAP;
     }
     let code = item.line_text.trim_start();
     let trimmed = item.line_text.chars().count() - code.chars().count();
-    // Highlight the symbol inside the code preview.
-    let before: String = code
-        .chars()
-        .take(item.column.saturating_sub(trimmed))
-        .collect();
-    let symbol: String = code
-        .chars()
-        .skip(item.column.saturating_sub(trimmed))
-        .take(item.end_column.saturating_sub(item.column))
-        .collect();
-    let after: String = code
-        .chars()
-        .skip(item.column.saturating_sub(trimmed) + symbol.chars().count())
-        .collect();
-    let line_label = format!("{}", item.line + 1);
-    let gutter =
-        ui.painter()
-            .layout_no_wrap(line_label.clone(), ui_font.clone(), *theme::TEXT_INFO);
+    let start = item.column.saturating_sub(trimmed);
+    let length = item.end_column.saturating_sub(item.column);
     if !with_file {
-        ui.painter().galley(
-            egui::pos2(
-                x + 28.0 - gutter.size().x,
-                rect.center().y - gutter.size().y / 2.0,
-            ),
-            gutter,
-            *theme::TEXT_INFO,
-        );
-        x += 40.0;
-    }
-    x = row_text(ui, rect, x, &before, mono.clone(), theme::editor::TEXT);
-    let symbol_start = x;
-    x = row_text(ui, rect, x, &symbol, mono.clone(), theme::TEXT_BRIGHT);
-    if !symbol.is_empty() {
-        ui.painter().rect_filled(
-            Rect::from_min_max(
-                egui::pos2(symbol_start, rect.top() + 3.0),
-                egui::pos2(x, rect.bottom() - 3.0),
-            ),
-            2.0,
-            theme::editor::SEARCH_RESULT.gamma_multiply(0.6),
-        );
-        row_text(
+        // Line number column.
+        x = row_text(
             ui,
             rect,
-            symbol_start,
-            &symbol,
-            mono.clone(),
-            theme::TEXT_BRIGHT,
+            x,
+            &format!("{}", item.line + 1),
+            ui_font.clone(),
+            colors.text_secondary,
+        )
+        .max(x + 28.0)
+            + 12.0;
+    }
+    let editor = &colors_editor(ui.ctx());
+    let mut job = egui::text::LayoutJob::default();
+    for (index, ch) in code.chars().enumerate() {
+        let inside = index >= start && index < start + length;
+        job.append(
+            &ch.to_string(),
+            0.0,
+            egui::text::TextFormat {
+                font_id: mono.clone(),
+                color: if inside { colors.text_strong } else { editor.0 },
+                background: if inside {
+                    editor.1.gamma_multiply(0.6)
+                } else {
+                    egui::Color32::TRANSPARENT
+                },
+                ..Default::default()
+            },
         );
     }
-    x = row_text(ui, rect, x, &after, mono, theme::editor::TEXT);
+    let galley = ui.painter().layout_job(job);
+    let code_width = galley.size().x;
+    let clip = rect.with_max_x(rect.right() - size::ROW_PILL_INSET - 4.0);
+    ui.painter().with_clip_rect(clip).galley(
+        egui::pos2(x, rect.center().y - galley.size().y / 2.0),
+        galley,
+        colors.text,
+    );
     if with_file {
         let location = format!("{} {}", name, item.line + 1);
         let galley = ui
             .painter()
-            .layout_no_wrap(location, ui_font, *theme::TEXT_INFO);
+            .layout_no_wrap(location, ui_font, colors.text_secondary);
         let pos = egui::pos2(
-            (rect.right() - galley.size().x - 10.0).max(x + 16.0),
+            (rect.right() - galley.size().x - 10.0).max(x + code_width + 16.0),
             rect.center().y - galley.size().y / 2.0,
         );
         ui.painter()
             .with_clip_rect(rect)
-            .galley(pos, galley, *theme::TEXT_INFO);
+            .galley(pos, galley, colors.text_secondary);
     }
+}
+
+/// The editor's text color and search-result background.
+fn colors_editor(ctx: &egui::Context) -> (egui::Color32, egui::Color32) {
+    let editor = Theme::current(ctx).editor;
+    (editor.text, editor.search_result)
 }
 
 /// Header of the Find tool window: `Find in Files` and, after Find Usages,
 /// a `Usages of x` tab. Returns `true` when the usages tab is selected.
 pub fn find_header(app: &mut IdeApp, ui: &mut egui::Ui) -> bool {
-    let (header, _) = ui.allocate_exact_size(
-        vec2(ui.available_width(), widgets::TOOL_WINDOW_HEADER_HEIGHT),
-        Sense::hover(),
-    );
-    let font = egui::FontId::proportional(theme::UI_FONT_SIZE);
-    let mut x = header.left() + 12.0;
-    x = row_text(
-        ui,
-        header,
-        x,
-        "Find",
-        theme::semibold(theme::UI_FONT_SIZE),
-        theme::TEXT_BRIGHT,
-    ) + 14.0;
+    let colors = Theme::colors(ui.ctx());
     let usages_title = app
         .state
         .navigation
         .usages
         .as_ref()
         .map(|usages| usages.title.clone());
-    let mut tabs = vec![(false, "Find in Files".to_owned())];
-    if let Some(title) = usages_title {
-        tabs.push((true, title));
+    let mut tabs = vec![Tab::new("Find in Files")];
+    if let Some(title) = &usages_title {
+        tabs.push(Tab::new(title.clone()));
     }
-    let show_tabs = tabs.len() > 1;
-    for (usages, label) in tabs {
-        if !show_tabs {
-            row_text(ui, header, x, &label, font.clone(), theme::TEXT_SECONDARY);
-            break;
-        }
-        let width = ui
-            .painter()
-            .layout_no_wrap(label.clone(), font.clone(), *theme::TEXT)
-            .size()
-            .x
-            + 16.0;
-        let rect = Rect::from_min_size(egui::pos2(x, header.top()), vec2(width, header.height()));
-        let response = ui.interact(rect, egui::Id::new(("find_tab", usages)), Sense::click());
-        if response.hovered() {
-            ui.painter()
-                .rect_filled(rect.shrink2(vec2(0.0, 4.0)), 4.0, theme::HOVER);
-        }
-        row_text(ui, rect, x + 8.0, &label, font.clone(), theme::TEXT_BRIGHT);
-        if app.state.navigation.usages_selected == usages {
-            ui.painter().line_segment(
-                [
-                    egui::pos2(rect.left() + 2.0, rect.bottom() - 1.0),
-                    egui::pos2(rect.right() - 2.0, rect.bottom() - 1.0),
-                ],
-                Stroke::new(2.0_f32, theme::ACCENT),
-            );
-        }
-        if response.clicked() {
-            app.state.navigation.usages_selected = usages;
-        }
-        x = rect.right() + 4.0;
-    }
-    let mut right = header.right() - 12.0;
-    let mut button = |ui: &mut egui::Ui, icon: Icon, color: egui::Color32, tooltip: &str| {
-        let rect = Rect::from_min_size(
-            egui::pos2(right - 22.0, header.center().y - 11.0),
-            vec2(22.0, 22.0),
+    let selected = usize::from(app.state.navigation.usages_selected && usages_title.is_some());
+    let usages_selected = selected == 1;
+    let mut hide = false;
+    let mut close_usages = false;
+    let mut cancel = false;
+    ui.horizontal(|ui| {
+        ui.set_min_height(widgets::TOOL_WINDOW_HEADER_HEIGHT);
+        ui.add_space(12.0);
+        ui.label(
+            egui::RichText::new("Find")
+                .font(archipel_kit::tokens::typography::semibold(
+                    ui.ctx(),
+                    archipel_kit::tokens::typography::BODY,
+                ))
+                .color(colors.text_strong),
         );
-        right -= 24.0;
-        let response = ui.interact(
-            rect,
-            egui::Id::new(("find_header_button", tooltip)),
-            Sense::click(),
-        );
-        if response.hovered() {
-            ui.painter().rect_filled(rect, 4.0, theme::HOVER);
+        ui.add_space(8.0);
+        if tabs.len() > 1 {
+            if let Some(index) = TabBar::new(&tabs, selected).show(ui).selected {
+                app.state.navigation.usages_selected = index == 1;
+            }
+        } else {
+            ui.label(egui::RichText::new("Find in Files").color(colors.text_secondary));
         }
-        icons::paint(ui.painter(), rect.shrink(3.0), icon, color);
-        response.on_hover_text(tooltip).clicked()
-    };
-    if button(ui, Icon::Minimize, *icons::ICON, "Hide") {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.add_space(8.0);
+            hide = ui
+                .add(IconButton::new(Glyph::Minimize, "Hide").small(true))
+                .clicked();
+            if usages_selected {
+                close_usages = ui
+                    .add(IconButton::new(Glyph::Close, "Close Usages Tab").small(true))
+                    .clicked();
+            } else if app.state.search.is_running() {
+                cancel = ui
+                    .add(
+                        IconButton::new(Glyph::Stop, "Cancel")
+                            .small(true)
+                            .tone(Tone::Stop),
+                    )
+                    .clicked();
+            }
+        });
+    });
+    if hide {
         app.toggle_tool_window(ToolWindow::Find);
     }
-    let usages_selected =
-        app.state.navigation.usages_selected && app.state.navigation.usages.is_some();
-    if usages_selected {
-        if button(ui, Icon::Close, *icons::ICON, "Close Usages Tab") {
-            app.state.navigation.usages = None;
-            app.state.navigation.usages_selected = false;
-        }
-    } else if app.state.search.is_running() && button(ui, Icon::Stop, *theme::STOP_RED, "Cancel") {
+    if close_usages {
+        app.state.navigation.usages = None;
+        app.state.navigation.usages_selected = false;
+    }
+    if cancel {
         app.dispatch("search.cancel", Value::Null);
     }
-    usages_selected
+    usages_selected && !close_usages
 }
 
 /// Usages grouped by file, like the reference Find tool window.
@@ -377,53 +453,28 @@ pub fn usages_view(app: &mut IdeApp, ui: &mut egui::Ui) {
         if list.truncated {
             summary.push_str(" (limit reached)");
         }
-        ui.label(egui::RichText::new(summary).color(theme::TEXT_SECONDARY));
+        ui.label(egui::RichText::new(summary).color(Theme::colors(ui.ctx()).text_secondary));
     });
     ui.add_space(4.0);
-    egui::ScrollArea::vertical()
+    scroll_vertical()
+        .id_salt("usages_view")
         .auto_shrink([false, false])
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
             for (path, items) in &groups {
-                let (rect, _) = list_row(ui, false);
                 let name = IdeApp::file_name(path);
-                icons::paint(
-                    ui.painter(),
-                    Rect::from_min_size(
-                        egui::pos2(rect.left() + 12.0, rect.center().y - 8.0),
-                        vec2(16.0, 16.0),
-                    ),
-                    Icon::for_file(&name),
-                    icons::ICON,
-                );
-                let font = egui::FontId::proportional(theme::UI_FONT_SIZE);
-                let x = row_text(
-                    ui,
-                    rect,
-                    rect.left() + 34.0,
-                    &name,
-                    font.clone(),
-                    theme::TEXT_BRIGHT,
-                );
                 let parent = path
                     .parent()
                     .map(|parent| parent.display().to_string())
                     .unwrap_or_default();
-                let x = row_text(ui, rect, x + 8.0, &parent, font.clone(), theme::TEXT_INFO);
-                row_text(
-                    ui,
-                    rect,
-                    x + 8.0,
-                    &widgets::pluralize(items.len(), "usage", "usages"),
-                    font,
-                    theme::TEXT_INFO,
-                );
+                let count = widgets::pluralize(items.len(), "usage", "usages");
+                ListRow::new(name.clone())
+                    .icon(Icon::for_file(&name).kit())
+                    .secondary(format!("{parent}  {count}"))
+                    .flat(true)
+                    .show(ui);
                 for item in items {
-                    let (rect, response) = list_row(ui, false);
-                    let inner =
-                        Rect::from_min_max(egui::pos2(rect.left() + 26.0, rect.top()), rect.max);
-                    item_row(ui, inner, item, false);
-                    if response.clicked() {
+                    if usage_row(ui, true, item).clicked() {
                         open = Some((*item).clone());
                     }
                 }
@@ -432,4 +483,22 @@ pub fn usages_view(app: &mut IdeApp, ui: &mut egui::Ui) {
     if let Some(item) = open {
         goto(app, &ui.ctx().clone(), &item);
     }
+}
+
+#[cfg(test)]
+pub(crate) fn choice_row_for_tests(
+    ui: &mut egui::Ui,
+    enabled: bool,
+    item: &NavigationItem,
+) -> egui::Response {
+    choice_row(ui, false, enabled, item).1
+}
+
+#[cfg(test)]
+pub(crate) fn usage_row_for_tests(
+    ui: &mut egui::Ui,
+    enabled: bool,
+    item: &NavigationItem,
+) -> egui::Response {
+    usage_row(ui, enabled, item)
 }

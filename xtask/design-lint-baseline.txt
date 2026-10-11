@@ -31,8 +31,6 @@ crates/jetthing-ui/src/markdown_ui.rs rounded-fill 3
 crates/jetthing-ui/src/merged_manifest_ui.rs rgb-color 6
 crates/jetthing-ui/src/merged_manifest_ui.rs rounded-fill 1
 crates/jetthing-ui/src/navigation_ui.rs rgb-color 1
-crates/jetthing-ui/src/navigation_ui.rs rounded-fill 5
-crates/jetthing-ui/src/palette.rs rounded-fill 5
 crates/jetthing-ui/src/plugin_manager.rs rounded-fill 3
 crates/jetthing-ui/src/plugin_ui.rs rgb-color 1
 crates/jetthing-ui/src/plugin_ui.rs rounded-fill 5
@@ -41,7 +39,6 @@ crates/jetthing-ui/src/problems_ui.rs rounded-fill 4
 crates/jetthing-ui/src/resource_manager_ui.rs rgb-color 1
 crates/jetthing-ui/src/resource_manager_ui.rs rounded-fill 3
 crates/jetthing-ui/src/settings_dialog.rs rounded-fill 1
-crates/jetthing-ui/src/switcher.rs rounded-fill 2
 crates/jetthing-ui/src/syntax.rs rgb-color 1
 crates/jetthing-ui/src/terminal_ui.rs rgb-color 2
 crates/jetthing-ui/src/theme_engine.rs rgb-color 3

@@ -1,7 +1,8 @@
 //! Gutter run icons and their popup (Run / Debug / Modify Run Configuration…).
 
 use crate::icons::{self, Icon};
-use crate::{IdeApp, keys, theme};
+use crate::{IdeApp, keys, popup_stack, theme};
+use archipel_kit::parts::Surface;
 use eframe::egui::{self, vec2};
 use jetthing_core::RunnableKind;
 use serde_json::json;
@@ -59,7 +60,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         .order(egui::Order::Foreground)
         .fixed_pos(open.position + vec2(8.0, 4.0))
         .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
+            Surface::Popup.frame(ctx).show(ui, |ui| {
                 ui.set_min_width(280.0);
                 let running = app.state.runner.is_running();
                 let run = ui.add(
@@ -83,7 +84,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                 ui.add(
                     crate::widgets::menu_item(format!("Run {target} with Coverage")).enabled(false),
                 )
-                .on_disabled_hover_text("Code coverage is not available yet (IJ-RUN-069)");
+                .on_disabled_hover_text("Code coverage is not available yet");
                 if ui
                     .add(crate::widgets::menu_item("Modify Run Configuration…"))
                     .clicked()
@@ -92,18 +93,13 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                 }
             });
         });
-    // Escape is handled by the workbench's Escape chain (see `is_open`). A press
+    // Escape is the popup stack's (`IdeApp::close_popup`). A press
     // outside closes the popup, as in the reference, so dragging a selection
     // in the editor does not leave it open.
-    let pressed_elsewhere = ctx.cumulative_pass_nr() > open.opened
-        && ctx.input(|input| {
-            input.pointer.any_pressed()
-                && input
-                    .pointer
-                    .press_origin()
-                    .is_some_and(|origin| !area.response.rect.contains(origin))
-        })
-        && action.is_none();
+    let pressed_elsewhere =
+        (popup_stack::pressed_outside(ctx, area.response.rect, None, Some(open.opened))
+            || popup_stack::window_focus_lost(ctx))
+            && action.is_none();
     if debug_action {
         close(ctx);
         app.dispatch(

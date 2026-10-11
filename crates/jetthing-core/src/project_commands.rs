@@ -172,6 +172,20 @@ impl IdeState {
             paths.len(),
             if paths.len() == 1 { "" } else { "s" }
         );
+        let files = format!(
+            "{} file{}",
+            paths.len(),
+            if paths.len() == 1 { "" } else { "s" }
+        );
+        self.notices.push(
+            crate::NoticeKind::Success,
+            if amend {
+                "Commit amended"
+            } else {
+                "Commit done"
+            },
+            format!("{files} committed."),
+        );
         Ok(hash)
     }
 

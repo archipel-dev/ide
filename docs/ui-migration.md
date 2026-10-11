@@ -76,6 +76,16 @@ bug to patch: do not bring the global pass back.
 | Colors `theme::TEXT`, `MODIFIED`, … | `Tone::Default`, `Tone::Modified`, … or `Theme::colors(ctx).field` |
 | Fonts `theme::semibold(size)` | `tokens::typography::semibold(ctx, size)` |
 
+## Design lint
+
+`cargo xtask design-lint` (run in CI) counts hand-rolled colors and shapes per file in
+`jetthing-ui`, `jetthing-app`, `jetthing-plugin-ui` and `plugins/`: `Color32::from_rgb*`,
+`0xRRGGBB[AA]` / `from_hex` palettes, `rect_filled` with a non-zero radius and
+`CornerRadius::same`. Existing hits are grandfathered in `xtask/design-lint-baseline.txt`;
+any count above its baseline fails. An area migration should bring its files to zero and run
+`cargo xtask design-lint --update` so the baseline only ever goes down. Test modules are
+not scanned.
+
 ## How to migrate an area
 
 1. Pick an area from the list below and say so, so nobody else edits the same files.

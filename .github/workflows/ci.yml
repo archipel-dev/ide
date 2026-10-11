@@ -37,4 +37,5 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
       - run: cargo run -p xtask -- parity --check
+      - run: cargo run -p xtask -- design-lint
 

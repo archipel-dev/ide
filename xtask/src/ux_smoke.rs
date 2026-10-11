@@ -164,7 +164,10 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
                 let _ = fs::remove_file(entry.path());
             }
         }
-        let project = if *name == "workbench-tree-tabs-popups-run" {
+        let project = if matches!(
+            *name,
+            "workbench-tree-tabs-popups-run" | "rename-from-context-menu"
+        ) {
             Some(create_fixture("rust-cargo", &work.join("rust-cargo"))?)
         } else {
             None
@@ -570,7 +573,11 @@ fn rename_from_context_menu(d: &mut Driver) -> Result<()> {
     d.key("ctrl+a")?;
     d.type_text("renamed.rs")?;
     d.key("Return")?;
-    d.expect("/popups/dialog", Value::Null, "Rename dialog closed by Enter")?;
+    d.expect(
+        "/popups/dialog",
+        Value::Null,
+        "Rename dialog closed by Enter",
+    )?;
     let renamed = root.join("src/renamed.rs");
     let deadline = Instant::now() + STATE_TIMEOUT;
     while !renamed.is_file() {

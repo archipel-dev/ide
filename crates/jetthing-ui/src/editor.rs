@@ -7,9 +7,9 @@ use crate::markdown_ui;
 use crate::problems_ui;
 use crate::tab_strip;
 use crate::widgets::island_frame;
+use crate::{IdeApp, theme};
 use archipel_kit::behaviour::{Behaviour, ContextMenu, DropTarget};
 use archipel_kit::components::MenuItem;
-use crate::{IdeApp, theme};
 use eframe::egui::{self, Color32, Rect, Sense, Stroke, vec2};
 use jetthing_core::Document;
 use jetthing_language::LanguageAnalysis;
@@ -491,9 +491,8 @@ const TAB_DRAG: &str = "jt_tab_drag";
 fn tabs(app: &mut IdeApp, ui: &mut egui::Ui, strip: Option<&TabStrip>) {
     let (bar, bar_response) =
         ui.allocate_exact_size(vec2(ui.available_width(), TAB_BAR_HEIGHT), Sense::click());
-    bar_response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Editor tabs")
-    });
+    bar_response
+        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Editor tabs"));
     let mut x = bar.left() + 6.0;
     let mut activate = None;
     let mut close = None;
@@ -569,10 +568,7 @@ fn tabs(app: &mut IdeApp, ui: &mut egui::Ui, strip: Option<&TabStrip>) {
             DropTarget::new(&mut dropped).attach(ui, response.clone());
             let after = pointer.is_some_and(|pos| pos.x >= rect.center().x);
             let before = if after {
-                indices
-                    .get(position + 1)
-                    .copied()
-                    .unwrap_or(index + 1)
+                indices.get(position + 1).copied().unwrap_or(index + 1)
             } else {
                 index
             };
@@ -624,7 +620,10 @@ fn tabs(app: &mut IdeApp, ui: &mut egui::Ui, strip: Option<&TabStrip>) {
     }
     // The empty part of the bar: a drop appends, a right click opens the bar's own menu
     // (never the first tab's), and nothing else happens.
-    let tail = Rect::from_min_max(egui::pos2(x.min(bar.right()), bar.top()), bar.right_bottom());
+    let tail = Rect::from_min_max(
+        egui::pos2(x.min(bar.right()), bar.top()),
+        bar.right_bottom(),
+    );
     if let Some(from) = dragged {
         let end = indices.last().map_or(0, |last| last + 1);
         let tail_response = ui.interact(tail, egui::Id::new("editor_tab_tail"), Sense::hover());
@@ -699,10 +698,7 @@ fn tab_bar_menu(app: &IdeApp, ui: &mut egui::Ui, chosen: &mut Option<&'static st
     ui.set_min_width(200.0);
     for (label, command) in entries {
         if ui
-            .add(
-                MenuItem::new(label)
-                    .enabled(app.commands.is_enabled(command, &app.state)),
-            )
+            .add(MenuItem::new(label).enabled(app.commands.is_enabled(command, &app.state)))
             .clicked()
         {
             *chosen = Some(command);
@@ -1795,15 +1791,16 @@ fn editor_surface(
                 || crate::change_popup::in_marker_column(x, layout.width)
                     && jetthing_core::hunk_at_line(changes, line).is_some()
                 || blame.is_some() && x < blame_width;
-            ui.ctx().set_cursor_icon(if fold_placeholder_hover.is_some() {
-                egui::CursorIcon::PointingHand
-            } else if x >= gutter_width {
-                egui::CursorIcon::Text
-            } else if clickable {
-                egui::CursorIcon::PointingHand
-            } else {
-                egui::CursorIcon::Default
-            });
+            ui.ctx()
+                .set_cursor_icon(if fold_placeholder_hover.is_some() {
+                    egui::CursorIcon::PointingHand
+                } else if x >= gutter_width {
+                    egui::CursorIcon::Text
+                } else if clickable {
+                    egui::CursorIcon::PointingHand
+                } else {
+                    egui::CursorIcon::Default
+                });
         }
         let focused = response.has_focus();
         let blink_on = {

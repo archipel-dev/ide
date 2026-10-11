@@ -403,22 +403,38 @@ mod tests {
         let (mut state, commands, root) = project(&["a", "b", "c"], "move");
         let active = state.documents[state.active_document.unwrap()].path.clone();
         commands
-            .execute("editor.moveTab", &mut state, json!({"from": 2, "before": 0}))
+            .execute(
+                "editor.moveTab",
+                &mut state,
+                json!({"from": 2, "before": 0}),
+            )
             .unwrap();
         assert_eq!(names(&state), ["c", "a", "b"]);
         assert_eq!(state.documents[state.active_document.unwrap()].path, active);
         commands
-            .execute("editor.moveTab", &mut state, json!({"from": 0, "before": 3}))
+            .execute(
+                "editor.moveTab",
+                &mut state,
+                json!({"from": 0, "before": 3}),
+            )
             .unwrap();
         assert_eq!(names(&state), ["a", "b", "c"]);
         state.set_pinned(0, true).unwrap();
         commands
-            .execute("editor.moveTab", &mut state, json!({"from": 2, "before": 0}))
+            .execute(
+                "editor.moveTab",
+                &mut state,
+                json!({"from": 2, "before": 0}),
+            )
             .unwrap();
         assert_eq!(names(&state), ["a", "c", "b"]);
         assert!(
             commands
-                .execute("editor.moveTab", &mut state, json!({"from": 9, "before": 0}))
+                .execute(
+                    "editor.moveTab",
+                    &mut state,
+                    json!({"from": 9, "before": 0})
+                )
                 .is_err()
         );
         std::fs::remove_dir_all(root).unwrap();

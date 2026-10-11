@@ -444,9 +444,9 @@ pub fn track_hover(app: &mut IdeApp, ctx: &egui::Context, hover: Option<(usize, 
         && pointer.is_some_and(|pointer| !app.doc_view.rect.is_some_and(|r| r.contains(pointer)));
     match app.state.docs.popup.as_ref().map(|popup| popup.from_mouse) {
         Some(true) => {
-            let on_symbol = hover.zip(app.doc_view.requested).is_some_and(
-                |((offset, _), requested)| on_same_identifier(app, requested, offset),
-            );
+            let on_symbol = hover
+                .zip(app.doc_view.requested)
+                .is_some_and(|((offset, _), requested)| on_same_identifier(app, requested, offset));
             if pressed_outside {
                 app.doc_view.pinned = false;
             }
@@ -459,8 +459,7 @@ pub fn track_hover(app: &mut IdeApp, ctx: &egui::Context, hover: Option<(usize, 
         }
         _ => app.doc_view.pinned = false,
     }
-    let Some((offset, pos)) = hover.filter(|_| !busy && !over_popup && !app.doc_view.pinned)
-    else {
+    let Some((offset, pos)) = hover.filter(|_| !busy && !over_popup && !app.doc_view.pinned) else {
         app.doc_view.resting = None;
         return;
     };
@@ -533,7 +532,10 @@ mod tests {
         });
         track_hover(&mut app, &ctx, None);
         let _ = ctx.end_pass();
-        assert!(app.state.docs.popup.is_none(), "a press outside unpins and closes");
+        assert!(
+            app.state.docs.popup.is_none(),
+            "a press outside unpins and closes"
+        );
     }
 
     #[test]

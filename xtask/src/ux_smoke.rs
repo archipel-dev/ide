@@ -50,6 +50,12 @@ mod layout {
     pub const TREE_SRC_CHEVRON: Point = (80, 113);
     /// Second row under `src` of the rust-cargo fixture (`broken.rs` sorts first).
     pub const TREE_MAIN_RS: Point = (150, 161);
+    /// First row under `src` of the rust-cargo fixture.
+    pub const TREE_BROKEN_RS: Point = (150, 137);
+    /// With `broken.rs` and `main.rs` open: centres of their tabs, and the left half of the
+    /// first one (an insertion point before it).
+    pub const TAB_SECOND: Point = (505, 61);
+    pub const TAB_FIRST_LEFT_HALF: Point = (345, 61);
     pub const PROJECT_HIDE_BUTTON: Point = (293, 58);
     pub const PROJECT_STRIPE_BUTTON: Point = (19, 62);
     pub const FIRST_TAB_CLOSE: Point = (419, 61);
@@ -105,6 +111,10 @@ const SCENES: &[(&str, SceneFn)] = &[
     (
         "workbench-tree-tabs-popups-run",
         workbench_tree_tabs_popups_run,
+    ),
+    (
+        "editor-tabs-drag-and-maximize",
+        editor_tabs_drag_and_maximize,
     ),
 ];
 
@@ -343,6 +353,33 @@ impl Driver {
         self.note(format!("right-click {what} at ({x}, {y})"));
         let (x, y) = (x.to_string(), y.to_string());
         self.xdotool(&["mousemove", &x, &y, "sleep", "0.12", "click", "3"])?;
+        self.settle();
+        Ok(())
+    }
+
+    /// Presses on `from`, moves in steps to `to` and releases: a mouse drag.
+    fn drag(
+        &mut self,
+        (x, y): layout::Point,
+        (to_x, to_y): layout::Point,
+        what: &str,
+    ) -> Result<()> {
+        self.note(format!("drag {what} from ({x}, {y}) to ({to_x}, {to_y})"));
+        let (x, y) = (x.to_string(), y.to_string());
+        self.xdotool(&["mousemove", &x, &y, "sleep", "0.15", "mousedown", "1"])?;
+        let steps = 8;
+        for step in 1..=steps {
+            let px = (x.parse::<i32>()? * (steps - step) + to_x * step) / steps;
+            let py = (y.parse::<i32>()? * (steps - step) + to_y * step) / steps;
+            self.xdotool(&[
+                "mousemove",
+                &px.to_string(),
+                &py.to_string(),
+                "sleep",
+                "0.05",
+            ])?;
+        }
+        self.xdotool(&["sleep", "0.2", "mouseup", "1"])?;
         self.settle();
         Ok(())
     }
@@ -631,6 +668,58 @@ fn workbench_tree_tabs_popups_run(d: &mut Driver) -> Result<()> {
         },
     )?;
     d.screenshot("run")?;
+    Ok(())
+}
+
+/// Two files open: dragging the second tab before the first reorders the bar (UX-011),
+/// a double click on a tab maximises the editor and again restores it (UX-012).
+fn editor_tabs_drag_and_maximize(d: &mut Driver) -> Result<()> {
+    d.wait("/project", "project opened", |value| !value.is_null())?;
+    dismiss_first_run(d)?;
+    d.click(layout::TREE_SRC_CHEVRON, "src chevron")?;
+    d.wait("/projectTree/expanded", "src expanded", |value| {
+        value
+            .as_array()
+            .is_some_and(|dirs| dirs.iter().any(|dir| dir == "src"))
+    })?;
+    d.double_click(layout::TREE_BROKEN_RS, "src/broken.rs row")?;
+    d.double_click(layout::TREE_MAIN_RS, "src/main.rs row")?;
+    d.wait("/tabs", "two tabs open", |value| {
+        value.as_array().is_some_and(|tabs| tabs.len() == 2)
+    })?;
+    let order = |d: &mut Driver| -> Result<Vec<String>> {
+        Ok(d.state()?["tabs"]
+            .as_array()
+            .map(|tabs| {
+                tabs.iter()
+                    .filter_map(|tab| tab["path"].as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default())
+    };
+    if order(d)? != ["src/broken.rs", "src/main.rs"] {
+        bail!("unexpected tab order before the drag: {:?}", order(d)?);
+    }
+    d.drag(
+        layout::TAB_SECOND,
+        layout::TAB_FIRST_LEFT_HALF,
+        "the main.rs tab",
+    )?;
+    d.expect(
+        "/tabs/0/path",
+        "src/main.rs".into(),
+        "main.rs is now the first tab",
+    )?;
+    d.expect(
+        "/activeTab",
+        "src/main.rs".into(),
+        "the dragged tab stays the active one",
+    )?;
+    d.screenshot("tabs-reordered")?;
+    d.double_click(layout::TAB_FIRST_LEFT_HALF, "a tab")?;
+    d.expect("/toolWindows/left", Value::Null, "editor maximised")?;
+    d.double_click(layout::TAB_FIRST_LEFT_HALF, "a tab")?;
+    d.expect("/toolWindows/left", "project".into(), "editor restored")?;
     Ok(())
 }
 

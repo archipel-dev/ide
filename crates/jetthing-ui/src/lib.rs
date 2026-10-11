@@ -34,8 +34,9 @@ mod device_manager;
 mod diff_ui;
 mod disk_banner;
 mod doc_ui;
-mod tab_strip;
 mod editor;
+#[cfg(test)]
+mod editor_chrome_audit;
 mod editor_keys;
 mod file_icon;
 mod find_popup;
@@ -78,6 +79,7 @@ mod settings_pages;
 mod structure_view;
 mod switcher;
 mod syntax;
+mod tab_strip;
 mod terminal_ui;
 mod test_view;
 mod theme;
@@ -86,8 +88,6 @@ mod toolbar_gradient;
 mod toolchain_banner;
 mod toolchain_status;
 mod toolwindows;
-#[cfg(test)]
-mod editor_chrome_audit;
 #[cfg(test)]
 mod ui_audit;
 mod welcome;

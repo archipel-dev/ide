@@ -166,25 +166,25 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) -> Option<Rect> {
                     }
                 }
                 let scrolled = area.show_rows(ui, ROW_HEIGHT, rows.len(), |ui, range| {
-                        for index in range {
-                            let row = &rows[index];
-                            let mut view = ListRow::new(row.label.as_str())
-                                .flat(true)
-                                .selected(index == selected);
-                            if let Some(icon) = kind_icon(row.kind) {
-                                view = view.icon(icon);
-                            }
-                            if let Some(detail) = &row.detail {
-                                view = view.secondary(detail.as_str());
-                            }
-                            if let Some(type_text) = &row.type_text {
-                                view = view
-                                    .trailing(Slot::text_tone(type_text.as_str(), Tone::Secondary));
-                            }
-                            if view.show(ui).response.clicked() {
-                                clicked = Some(index);
-                            }
+                    for index in range {
+                        let row = &rows[index];
+                        let mut view = ListRow::new(row.label.as_str())
+                            .flat(true)
+                            .selected(index == selected);
+                        if let Some(icon) = kind_icon(row.kind) {
+                            view = view.icon(icon);
                         }
+                        if let Some(detail) = &row.detail {
+                            view = view.secondary(detail.as_str());
+                        }
+                        if let Some(type_text) = &row.type_text {
+                            view =
+                                view.trailing(Slot::text_tone(type_text.as_str(), Tone::Secondary));
+                        }
+                        if view.show(ui).response.clicked() {
+                            clicked = Some(index);
+                        }
+                    }
                 });
                 ctx.data_mut(|data| {
                     data.insert_temp(offset_id, (selected, scrolled.state.offset.y))

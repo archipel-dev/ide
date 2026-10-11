@@ -11,7 +11,8 @@ use eframe::egui::{self, pos2, vec2};
 use jetthing_core::{CodeActionItem, CodeActionList, CompletionSession, DiskConflict, QuickDoc};
 use std::path::PathBuf;
 
-const JAVA: &str = "package com.example;\n\npublic class Main {\n    public void increment() {}\n}\n";
+const JAVA: &str =
+    "package com.example;\n\npublic class Main {\n    public void increment() {}\n}\n";
 
 fn themes() -> [(&'static str, Theme); 2] {
     [("dark", Theme::dark()), ("light", Theme::light())]
@@ -19,10 +20,8 @@ fn themes() -> [(&'static str, Theme); 2] {
 
 /// A project with Main.java, Util.java and README.md open; Util is modified, README pinned.
 fn app_with_tabs(name: &str) -> IdeApp {
-    let root: PathBuf = std::env::temp_dir().join(format!(
-        "jetthing-ui-chrome-{name}-{}",
-        std::process::id()
-    ));
+    let root: PathBuf =
+        std::env::temp_dir().join(format!("jetthing-ui-chrome-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("src")).unwrap();
     std::fs::write(root.join("src/Main.java"), JAVA).unwrap();
@@ -107,8 +106,12 @@ fn clicking_a_tab_activates_it_and_a_middle_click_closes_it() {
         strip(ui, |ui| crate::editor::tabs_for_tests(app, ui));
         // Activating a tab hands the focus to the editor surface: stand-in for it.
         let editor = ui.allocate_response(vec2(200.0, 100.0), egui::Sense::click());
-        ui.interact(editor.rect, crate::editor::editor_id(), egui::Sense::click())
-            .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Editor"));
+        ui.interact(
+            editor.rect,
+            crate::editor::editor_id(),
+            egui::Sense::click(),
+        )
+        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::TextEdit, true, "Editor"));
     });
     harness.run();
     harness.get_by_label("Util.java").click();
@@ -195,7 +198,10 @@ fn dragging_a_tab_onto_another_reorders_the_bar() {
         strip(ui, |ui| crate::editor::tabs_with_drag_for_tests(app, ui));
     });
     harness.run();
-    assert_eq!(tab_names(harness.state()), ["README.md", "Main.java", "Util.java"]);
+    assert_eq!(
+        tab_names(harness.state()),
+        ["README.md", "Main.java", "Util.java"]
+    );
     let util = harness.get_by_label("Util.java").rect();
     let main = harness.get_by_label("Main.java").rect();
     // A drag keeps repainting (the ghost follows the pointer), so step instead of run.
@@ -211,7 +217,10 @@ fn dragging_a_tab_onto_another_reorders_the_bar() {
     harness.drop_at(main.left_center() + vec2(8.0, 0.0));
     harness.run_steps(3);
     // The pinned README stays leftmost; Util now precedes Main.
-    assert_eq!(tab_names(harness.state()), ["README.md", "Util.java", "Main.java"]);
+    assert_eq!(
+        tab_names(harness.state()),
+        ["README.md", "Util.java", "Main.java"]
+    );
 }
 
 fn app_with_completion(name: &str) -> IdeApp {
@@ -327,7 +336,10 @@ fn quick_fix_popup_applies_a_clicked_row_and_moves_with_the_keys() {
     harness.run();
     harness.key_press(egui::Key::Escape);
     harness.run();
-    assert!(!harness.state().state().code_actions.popup, "Escape closes it");
+    assert!(
+        !harness.state().state().code_actions.popup,
+        "Escape closes it"
+    );
 }
 
 fn app_with_quick_doc(name: &str) -> IdeApp {

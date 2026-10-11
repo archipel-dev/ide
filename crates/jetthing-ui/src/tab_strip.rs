@@ -93,7 +93,10 @@ impl Layout {
 
 /// Width of a tab titled `name`.
 pub fn width(ui: &Ui, name: &str, preview: bool) -> f32 {
-    PAD_LEFT + size::ICON + GAP + title(ui, name, preview, egui::Color32::WHITE).size().x
+    PAD_LEFT
+        + size::ICON
+        + GAP
+        + title(ui, name, preview, egui::Color32::WHITE).size().x
         + GAP
         + size::ICON_BUTTON_SMALL
         + PAD_RIGHT

@@ -1,9 +1,9 @@
 //! Maps document lines to visual rows when code-folding regions are collapsed,
 //! and paints gutter fold markers.
 
+use archipel_kit::Theme;
 use archipel_kit::icons::{self, Glyph};
 use archipel_kit::parts::row_pill;
-use archipel_kit::Theme;
 use archipel_kit::tokens::size::ROW_PILL_INSET;
 use eframe::egui::{self, Color32, Rect};
 use jetthing_core::Document;
@@ -136,7 +136,11 @@ pub fn paint_marker(
     };
     if hovered {
         // `row_pill` insets by the row pill inset on both sides.
-        row_pill(painter, rect.expand2(egui::vec2(ROW_PILL_INSET, 0.0)), kit.colors.hover);
+        row_pill(
+            painter,
+            rect.expand2(egui::vec2(ROW_PILL_INSET, 0.0)),
+            kit.colors.hover,
+        );
     }
     let glyph = if collapsed {
         Glyph::ChevronRight

@@ -135,6 +135,9 @@ pub struct IdeApp {
     last_active_file: Option<PathBuf>,
     /// A single click in the Project tree opened a preview: keep the keyboard in the tree.
     pub(crate) keep_tree_focus: bool,
+    /// Set by controls that open a file with a click (tree double-click): the
+    /// editor is focused on the next frame, see `toolwindows::project`.
+    pub(crate) focus_editor_next_frame: bool,
     find: findbar::FindBar,
     /// Text of the last whole-line copy, so pasting it inserts a line.
     clipboard_line: Option<String>,
@@ -305,6 +308,7 @@ impl IdeApp {
             last_right: None,
             last_active_file: None,
             keep_tree_focus: false,
+            focus_editor_next_frame: false,
             find: findbar::FindBar::default(),
             clipboard_line: None,
             dialog: None,
@@ -702,15 +706,18 @@ impl IdeApp {
                 self.find_popup.open = false;
             } else if self.state.docs.popup.is_some() {
                 self.dispatch("language.closeQuickDoc", Value::Null);
-            } else if self.state.completion.is_some() {
+            } else if completion_open {
+                // Only a visible popup takes Escape; a hidden session must not
+                // swallow the key meant for the find bar or a tool window.
                 self.dispatch("completion.close", Value::Null);
             } else if self.state.signature.popup.is_some() {
                 self.dispatch("language.closeParameterInfo", Value::Null);
             } else if self.state.snippet.is_some() {
                 self.dispatch("snippet.exit", Value::Null);
-            } else if self.find.open
-                && (self.editor_focused(ctx) || ctx.memory(|m| m.has_focus(findbar::query_id())))
-            {
+            } else if self.find.open {
+                // One Escape closes the find bar from the query field or the
+                // editor. Do not test focus here: egui already surrendered the
+                // focused text field on this very Escape, so nothing is focused.
                 self.find.open = false;
                 ctx.memory_mut(|memory| memory.request_focus(editor::editor_id()));
             } else if self.state.tool_windows.visible(Anchor::Bottom).is_some()
@@ -740,6 +747,14 @@ impl IdeApp {
     /// Activating a tool window moves keyboard focus into it; hiding it returns
     /// focus to the editor.
     fn follow_tool_window_focus(&mut self, ctx: &egui::Context) {
+        if std::mem::take(&mut self.focus_editor_next_frame)
+            && self.state.active_document.is_some()
+            && self.dialog.is_none()
+            && !self.palette.open
+            && !self.find_popup.open
+        {
+            ctx.memory_mut(|memory| memory.request_focus(editor::editor_id()));
+        }
         // Opening or switching to a file (tree, Go to File, search results,
         // automation) moves keyboard focus into its editor, as in the reference.
         let active = self

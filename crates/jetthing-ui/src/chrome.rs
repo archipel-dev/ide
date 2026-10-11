@@ -968,13 +968,16 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                     }
                     if !app.state.status.is_empty() {
                         let status = first_line_truncated(&app.state.status, 70);
-                        let response = widgets::flat_widget(
+                        // Whatever room the right-hand widgets left, minus a gap
+                        // to the breadcrumbs, so a long message is elided instead
+                        // of painting over the navigation bar.
+                        let max_width = (ui.available_width() - 24.0).max(40.0);
+                        let response = widgets::flat_widget_elided(
                             ui,
-                            None,
                             &status,
                             font.clone(),
                             *theme::TEXT_INFO,
-                            false,
+                            max_width,
                             22.0,
                         );
                         let response = response.on_hover_text(app.state.status.clone());

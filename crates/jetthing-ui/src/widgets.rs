@@ -176,6 +176,35 @@ pub fn flat_widget(
     response
 }
 
+/// [`flat_widget`] whose text is elided with "…" so it never grows past
+/// `max_width` (status messages must not run over the breadcrumbs).
+pub fn flat_widget_elided(
+    ui: &mut egui::Ui,
+    text: &str,
+    font: egui::FontId,
+    color: impl Into<Color32>,
+    max_width: f32,
+    height: f32,
+) -> egui::Response {
+    let color = color.into();
+    let galley =
+        ui.painter()
+            .layout_job(elided_job(text, font, color, (max_width - 16.0).max(0.0)));
+    let width = 8.0 + galley.size().x + 8.0;
+    let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::click());
+    let fill = if response.is_pointer_button_down_on() {
+        *theme::PRESSED
+    } else if response.hovered() {
+        *theme::HOVER
+    } else {
+        Color32::TRANSPARENT
+    };
+    ui.painter().rect_filled(rect, 6.0, fill);
+    let text_pos = egui::pos2(rect.left() + 8.0, rect.center().y - galley.size().y / 2.0);
+    ui.painter().galley(text_pos, galley, color);
+    response
+}
+
 /// Single-line search/input field. It has the look of the kit's `TextField::search`
 /// (field surface, focus outline, placeholder color, 28 pt height) but keeps `id` on the
 /// text edit, because tool windows move keyboard focus by id (the kit's `TextField` has no

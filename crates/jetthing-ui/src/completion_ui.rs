@@ -150,6 +150,23 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) -> Option<Rect> {
         return None;
     }
     let caret = app.caret_screen_pos?;
+    // A click that takes keyboard focus away from the editor (project tree,
+    // tool window, toolbar) dismisses the popup, as in the reference IDE.
+    // Clicks on the popup itself select a row and are handled below.
+    if session.visible() && !app.editor_focused(ctx) {
+        let popup_rect = ctx.memory(|memory| memory.area_rect(egui::Id::new("completion_popup")));
+        let pressed_outside = ctx.input(|input| {
+            input.pointer.any_pressed()
+                && input
+                    .pointer
+                    .interact_pos()
+                    .is_some_and(|pos| !popup_rect.is_some_and(|rect| rect.contains(pos)))
+        });
+        if pressed_outside {
+            app.dispatch("completion.close", serde_json::Value::Null);
+            return None;
+        }
+    }
     let indexing = session.indexing.clone();
     if indexing.is_some() {
         // Re-query and refresh the notice when the server finishes.

@@ -274,7 +274,8 @@ fn action_button(ui: &mut egui::Ui, icon: Icon, label: &str) -> egui::Response {
         egui::FontId::proportional(theme::UI_FONT_SIZE),
         *theme::TEXT,
     );
-    response.on_hover_text(label)
+    // The tile already shows its label; a tooltip repeating it is noise.
+    response
 }
 
 fn recent_row(

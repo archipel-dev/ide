@@ -71,6 +71,7 @@ mod test_nav;
 mod welcome_commands;
 pub use welcome_commands::{CloneJob, JdkChoice, jdk_major, repository_name};
 mod live_templates;
+mod notice;
 mod run_config_commands;
 mod search_scopes;
 mod settings_commands;
@@ -90,6 +91,7 @@ pub use android_devices::DeviceHub;
 pub use android_logcat::LogcatState;
 pub use android_tools::{LayoutEditorState, LayoutMode};
 pub use disk_sync::{DiskConflict, Waker, content_hash};
+pub use notice::{Notice, NoticeKind, Notices};
 pub use settings_commands::Settings;
 mod vcs;
 pub use build_commands::{BuildSystems, DetectedBuild};
@@ -370,6 +372,8 @@ pub struct IdeState {
     pub update_state: UpdateState,
     /// Whether the update balloon is showing.
     pub update_notification: bool,
+    /// Balloons for completed operations (commit, toolchain setup), drained by the UI.
+    pub notices: Notices,
     /// Whether Help → About is showing (`app.about`).
     pub about_open: bool,
     /// Unseen crash report from a previous session (`app.dismissCrashReport`).

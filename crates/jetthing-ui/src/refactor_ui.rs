@@ -3,7 +3,11 @@
 //! server has no `prepareRename`. Enter applies, Escape cancels; the policy
 //! lives in `jetthing_core::refactor`, these controls only dispatch commands.
 
-use crate::{IdeApp, theme};
+use crate::{IdeApp, popup_stack};
+use archipel_kit::Theme;
+use archipel_kit::components::Button;
+use archipel_kit::parts::Surface;
+use archipel_kit::tokens::typography;
 use eframe::egui::{self, RichText, text_selection::CCursorRange, vec2};
 use serde_json::{Value, json};
 
@@ -27,17 +31,17 @@ pub fn popup(app: &mut IdeApp, ctx: &egui::Context) {
     });
     let has_focus = ctx.memory(|memory| memory.has_focus(field_id()));
     let submit = has_focus && ctx.input(|input| input.key_pressed(egui::Key::Enter));
-    let cancel = ctx.input(|input| input.key_pressed(egui::Key::Escape));
     let mut name = session.name.clone();
     let mut ok = false;
     let mut close = false;
     let title = format!("Rename '{}'", session.original);
     let mut body = |ui: &mut egui::Ui| {
         ui.set_min_width(280.0);
+        let colors = Theme::colors(ui.ctx());
         ui.label(
             RichText::new(&title)
-                .font(theme::semibold(theme::UI_FONT_SIZE))
-                .color(theme::TEXT_BRIGHT),
+                .font(typography::semibold(ui.ctx(), typography::BODY))
+                .color(colors.text_strong),
         );
         ui.add_space(4.0);
         let mut output = egui::TextEdit::singleline(&mut name)
@@ -63,15 +67,15 @@ pub fn popup(app: &mut IdeApp, ctx: &egui::Context) {
             )
         };
         if let Some(error) = &session.error {
-            ui.label(RichText::new(error).color(theme::STOP_RED));
+            ui.label(RichText::new(error).color(colors.error));
         } else if !hint.is_empty() {
-            ui.label(RichText::new(hint).color(theme::TEXT_SECONDARY));
+            ui.label(RichText::new(hint).color(colors.text_secondary));
         }
         if session.dialog {
             ui.add_space(4.0);
             ui.horizontal(|ui| {
-                ok = ui.button("Refactor").clicked();
-                close = ui.button("Cancel").clicked();
+                ok = ui.add(Button::primary("Refactor")).clicked();
+                close = ui.add(Button::secondary("Cancel")).clicked();
             });
         }
     };
@@ -80,9 +84,7 @@ pub fn popup(app: &mut IdeApp, ctx: &egui::Context) {
             .order(egui::Order::Foreground)
             .anchor(egui::Align2::CENTER_CENTER, vec2(0.0, -80.0))
             .show(ctx, |ui| {
-                egui::Frame::popup(ui.style())
-                    .inner_margin(egui::Margin::same(12))
-                    .show(ui, &mut body);
+                Surface::Dialog.frame(ctx).show(ui, &mut body);
             })
             .response
     } else {
@@ -93,7 +95,8 @@ pub fn popup(app: &mut IdeApp, ctx: &egui::Context) {
             .order(egui::Order::Foreground)
             .fixed_pos(anchor + vec2(-12.0, 6.0))
             .show(ctx, |ui| {
-                egui::Frame::popup(ui.style())
+                Surface::Popup
+                    .frame(ctx)
                     .inner_margin(egui::Margin::same(8))
                     .show(ui, &mut body);
             })
@@ -104,10 +107,10 @@ pub fn popup(app: &mut IdeApp, ctx: &egui::Context) {
     }
     if submit || ok {
         app.dispatch("refactor.rename.apply", Value::Null);
-    } else if cancel || close {
+    } else if close {
         app.dispatch("refactor.rename.cancel", Value::Null);
         ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
-    } else if ctx.input(|input| input.pointer.any_pressed()) && !response.contains_pointer() {
+    } else if popup_stack::pressed_outside(ctx, response.rect, None, None) {
         app.dispatch("refactor.rename.cancel", Value::Null);
     }
 }

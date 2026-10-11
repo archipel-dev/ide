@@ -11,7 +11,7 @@ use std::path::PathBuf;
 const JAVA: &str = "package com.example;\n\npublic class Main {\n    private int counter;\n\n    public void increment() {\n        counter++;\n    }\n\n    interface Listener {\n        void onChange(int value);\n    }\n}\n";
 
 /// A project with sources, tests and docs, Main.java open.
-fn app_with_project(name: &str) -> IdeApp {
+pub(crate) fn app_with_project(name: &str) -> IdeApp {
     let root: PathBuf =
         std::env::temp_dir().join(format!("jetthing-ui-audit-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
@@ -26,12 +26,12 @@ fn app_with_project(name: &str) -> IdeApp {
     IdeApp::new(Some(root.clone()), vec![root.join("src/main/Main.java")])
 }
 
-fn themes() -> [(&'static str, Theme); 2] {
+pub(crate) fn themes() -> [(&'static str, Theme); 2] {
     [("dark", Theme::dark()), ("light", Theme::light())]
 }
 
 /// Runs `show` in a 360×420 panel.
-fn panel(ui: &mut egui::Ui, show: impl FnOnce(&mut egui::Ui)) {
+pub(crate) fn panel(ui: &mut egui::Ui, show: impl FnOnce(&mut egui::Ui)) {
     ui.allocate_ui(egui::vec2(360.0, 420.0), |ui| {
         ui.set_min_size(egui::vec2(360.0, 420.0));
         show(ui);

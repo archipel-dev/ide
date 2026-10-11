@@ -287,7 +287,7 @@ impl IdeApp {
             || self.state.docs.popup.is_some()
     }
 
-    fn completion_visible(&self) -> bool {
+    pub(crate) fn completion_visible(&self) -> bool {
         self.state
             .completion
             .as_ref()
@@ -387,6 +387,7 @@ impl IdeApp {
             "editor": editor,
             "terminal": self.terminal_text(),
             "popups": {
+                "stack": self.popup_stack.layers().iter().map(|layer| format!("{layer:?}")).collect::<Vec<_>>(),
                 "searchEverywhere": self.palette.open.then(|| self.palette.tab_name()),
                 "findInFilesPopup": self.find_popup.open,
                 "switcher": self.state.quick_nav.switcher.as_ref().map(|switcher| match switcher.selected_entry() {

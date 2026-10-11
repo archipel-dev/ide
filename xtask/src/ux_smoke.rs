@@ -106,6 +106,10 @@ const SCENES: &[(&str, SceneFn)] = &[
         "workbench-tree-tabs-popups-run",
         workbench_tree_tabs_popups_run,
     ),
+    (
+        "search-everywhere-opens-a-file",
+        search_everywhere_opens_a_file,
+    ),
 ];
 
 pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
@@ -159,7 +163,10 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
                 let _ = fs::remove_file(entry.path());
             }
         }
-        let project = if *name == "workbench-tree-tabs-popups-run" {
+        let project = if matches!(
+            *name,
+            "workbench-tree-tabs-popups-run" | "search-everywhere-opens-a-file"
+        ) {
             Some(create_fixture("rust-cargo", &work.join("rust-cargo"))?)
         } else {
             None
@@ -631,6 +638,54 @@ fn workbench_tree_tabs_popups_run(d: &mut Driver) -> Result<()> {
         },
     )?;
     d.screenshot("run")?;
+    Ok(())
+}
+
+/// Golden path of Search Everywhere with the mouse and keyboard only: the toolbar icon
+/// opens it, typing searches, ↓ moves the selection, Enter opens the file, and Escape
+/// closes it again through the popup stack.
+fn search_everywhere_opens_a_file(d: &mut Driver) -> Result<()> {
+    d.wait("/project", "project opened", |value| !value.is_null())?;
+    dismiss_first_run(d)?;
+    d.click(layout::TOOLBAR_SEARCH, "Search Everywhere toolbar button")?;
+    d.wait(
+        "/popups/searchEverywhere",
+        "Search Everywhere open",
+        |value| !value.is_null(),
+    )?;
+    d.wait(
+        "/popups/stack",
+        "Search Everywhere on the popup stack",
+        |value| {
+            value
+                .as_array()
+                .is_some_and(|layers| layers.last().is_some_and(|top| top == "SearchEverywhere"))
+        },
+    )?;
+    d.key("Escape")?;
+    d.expect(
+        "/popups/searchEverywhere",
+        Value::Null,
+        "Escape closes the top-most popup",
+    )?;
+    d.click(layout::TOOLBAR_SEARCH, "Search Everywhere toolbar button")?;
+    d.wait(
+        "/popups/searchEverywhere",
+        "Search Everywhere reopened",
+        |value| !value.is_null(),
+    )?;
+    d.type_text("main")?;
+    d.key("Down")?;
+    d.screenshot("search-everywhere-selected")?;
+    d.key("Return")?;
+    d.wait("/activeTab", "a main file opened in a tab", |value| {
+        value.as_str().is_some_and(|tab| tab.contains("main"))
+    })?;
+    d.expect(
+        "/popups/searchEverywhere",
+        Value::Null,
+        "Search Everywhere closed after opening",
+    )?;
     Ok(())
 }
 

@@ -142,6 +142,32 @@ cargo build -p jetthing-app
 docs/ui-migration/capture.sh target/debug/jetthing-app /tmp/after
 ```
 
+## Popup stack
+
+`crates/jetthing-ui/src/popup_stack.rs` is the IDE's one list of open transient layers
+(interaction spec §1). It holds identities, not state: a popup stays owned by the code that
+draws it and is closed through its own state.
+
+| Call | Meaning |
+|---|---|
+| `PopupId` | A layer: `SearchEverywhere`, `FindInFiles`, `Switcher`, `NavigationChoices`, `GutterRun`, `Rename`, `QuickDoc`, `Completion`, `ParameterInfo`, or `Other("name")` for a popup an area registers. |
+| `PopupStack::sync(&visible)` | Once per frame (`IdeApp::handle_shortcuts`): layers that are no longer visible leave, new ones go on top. A hidden or stale layer (an invisible completion session, a quick-doc popup whose anchor scrolled away) is never on the stack and cannot take Escape. |
+| `push(id)` / `remove(id)` / `contains(id)` | Explicit registration for popups that are not derived from state. |
+| `pop()` / `top()` | The top-most layer. |
+| **Escape rule** | `handle_shortcuts` pops the top layer and calls `IdeApp::close_popup(ctx, id)`. Nothing lower sees that Escape. Egui menus (`Popup::is_any_open`) are closed first, as before. |
+| `pressed_outside(ctx, rect, anchor, opened_pass)` | A pointer press outside the popup (and outside its anchor control, for toggles); the press that opened it is ignored. Every transient popup calls it to close on a click outside. |
+| `window_focus_lost(ctx)` | The window lost focus: transient popups (Search Everywhere, Switcher, chooser, gutter menu) close. |
+
+To put a popup on the stack: add its `PopupId` to `IdeApp::visible_popups` while it is
+visible (one line, in `lib.rs`), and a match arm in `IdeApp::close_popup` that closes it
+through its own state. Do not read Escape in the popup itself. The `state` snapshot
+reports the stack as `popups.stack`, so `ux-smoke` scenes can assert it.
+
+Popup content: `Surface::Popup.frame(ctx)` inside an `egui::Area` (`Order::Foreground`), or
+`parts::Popover` for a popup below a widget. Rows are kit `ListRow`s; a row whose content
+the caller paints (highlighted match, code preview) uses `popup_row::row`, which is the kit's
+row pill and states plus an accessible name.
+
 ## Kit gaps found by the foundation
 
 The foundation worked around these; each is a candidate for a kit PR. Fix the kit first when
@@ -157,6 +183,9 @@ your area needs one.
 | `IconButton` takes a `Tone`, not a color | `icons::button_colored` matches the color to the tone of the same value | AI chat, run widget, debug |
 | `Surface` has no chrome variant (toolbar, status bar, stripes) | `chrome_frame(ctx)` fills with `colors.frame` | main toolbar, status bar |
 | No tool-window title bar with a hide button | `tool_window_header` (icon buttons from the kit) | all tool windows (`Panel` may cover it) |
+| `ListRow` cannot emphasise matched characters of its label (speed search) or show a code preview with a highlighted symbol | `popup_row::row` (kit row pill and states) with a text layout whose matched characters have a background; Search Everywhere, the chooser popup, usages | Search Everywhere, Find, Problems filter |
+| `TextField` has no accessible name without a visible label, and no `.id(..)` | `widget_info` on the response names the Search Everywhere field; the rename field stays an `egui::TextEdit` (needs the id to select its text) | Search Everywhere, rename, every `search_field` |
+| `Toast::show_corner` floats on `Order::Foreground`, above modals | `Toast::show` inside an `Area` on `notifications::BALLOON_ORDER` | notifications |
 | No kit equivalent of `widgets::flat_widget` (status-bar and toolbar dropdown text with icon and chevron) | Uses `State` and `cursor::on_hover_action` | main toolbar, status bar |
 
 ## Areas
@@ -177,7 +206,7 @@ days, **L** three days or more. Areas that touch the same file (`chrome.rs`, `to
 | Terminal | `terminal_ui.rs`, `ai_terminal.rs` | S | Tab strip to `TabBar`; the terminal grid itself is not kit UI. |
 | Logcat, devices, Android | `logcat_ui.rs`, `device_manager.rs`, `running_devices_ui.rs`, `android_view.rs`, `android_sdk.rs`, `merged_manifest_ui.rs`, `resource_manager_ui.rs`, `layout_editor_ui.rs` | L | Do after the generic tool windows. `device_manager` and `android_sdk` are also dialogs. |
 | Editor tabs and chrome | `editor.rs` (`tabs`, `tab_drag`, ~450 lines), `completion_ui.rs`, `intentions_ui.rs`, `doc_ui.rs`, `folding.rs`, `blame_gutter.rs`, banners (`disk_banner.rs`, `gradle_banner.rs`, `toolchain_banner.rs`) | L | `TabBar` with `DragSource`/`DropTarget` for tab moves between splits. The text editor itself stays custom. |
-| Popups and Search Everywhere | `popups.rs`, `palette.rs`, `navigation_ui.rs`, `switcher.rs`, `gutter_popup.rs`, `refactor_ui.rs`, `lsp_status.rs`, `notifications.rs` | L | 22 `Frame::popup` call sites to `Surface::Popup` / `Popover`. Do before the dialogs so they share the popup shell. |
+| Popups and Search Everywhere | `popups.rs`, `palette.rs`, `navigation_ui.rs`, `switcher.rs`, `gutter_popup.rs`, `refactor_ui.rs`, `lsp_status.rs`, `notifications.rs` | L | 22 `Frame::popup` call sites to `Surface::Popup` / `Popover`. Do before the dialogs so they share the popup shell. **Done** for `palette.rs`, `navigation_ui.rs`, `switcher.rs`, `gutter_popup.rs`, `refactor_ui.rs`, `notifications.rs` and the [popup stack](#popup-stack); left: `popups.rs`, `lsp_status.rs`, and the editor chrome that joins the stack (`completion_ui.rs`, `doc_ui.rs`, `intentions_ui.rs`). |
 | Dialogs | `new_project.rs`, `settings_dialog.rs` (+ `settings_keymap.rs`, `settings_live_templates.rs`, `settings_pages.rs`), `plugin_manager.rs`, `run_config_dialog.rs`, `clone_dialog.rs`, `push_dialog.rs`, `first_run.rs`, `about.rs`, `crash_notice.rs` | L (split: Settings L, Plugins M, Run Configurations M, New Project / Clone / Push S each) | `Dialog` plus `TextField`, `Dropdown`, `Checkbox`, `PropertyGrid`. About 100 plain buttons. |
 | Main toolbar, status bar, stripes | `chrome.rs`, `main_menu.rs`, `toolchain_status.rs`, `lsp_status.rs`, `plugin_ui.rs` (status widgets) | M | One worker for all of `chrome.rs`. Run widget to `Button` + `Dropdown`; main menu needs the submenu gap. |
 | Welcome screen | `welcome.rs` | S | `EmptyState`, `ListRow`, `TextField::search`, avatars (`Avatar`). |

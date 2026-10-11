@@ -63,7 +63,11 @@ mod notifications;
 mod palette;
 mod plugin_manager;
 mod plugin_ui;
+mod popup_row;
+mod popup_stack;
 mod popups;
+#[cfg(test)]
+mod popups_audit;
 mod problems_ui;
 mod push_dialog;
 mod refactor_ui;
@@ -106,6 +110,8 @@ pub struct IdeApp {
     state: IdeState,
     commands: CommandRegistry<IdeState>,
     palette: palette::Palette,
+    /// Every open transient layer, oldest first; Escape closes the top one.
+    popup_stack: popup_stack::PopupStack,
     /// Whether Ctrl was down when the Switcher opened (`None` while it is closed).
     switcher_ctrl: Option<bool>,
     terminal_selection: Option<(terminal_ui::GridPoint, terminal_ui::GridPoint)>,
@@ -290,6 +296,7 @@ impl IdeApp {
             state,
             commands,
             palette: palette::Palette::default(),
+            popup_stack: popup_stack::PopupStack::default(),
             switcher_ctrl: None,
             terminal_selection: None,
             search_input: String::new(),
@@ -363,7 +370,7 @@ impl IdeApp {
     fn dispatch(&mut self, id: &str, params: Value) {
         if let Err(error) = self.commands.execute(id, &mut self.state, params) {
             diagnostics::log(diagnostics::Level::Warn, &format!("{id}: {error}"));
-            self.state.status = error.to_string();
+            self.state.status = notifications::error_message(id, &error);
         } else if id == "project.close" {
             self.project_closed();
         }
@@ -584,8 +591,61 @@ impl IdeApp {
         }
     }
 
+    /// The transient layers on screen this frame (see `popup_stack`). Areas that own
+    /// another popup add its `PopupId::Other(..)` here and close it in [`Self::close_popup`].
+    fn visible_popups(&self, ctx: &egui::Context) -> Vec<popup_stack::PopupId> {
+        use popup_stack::PopupId;
+        let mut visible = Vec::new();
+        let mut add = |open: bool, id: PopupId| {
+            if open {
+                visible.push(id);
+            }
+        };
+        add(self.completion_visible(), PopupId::Completion);
+        add(self.state.signature.popup.is_some(), PopupId::ParameterInfo);
+        add(self.state.docs.popup.is_some(), PopupId::QuickDoc);
+        add(
+            self.state.navigation.choices.is_some(),
+            PopupId::NavigationChoices,
+        );
+        add(gutter_popup::is_open(ctx), PopupId::GutterRun);
+        add(self.state.refactor.rename.is_some(), PopupId::Rename);
+        add(self.state.quick_nav.switcher.is_some(), PopupId::Switcher);
+        add(self.find_popup.open, PopupId::FindInFiles);
+        add(self.palette.open, PopupId::SearchEverywhere);
+        visible
+    }
+
+    /// Closes one layer of the popup stack through the state its owner draws from.
+    fn close_popup(&mut self, ctx: &egui::Context, id: popup_stack::PopupId) {
+        use popup_stack::PopupId;
+        self.popup_stack.remove(id);
+        match id {
+            PopupId::SearchEverywhere => self.palette.open = false,
+            PopupId::FindInFiles => self.find_popup.open = false,
+            PopupId::Switcher => self.dispatch("navigate.switcherCancel", Value::Null),
+            PopupId::NavigationChoices => self.state.navigation.choices = None,
+            PopupId::GutterRun => gutter_popup::close(ctx),
+            PopupId::Rename => {
+                self.dispatch("refactor.rename.cancel", Value::Null);
+                ctx.memory_mut(|memory| memory.request_focus(editor::editor_id()));
+            }
+            PopupId::QuickDoc => self.dispatch("language.closeQuickDoc", Value::Null),
+            PopupId::Completion => self.dispatch("completion.close", Value::Null),
+            PopupId::ParameterInfo => self.dispatch("language.closeParameterInfo", Value::Null),
+            PopupId::Other(_) => {}
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn handle_shortcuts_for_tests(&mut self, ctx: &egui::Context) {
+        self.handle_shortcuts(ctx);
+    }
+
     fn handle_shortcuts(&mut self, ctx: &egui::Context) {
         use egui::{Key, Modifiers};
+        let visible = self.visible_popups(ctx);
+        self.popup_stack.sync(&visible);
         let completion_open = self
             .state
             .completion
@@ -677,8 +737,6 @@ impl IdeApp {
             if egui::Popup::is_any_open(ctx) {
                 // Context menus and main-menu dropdowns close first.
                 egui::Popup::close_all(ctx);
-            } else if gutter_popup::is_open(ctx) {
-                gutter_popup::close(ctx);
             } else if self.state.debugger.evaluate_dialog.is_some() {
                 self.dispatch("debug.closeEvaluateDialog", Value::Null);
             } else if self.state.debugger.editing_breakpoint.is_some() {
@@ -697,21 +755,12 @@ impl IdeApp {
                 self.push_dialog = None;
             } else if self.change_popup.is_some() {
                 self.change_popup = None;
-            } else if self.state.quick_nav.switcher.is_some() {
-                self.dispatch("navigate.switcherCancel", Value::Null);
             } else if self.state.ai.pending_apply.is_some() {
                 self.dispatch("ai.chat.applyCancel", Value::Null);
-            } else if self.palette.open || self.find_popup.open {
-                self.palette.open = false;
-                self.find_popup.open = false;
-            } else if self.state.docs.popup.is_some() {
-                self.dispatch("language.closeQuickDoc", Value::Null);
-            } else if completion_open {
-                // Only a visible popup takes Escape; a hidden session must not
-                // swallow the key meant for the find bar or a tool window.
-                self.dispatch("completion.close", Value::Null);
-            } else if self.state.signature.popup.is_some() {
-                self.dispatch("language.closeParameterInfo", Value::Null);
+            } else if let Some(top) = self.popup_stack.pop() {
+                // One rule for every transient layer: the top-most visible one closes.
+                // A hidden session never reaches the stack, so it cannot swallow the key.
+                self.close_popup(ctx, top);
             } else if self.state.snippet.is_some() {
                 self.dispatch("snippet.exit", Value::Null);
             } else if self.find.open {

@@ -259,9 +259,21 @@ impl IdeState {
                 self.status = match result {
                     Ok(installed) => {
                         installed_any = true;
+                        self.notices.push(
+                            crate::NoticeKind::Success,
+                            format!("{name} installed"),
+                            format!("Version {} is ready to use.", installed.version),
+                        );
                         format!("{name} {} installed", installed.version)
                     }
-                    Err(error) => format!("{name} setup failed: {error}"),
+                    Err(error) => {
+                        self.notices.push(
+                            crate::NoticeKind::Error,
+                            format!("{name} setup failed"),
+                            error.to_string(),
+                        );
+                        format!("{name} setup failed: {error}")
+                    }
                 };
             }
         }

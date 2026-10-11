@@ -1,10 +1,10 @@
-//! `.jtplugin` archives: a zip file with `jetthing-plugin.toml` at its root
+//! `.jtplugin` archives: a zip file with `archipel-plugin.toml` (or `jetthing-plugin.toml`) at its root
 //! (or inside a single top-level directory) plus the plugin's files.
 //!
 //! Installation extracts into `<plugins dir>/<plugin id>/` through a temporary
 //! directory, so a failed install never leaves a half-written plugin behind.
 
-use crate::{MANIFEST_FILE, PluginError, PluginKind, PluginManifest};
+use crate::{JETTHING_MANIFEST_FILE, MANIFEST_FILE, PluginError, PluginKind, PluginManifest};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Component, Path, PathBuf};
@@ -12,6 +12,9 @@ use std::path::{Component, Path, PathBuf};
 /// File extension of plugin archives.
 pub const ARCHIVE_EXTENSION: &str = "jtplugin";
 const MAX_ENTRIES: usize = 10_000;
+/// Manifest names accepted in archives, in order of preference.
+const ARCHIVE_MANIFESTS: [&str; 2] = [MANIFEST_FILE, JETTHING_MANIFEST_FILE];
+
 const MAX_UNPACKED_BYTES: u64 = 512 * 1024 * 1024;
 
 fn io_error(path: &Path, error: impl std::fmt::Display) -> PluginError {
@@ -70,20 +73,23 @@ fn entry_paths(
     }
     let root = if files
         .iter()
-        .any(|(_, path)| path == Path::new(MANIFEST_FILE))
+        .any(|(_, path)| ARCHIVE_MANIFESTS.iter().any(|name| path == Path::new(name)))
     {
         PathBuf::new()
     } else {
         let candidates: Vec<&PathBuf> = files
             .iter()
             .map(|(_, path)| path)
-            .filter(|path| path.components().count() == 2 && path.ends_with(MANIFEST_FILE))
+            .filter(|path| {
+                path.components().count() == 2
+                    && ARCHIVE_MANIFESTS.iter().any(|name| path.ends_with(name))
+            })
             .collect();
         match candidates.as_slice() {
             [manifest] => manifest.parent().map(Path::to_path_buf).unwrap_or_default(),
             [] => {
                 return Err(PluginError::Manifest(format!(
-                    "{} contains no {MANIFEST_FILE} at its root",
+                    "{} contains no {MANIFEST_FILE} (or {JETTHING_MANIFEST_FILE}) at its root",
                     source.display()
                 )));
             }
@@ -112,13 +118,13 @@ pub fn read_manifest(source: &Path) -> Result<PluginManifest, PluginError> {
     let mut archive = zip::ZipArchive::new(file).map_err(|e| zip_error(source, e))?;
     let (_, root) = entry_paths(&mut archive, source)?;
     let mut text = String::new();
+    let name = ARCHIVE_MANIFESTS
+        .iter()
+        .map(|name| root.join(name).to_string_lossy().replace('\\', "/"))
+        .find(|name| archive.by_name(name).is_ok())
+        .unwrap_or_else(|| MANIFEST_FILE.to_string());
     archive
-        .by_name(
-            &root
-                .join(MANIFEST_FILE)
-                .to_string_lossy()
-                .replace('\\', "/"),
-        )
+        .by_name(&name)
         .map_err(|e| zip_error(source, e))?
         .take(1024 * 1024)
         .read_to_string(&mut text)
@@ -195,7 +201,10 @@ pub fn uninstall(plugins_dir: &Path, id: &str) -> Result<(), PluginError> {
         return Err(PluginError::InvalidId(id.into()));
     }
     let target = plugins_dir.join(id);
-    if !target.join(MANIFEST_FILE).is_file() {
+    if !ARCHIVE_MANIFESTS
+        .iter()
+        .any(|name| target.join(name).is_file())
+    {
         return Err(PluginError::NotFound(format!(
             "{id} is not installed in {}",
             plugins_dir.display()
@@ -207,7 +216,11 @@ pub fn uninstall(plugins_dir: &Path, id: &str) -> Result<(), PluginError> {
 /// Packs the plugin directory `dir` into `output` (a `.jtplugin` file).
 /// Hidden files and `target/` are skipped.
 pub fn pack(dir: &Path, output: &Path) -> Result<PluginManifest, PluginError> {
-    let manifest_path = dir.join(MANIFEST_FILE);
+    let manifest_path = ARCHIVE_MANIFESTS
+        .iter()
+        .map(|name| dir.join(name))
+        .find(|path| path.is_file())
+        .unwrap_or_else(|| dir.join(MANIFEST_FILE));
     let text = fs::read_to_string(&manifest_path).map_err(|e| io_error(&manifest_path, e))?;
     let manifest = PluginManifest::parse(&text)?;
     let mut files = Vec::new();
@@ -353,7 +366,7 @@ mod tests {
             (
                 "missing",
                 vec![("readme.md", "")],
-                "no jetthing-plugin.toml",
+                "no archipel-plugin.toml",
             ),
             (
                 "entry",

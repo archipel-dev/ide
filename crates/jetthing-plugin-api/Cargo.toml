@@ -3,11 +3,7 @@ name = "jetthing-plugin-api"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Stable, UI-toolkit-free plugin API for Jetthing (Plugin trait, contributions, host services, manifest)."
+description = "Compatibility shim re-exporting archipel-plugin-api."
 
 [dependencies]
-jetthing-command = { path = "../jetthing-command" }
-serde.workspace = true
-serde_json.workspace = true
-thiserror.workspace = true
-toml.workspace = true
+archipel-plugin-api.workspace = true

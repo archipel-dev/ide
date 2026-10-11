@@ -177,7 +177,8 @@ impl Plugin for HelloPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jetthing_plugin_api::testing::RecordingHost;
+    use archipel_plugin_testing::RecordingHost;
+    use jetthing_plugin_api::testing::RecordingHost as ApiRecordingHost;
 
     #[test]
     fn contributions_are_consistent() {
@@ -195,6 +196,7 @@ mod tests {
     #[test]
     fn commands_use_settings_and_host_services() {
         let mut plugin = HelloPlugin::new();
+        // The SDK's fake host from `archipel-plugin-testing`.
         let mut host = RecordingHost::new(ID);
         host.settings.insert("greeting".into(), json!("Hi"));
         host.settings.insert("notify".into(), json!(false));
@@ -221,7 +223,7 @@ mod tests {
     #[test]
     fn main_view_renders_in_egui() {
         let mut plugin = HelloPlugin::new();
-        let mut host = RecordingHost::new(ID);
+        let mut host = ApiRecordingHost::new(ID);
         let ctx = egui::Context::default();
         let view = ViewContext {
             view: "hello.main".into(),

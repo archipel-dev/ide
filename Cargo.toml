@@ -17,6 +17,11 @@ license = "Apache-2.0 OR MIT"
 rust-version = "1.91"
 
 [workspace.dependencies]
+# Plugin SDK: source of truth for the command, plugin API and plugin UI crates.
+archipel-command = { git = "https://github.com/archipel-dev/sdk", branch = "main" }
+archipel-plugin-api = { git = "https://github.com/archipel-dev/sdk", branch = "main" }
+archipel-plugin-testing = { git = "https://github.com/archipel-dev/sdk", branch = "main" }
+archipel-plugin-ui = { git = "https://github.com/archipel-dev/sdk", branch = "main" }
 anyhow = "1.0"
 eframe = { version = "0.33", features = ["wgpu"] }
 egui = "0.33"

@@ -3,9 +3,7 @@ name = "jetthing-command"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Compatibility shim re-exporting archipel-command."
 
 [dependencies]
-serde.workspace = true
-serde_json.workspace = true
-thiserror.workspace = true
-
+archipel-command.workspace = true

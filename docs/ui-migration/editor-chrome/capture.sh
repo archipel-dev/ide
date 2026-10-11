@@ -49,6 +49,8 @@ pgrep -f "Xvfb $DISPLAY_NUM" >/dev/null || { Xvfb $DISPLAY_NUM -screen 0 1440x90
 APP=$!
 trap 'kill $APP 2>/dev/null || true' EXIT
 sleep 15
+WID=$(xdotool search --onlyvisible --name demo | head -1)
+xdotool windowfocus "$WID" || true   # there is no window manager under Xvfb
 
 move() { xdotool mousemove "$1" "$2"; sleep 0.7; }
 click() { move "$1" "$2"; xdotool click 1; sleep 0.9; }
@@ -60,31 +62,37 @@ click 80 113                        # src chevron
 dbl 150 137                         # src/main.rs
 dbl 150 161                         # src/util.rs
 sleep 4
-# Tabs: hover, pressed (button held), dragging (tab follows the pointer).
-move 520 61; shot tab-hover
+# Tabs (main.rs is the inactive one on the left): hover, pressed (button held), dragging
+# (the tab follows the pointer, an insertion marker shows where it lands).
+move 370 61; shot tab-hover
 xdotool mousedown 1; sleep 0.5; shot tab-pressed
-xdotool mousemove 500 61 mousemove 470 61 mousemove 400 61; sleep 0.6
+for x in 390 420 450 480 500; do xdotool mousemove $x 61; sleep 0.15; done; sleep 0.6
 shot tab-dragging
 xdotool mouseup 1; sleep 1
-# Completion: click into main.rs after `counter.` and type.
-click 380 61                        # first tab (main.rs)
-click 700 420                       # end of the `counter.increment();` line area
-xdotool key End; xdotool type --delay 80 $'\ncounter.'; sleep 6
+# The editor features need rust-analyzer: give it time to load the project.
+dbl 150 137                         # main.rs (focus its tab whatever the tab order is)
+sleep 30
+# Quick documentation: rest the mouse on `Counter` in `struct Counter`.
+move 456 124; sleep 1; move 462 126; sleep 6
+shot quick-doc
+move 900 600
+# Completion: type `counter.` on a new line inside `main`.
+click 800 374                       # end of the println! line
+xdotool key End Return
+xdotool type --delay 90 'counter.'; sleep 8
 shot completion
 xdotool key Escape; sleep 0.5
-# Quick documentation: rest the mouse on `Counter`.
-move 480 240; sleep 3
-shot quick-doc
-# Quick fix: an error under the caret, then the bulb.
-xdotool key ctrl+a; xdotool key BackSpace
-xdotool type --delay 40 $'fn main() {\n    let x: i32 = "a";\n}\n'; sleep 8
-click 600 168
-sleep 2
+xdotool key shift+Home; xdotool key BackSpace
+# Quick fix: a type error under the caret, then the quick-fix popup.
+move 900 600
+xdotool key ctrl+End
+xdotool type --delay 60 'let y: i32 = "a";'; sleep 12
+xdotool key Left Left Left; sleep 3
 shot quick-fix-bulb
-xdotool key alt+Return; sleep 1.5
+xdotool key alt+Return; sleep 2
 shot quick-fix
 xdotool key Escape; sleep 0.5
 # Banner: the file changes on disk while it has unsaved edits.
-echo '// changed outside' >> "$DEMO/src/main.rs"; sleep 5
+echo '// changed outside' >> "$DEMO/src/main.rs"; sleep 6
 shot banner
 echo "wrote $OUT-*.png"

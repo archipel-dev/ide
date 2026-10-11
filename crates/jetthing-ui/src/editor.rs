@@ -1100,6 +1100,16 @@ fn paint_hint(
     );
 }
 
+/// How a collapsed region's placeholder is drawn.
+#[derive(Clone, Copy)]
+struct PlaceholderStyle<'a> {
+    char_width: f32,
+    font: &'a egui::FontId,
+    row_height: f32,
+    kit: &'a archipel_kit::Theme,
+    hovered: bool,
+}
+
 /// Paints a collapsed region's placeholder box and the text after the region
 /// on its last line, starting at `origin` (top-left of the placeholder).
 fn paint_collapsed_tail(
@@ -1107,17 +1117,22 @@ fn paint_collapsed_tail(
     document: &Document,
     row: &CollapsedRow,
     origin: egui::Pos2,
-    char_width: f32,
-    font: &egui::FontId,
-    row_height: f32,
-    kit: &archipel_kit::Theme,
-    hovered: bool,
+    style: &PlaceholderStyle<'_>,
 ) {
+    let PlaceholderStyle {
+        char_width,
+        font,
+        row_height,
+        kit,
+        hovered,
+    } = *style;
     let width = row.placeholder.chars().count() as f32 * char_width;
     let (background, foreground) = crate::folding::placeholder_colors(kit, hovered);
-    painter.rect_filled(
-        Rect::from_min_size(origin + vec2(0.0, 3.0), vec2(width, row_height - 6.0)),
-        3.0,
+    // `row_pill` insets by the row pill inset on both sides.
+    archipel_kit::parts::row_pill(
+        painter,
+        Rect::from_min_size(origin + vec2(0.0, 3.0), vec2(width, row_height - 6.0))
+            .expand2(vec2(archipel_kit::tokens::size::ROW_PILL_INSET, 0.0)),
         background,
     );
     painter.text(
@@ -2030,11 +2045,13 @@ fn editor_surface(
                         rect.left() + text_left + visible.chars().count() as f32 * char_width,
                         y,
                     ),
-                    char_width,
-                    &font,
-                    row_height,
-                    &kit_theme,
-                    fold_placeholder_hover == Some(line),
+                    &PlaceholderStyle {
+                        char_width,
+                        font: &font,
+                        row_height,
+                        kit: &kit_theme,
+                        hovered: fold_placeholder_hover == Some(line),
+                    },
                 );
             }
 

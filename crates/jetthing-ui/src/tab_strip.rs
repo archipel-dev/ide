@@ -170,7 +170,7 @@ pub fn show(ui: &mut Ui, tab: &Tab<'_>) -> TabOut {
     icons::paint(
         &painter,
         layout.icon,
-        tab.icon.clone(),
+        tab.icon,
         state.icon(Tone::Icon, &colors),
     );
     painter.galley(layout.text.min, galley, state.text(tone, &colors));

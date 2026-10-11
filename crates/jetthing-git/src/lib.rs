@@ -21,7 +21,9 @@ pub use log::{
     Branches, CommitDetails, CommitFile, CommitInfo, GraphEdge, GraphRow, LocalBranch, LogQuery,
     branches, commit_details, graph, log,
 };
-pub use remote::{PushPlan, RemoteEvent, RemoteJob, RemoteOperation, push_plan, remotes};
+pub use remote::{
+    PushPlan, RemoteEvent, RemoteJob, RemoteOperation, add_remote, push_plan, remotes,
+};
 pub use watcher::{Notify, StatusWatcher};
 pub use worktree::{
     StashEntry, last_commit_message, stash_apply, stash_drop, stash_list, stash_push,
@@ -33,6 +35,12 @@ pub enum GitError {
     Io(#[from] std::io::Error),
     #[error("Git command failed: {0}")]
     Command(String),
+    /// The repository has no remote, so nothing can be pushed or fetched.
+    #[error("This repository has no remote to push to.")]
+    NoRemote,
+    /// A message that is already worded for the user (validation of what they typed).
+    #[error("{0}")]
+    Invalid(String),
     #[error("path is not inside a Git repository: {0}")]
     NotRepository(PathBuf),
     #[error("{0} is a binary file and cannot be compared as text")]

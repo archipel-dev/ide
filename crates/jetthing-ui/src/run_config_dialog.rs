@@ -1,9 +1,15 @@
 //! Run/Debug Configurations dialog: configuration list on the left, form on the right.
 
-use crate::icons::{self, Icon};
-use crate::widgets::{list_row, row_text};
-use crate::{IdeApp, theme};
-use eframe::egui::{self, RichText, vec2};
+use crate::IdeApp;
+use crate::dialog::{self, Outcome, Shell};
+use archipel_kit::components::{
+    Banner, Button, Checkbox, EmptyState, IconButton, Link, ListRow, MenuItem, PropertyGrid,
+    SectionHeader, Severity, TextField, VirtualList,
+};
+use archipel_kit::parts::Popover;
+use archipel_kit::tokens::size;
+use archipel_kit::{Glyph, Tone};
+use eframe::egui;
 use jetthing_runner::{RunConfiguration, RunTarget};
 use serde_json::{Map, Value, json};
 
@@ -267,6 +273,7 @@ struct State {
     selected: usize,
     error: Option<String>,
     add_menu: bool,
+    modify_menu: bool,
     help: bool,
     /// Saved configurations removed in the dialog; deleted on Apply/OK.
     removed: Vec<String>,
@@ -314,6 +321,7 @@ pub fn open(app: &IdeApp, ctx: &egui::Context, focus: Option<&str>) {
                 selected,
                 error,
                 add_menu: false,
+                modify_menu: false,
                 help: false,
                 removed: Vec::new(),
             },
@@ -321,7 +329,7 @@ pub fn open(app: &IdeApp, ctx: &egui::Context, focus: Option<&str>) {
     });
 }
 
-enum Outcome {
+enum Choice {
     Keep,
     Close,
     Run(String),
@@ -334,84 +342,57 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     if !state.open {
         return;
     }
-    let mut outcome = Outcome::Keep;
-    let modal = egui::Modal::new(egui::Id::new("run_config_modal")).show(ctx, |ui| {
-        ui.set_width(860.0);
-        ui.set_height(520.0);
-        ui.label(
-            RichText::new("Run/Debug Configurations")
-                .font(theme::semibold(theme::UI_FONT_SIZE))
-                .color(theme::TEXT_BRIGHT),
-        );
-        ui.add_space(6.0);
-        ui.horizontal_top(|ui| {
-            ui.vertical(|ui| {
-                ui.set_width(240.0);
-                list(ui, &mut state);
+    let mut choice = Choice::Keep;
+    let dirty = state.drafts.iter().any(|draft| draft.dirty) || !state.removed.is_empty();
+    let run_enabled = !state.drafts.is_empty() && !app.state.runner.is_running();
+    let height = (ctx.content_rect().height() - 220.0).clamp(240.0, 480.0);
+    let outcome = Shell::new("run_config", "Run/Debug Configurations")
+        .width(880.0)
+        .ok("OK")
+        .secondary("Help", true)
+        .secondary("Apply", dirty)
+        .secondary("Run", run_enabled)
+        .keys_held(state.add_menu || state.modify_menu)
+        .show(ctx, |ui| {
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = 16.0;
+                ui.vertical(|ui| {
+                    ui.set_width(250.0);
+                    list(ui, ctx, &mut state, height);
+                });
+                ui.vertical(|ui| {
+                    ui.set_width(ui.available_width());
+                    form(ui, ctx, &mut state, height);
+                });
             });
-            ui.separator();
-            ui.vertical(|ui| {
-                ui.set_width(590.0);
-                form(ui, &mut state);
-            });
-        });
-        ui.add_space(8.0);
-        if let Some(error) = &state.error {
-            ui.label(RichText::new(error).color(theme::ERROR));
-        }
-        if state.help {
-            ui.label(
-                RichText::new(
+            if state.help {
+                dialog::hint(
+                    ui,
                     "Configurations are stored as files in .jetthing/runConfigurations. \
                      Use Modify options to show optional fields.",
-                )
-                .color(theme::TEXT_INFO),
-            );
-        }
-        ui.separator();
-        ui.horizontal(|ui| {
-            if ui.button("?").on_hover_text("Help").clicked() {
-                state.help = !state.help;
+                );
             }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let dirty =
-                    state.drafts.iter().any(|draft| draft.dirty) || !state.removed.is_empty();
-                if ui.add_enabled(dirty, egui::Button::new("Apply")).clicked() {
-                    apply(app, &mut state);
-                }
-                if ui.button("Cancel").clicked() {
-                    outcome = Outcome::Close;
-                }
-                if ui
-                    .add(
-                        egui::Button::new(RichText::new("OK").color(egui::Color32::WHITE))
-                            .fill(theme::ACCENT),
-                    )
-                    .clicked()
-                    && apply(app, &mut state)
-                {
-                    outcome = Outcome::Close;
-                }
-                let run_enabled = !state.drafts.is_empty() && !app.state.runner.is_running();
-                if ui
-                    .add_enabled(run_enabled, egui::Button::new("▶ Run"))
-                    .on_hover_text("Save and run the selected configuration")
-                    .clicked()
-                    && apply(app, &mut state)
-                    && let Some(draft) = state.drafts.get(state.selected)
-                {
-                    outcome = Outcome::Run(draft.name.trim().to_owned());
-                }
-            });
         });
-    });
-    if modal.should_close() && matches!(outcome, Outcome::Keep) {
-        outcome = Outcome::Close;
-    }
     match outcome {
-        Outcome::Keep => {}
-        Outcome::Close => state.open = false,
-        Outcome::Run(name) => {
+        Some(Outcome::Cancel) => choice = Choice::Close,
+        Some(Outcome::Ok) if apply(app, &mut state) => choice = Choice::Close,
+        Some(Outcome::Secondary(0)) => state.help = !state.help,
+        Some(Outcome::Secondary(1)) => {
+            apply(app, &mut state);
+        }
+        Some(Outcome::Secondary(_)) => {
+            if apply(app, &mut state)
+                && let Some(draft) = state.drafts.get(state.selected)
+            {
+                choice = Choice::Run(draft.name.trim().to_owned());
+            }
+        }
+        _ => {}
+    }
+    match choice {
+        Choice::Keep => {}
+        Choice::Close => state.open = false,
+        Choice::Run(name) => {
             state.open = false;
             app.dispatch("runConfig.run", json!({"name": name}));
         }
@@ -419,18 +400,46 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     ctx.data_mut(|data| data.insert_temp(state_id(), state));
 }
 
-fn list(ui: &mut egui::Ui, state: &mut State) {
+/// A row of the configuration list: a type heading or a configuration (by draft index).
+#[derive(Clone, Copy)]
+enum Entry {
+    Type(&'static str),
+    Config(usize),
+}
+
+fn entries(state: &State) -> Vec<Entry> {
+    let mut order: Vec<usize> = (0..state.drafts.len()).collect();
+    order.sort_by_key(|&index| {
+        (
+            state.drafts[index].type_id,
+            state.drafts[index].name.clone(),
+        )
+    });
+    let mut entries = Vec::new();
+    let mut group = "";
+    for index in order {
+        let type_name = RunTarget::template(state.drafts[index].type_id)
+            .map(|target| target.type_name())
+            .unwrap_or("Shell Command");
+        if type_name != group {
+            group = type_name;
+            entries.push(Entry::Type(type_name));
+        }
+        entries.push(Entry::Config(index));
+    }
+    entries
+}
+
+fn list(ui: &mut egui::Ui, ctx: &egui::Context, state: &mut State, height: f32) {
     ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 2.0;
-        if icons::button(ui, Icon::Add, "Add New Configuration").clicked() {
+        ui.spacing_mut().item_spacing.x = size::TOOLBAR_GAP;
+        let add = ui.add(IconButton::new(Glyph::Plus, "Add New Configuration"));
+        if add.clicked() {
             state.add_menu = !state.add_menu;
         }
         let can_remove = !state.drafts.is_empty();
         if ui
-            .add_enabled_ui(can_remove, |ui| {
-                icons::button(ui, Icon::Minimize, "Remove Configuration")
-            })
-            .inner
+            .add(IconButton::new(Glyph::Minus, "Remove Configuration").enabled(can_remove))
             .clicked()
         {
             let draft = state.drafts.remove(state.selected);
@@ -441,10 +450,7 @@ fn list(ui: &mut egui::Ui, state: &mut State) {
             state.selected = state.selected.min(state.drafts.len().saturating_sub(1));
         }
         if ui
-            .add_enabled_ui(can_remove, |ui| {
-                icons::button(ui, Icon::File, "Copy Configuration")
-            })
-            .inner
+            .add(IconButton::new(Glyph::Copy, "Copy Configuration").enabled(can_remove))
             .clicked()
             && let Some(draft) = state.drafts.get(state.selected).cloned()
         {
@@ -456,116 +462,76 @@ fn list(ui: &mut egui::Ui, state: &mut State) {
             state.drafts.push(copy);
             state.selected = state.drafts.len() - 1;
         }
-    });
-    if state.add_menu {
-        egui::Frame::popup(ui.style()).show(ui, |ui| {
-            ui.label(RichText::new("Add New Configuration").color(theme::TEXT_INFO));
-            for type_id in RunTarget::TYPE_IDS {
-                let target = RunTarget::template(type_id).expect("known type");
-                if ui
-                    .add(crate::widgets::menu_item(target.type_name()))
-                    .clicked()
-                {
-                    let name = unique_name(&state.drafts, "Unnamed");
-                    if let Some(draft) = Draft::new(type_id, name) {
-                        state.drafts.push(draft);
-                        state.selected = state.drafts.len() - 1;
+        let mut open = state.add_menu;
+        let mut picked = false;
+        Popover::below("run_config_add", &add)
+            .width(220.0)
+            .show(ctx, &mut open, |ui| {
+                for type_id in RunTarget::TYPE_IDS {
+                    let target = RunTarget::template(type_id).expect("known type");
+                    if ui.add(MenuItem::new(target.type_name())).clicked() {
+                        let name = unique_name(&state.drafts, "Unnamed");
+                        if let Some(draft) = Draft::new(type_id, name) {
+                            state.drafts.push(draft);
+                            state.selected = state.drafts.len() - 1;
+                        }
+                        picked = true;
                     }
-                    state.add_menu = false;
                 }
-            }
-        });
-    }
-    ui.add_space(4.0);
-    ui.add_enabled(
-        false,
-        egui::Label::new(RichText::new("Edit configuration templates…").color(theme::TEXT_INFO)),
-    )
-    .on_disabled_hover_text("Configuration templates are not supported yet");
-    ui.add_space(4.0);
-    egui::ScrollArea::vertical()
-        .id_salt("run_config_list")
-        .auto_shrink([false, false])
-        .max_height(410.0)
-        .show(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            let mut group = "";
-            let mut order: Vec<usize> = (0..state.drafts.len()).collect();
-            order.sort_by_key(|&index| {
-                (
-                    state.drafts[index].type_id,
-                    state.drafts[index].name.clone(),
-                )
             });
-            for index in order {
-                let draft = &state.drafts[index];
-                let type_name = RunTarget::template(draft.type_id)
-                    .map(|target| target.type_name())
-                    .unwrap_or("Shell Command");
-                if type_name != group {
-                    group = type_name;
-                    let (rect, _) = list_row(ui, false);
-                    icons::paint(
-                        ui.painter(),
-                        egui::Rect::from_min_size(
-                            egui::pos2(rect.left() + 8.0, rect.center().y - 7.0),
-                            vec2(14.0, 14.0),
-                        ),
-                        Icon::ChevronDown,
-                        theme::TEXT_SECONDARY,
-                    );
-                    row_text(
-                        ui,
-                        rect,
-                        rect.left() + 28.0,
-                        type_name,
-                        theme::semibold(theme::UI_FONT_SIZE),
-                        theme::TEXT_BRIGHT,
-                    );
-                }
-                let (rect, response) = list_row(ui, index == state.selected);
-                icons::paint(
-                    ui.painter(),
-                    egui::Rect::from_min_size(
-                        egui::pos2(rect.left() + 28.0, rect.center().y - 7.0),
-                        vec2(14.0, 14.0),
-                    ),
-                    Icon::Run,
-                    if draft.temporary {
-                        theme::TEXT_INFO
-                    } else {
-                        theme::RUN_GREEN
-                    },
-                );
+        state.add_menu = open && !picked;
+    });
+    ui.add_enabled(false, Link::new("Edit configuration templates…"))
+        .on_disabled_hover_text("Configuration templates are not supported yet");
+    let entries = entries(state);
+    if entries.is_empty() {
+        dialog::hint(ui, "No configurations. Click + to add one.");
+        return;
+    }
+    let position = |draft: usize| {
+        entries
+            .iter()
+            .position(|entry| matches!(entry, Entry::Config(index) if *index == draft))
+    };
+    let mut selected = position(state.selected);
+    VirtualList::new("run_config_list", entries.len(), &mut selected)
+        .name("Run configurations")
+        .height(height - 60.0)
+        .show(ui, |index| match entries[index] {
+            Entry::Type(name) => ListRow::new(name).enabled(false),
+            Entry::Config(draft_index) => {
+                let draft = &state.drafts[draft_index];
                 let label = if draft.dirty {
                     format!("{} *", draft.name)
                 } else {
                     draft.name.clone()
                 };
-                let color = if draft.temporary {
-                    theme::TEXT_SECONDARY
-                } else {
-                    theme::TEXT
-                };
-                row_text(
-                    ui,
-                    rect,
-                    rect.left() + 48.0,
-                    &label,
-                    egui::FontId::proportional(theme::UI_FONT_SIZE),
-                    color,
-                );
-                if response.clicked() {
-                    state.selected = index;
-                }
-            }
-            if state.drafts.is_empty() {
-                ui.add_space(12.0);
-                ui.label(
-                    RichText::new("No configurations. Click + to add one.").color(theme::TEXT_INFO),
-                );
+                ListRow::new(label)
+                    .depth(1)
+                    .icon(Glyph::Run)
+                    .icon_tone(if draft.temporary {
+                        Tone::Muted
+                    } else {
+                        Tone::Run
+                    })
+                    .label_tone(if draft.temporary {
+                        Tone::Secondary
+                    } else {
+                        Tone::Default
+                    })
             }
         });
+    if let Some(to) = selected
+        && let Some(from) = position(state.selected)
+        && to != from
+    {
+        let to = dialog::skip_unselectable(entries.len(), from, to, |index| {
+            matches!(entries[index], Entry::Config(_))
+        });
+        if let Entry::Config(index) = entries[to] {
+            state.selected = index;
+        }
+    }
 }
 
 fn unique_name(drafts: &[Draft], base: &str) -> String {
@@ -578,130 +544,112 @@ fn unique_name(drafts: &[Draft], base: &str) -> String {
     name
 }
 
-fn form(ui: &mut egui::Ui, state: &mut State) {
+fn form(ui: &mut egui::Ui, ctx: &egui::Context, state: &mut State, height: f32) {
+    if let Some(error) = &state.error {
+        Banner::new(Severity::Error, error.clone()).show(ui);
+    }
     let Some(draft) = state.drafts.get_mut(state.selected) else {
-        ui.add_space(40.0);
-        ui.vertical_centered(|ui| {
-            ui.label(
-                RichText::new("Select a configuration or add a new one").color(theme::TEXT_INFO),
-            );
-        });
+        EmptyState::new("Select a configuration or add a new one").show(ui);
         return;
     };
     let mut changed = false;
-    egui::Grid::new("run_config_form")
-        .num_columns(2)
-        .spacing(vec2(12.0, 10.0))
-        .min_col_width(130.0)
+    egui::ScrollArea::vertical()
+        .id_salt("run_config_form")
+        .max_height(height)
+        .auto_shrink([false, true])
         .show(ui, |ui| {
-            ui.label("Name:");
-            changed |= text(ui, &mut draft.name, "", 420.0);
-            ui.end_row();
-            ui.label("Type:");
+            changed |= ui
+                .add(TextField::new(&mut draft.name).label("Name"))
+                .changed();
             let type_name = RunTarget::template(draft.type_id)
                 .map(|target| target.type_name())
                 .unwrap_or("Shell Command");
-            ui.label(RichText::new(type_name).color(theme::TEXT_SECONDARY));
-            ui.end_row();
-            ui.label("");
-            ui.add_enabled(
-                false,
-                egui::Checkbox::new(&mut true, "Store as project file"),
-            )
-            .on_disabled_hover_text("Configurations are always stored in .jetthing/runConfigurations");
-            ui.end_row();
-            ui.label("");
-            ui.menu_button(
-                RichText::new("Modify options").color(theme::ACCENT),
-                |ui| {
-                    ui.checkbox(&mut draft.show_working_directory, "Working directory");
-                    ui.checkbox(&mut draft.show_env, "Environment variables");
+            PropertyGrid::new("run_config_type")
+                .row("Type", type_name)
+                .show(ui);
+            ui.add(Checkbox::new(&mut true, "Store as project file").enabled(false))
+                .on_disabled_hover_text(
+                    "Configurations are always stored in .jetthing/runConfigurations",
+                );
+            let modify = ui.add(Button::ghost("Modify options"));
+            if modify.clicked() {
+                state.modify_menu = !state.modify_menu;
+            }
+            let mut open = state.modify_menu;
+            Popover::below("run_config_modify", &modify)
+                .width(240.0)
+                .show(ctx, &mut open, |ui| {
                     if ui
-                        .checkbox(
-                            &mut draft.open_tool_window,
-                            "Open run/debug tool window when started",
+                        .add(
+                            MenuItem::new("Working directory")
+                                .checked(draft.show_working_directory),
                         )
-                        .changed()
-                    {
-                        changed = true;
-                    }
-                },
-            );
-            ui.end_row();
-            if draft.temporary {
-                ui.label("");
-                ui.label(
-                    RichText::new("Temporary configuration; Apply or OK stores it in .jetthing/runConfigurations")
-                        .color(theme::TEXT_INFO),
-                );
-                ui.end_row();
-            }
-            for (field, (_, value)) in fields(draft.type_id).iter().zip(draft.fields.iter_mut()) {
-                ui.label(format!("{}:", field.label));
-                changed |= text(ui, value, field.hint, 420.0);
-                ui.end_row();
-            }
-            if draft.show_working_directory {
-                ui.label("Working directory:");
-                changed |= text(ui, &mut draft.working_directory, "Project root (relative path)", 420.0);
-                ui.end_row();
-            }
-            if draft.show_env {
-                ui.label("Environment variables:");
-                changed |= text(ui, &mut draft.env, "KEY=value; KEY2=value2", 420.0);
-                ui.end_row();
-                ui.label("");
-                ui.label(
-                    RichText::new("Separate variables with semicolon: VAR=value; VAR1=value1")
-                        .color(theme::TEXT_INFO)
-                        .size(theme::UI_FONT_SIZE - 1.0),
-                );
-                ui.end_row();
-            }
-        });
-    if draft.open_tool_window {
-        ui.add_space(6.0);
-        ui.horizontal(|ui| {
-            egui::Frame::new()
-                .fill(*theme::SELECTION)
-                .corner_radius(10.0)
-                .inner_margin(egui::Margin::symmetric(8, 2))
-                .show(ui, |ui| {
-                    ui.label("Open run/debug tool window when started");
-                    if ui
-                        .small_button("×")
-                        .on_hover_text("Remove option")
                         .clicked()
                     {
-                        draft.open_tool_window = false;
-                        changed = true;
+                        draft.show_working_directory = !draft.show_working_directory;
+                    }
+                    if ui
+                        .add(MenuItem::new("Environment variables").checked(draft.show_env))
+                        .clicked()
+                    {
+                        draft.show_env = !draft.show_env;
                     }
                 });
+            state.modify_menu = open;
+            if draft.temporary {
+                dialog::hint(
+                    ui,
+                    "Temporary configuration; Apply or OK stores it in .jetthing/runConfigurations",
+                );
+            }
+            for (field, (_, value)) in fields(draft.type_id).iter().zip(draft.fields.iter_mut()) {
+                changed |= ui
+                    .add(
+                        TextField::new(value)
+                            .label(field.label)
+                            .placeholder(field.hint)
+                            .monospace(true),
+                    )
+                    .changed();
+            }
+            if draft.show_working_directory {
+                changed |= ui
+                    .add(
+                        TextField::new(&mut draft.working_directory)
+                            .label("Working directory")
+                            .placeholder("Project root (relative path)")
+                            .monospace(true),
+                    )
+                    .changed();
+            }
+            if draft.show_env {
+                changed |= ui
+                    .add(
+                        TextField::new(&mut draft.env)
+                            .label("Environment variables")
+                            .placeholder("KEY=value; KEY2=value2")
+                            .monospace(true),
+                    )
+                    .changed();
+                dialog::hint(
+                    ui,
+                    "Separate variables with semicolon: VAR=value; VAR1=value1",
+                );
+            }
+            changed |= ui
+                .add(Checkbox::new(
+                    &mut draft.open_tool_window,
+                    "Open run/debug tool window when started",
+                ))
+                .changed();
+            ui.add(SectionHeader::new("Code Coverage"));
+            ui.add(Button::secondary("Modify").enabled(false));
+            dialog::hint(ui, "Coverage runners are not available yet.");
         });
-    }
-    ui.add_space(10.0);
-    ui.add_enabled_ui(false, |ui| {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("Code Coverage").font(theme::semibold(theme::UI_FONT_SIZE)));
-            let _ = ui.button("Modify");
-        });
-        ui.label(RichText::new("Coverage runners are not available yet.").color(theme::TEXT_INFO));
-    });
     if changed {
         draft.dirty = true;
         state.error = draft.to_config().err();
     }
-}
-
-fn text(ui: &mut egui::Ui, value: &mut String, hint: &str, width: f32) -> bool {
-    ui.add(
-        egui::TextEdit::singleline(value)
-            .hint_text(RichText::new(hint).color(theme::TEXT_DISABLED))
-            .desired_width(width)
-            .font(egui::FontId::monospace(theme::UI_FONT_SIZE - 0.5))
-            .margin(egui::Margin::symmetric(6, 4)),
-    )
-    .changed()
 }
 
 /// Deletes removed configurations and saves dirty drafts. Returns false on error.

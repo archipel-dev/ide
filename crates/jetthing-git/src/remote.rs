@@ -258,6 +258,29 @@ pub fn remotes(root: &Path) -> Result<Vec<String>, GitError> {
         .collect())
 }
 
+/// Adds the remote `name` that points at `url` (what `git remote add` does), after
+/// checking what the user typed.
+pub fn add_remote(root: &Path, name: &str, url: &str) -> Result<(), GitError> {
+    let (name, url) = (name.trim(), url.trim());
+    if name.is_empty() {
+        return Err(GitError::Invalid("Remote name must not be empty.".into()));
+    }
+    if name.contains(char::is_whitespace) || name.starts_with('-') || name.contains("..") {
+        return Err(GitError::Invalid(
+            "Remote name must not contain spaces, “..” or start with “-”.".into(),
+        ));
+    }
+    if url.is_empty() {
+        return Err(GitError::Invalid("URL must not be empty.".into()));
+    }
+    if remotes(root)?.iter().any(|existing| existing == name) {
+        return Err(GitError::Invalid(format!(
+            "A remote named “{name}” already exists."
+        )));
+    }
+    checked(root, &["remote", "add", name, "--", url]).map(|_| ())
+}
+
 pub fn push_plan(root: &Path) -> Result<PushPlan, GitError> {
     let head = run(root, &["symbolic-ref", "--short", "-q", "HEAD"])?;
     if !head.status.success() {
@@ -268,9 +291,7 @@ pub fn push_plan(root: &Path) -> Result<PushPlan, GitError> {
     let branch = String::from_utf8_lossy(&head.stdout).trim().to_owned();
     let remotes = remotes(root)?;
     if remotes.is_empty() {
-        return Err(GitError::Command(
-            "the repository has no remotes; add one with `git remote add`".into(),
-        ));
+        return Err(GitError::NoRemote);
     }
     let upstream = run(
         root,

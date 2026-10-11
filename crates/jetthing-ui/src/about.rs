@@ -1,72 +1,39 @@
 //! Help → About: version and build details with a copy button for bug reports.
 
-use crate::{IdeApp, theme};
-use eframe::egui::{self, RichText};
+use crate::IdeApp;
+use crate::dialog::{self, Outcome, Shell};
+use archipel_kit::components::PropertyGrid;
+use eframe::egui;
 use jetthing_core::build_info::BUILD;
 
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     if !app.state.about_open {
         return;
     }
-    let width = 360.0;
-    let screen = ctx.content_rect();
-    let mut close = false;
-    egui::Area::new(egui::Id::new("about_dialog"))
-        .order(egui::Order::Foreground)
-        .fixed_pos(egui::pos2(
-            screen.center().x - width / 2.0,
-            screen.top() + screen.height() * 0.2,
-        ))
+    let outcome = Shell::new("about", "Jetthing")
+        .width(400.0)
+        .ok("Close")
+        .cancel(None)
+        .secondary("Copy", true)
         .show(ctx, |ui| {
-            egui::Frame::popup(ui.style())
-                .corner_radius(10)
-                .inner_margin(egui::Margin::same(16))
-                .show(ui, |ui| {
-                    ui.set_width(width - 32.0);
-                    ui.label(
-                        RichText::new("Jetthing")
-                            .font(theme::semibold(theme::UI_FONT_SIZE + 6.0))
-                            .color(theme::TEXT_BRIGHT),
-                    );
-                    ui.label(
-                        RichText::new("Native Rust IDE platform").color(theme::TEXT_SECONDARY),
-                    );
-                    ui.add_space(10.0);
-                    egui::Grid::new("about_rows")
-                        .num_columns(2)
-                        .spacing([12.0, 4.0])
-                        .show(ui, |ui| {
-                            for (label, value) in BUILD.rows() {
-                                ui.label(RichText::new(label).color(theme::TEXT_SECONDARY));
-                                ui.label(RichText::new(value).color(theme::TEXT));
-                                ui.end_row();
-                            }
-                        });
-                    ui.add_space(10.0);
-                    ui.label(
-                        RichText::new(
-                            "Apache-2.0 OR MIT. Not affiliated with or endorsed by JetBrains.",
-                        )
-                        .color(theme::TEXT_INFO),
-                    );
-                    ui.add_space(10.0);
-                    ui.horizontal(|ui| {
-                        if ui
-                            .button("Copy")
-                            .on_hover_text("Copy build details")
-                            .clicked()
-                        {
-                            ctx.copy_text(BUILD.report());
-                            app.state.status = "Build details copied".into();
-                        }
-                        if ui.button("Close").clicked() {
-                            close = true;
-                        }
-                    });
-                });
+            dialog::message(ui, "Native Rust IDE platform");
+            let mut grid = PropertyGrid::new("about_rows");
+            for (label, value) in BUILD.rows() {
+                grid = grid.row(label, value);
+            }
+            grid.show(ui);
+            dialog::hint(
+                ui,
+                "Apache-2.0 OR MIT. Not affiliated with or endorsed by JetBrains.",
+            );
         });
-    // Escape is handled with the other dismiss keys in `IdeApp`.
-    if close {
-        app.dispatch("app.closeAbout", serde_json::Value::Null);
+    match outcome {
+        Some(Outcome::Secondary(_)) => {
+            ctx.copy_text(BUILD.report());
+            app.state.status = "Build details copied".into();
+        }
+        // Escape is also handled with the other dismiss keys in `IdeApp`.
+        Some(_) => app.dispatch("app.closeAbout", serde_json::Value::Null),
+        None => {}
     }
 }

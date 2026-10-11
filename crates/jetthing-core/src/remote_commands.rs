@@ -43,6 +43,14 @@ impl IdeState {
         jetthing_git::push_plan(&git.root).map_err(|error| error.to_string())
     }
 
+    /// Whether the repository has no remote at all (Push then offers to define one).
+    pub fn push_needs_remote(&self) -> bool {
+        self.git
+            .as_ref()
+            .and_then(|git| jetthing_git::remotes(&git.root).ok())
+            .is_some_and(|remotes| remotes.is_empty())
+    }
+
     /// Applies progress and completion of the running remote operation.
     pub fn poll_remote(&mut self) {
         let Some(job) = self.remote_job.as_ref() else {
@@ -130,6 +138,38 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
     registry
         .register(Command::new(
             spec(
+                "git.addRemote",
+                "Define Remote…",
+                "Git",
+                None,
+                r#"{"name":"string","url":"string"}"#,
+            ),
+            |state: &IdeState| state.git.is_some(),
+            |state: &mut IdeState, params| {
+                let text = |name: &str| {
+                    params
+                        .get(name)
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_owned()
+                };
+                let root = state
+                    .git
+                    .as_ref()
+                    .ok_or_else(|| {
+                        CommandError::Failed("the project is not a Git repository".into())
+                    })?
+                    .root
+                    .clone();
+                jetthing_git::add_remote(&root, &text("name"), &text("url"))
+                    .map_err(|error| CommandError::Failed(error.to_string()))?;
+                Ok(Value::Null)
+            },
+        ))
+        .expect("unique built-in id");
+    registry
+        .register(Command::new(
+            spec(
                 "git.push",
                 "Push…",
                 "Git",
@@ -199,6 +239,35 @@ mod tests {
             state.poll_remote();
         }
         assert!(!state.remote_busy());
+    }
+
+    #[test]
+    fn push_without_a_remote_offers_to_define_one() {
+        let dir =
+            std::env::temp_dir().join(format!("jetthing-core-no-remote-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        git(&dir, &["init", "-q", "-b", "main"]);
+        let commands = built_in_commands();
+        let mut state = IdeState::default();
+        commands
+            .execute("project.open", &mut state, json!({"path": dir}))
+            .unwrap();
+        assert!(state.push_needs_remote());
+        let message = state.push_plan().unwrap_err();
+        assert_eq!(message, "This repository has no remote to push to.");
+        let add = |state: &mut IdeState, name: &str, url: &str| {
+            commands.execute("git.addRemote", state, json!({"name": name, "url": url}))
+        };
+        let error = add(&mut state, "", "https://example.invalid/x.git").unwrap_err();
+        assert!(error.to_string().contains("Remote name must not be empty"));
+        let error = add(&mut state, "origin", " ").unwrap_err();
+        assert!(error.to_string().contains("URL must not be empty"));
+        add(&mut state, "origin", "https://example.invalid/x.git").unwrap();
+        assert!(!state.push_needs_remote());
+        let error = add(&mut state, "origin", "https://example.invalid/y.git").unwrap_err();
+        assert!(error.to_string().contains("already exists"));
+        assert_eq!(state.push_plan().unwrap().remote, "origin");
     }
 
     #[test]

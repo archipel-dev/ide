@@ -2,8 +2,6 @@
 //! code part of the navigation-bar breadcrumbs, all from the language
 //! analysis' tags-query structure.
 
-use crate::icons::Icon;
-use crate::widgets;
 use crate::{IdeApp, theme};
 use archipel_kit::behaviour::ContextMenu;
 use archipel_kit::components::{ListRow, MenuItem, VirtualList};
@@ -105,32 +103,6 @@ pub fn icon(kind: SymbolKind) -> archipel_kit::Icon {
         SymbolKind::Heading => archipel_kit::Icon::Glyph(Glyph::FileText),
         SymbolKind::Other => symbol(Kind::Variable),
     }
-}
-
-/// Paints one structure row (the File Structure popup); returns its geometry.
-/// `expanded` draws a chevron for items with children (the tool window collapses them).
-pub fn row(
-    ui: &mut egui::Ui,
-    depth: usize,
-    item: &StructureItem,
-    selected: bool,
-    expanded: Option<bool>,
-) -> widgets::TreeRowOut {
-    widgets::tree_row(
-        ui,
-        widgets::TreeRow {
-            depth,
-            expanded,
-            selected,
-            icon: Some((Icon::Kit(icon(item.kind)), *theme::ICON)),
-            tone: Some(archipel_kit::Tone::Strong),
-            secondary: item
-                .detail
-                .as_deref()
-                .map(|detail| (detail, *theme::TEXT_SECONDARY)),
-            ..widgets::TreeRow::new(&item.name)
-        },
-    )
 }
 
 /// Moves the caret to the item's name and focuses the editor.

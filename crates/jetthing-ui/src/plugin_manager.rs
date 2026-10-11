@@ -8,10 +8,16 @@
 //! `plugin.uninstall`, `plugin.refresh`, `plugin.setSetting`) that the settings
 //! dialog runs after drawing.
 
-use crate::icons;
-use crate::theme;
+use crate::dialog;
 use crate::widgets;
-use eframe::egui::{self, Color32, Rect, RichText, Sense, vec2};
+use archipel_kit::components::{
+    Avatar, Banner, Button, Checkbox, Dropdown, EmptyState, IconButton, Link, ListRow, MenuItem,
+    PropertyGrid, SectionHeader, Severity, Tab as KitTab, TabBar, TextField, VirtualList,
+};
+use archipel_kit::parts::{Popover, Slot};
+use archipel_kit::tokens::typography;
+use archipel_kit::{Glyph, Theme, Tone};
+use eframe::egui::{self, RichText, vec2};
 use jetthing_core::IdeState;
 use jetthing_plugins::catalog::{Catalog, CatalogEntry};
 use jetthing_plugins::{PluginEntry, PluginSource, PluginStatus, SettingKind};
@@ -49,8 +55,6 @@ pub struct PluginManager {
 }
 
 const LIST_WIDTH: f32 = 340.0;
-const ROW_HEIGHT: f32 = 64.0;
-const GROUP_HEIGHT: f32 = 26.0;
 
 /// Groups of the Installed tab, in display order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,182 +159,99 @@ pub fn page(ui: &mut egui::Ui, manager: &mut PluginManager, cx: &mut PageContext
     if manager.tab == Tab::Marketplace && manager.catalog.is_none() {
         manager.catalog = Some(Catalog::scan(&jetthing_core::plugin_registry_dirs()));
     }
-    let full = ui.available_rect_before_wrap();
-    ui.allocate_rect(full, Sense::hover());
-    let header = Rect::from_min_size(full.min, vec2(full.width(), 40.0));
-    let body = Rect::from_min_max(egui::pos2(full.left(), header.bottom()), full.max);
-    header_row(
-        cx,
-        &mut ui.new_child(egui::UiBuilder::new().max_rect(header)),
-        manager,
-    );
-    let painter = ui.painter();
-    painter.hline(
-        full.x_range(),
-        header.bottom(),
-        egui::Stroke::new(1.0_f32, theme::POPUP_BORDER),
-    );
-    let list_rect = Rect::from_min_max(
-        body.min,
-        egui::pos2(body.left() + LIST_WIDTH, body.bottom()),
-    );
-    let details_rect = Rect::from_min_max(egui::pos2(list_rect.right(), body.top()), body.max);
-    painter.vline(
-        list_rect.right(),
-        body.y_range(),
-        egui::Stroke::new(1.0_f32, theme::POPUP_BORDER),
-    );
-    let mut list_ui = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(list_rect)
-            .layout(egui::Layout::top_down(egui::Align::Min)),
-    );
-    list(cx, &mut list_ui, manager);
-    let mut details_ui = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(details_rect.shrink2(vec2(20.0, 14.0)))
-            .layout(egui::Layout::top_down(egui::Align::Min)),
-    );
-    match manager.tab {
-        Tab::Installed => details(cx, &mut details_ui, manager),
-        Tab::Marketplace => market_details(cx, &mut details_ui, manager),
-    }
+    header_row(cx, ui, manager);
+    ui.separator();
+    let height = ui.available_height();
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        ui.allocate_ui_with_layout(
+            vec2(LIST_WIDTH, height),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                ui.set_min_size(vec2(LIST_WIDTH, height));
+                list(cx, ui, manager);
+            },
+        );
+        ui.separator();
+        let width = ui.available_width();
+        ui.allocate_ui_with_layout(
+            vec2(width, height),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                ui.set_min_size(vec2(width, height));
+                ui.add_space(8.0);
+                ui.horizontal_top(|ui| {
+                    ui.add_space(12.0);
+                    ui.vertical(|ui| {
+                        ui.set_width(ui.available_width() - 12.0);
+                        match manager.tab {
+                            Tab::Installed => details(cx, ui, manager),
+                            Tab::Marketplace => market_details(cx, ui, manager),
+                        }
+                    });
+                });
+            },
+        );
+    });
 }
 
 /// Where plugins can be installed from, shown when nothing is selected.
 fn plugin_directories(cx: &PageContext<'_>, ui: &mut egui::Ui) {
-    ui.label(
-        RichText::new("Plugin directories")
-            .font(theme::semibold(theme::UI_FONT_SIZE + 2.0))
-            .color(theme::TEXT_BRIGHT),
+    ui.add(SectionHeader::new("Plugin directories"));
+    dialog::hint(
+        ui,
+        "Jetthing loads plugins (a folder with a jetthing-plugin.toml) from these directories; \
+         .jtplugin archives install into the User directory:",
     );
-    ui.add_space(6.0);
-    ui.label(
-        RichText::new(
-            "Jetthing loads plugins (a folder with a jetthing-plugin.toml) from these directories; \
-             .jtplugin archives install into the User directory:",
-        )
-        .color(theme::TEXT_SECONDARY),
-    );
-    ui.add_space(4.0);
     let project = cx.state.project.as_ref().map(|p| p.root());
+    let mut grid = PropertyGrid::new("plugin_directories");
     for (source, dir) in jetthing_core::plugin_dirs(project) {
-        ui.horizontal(|ui| {
-            ui.add_sized(
-                [70.0, 18.0],
-                egui::Label::new(RichText::new(source).color(theme::TEXT_INFO)),
-            );
-            ui.label(RichText::new(dir.display().to_string()).color(theme::TEXT));
-        });
+        grid = grid.mono_row(source, dir.display().to_string());
     }
+    grid.show(ui);
 }
 
 fn header_row(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginManager) {
-    let rect = ui.max_rect();
     let installed = cx.state.plugin_host.registry.entries().len();
-    let font = egui::FontId::proportional(theme::UI_FONT_SIZE);
-    let mut x = rect.left();
-    for (tab, label) in [
-        (Tab::Marketplace, "Marketplace"),
-        (Tab::Installed, "Installed"),
-    ] {
-        let galley = ui
-            .painter()
-            .layout_no_wrap(label.into(), font.clone(), *theme::TEXT);
-        let badge = (tab == Tab::Installed).then(|| installed.to_string());
-        let width = galley.size().x + 24.0 + if badge.is_some() { 22.0 } else { 0.0 };
-        let tab_rect = Rect::from_min_size(egui::pos2(x, rect.top()), vec2(width, rect.height()));
-        let response = ui.interact(
-            tab_rect,
-            egui::Id::new(("plugin_tab_header", label)),
-            Sense::click(),
-        );
-        let active = manager.tab == tab;
-        if response.hovered() && !active {
-            ui.painter()
-                .rect_filled(tab_rect.shrink2(vec2(0.0, 6.0)), 4.0, theme::HOVER);
-        }
-        let text_color = if active {
-            theme::TEXT_BRIGHT
-        } else {
-            theme::TEXT
-        };
-        let text_pos = egui::pos2(
-            tab_rect.left() + 12.0,
-            tab_rect.center().y - galley.size().y / 2.0,
-        );
-        ui.painter().galley(text_pos, galley.clone(), *text_color);
-        if let Some(badge) = badge {
-            let center = egui::pos2(text_pos.x + galley.size().x + 13.0, tab_rect.center().y);
-            ui.painter().circle_filled(center, 8.0, theme::TEXT_INFO);
-            ui.painter().text(
-                center,
-                egui::Align2::CENTER_CENTER,
-                badge,
-                egui::FontId::proportional(10.0),
-                *theme::POPUP,
-            );
-        }
-        if active {
-            ui.painter().rect_filled(
-                Rect::from_min_max(
-                    egui::pos2(tab_rect.left(), tab_rect.bottom() - 3.0),
-                    tab_rect.right_bottom(),
-                ),
-                0.0,
-                theme::ACCENT,
-            );
-        }
-        if response.clicked() {
-            manager.tab = tab;
-            if tab == Tab::Marketplace {
+    let tabs = [
+        KitTab::new("Marketplace"),
+        KitTab::new(format!("Installed ({installed})")),
+    ];
+    let current = usize::from(manager.tab == Tab::Installed);
+    ui.horizontal(|ui| {
+        if let Some(index) = TabBar::new(&tabs, current).show(ui).selected {
+            manager.tab = if index == 0 {
+                Tab::Marketplace
+            } else {
+                Tab::Installed
+            };
+            if manager.tab == Tab::Marketplace {
                 manager.catalog = None; // rescan the registries
             }
         }
-        x += width + 4.0;
-    }
-    let gear_rect = Rect::from_center_size(egui::pos2(x + 18.0, rect.center().y), vec2(24.0, 24.0));
-    let gear = ui.interact(
-        gear_rect,
-        egui::Id::new("plugin_manager_gear"),
-        Sense::click(),
-    );
-    if gear.hovered() {
-        ui.painter().rect_filled(gear_rect, 4.0, theme::HOVER);
-    }
-    paint_gear(ui.painter(), gear_rect.center(), *icons::ICON);
-    let gear = gear.on_hover_text("Manage plugins");
-    egui::Popup::menu(&gear).show(|ui| {
-        ui.set_min_width(220.0);
-        if ui.button("Install Plugin from Disk…").clicked() {
-            manager.tab = Tab::Installed;
-            manager.install_path = Some(String::new());
-            manager.install_error = None;
-            ui.close();
+        let gear = ui.add(IconButton::new(Glyph::Settings, "Manage plugins"));
+        let id = egui::Id::new("plugin_manager_gear_open");
+        let mut open: bool = ui.data(|d| d.get_temp(id)).unwrap_or(false);
+        if gear.clicked() {
+            open = !open;
         }
-        if ui.button("Refresh Plugin List").clicked() {
-            manager.catalog = None;
-            cx.dispatch("plugin.refresh", Value::Null);
-            ui.close();
-        }
-    });
-}
-
-/// Original gear glyph: a ring with eight teeth.
-fn paint_gear(painter: &egui::Painter, center: egui::Pos2, color: Color32) {
-    let stroke = egui::Stroke::new(1.3_f32, color);
-    painter.circle_stroke(center, 4.5, stroke);
-    painter.circle_stroke(center, 1.8, stroke);
-    for tooth in 0..8 {
-        let angle = tooth as f32 * std::f32::consts::FRAC_PI_4;
-        let direction = vec2(angle.cos(), angle.sin());
-        painter.line_segment([center + direction * 5.0, center + direction * 7.0], stroke);
-    }
-}
-
-fn placeholder(ui: &mut egui::Ui, text: &str) {
-    ui.centered_and_justified(|ui| {
-        ui.label(RichText::new(text).color(theme::TEXT_SECONDARY));
+        let mut picked = false;
+        Popover::below("plugin_manager_gear", &gear)
+            .width(240.0)
+            .show(ui.ctx(), &mut open, |ui| {
+                if ui.add(MenuItem::new("Install Plugin from Disk…")).clicked() {
+                    manager.tab = Tab::Installed;
+                    manager.install_path = Some(String::new());
+                    manager.install_error = None;
+                    picked = true;
+                }
+                if ui.add(MenuItem::new("Refresh Plugin List")).clicked() {
+                    manager.catalog = None;
+                    cx.dispatch("plugin.refresh", Value::Null);
+                    picked = true;
+                }
+            });
+        ui.data_mut(|d| d.insert_temp(id, open && !picked));
     });
 }
 
@@ -350,29 +271,30 @@ fn list(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginManager
     if let Some(path) = manager.install_path.as_mut() {
         let mut install = false;
         let mut cancel = false;
-        egui::Frame::new()
-            .inner_margin(egui::Margin::symmetric(10, 6))
-            .show(ui, |ui| {
-                ui.label(
-                    RichText::new("Install Plugin from Disk")
-                        .font(theme::semibold(theme::UI_FONT_SIZE)),
-                );
+        ui.horizontal(|ui| {
+            ui.add_space(8.0);
+            ui.vertical(|ui| {
+                ui.set_width(LIST_WIDTH - 24.0);
+                let error = manager
+                    .install_error
+                    .as_deref()
+                    .map(|error| dialog::friendly("Plugin file", error));
                 let response = ui.add(
-                    egui::TextEdit::singleline(path)
-                        .hint_text("/path/to/plugin.jtplugin")
-                        .desired_width(LIST_WIDTH - 24.0),
+                    TextField::new(path)
+                        .label("Install Plugin from Disk")
+                        .placeholder("/path/to/plugin.jtplugin")
+                        .error(error.as_deref()),
                 );
                 if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                     install = true;
                 }
                 ui.horizontal(|ui| {
-                    install |= ui.button("Install").clicked();
-                    cancel = ui.button("Cancel").clicked();
+                    install |= ui.add(Button::primary("Install")).clicked();
+                    cancel = ui.add(Button::secondary("Cancel")).clicked();
                 });
-                if let Some(error) = &manager.install_error {
-                    ui.label(RichText::new(error).small().color(theme::ERROR));
-                }
             });
+        });
+        ui.add_space(8.0);
         if install && !path.trim().is_empty() {
             let path = path.trim().to_owned();
             cx.dispatch("plugin.install", json!({"path": path}));
@@ -388,6 +310,28 @@ fn list(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginManager
     }
 }
 
+/// A row of a plugin list: a group heading (with an optional Enable/Disable all link), a
+/// plugin or a load problem.
+enum Row<'a> {
+    Group {
+        title: String,
+        /// `Some(enable)` when the link should ask for that state for `ids`.
+        link: Option<(bool, Vec<String>)>,
+    },
+    Installed(&'a PluginEntry),
+    Registry {
+        entry: &'a CatalogEntry,
+        installed: Option<String>,
+    },
+    Problem(String),
+}
+
+impl Row<'_> {
+    fn selectable(&self) -> bool {
+        matches!(self, Row::Installed(_) | Row::Registry { .. })
+    }
+}
+
 fn marketplace(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginManager) {
     let catalog = manager.catalog.clone().unwrap_or_default();
     let visible: Vec<&CatalogEntry> = catalog
@@ -399,47 +343,57 @@ fn marketplace(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut Plugin
         manager.market_selected = visible.first().map(|entry| entry.manifest.id.clone());
     }
     if visible.is_empty() {
-        ui.add_space(40.0);
-        ui.vertical_centered(|ui| {
-            let (title, hint) = if catalog.entries.is_empty() {
-                (
-                    "No plugins in the local registry",
-                    "Put .jtplugin archives into one of the registry\ndirectories listed on the right.",
-                )
-            } else {
-                ("Nothing found", "No registry plugin matches the search.")
-            };
-            ui.label(RichText::new(title).color(theme::TEXT_BRIGHT));
-            ui.add_space(4.0);
-            ui.label(RichText::new(hint).color(theme::TEXT_SECONDARY));
-            ui.add_space(8.0);
-            if ui.button("Install Plugin from Disk…").clicked() {
-                manager.tab = Tab::Installed;
-                manager.install_path = Some(String::new());
-            }
-        });
+        let (title, hint) = if catalog.entries.is_empty() {
+            (
+                "No plugins in the local registry",
+                "Put .jtplugin archives into one of the registry directories listed on the right.",
+            )
+        } else {
+            ("Nothing found", "No registry plugin matches the search.")
+        };
+        let out = EmptyState::new(title).hint(hint).show(ui);
+        let _ = out;
+        if ui
+            .add(Button::secondary("Install Plugin from Disk…"))
+            .clicked()
+        {
+            manager.tab = Tab::Installed;
+            manager.install_path = Some(String::new());
+        }
         return;
     }
-    let mut installs: Vec<PathBuf> = Vec::new();
-    egui::ScrollArea::vertical()
-        .id_salt("plugin_market_list")
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            group_header(ui, "Local registry", true, false);
-            for entry in visible {
-                let installed = cx.state.plugin_host.registry.get(&entry.manifest.id);
-                if market_row(
-                    ui,
-                    entry,
-                    installed.map(|e| e.manifest.version.as_str()),
-                    manager,
-                ) {
-                    installs.push(entry.archive.clone());
-                }
-            }
-        });
-    for archive in installs {
+    let mut rows = vec![Row::Group {
+        title: "Local registry".into(),
+        link: None,
+    }];
+    rows.extend(visible.iter().map(|entry| {
+        Row::Registry {
+            entry,
+            installed: cx
+                .state
+                .plugin_host
+                .registry
+                .get(&entry.manifest.id)
+                .map(|e| e.manifest.version.clone()),
+        }
+    }));
+    let installs = std::cell::RefCell::new(Vec::<PathBuf>::new());
+    let toggles = std::cell::RefCell::new(Vec::<(String, bool)>::new());
+    let current = manager.market_selected.clone();
+    let chosen = plugin_list(
+        ui,
+        "plugin_market_list",
+        "Marketplace plugins",
+        &rows,
+        |row| matches!(row, Row::Registry { entry, .. } if Some(entry.manifest.id.as_str()) == current.as_deref()),
+        &installs,
+        &toggles,
+    );
+    if let Some(Row::Registry { entry, .. }) = chosen.map(|index| &rows[index]) {
+        manager.market_selected = Some(entry.manifest.id.clone());
+        manager.detail = DetailTab::Overview;
+    }
+    for archive in installs.into_inner() {
         manager.install_error = None;
         cx.dispatch(
             "plugin.install",
@@ -448,81 +402,229 @@ fn marketplace(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut Plugin
     }
 }
 
-/// One Marketplace card: icon, name, version and vendor, Install/Installed.
-/// Returns true when Install was clicked.
-fn market_row(
+/// Draws `rows` as a virtualized list and returns the row the user selected this frame.
+/// Install buttons push archives to `installs`, enable checkboxes and group links push
+/// `(id, enable)` to `toggles`.
+fn plugin_list(
     ui: &mut egui::Ui,
-    entry: &CatalogEntry,
-    installed: Option<&str>,
-    manager: &mut PluginManager,
-) -> bool {
-    let manifest = &entry.manifest;
-    let (rect, response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), ROW_HEIGHT), Sense::click());
-    let selected = manager.market_selected.as_deref() == Some(manifest.id.as_str());
-    if selected {
-        ui.painter().rect_filled(rect, 0.0, theme::SELECTION);
-    } else if response.hovered() {
-        ui.painter().rect_filled(rect, 0.0, theme::HOVER);
+    id: &str,
+    name: &str,
+    rows: &[Row<'_>],
+    is_selected: impl Fn(&Row<'_>) -> bool,
+    installs: &std::cell::RefCell<Vec<PathBuf>>,
+    toggles: &std::cell::RefCell<Vec<(String, bool)>>,
+) -> Option<usize> {
+    let from = rows.iter().position(&is_selected);
+    let mut selected = from;
+    VirtualList::new(id, rows.len(), &mut selected)
+        .name(name)
+        .height(ui.available_height())
+        .show(ui, |index| match &rows[index] {
+            Row::Group { title, link } => {
+                let row = ListRow::new(title).label_tone(Tone::Secondary).flat(true);
+                match link {
+                    Some((enable, ids)) => {
+                        let label = if *enable { "Enable all" } else { "Disable all" };
+                        row.trailing(Slot::ui_width(86.0, move |ui| {
+                            if ui.add(Link::new(label)).clicked() {
+                                toggles
+                                    .borrow_mut()
+                                    .extend(ids.iter().map(|id| (id.clone(), *enable)));
+                            }
+                        }))
+                    }
+                    None => row,
+                }
+            }
+            Row::Installed(entry) => {
+                let manifest = &entry.manifest;
+                let tone = match entry.status {
+                    PluginStatus::Failed(_) => Tone::Error,
+                    _ if !enabled(entry) => Tone::Secondary,
+                    _ => Tone::Strong,
+                };
+                let detail = match &entry.status {
+                    PluginStatus::Failed(_) => format!("{}  failed to load", manifest.version),
+                    PluginStatus::Unsupported(_) => format!("{}  unsupported", manifest.version),
+                    _ if entry.source == PluginSource::Bundled => {
+                        format!("{}  bundled", manifest.version)
+                    }
+                    _ => format!("{}  {}", manifest.version, manifest.vendor),
+                };
+                let can_toggle = entry.can_toggle();
+                let on = enabled(entry);
+                let plugin_id = entry.id().to_owned();
+                ListRow::new(&manifest.name)
+                    .icon(Glyph::Plugin)
+                    .label_tone(tone)
+                    .secondary(detail)
+                    .trailing(Slot::ui_width(96.0, move |ui| {
+                        let mut checked = on;
+                        if ui
+                            .add(Checkbox::new(&mut checked, "Enabled").enabled(can_toggle))
+                            .changed()
+                        {
+                            toggles.borrow_mut().push((plugin_id.clone(), checked));
+                        }
+                    }))
+            }
+            Row::Registry { entry, installed } => {
+                let manifest = &entry.manifest;
+                let vendor = if manifest.vendor.is_empty() {
+                    "Unknown vendor"
+                } else {
+                    &manifest.vendor
+                };
+                let (label, enabled, primary) = match installed {
+                    Some(version) if *version == manifest.version => ("Installed", false, false),
+                    Some(_) => ("Update", true, false),
+                    None => ("Install", true, true),
+                };
+                let archive = entry.archive.clone();
+                ListRow::new(&manifest.name)
+                    .icon(Glyph::Plugin)
+                    .label_tone(Tone::Strong)
+                    .secondary(format!("{}  {vendor}", manifest.version))
+                    .trailing(Slot::ui_width(88.0, move |ui| {
+                        let button = if primary {
+                            Button::primary(label)
+                        } else {
+                            Button::secondary(label)
+                        };
+                        if ui
+                            .add(button.small(true).min_width(76.0).enabled(enabled))
+                            .clicked()
+                        {
+                            installs.borrow_mut().push(archive.clone());
+                        }
+                    }))
+            }
+            Row::Problem(text) => ListRow::new(text).label_tone(Tone::Error).flat(true),
+        });
+    let to = selected?;
+    if Some(to) == from {
+        return None;
     }
-    paint_plugin_icon(
-        ui.painter(),
-        Rect::from_min_size(rect.left_center() + vec2(10.0, -18.0), vec2(36.0, 36.0)),
-        &manifest.name,
-    );
-    let text_left = rect.left() + 58.0;
-    let name = ui.painter().layout(
-        manifest.name.clone(),
-        theme::semibold(theme::UI_FONT_SIZE),
-        *theme::TEXT_BRIGHT,
-        rect.width() - 150.0,
-    );
-    ui.painter().galley(
-        egui::pos2(text_left, rect.top() + 14.0),
-        name,
-        *theme::TEXT_BRIGHT,
-    );
-    let vendor = if manifest.vendor.is_empty() {
-        "Unknown vendor"
-    } else {
-        &manifest.vendor
-    };
-    ui.painter().text(
-        egui::pos2(text_left, rect.top() + 36.0),
-        egui::Align2::LEFT_TOP,
-        format!("{}  {vendor}", manifest.version),
-        egui::FontId::proportional(theme::UI_FONT_SIZE - 0.5),
-        *theme::TEXT_INFO,
-    );
-    let button_rect = Rect::from_center_size(
-        egui::pos2(rect.right() - 46.0, rect.center().y),
-        vec2(76.0, 26.0),
-    );
-    let mut install = false;
-    let mut button_ui = ui.new_child(egui::UiBuilder::new().max_rect(button_rect));
-    match installed {
-        Some(version) if version == manifest.version => {
-            button_ui.add_enabled(
-                false,
-                egui::Button::new("Installed").min_size(button_rect.size()),
-            );
+    let to = dialog::skip_unselectable(rows.len(), from.unwrap_or(0), to, |i| rows[i].selectable());
+    (rows[to].selectable() && Some(to) != from).then_some(to)
+}
+
+fn installed_list(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginManager) {
+    let mut rows: Vec<Row<'_>> = Vec::new();
+    for group in [Group::Downloaded, Group::Project, Group::Bundled] {
+        let entries: Vec<&PluginEntry> = cx
+            .state
+            .plugin_host
+            .registry
+            .entries()
+            .iter()
+            .filter(|entry| group_of(cx.state, entry) == group && matches(entry, &manager.search))
+            .collect();
+        if entries.is_empty() {
+            continue;
         }
-        Some(_) => {
-            install = button_ui
-                .add(egui::Button::new("Update").min_size(button_rect.size()))
-                .clicked()
-        }
-        None => {
-            install = button_ui
-                .add(egui::Button::new("Install").min_size(button_rect.size()))
-                .clicked()
+        let enabled_count = entries.iter().filter(|entry| enabled(entry)).count();
+        let title = match group {
+            Group::Downloaded => {
+                format!("Downloaded ({enabled_count} of {} enabled)", entries.len())
+            }
+            Group::Project => "Project".to_owned(),
+            Group::Bundled => "Bundled".to_owned(),
+        };
+        let toggleable: Vec<String> = entries
+            .iter()
+            .filter(|entry| entry.can_toggle())
+            .map(|entry| entry.id().to_owned())
+            .collect();
+        let all_enabled = enabled_count == entries.len();
+        rows.push(Row::Group {
+            title,
+            link: (!toggleable.is_empty()).then_some((!all_enabled, toggleable)),
+        });
+        rows.extend(entries.into_iter().map(Row::Installed));
+    }
+    if !cx.state.plugin_host.registry.problems.is_empty() {
+        rows.push(Row::Group {
+            title: "Problems".into(),
+            link: None,
+        });
+        for (path, problem) in &cx.state.plugin_host.registry.problems {
+            rows.push(Row::Problem(format!("{}: {problem}", path.display())));
         }
     }
-    if response.clicked() {
-        manager.market_selected = Some(manifest.id.clone());
+    let installs = std::cell::RefCell::new(Vec::<PathBuf>::new());
+    let toggles = std::cell::RefCell::new(Vec::<(String, bool)>::new());
+    let current = manager.selected.clone();
+    let chosen = plugin_list(
+        ui,
+        "plugin_manager_list",
+        "Installed plugins",
+        &rows,
+        |row| matches!(row, Row::Installed(entry) if Some(entry.id()) == current.as_deref()),
+        &installs,
+        &toggles,
+    );
+    if let Some(Row::Installed(entry)) = chosen.map(|index| &rows[index]) {
+        manager.selected = Some(entry.id().to_owned());
         manager.detail = DetailTab::Overview;
     }
-    install
+    for (id, enable) in toggles.into_inner() {
+        let command = if enable {
+            "plugin.enable"
+        } else {
+            "plugin.disable"
+        };
+        cx.dispatch(command, json!({"id": id}));
+    }
+}
+
+fn placeholder(ui: &mut egui::Ui, text: &str) {
+    EmptyState::new(text).show(ui);
+}
+
+/// The plugin title, with its avatar, and the vendor line with the homepage link.
+fn title_block(ui: &mut egui::Ui, manifest: &jetthing_plugins::PluginManifest) {
+    let colors = Theme::colors(ui.ctx());
+    ui.horizontal(|ui| {
+        ui.add(Avatar::new(manifest.name.clone()).size(36.0));
+        ui.vertical(|ui| {
+            ui.label(
+                RichText::new(&manifest.name)
+                    .font(typography::semibold(ui.ctx(), 20.0))
+                    .color(colors.text_strong),
+            );
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(if manifest.vendor.is_empty() {
+                        "Unknown vendor"
+                    } else {
+                        &manifest.vendor
+                    })
+                    .color(colors.text_secondary),
+                );
+                if let Some(homepage) = &manifest.homepage
+                    && ui.add(Link::new("Plugin homepage ↗")).clicked()
+                {
+                    ui.ctx().open_url(egui::OpenUrl::new_tab(homepage));
+                }
+            });
+        });
+    });
+}
+
+/// Overview / Settings / Additional Info tabs of the details pane.
+fn detail_tabs(ui: &mut egui::Ui, manager: &mut PluginManager, tabs: &[(DetailTab, &str)]) {
+    if !tabs.iter().any(|(tab, _)| *tab == manager.detail) {
+        manager.detail = DetailTab::Overview;
+    }
+    let bar: Vec<KitTab> = tabs.iter().map(|(_, label)| KitTab::new(*label)).collect();
+    let current = tabs
+        .iter()
+        .position(|(tab, _)| *tab == manager.detail)
+        .unwrap_or(0);
+    if let Some(index) = TabBar::new(&bar, current).show(ui).selected {
+        manager.detail = tabs[index].0;
+    }
 }
 
 fn market_details(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginManager) {
@@ -537,25 +639,7 @@ fn market_details(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut Plu
         return;
     };
     let manifest = &entry.manifest;
-    ui.label(
-        RichText::new(&manifest.name)
-            .font(theme::semibold(20.0))
-            .color(theme::TEXT_BRIGHT),
-    );
-    ui.add_space(2.0);
-    ui.horizontal(|ui| {
-        ui.label(
-            RichText::new(if manifest.vendor.is_empty() {
-                "Unknown vendor"
-            } else {
-                &manifest.vendor
-            })
-            .color(theme::TEXT_SECONDARY),
-        );
-        if let Some(homepage) = &manifest.homepage {
-            ui.hyperlink_to("Plugin homepage ↗", homepage);
-        }
-    });
+    title_block(ui, manifest);
     ui.add_space(8.0);
     let installed_version = cx
         .state
@@ -569,31 +653,29 @@ fn market_details(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut Plu
             Some(_) => ("Update", true),
             None => ("Install", true),
         };
-        if ui
-            .add_enabled(enabled, egui::Button::new(label).min_size(vec2(84.0, 28.0)))
-            .clicked()
-        {
+        let button = if enabled && installed_version.is_none() {
+            Button::primary(label)
+        } else {
+            Button::secondary(label)
+        };
+        if ui.add(button.enabled(enabled)).clicked() {
             manager.install_error = None;
             cx.dispatch(
                 "plugin.install",
                 json!({"path": entry.archive.display().to_string()}),
             );
         }
-        ui.add_space(8.0);
-        ui.label(RichText::new(&manifest.version).color(theme::TEXT));
+        ui.label(RichText::new(&manifest.version).color(Theme::colors(ui.ctx()).text));
         if let Some(installed) = &installed_version
             && *installed != manifest.version
         {
-            ui.label(
-                RichText::new(format!("(installed {installed})")).color(theme::TEXT_SECONDARY),
-            );
+            dialog::hint(ui, format!("(installed {installed})"));
         }
     });
     if let Some(error) = &manager.install_error {
-        ui.add_space(6.0);
-        ui.label(RichText::new(error).color(theme::ERROR));
+        Banner::new(Severity::Error, dialog::friendly("Plugin file", error)).show(ui);
     }
-    ui.add_space(10.0);
+    ui.add_space(8.0);
     detail_tabs(
         ui,
         manager,
@@ -602,70 +684,47 @@ fn market_details(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut Plu
             (DetailTab::AdditionalInfo, "Additional Info"),
         ],
     );
-    ui.separator();
-    ui.add_space(6.0);
     egui::ScrollArea::vertical()
         .id_salt(("plugin_market_details", &manifest.id))
         .auto_shrink([false, false])
         .show(ui, |ui| match manager.detail {
             DetailTab::AdditionalInfo => {
-                let rows = additional_info(manifest, &entry.archive.display().to_string());
-                for (key, value) in rows {
-                    info_row(ui, key, &value);
+                let mut grid = PropertyGrid::new("plugin_market_info");
+                for (key, value) in additional_info(manifest, &entry.archive.display().to_string())
+                {
+                    grid = grid.row(key, value);
                 }
+                grid.show(ui);
             }
             _ => {
-                ui.label(if manifest.description.is_empty() {
-                    RichText::new("No description.").color(theme::TEXT_SECONDARY)
+                if manifest.description.is_empty() {
+                    dialog::hint(ui, "No description.");
                 } else {
-                    RichText::new(&manifest.description).color(theme::TEXT)
-                });
-                ui.add_space(10.0);
-                ui.label(
-                    RichText::new("Requested permissions")
-                        .font(theme::semibold(theme::UI_FONT_SIZE)),
-                );
+                    dialog::message(ui, manifest.description.clone());
+                }
+                ui.add(SectionHeader::new("Requested permissions"));
                 if manifest.permissions.is_empty() {
-                    ui.label(RichText::new("None").color(theme::TEXT_SECONDARY));
+                    dialog::hint(ui, "None");
                 }
                 for permission in &manifest.permissions {
-                    ui.label(format!("• {}", permission.description()));
+                    dialog::message(ui, format!("• {}", permission.description()));
                 }
             }
         });
 }
 
 fn plugin_directories_with_registries(cx: &PageContext<'_>, ui: &mut egui::Ui) {
-    ui.label(
-        RichText::new("Plugin registries")
-            .font(theme::semibold(theme::UI_FONT_SIZE + 2.0))
-            .color(theme::TEXT_BRIGHT),
+    ui.add(SectionHeader::new("Plugin registries"));
+    dialog::hint(
+        ui,
+        "The Marketplace lists the .jtplugin archives found in these directories \
+         (JETTHING_REGISTRY_DIR overrides the first entry):",
     );
-    ui.add_space(6.0);
-    ui.label(
-        RichText::new(
-            "The Marketplace lists the .jtplugin archives found in these directories \
-             (JETTHING_REGISTRY_DIR overrides the first entry):",
-        )
-        .color(theme::TEXT_SECONDARY),
-    );
-    ui.add_space(4.0);
     for dir in jetthing_core::plugin_registry_dirs() {
-        ui.label(RichText::new(dir.display().to_string()).color(theme::TEXT));
+        dialog::message(ui, dir.display().to_string());
     }
     ui.add_space(12.0);
     plugin_directories(cx, ui);
-}
-
-fn info_row(ui: &mut egui::Ui, key: &str, value: &str) {
-    ui.horizontal_top(|ui| {
-        ui.add_sized(
-            [110.0, 18.0],
-            egui::Label::new(RichText::new(key).color(theme::TEXT_SECONDARY)),
-        );
-        ui.label(value);
-    });
-    ui.add_space(4.0);
 }
 
 /// Key/value rows of the Additional Info tab shared by both tabs' details.
@@ -697,234 +756,6 @@ fn additional_info(
     ]
 }
 
-fn detail_tabs(ui: &mut egui::Ui, manager: &mut PluginManager, tabs: &[(DetailTab, &str)]) {
-    if !tabs.iter().any(|(tab, _)| *tab == manager.detail) {
-        manager.detail = DetailTab::Overview;
-    }
-    ui.horizontal(|ui| {
-        for (tab, label) in tabs {
-            let active = manager.detail == *tab;
-            let text = RichText::new(*label).color(if active {
-                theme::TEXT_BRIGHT
-            } else {
-                theme::TEXT
-            });
-            let response = ui.add(
-                egui::Button::new(text)
-                    .frame(false)
-                    .min_size(vec2(0.0, 28.0)),
-            );
-            if active {
-                let r = response.rect;
-                ui.painter().rect_filled(
-                    Rect::from_min_max(
-                        egui::pos2(r.left(), r.bottom() + 1.0),
-                        egui::pos2(r.right(), r.bottom() + 4.0),
-                    ),
-                    0.0,
-                    theme::ACCENT,
-                );
-            }
-            if response.clicked() {
-                manager.detail = *tab;
-            }
-            ui.add_space(8.0);
-        }
-    });
-}
-
-fn installed_list(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginManager) {
-    let mut toggles: Vec<(String, bool)> = Vec::new();
-    egui::ScrollArea::vertical()
-        .id_salt("plugin_manager_list")
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            for group in [Group::Downloaded, Group::Project, Group::Bundled] {
-                let entries: Vec<&PluginEntry> = cx
-                    .state
-                    .plugin_host
-                    .registry
-                    .entries()
-                    .iter()
-                    .filter(|entry| {
-                        group_of(cx.state, entry) == group && matches(entry, &manager.search)
-                    })
-                    .collect();
-                if entries.is_empty() {
-                    continue;
-                }
-                let enabled_count = entries.iter().filter(|entry| enabled(entry)).count();
-                let title = match group {
-                    Group::Downloaded => {
-                        format!("Downloaded ({enabled_count} of {} enabled)", entries.len())
-                    }
-                    Group::Project => "Project".to_owned(),
-                    Group::Bundled => "Bundled".to_owned(),
-                };
-                let toggleable: Vec<String> = entries
-                    .iter()
-                    .filter(|entry| entry.can_toggle())
-                    .map(|entry| entry.id().to_owned())
-                    .collect();
-                let all_enabled = enabled_count == entries.len();
-                if let Some(enable) = group_header(ui, &title, all_enabled, !toggleable.is_empty())
-                {
-                    toggles.extend(toggleable.into_iter().map(|id| (id, enable)));
-                }
-                for entry in entries {
-                    if let Some(toggle) = plugin_row(ui, entry, manager) {
-                        toggles.push((entry.id().to_owned(), toggle));
-                    }
-                }
-            }
-            if !cx.state.plugin_host.registry.problems.is_empty() {
-                group_header(ui, "Problems", true, false);
-                for (path, problem) in &cx.state.plugin_host.registry.problems {
-                    egui::Frame::new()
-                        .inner_margin(egui::Margin::symmetric(10, 4))
-                        .show(ui, |ui| {
-                            ui.label(
-                                RichText::new(format!("{}: {problem}", path.display()))
-                                    .small()
-                                    .color(theme::ERROR),
-                            );
-                        });
-                }
-            }
-        });
-    for (id, enable) in toggles {
-        let command = if enable {
-            "plugin.enable"
-        } else {
-            "plugin.disable"
-        };
-        cx.dispatch(command, json!({"id": id}));
-    }
-}
-
-/// Group header with an optional "Disable all"/"Enable all" link; returns
-/// the requested state when the link is clicked.
-fn group_header(ui: &mut egui::Ui, title: &str, all_enabled: bool, link: bool) -> Option<bool> {
-    let (rect, _) =
-        ui.allocate_exact_size(vec2(ui.available_width(), GROUP_HEIGHT), Sense::hover());
-    ui.painter().rect_filled(rect, 0.0, theme::NOTIFICATION);
-    ui.painter().text(
-        rect.left_center() + vec2(10.0, 0.0),
-        egui::Align2::LEFT_CENTER,
-        title,
-        egui::FontId::proportional(theme::UI_FONT_SIZE),
-        *theme::TEXT,
-    );
-    if !link {
-        return None;
-    }
-    let label = if all_enabled {
-        "Disable all"
-    } else {
-        "Enable all"
-    };
-    let galley = ui.painter().layout_no_wrap(
-        label.into(),
-        egui::FontId::proportional(theme::UI_FONT_SIZE),
-        *theme::MODIFIED,
-    );
-    let link_rect = Rect::from_min_size(
-        egui::pos2(
-            rect.right() - galley.size().x - 10.0,
-            rect.center().y - galley.size().y / 2.0,
-        ),
-        galley.size(),
-    );
-    let response = ui.interact(
-        link_rect,
-        egui::Id::new(("plugin_group_link", title)),
-        Sense::click(),
-    );
-    ui.painter().galley(link_rect.min, galley, *theme::MODIFIED);
-    response.clicked().then_some(!all_enabled)
-}
-
-/// One plugin row: icon, bold name, version and vendor, checkbox. Returns a
-/// requested enable state when the checkbox was toggled.
-fn plugin_row(ui: &mut egui::Ui, entry: &PluginEntry, manager: &mut PluginManager) -> Option<bool> {
-    let (rect, response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), ROW_HEIGHT), Sense::click());
-    let selected = manager.selected.as_deref() == Some(entry.id());
-    if selected {
-        ui.painter().rect_filled(rect, 0.0, theme::SELECTION);
-    } else if response.hovered() {
-        ui.painter().rect_filled(rect, 0.0, theme::HOVER);
-    }
-    let manifest = &entry.manifest;
-    paint_plugin_icon(
-        ui.painter(),
-        Rect::from_min_size(rect.left_center() + vec2(10.0, -18.0), vec2(36.0, 36.0)),
-        &manifest.name,
-    );
-    let muted = !enabled(entry);
-    let name_color = match entry.status {
-        PluginStatus::Failed(_) => theme::ERROR,
-        _ if muted => theme::TEXT_SECONDARY,
-        _ => theme::TEXT_BRIGHT,
-    };
-    let text_left = rect.left() + 58.0;
-    let name = ui.painter().layout(
-        manifest.name.clone(),
-        theme::semibold(theme::UI_FONT_SIZE),
-        *name_color,
-        rect.width() - 100.0,
-    );
-    ui.painter()
-        .galley(egui::pos2(text_left, rect.top() + 14.0), name, *name_color);
-    let detail = match &entry.status {
-        PluginStatus::Failed(_) => format!("{}  failed to load", manifest.version),
-        PluginStatus::Unsupported(_) => format!("{}  unsupported", manifest.version),
-        _ if entry.source == PluginSource::Bundled => format!("{}  bundled", manifest.version),
-        _ => format!("{}  {}", manifest.version, manifest.vendor),
-    };
-    ui.painter().text(
-        egui::pos2(text_left, rect.top() + 36.0),
-        egui::Align2::LEFT_TOP,
-        detail,
-        egui::FontId::proportional(theme::UI_FONT_SIZE - 0.5),
-        *theme::TEXT_INFO,
-    );
-    let mut checked = enabled(entry);
-    let check_rect = Rect::from_center_size(
-        egui::pos2(rect.right() - 24.0, rect.top() + 22.0),
-        vec2(18.0, 18.0),
-    );
-    let mut toggle = None;
-    let mut check_ui = ui.new_child(egui::UiBuilder::new().max_rect(check_rect));
-    if check_ui
-        .add_enabled(
-            entry.can_toggle(),
-            egui::Checkbox::without_text(&mut checked),
-        )
-        .changed()
-    {
-        toggle = Some(checked);
-    }
-    if response.clicked() {
-        manager.selected = Some(entry.id().to_owned());
-        manager.detail = DetailTab::Overview;
-    }
-    toggle
-}
-
-/// Plugin icon: rounded square with initials (no third-party artwork).
-fn paint_plugin_icon(painter: &egui::Painter, rect: Rect, name: &str) {
-    painter.rect_filled(rect, 8.0, theme::avatar_color(name));
-    painter.text(
-        rect.center(),
-        egui::Align2::CENTER_CENTER,
-        theme::project_initials(name),
-        theme::semibold(14.0),
-        Color32::WHITE,
-    );
-}
-
 fn details(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginManager) {
     let Some(entry) = manager
         .selected
@@ -941,33 +772,12 @@ fn details(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginMana
     let can_toggle = entry.can_toggle();
     let is_enabled = enabled(entry);
     let uninstallable = cx.state.plugin_uninstallable(&manifest.id);
-    ui.label(
-        RichText::new(&manifest.name)
-            .font(theme::semibold(20.0))
-            .color(theme::TEXT_BRIGHT),
-    );
-    ui.add_space(2.0);
-    ui.horizontal(|ui| {
-        ui.label(
-            RichText::new(if manifest.vendor.is_empty() {
-                "Unknown vendor"
-            } else {
-                &manifest.vendor
-            })
-            .color(theme::TEXT_SECONDARY),
-        );
-        if let Some(homepage) = &manifest.homepage {
-            ui.hyperlink_to("Plugin homepage ↗", homepage);
-        }
-    });
+    title_block(ui, &manifest);
     ui.add_space(8.0);
     ui.horizontal(|ui| {
         let label = if is_enabled { "Disable" } else { "Enable" };
         if ui
-            .add_enabled(
-                can_toggle,
-                egui::Button::new(label).min_size(vec2(84.0, 28.0)),
-            )
+            .add(Button::secondary(label).enabled(can_toggle))
             .clicked()
         {
             let command = if is_enabled {
@@ -977,84 +787,37 @@ fn details(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginMana
             };
             cx.dispatch(command, json!({"id": manifest.id}));
         }
-        if uninstallable
-            && ui
-                .add(egui::Button::new("Uninstall").min_size(vec2(84.0, 28.0)))
-                .clicked()
-        {
+        if uninstallable && ui.add(Button::secondary("Uninstall")).clicked() {
             cx.dispatch("plugin.uninstall", json!({"id": manifest.id}));
             manager.selected = None;
         }
-        ui.add_space(8.0);
-        ui.label(RichText::new(&manifest.version).color(theme::TEXT));
+        ui.label(RichText::new(&manifest.version).color(Theme::colors(ui.ctx()).text));
     });
     if let PluginStatus::Failed(reason) | PluginStatus::Unsupported(reason) = &status {
-        ui.add_space(8.0);
-        egui::Frame::new()
-            .fill(if matches!(status, PluginStatus::Failed(_)) {
-                theme::ERROR.gamma_multiply(0.2)
-            } else {
-                *theme::NOTIFICATION
-            })
-            .corner_radius(4)
-            .inner_margin(egui::Margin::same(10))
-            .show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                ui.label(RichText::new(reason).color(theme::TEXT));
-            });
+        let severity = if matches!(status, PluginStatus::Failed(_)) {
+            Severity::Error
+        } else {
+            Severity::Warning
+        };
+        Banner::new(severity, reason.clone()).show(ui);
     }
-    ui.add_space(10.0);
+    ui.add_space(8.0);
     let mut tabs = vec![(DetailTab::Overview, "Overview")];
     if !contributions.settings_pages.is_empty() {
         tabs.push((DetailTab::Settings, "Settings"));
     }
     tabs.push((DetailTab::AdditionalInfo, "Additional Info"));
-    if !tabs.iter().any(|(tab, _)| *tab == manager.detail) {
-        manager.detail = DetailTab::Overview;
-    }
-    ui.horizontal(|ui| {
-        for (tab, label) in &tabs {
-            let active = manager.detail == *tab;
-            let text = RichText::new(*label).color(if active {
-                theme::TEXT_BRIGHT
-            } else {
-                theme::TEXT
-            });
-            let response = ui.add(
-                egui::Button::new(text)
-                    .frame(false)
-                    .min_size(vec2(0.0, 28.0)),
-            );
-            if active {
-                let r = response.rect;
-                ui.painter().rect_filled(
-                    Rect::from_min_max(
-                        egui::pos2(r.left(), r.bottom() + 1.0),
-                        egui::pos2(r.right(), r.bottom() + 4.0),
-                    ),
-                    0.0,
-                    theme::ACCENT,
-                );
-            }
-            if response.clicked() {
-                manager.detail = *tab;
-            }
-            ui.add_space(8.0);
-        }
-    });
-    ui.separator();
-    ui.add_space(6.0);
+    detail_tabs(ui, manager, &tabs);
     egui::ScrollArea::vertical()
         .id_salt(("plugin_details", &manifest.id))
         .auto_shrink([false, false])
         .show(ui, |ui| match manager.detail {
             DetailTab::Overview => {
-                ui.label(if manifest.description.is_empty() {
-                    RichText::new("No description.").color(theme::TEXT_SECONDARY)
+                if manifest.description.is_empty() {
+                    dialog::hint(ui, "No description.");
                 } else {
-                    RichText::new(&manifest.description).color(theme::TEXT)
-                });
-                ui.add_space(10.0);
+                    dialog::message(ui, manifest.description.clone());
+                }
                 let items = [
                     (contributions.commands.len(), "command", "commands"),
                     (
@@ -1077,17 +840,15 @@ fn details(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginMana
                     (contributions.menus.len(), "menu item", "menu items"),
                 ];
                 if items.iter().any(|(count, ..)| *count > 0) {
-                    ui.label(RichText::new("Features").font(theme::semibold(theme::UI_FONT_SIZE)));
+                    ui.add(SectionHeader::new("Features"));
                     for (count, one, many) in items.into_iter().filter(|(count, ..)| *count > 0) {
-                        ui.label(format!("• {}", widgets::pluralize(count, one, many)));
+                        dialog::message(ui, format!("• {}", widgets::pluralize(count, one, many)));
                     }
                 }
                 if manifest.app.is_some() {
-                    ui.add_space(8.0);
-                    ui.label(
-                        RichText::new(format!("Run standalone: jetthing --app {}", manifest.id))
-                            .monospace()
-                            .color(theme::TEXT_SECONDARY),
+                    dialog::hint(
+                        ui,
+                        format!("Run standalone: jetthing --app {}", manifest.id),
                     );
                 }
             }
@@ -1107,46 +868,14 @@ fn details(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginMana
                         .collect::<Vec<_>>()
                         .join("\n")
                 };
-                for (key, value) in [
-                    ("Plugin ID", manifest.id.clone()),
-                    ("Kind", manifest.kind.label().to_owned()),
-                    ("API version", manifest.api_version.to_string()),
-                    ("Status", status.label().to_owned()),
-                    ("Source", source),
-                    (
-                        "License",
-                        manifest
-                            .license
-                            .clone()
-                            .unwrap_or_else(|| "Not specified".into()),
-                    ),
-                    ("Permissions", permissions),
-                    (
-                        "Dependencies",
-                        if manifest.dependencies.is_empty() {
-                            "None".into()
-                        } else {
-                            manifest.dependencies.join(", ")
-                        },
-                    ),
-                    (
-                        "Tags",
-                        if manifest.capabilities.is_empty() {
-                            "None".into()
-                        } else {
-                            manifest.capabilities.join(", ")
-                        },
-                    ),
-                ] {
-                    ui.horizontal_top(|ui| {
-                        ui.add_sized(
-                            [110.0, 18.0],
-                            egui::Label::new(RichText::new(key).color(theme::TEXT_SECONDARY)),
-                        );
-                        ui.label(value);
-                    });
-                    ui.add_space(4.0);
+                let mut grid = PropertyGrid::new("plugin_info");
+                let mut rows = additional_info(&manifest, &source);
+                rows.insert(3, ("Status", status.label().to_owned()));
+                rows.insert(6, ("Permissions", permissions));
+                for (key, value) in rows {
+                    grid = grid.row(key, value);
                 }
+                grid.show(ui);
             }
         });
 }
@@ -1159,57 +888,85 @@ fn settings(
     contributions: &jetthing_plugins::Contributions,
 ) {
     for page in &contributions.settings_pages {
-        ui.label(RichText::new(&page.title).font(theme::semibold(theme::UI_FONT_SIZE)));
-        ui.add_space(4.0);
+        ui.add(SectionHeader::new(page.title.clone()));
         for field in &page.fields {
             let current = cx
                 .state
                 .plugin_setting(plugin, &field.key)
                 .unwrap_or_else(|| field.kind.default_value());
             let mut updated = None;
-            ui.horizontal(|ui| {
-                ui.add_sized([170.0, 20.0], egui::Label::new(&field.label));
-                match &field.kind {
-                    SettingKind::Text { .. } => {
-                        let mut text = current.as_str().unwrap_or_default().to_owned();
-                        if ui.text_edit_singleline(&mut text).changed() {
-                            updated = Some(Value::from(text));
-                        }
-                    }
-                    SettingKind::Bool { .. } => {
-                        let mut flag = current.as_bool().unwrap_or_default();
-                        if ui.checkbox(&mut flag, "").changed() {
-                            updated = Some(Value::from(flag));
-                        }
-                    }
-                    SettingKind::Number { min, max, .. } => {
-                        let mut number = current.as_f64().unwrap_or_default();
-                        let mut drag = egui::DragValue::new(&mut number);
-                        if let (Some(min), Some(max)) = (min, max) {
-                            drag = drag.range(*min..=*max);
-                        }
-                        if ui.add(drag).changed() {
-                            updated = Some(Value::from(number));
-                        }
-                    }
-                    SettingKind::Choice { options, .. } => {
-                        let selected = current.as_str().unwrap_or_default().to_owned();
-                        egui::ComboBox::from_id_salt(("plugin_setting", plugin, &field.key))
-                            .selected_text(&selected)
-                            .show_ui(ui, |ui| {
-                                for option in options {
-                                    if ui.selectable_label(*option == selected, option).clicked() {
-                                        updated = Some(Value::from(option.clone()));
-                                    }
-                                }
-                            });
+            match &field.kind {
+                SettingKind::Text { .. } => {
+                    let mut text = current.as_str().unwrap_or_default().to_owned();
+                    if ui
+                        .add(TextField::new(&mut text).label(field.label.clone()))
+                        .changed()
+                    {
+                        updated = Some(Value::from(text));
                     }
                 }
-            });
-            if let Some(description) = &field.description {
-                ui.label(RichText::new(description).small().color(theme::TEXT_INFO));
+                SettingKind::Bool { .. } => {
+                    let mut flag = current.as_bool().unwrap_or_default();
+                    if ui
+                        .add(Checkbox::new(&mut flag, field.label.clone()))
+                        .changed()
+                    {
+                        updated = Some(Value::from(flag));
+                    }
+                }
+                SettingKind::Number { min, max, .. } => {
+                    // The text being typed is kept until it is a valid number in range.
+                    let buffer_id = egui::Id::new(("plugin_setting_number", plugin, &field.key));
+                    let mut text: String = ui
+                        .data(|d| d.get_temp(buffer_id))
+                        .unwrap_or_else(|| current.as_f64().unwrap_or_default().to_string());
+                    let parsed = text.trim().parse::<f64>().ok();
+                    let in_range = parsed.is_some_and(|n| {
+                        min.is_none_or(|min| n >= min) && max.is_none_or(|max| n <= max)
+                    });
+                    let error = if in_range {
+                        None
+                    } else {
+                        Some(match (min, max) {
+                            (Some(min), Some(max)) => {
+                                format!("{} must be a number from {min} to {max}.", field.label)
+                            }
+                            _ => format!("{} must be a number.", field.label),
+                        })
+                    };
+                    let response = ui.add(
+                        TextField::new(&mut text)
+                            .label(field.label.clone())
+                            .error(error.as_deref()),
+                    );
+                    if response.changed()
+                        && in_range
+                        && let Some(number) = text.trim().parse::<f64>().ok()
+                    {
+                        updated = Some(Value::from(number));
+                    }
+                    ui.data_mut(|d| d.insert_temp(buffer_id, text));
+                }
+                SettingKind::Choice { options, .. } => {
+                    let mut selected = current.as_str().unwrap_or_default().to_owned();
+                    let before = selected.clone();
+                    ui.add(
+                        Dropdown::new(
+                            ("plugin_setting", plugin, &field.key),
+                            &mut selected,
+                            options.clone(),
+                        )
+                        .label(field.label.clone())
+                        .width(240.0),
+                    );
+                    if selected != before {
+                        updated = Some(Value::from(selected));
+                    }
+                }
             }
-            ui.add_space(4.0);
+            if let Some(description) = &field.description {
+                dialog::hint(ui, description.clone());
+            }
             if let Some(value) = updated {
                 cx.dispatch(
                     "plugin.setSetting",
@@ -1217,7 +974,6 @@ fn settings(
                 );
             }
         }
-        ui.add_space(8.0);
     }
 }
 

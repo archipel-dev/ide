@@ -1,9 +1,10 @@
 //! Get from Version Control: URL + directory, then `git clone` with progress.
 
+use crate::IdeApp;
+use crate::dialog::{self, Outcome, Select, Shell};
 use crate::native_dialog::Purpose;
-use crate::popups::{popup_frame, title};
-use crate::{IdeApp, theme};
-use eframe::egui::{self, RichText};
+use archipel_kit::components::{Button, Spinner, TextField};
+use eframe::egui;
 use serde_json::json;
 
 pub struct Form {
@@ -64,93 +65,120 @@ pub fn show(
     browse: &mut Option<Purpose>,
 ) -> bool {
     let mut keep = true;
-    let mut clone = false;
     let busy = app.state.clone_busy();
     if let Some(error) = app.state.clone_error.take() {
         form.error = Some(error);
     }
     let progress = app.state.clone_progress.clone();
-    popup_frame(ctx, "dialog_clone", 560.0, |ui| {
-        title(ui, "Get from Version Control");
-        ui.add_enabled_ui(!busy, |ui| {
-            egui::Grid::new("clone_fields")
-                .num_columns(2)
-                .spacing([16.0, 10.0])
-                .show(ui, |ui| {
-                    ui.label(RichText::new("URL").color(theme::TEXT_SECONDARY));
-                    let response = ui.add(
-                        egui::TextEdit::singleline(&mut form.url)
-                            .id(egui::Id::new("clone_url"))
-                            .hint_text("https://example.com/org/repository.git")
-                            .desired_width(400.0),
-                    );
-                    if focus {
-                        response.request_focus();
-                    }
-                    if response.changed() {
-                        form.error = None;
-                        form.follow_url();
-                    }
-                    ui.end_row();
-                    ui.label(RichText::new("Directory").color(theme::TEXT_SECONDARY));
-                    ui.horizontal(|ui| {
-                        let response = ui.add(
-                            egui::TextEdit::singleline(&mut form.directory)
-                                .id(egui::Id::new("clone_directory"))
-                                .desired_width(330.0),
-                        );
-                        if response.changed() {
-                            form.directory_edited = true;
-                            form.error = None;
-                        }
-                        if ui.button("Browse…").clicked() {
-                            *browse = Some(Purpose::CloneLocation);
-                        }
-                    });
-                    ui.end_row();
-                });
-        });
-        ui.add_space(8.0);
-        if busy {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                ui.label(
-                    RichText::new(progress.as_deref().unwrap_or("Cloning…"))
-                        .color(theme::TEXT_SECONDARY),
+    let url_error = form.url_error();
+    let directory_error = form.directory_error();
+    let valid = !form.url.trim().is_empty() && !form.directory.trim().is_empty();
+    let outcome = Shell::new("clone", "Get from Version Control")
+        .width(560.0)
+        .ok("Clone")
+        .ok_enabled(!busy && valid)
+        .cancel_enabled(!busy)
+        .show(ctx, |ui| {
+            let response = ui.add(
+                TextField::new(&mut form.url)
+                    .label("URL")
+                    .placeholder("https://example.com/org/repository.git")
+                    .error(url_error.as_deref())
+                    .enabled(!busy),
+            );
+            if focus {
+                dialog::focus_first(ctx, &response, Select::All);
+            }
+            if response.changed() {
+                form.error = None;
+                form.follow_url();
+            }
+            let width = ui.available_width();
+            ui.horizontal_top(|ui| {
+                let response = ui.add(
+                    TextField::new(&mut form.directory)
+                        .label("Directory")
+                        .error(directory_error.as_deref())
+                        .enabled(!busy)
+                        .width(width - 100.0 - ui.spacing().item_spacing.x),
                 );
+                if response.changed() {
+                    form.directory_edited = true;
+                    form.error = None;
+                }
+                // Level with the field, below its label.
+                ui.vertical(|ui| {
+                    ui.add_space(ui.text_style_height(&egui::TextStyle::Body) + 4.0);
+                    if ui
+                        .add(Button::secondary("Browse…").enabled(!busy))
+                        .clicked()
+                    {
+                        *browse = Some(Purpose::CloneLocation);
+                    }
+                });
             });
-        }
-        if let Some(message) = &form.error {
-            ui.label(RichText::new(message).color(theme::ERROR));
-        }
-        ui.add_space(10.0);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.add_enabled(!busy, egui::Button::new("Cancel")).clicked() {
-                keep = false;
-            }
-            if ui
-                .add_enabled(
-                    !busy && !form.url.trim().is_empty() && !form.directory.trim().is_empty(),
-                    egui::Button::new("Clone"),
-                )
-                .clicked()
-            {
-                clone = true;
+            if busy {
+                ui.horizontal(|ui| {
+                    ui.add(Spinner::new().label("Cloning"));
+                    dialog::hint(ui, progress.as_deref().unwrap_or("Cloning…"));
+                });
             }
         });
-    });
-    if clone {
-        form.error = None;
-        let params = json!({"url": form.url.trim(), "directory": form.directory.trim()});
-        if let Err(error) = app
-            .commands
-            .execute("project.clone", &mut app.state, params)
-        {
-            form.error = Some(error.to_string());
+    match outcome {
+        Some(Outcome::Cancel) if !busy => keep = false,
+        Some(Outcome::Ok) if !busy && valid => {
+            form.error = None;
+            let params = json!({"url": form.url.trim(), "directory": form.directory.trim()});
+            if let Err(error) = app
+                .commands
+                .execute("project.clone", &mut app.state, params)
+            {
+                form.error = Some(error.to_string());
+            }
         }
+        _ => {}
     }
     if busy {
         ctx.request_repaint_after(std::time::Duration::from_millis(100));
     }
     keep
+}
+
+impl Form {
+    /// Whether the failure the last clone reported is about the directory.
+    fn error_is_about_directory(&self) -> bool {
+        self.error.as_ref().is_some_and(|error| {
+            let error = error.to_lowercase();
+            error.contains("directory")
+                || error.contains("destination")
+                || error.contains("already exists")
+        })
+    }
+
+    fn url_error(&self) -> Option<String> {
+        let error = self
+            .error
+            .as_ref()
+            .filter(|_| !self.error_is_about_directory())?;
+        Some(dialog::friendly("URL", &git_message(error)))
+    }
+
+    fn directory_error(&self) -> Option<String> {
+        let error = self
+            .error
+            .as_ref()
+            .filter(|_| self.error_is_about_directory())?;
+        Some(dialog::friendly("Directory", &git_message(error)))
+    }
+}
+
+/// Drops git's own prefixes (`fatal:`, `Git command failed:`) from a failure message.
+fn git_message(error: &str) -> String {
+    let error = error
+        .trim()
+        .strip_prefix("Git command failed:")
+        .unwrap_or(error)
+        .trim();
+    let error = error.strip_prefix("fatal:").unwrap_or(error).trim();
+    error.lines().next().unwrap_or(error).to_owned()
 }

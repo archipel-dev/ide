@@ -31,6 +31,7 @@ mod crash_notice;
 mod debug_dialogs;
 mod debug_window;
 mod device_manager;
+mod dialog;
 mod diff_ui;
 mod disk_banner;
 mod doc_ui;

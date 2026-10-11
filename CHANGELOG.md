@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.10](https://github.com/archipel-dev/ide/compare/v0.0.9...v0.0.10) (2026-10-11)
+
+
+### Features
+
+* **ui:** build the UI foundation on archipel-kit ([#28](https://github.com/archipel-dev/ide/issues/28)) ([496e652](https://github.com/archipel-dev/ide/commit/496e652d9e9288a3fd70a14e0ef3bffa9c5ebe5f))
+
 ## [0.0.9](https://github.com/HenrySchwerdt/jetthing/compare/v0.0.8...v0.0.9) (2026-10-11)
 
 v0.0.8 was published without downloads; this release ships its contents plus the changes below.

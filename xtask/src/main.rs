@@ -1,4 +1,5 @@
 mod changelog;
+mod design_lint;
 mod dist;
 mod manifests;
 mod parity;
@@ -12,7 +13,7 @@ use std::{
     process::Command,
 };
 
-const USAGE: &str = "usage: cargo xtask parity [--check] | dist [--installer] [--target <triple>] | changelog [--from REF] [--to REF] [--version X.Y.Z] [--output FILE] | manifests --dir DIR [--version X.Y.Z] | scenes [--only 01,05] [--out DIR] [--release] | ux-smoke [--only NAME,…] [--out DIR] [--release] | pack-plugin <dir> [output] | build-wasm-example";
+const USAGE: &str = "usage: cargo xtask parity [--check] | dist [--installer] [--target <triple>] | changelog [--from REF] [--to REF] [--version X.Y.Z] [--output FILE] | manifests --dir DIR [--version X.Y.Z] | scenes [--only 01,05] [--out DIR] [--release] | ux-smoke [--only NAME,…] [--out DIR] [--release] | design-lint [--update] | pack-plugin <dir> [output] | build-wasm-example";
 
 fn workspace_root() -> PathBuf {
     // Prefer the current directory when it holds the inventory (normal `cargo run`
@@ -43,6 +44,7 @@ fn main() -> Result<()> {
         Some("manifests") => manifests::run(manifests::Options::parse(args.into_iter().skip(1))?),
         Some("scenes") => scenes::run(args.into_iter().skip(1)),
         Some("ux-smoke") => ux_smoke::run(args.into_iter().skip(1)),
+        Some("design-lint") => design_lint::run(args.into_iter().skip(1)),
         Some("build-wasm-example") => build_wasm_example(),
         Some("pack-plugin") => {
             let dir = args

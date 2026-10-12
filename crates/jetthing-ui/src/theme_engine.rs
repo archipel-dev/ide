@@ -99,8 +99,6 @@ pub mod tokens {
         TEXT_DISABLED = ["ui:*.disabledForeground"] or 0x4C4F56;
         /// `ActionButton.hoverBackground`.
         HOVER = ["ui:ActionButton.hoverBackground"] or 0xFFFFFF17;
-        /// `ActionButton.pressedBackground`.
-        PRESSED = ["ui:ActionButton.pressedBackground"] or 0xFFFFFF29;
         /// `*.selectionBackground`.
         SELECTION = ["ui:*.selectionBackground"] or 0x2A4371;
         /// `ToolWindow.Button.selectedBackground`, `*.focusColor`.
@@ -230,7 +228,6 @@ fn kit_color(token: &str, c: &Colors) -> Option<Color32> {
         "TEXT_INFO" => c.text_placeholder,
         "TEXT_DISABLED" => c.text_disabled,
         "HOVER" => c.hover,
-        "PRESSED" => c.pressed,
         "SELECTION" => c.selection,
         "ACCENT" => c.accent,
         "SELECTION_DISABLED" => c.accent_disabled,

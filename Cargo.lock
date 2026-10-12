@@ -272,20 +272,24 @@ dependencies = [
 
 [[package]]
 name = "archipel-icons"
-version = "0.1.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#89e6bb6682c87507b8e328877321cdebea267919"
+version = "0.3.0"
+source = "git+https://github.com/archipel-dev/kit?branch=main#49d2f475de7d028afabbf3d5336ca0eb1813cdfd"
 dependencies = [
  "egui",
 ]
 
 [[package]]
 name = "archipel-kit"
-version = "0.1.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#89e6bb6682c87507b8e328877321cdebea267919"
+version = "0.3.0"
+source = "git+https://github.com/archipel-dev/kit?branch=main#49d2f475de7d028afabbf3d5336ca0eb1813cdfd"
 dependencies = [
  "archipel-icons",
  "egui",
  "egui_kittest",
+ "objc2 0.6.5",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "serde",
 ]
 
 [[package]]
@@ -981,7 +985,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
 dependencies = [
  "lazy_static",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

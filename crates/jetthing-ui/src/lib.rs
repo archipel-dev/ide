@@ -22,6 +22,7 @@ mod build_variants_ui;
 mod build_window;
 mod change_popup;
 mod chrome;
+pub use chrome::window_chrome;
 mod clone_dialog;
 mod completion_ui;
 mod console_links;
@@ -81,7 +82,6 @@ mod terminal_ui;
 mod test_view;
 mod theme;
 mod theme_engine;
-mod toolbar_gradient;
 mod toolchain_banner;
 mod toolchain_status;
 mod toolwindows;
@@ -873,6 +873,11 @@ impl eframe::App for IdeApp {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.frame(ctx);
+        // macOS: keep the native traffic lights centred in the toolbar band, also after a
+        // resize relayout (a no-op on other platforms).
+        if let Some(title) = ctx.input(|input| input.viewport().title.clone()) {
+            chrome::window_chrome().align_native_controls(&title, ctx);
+        }
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
@@ -1009,6 +1014,7 @@ impl IdeApp {
         if self.state.project.is_none() && welcome::active(self) {
             welcome::show(self, ctx);
         } else {
+            chrome::project_glow(self, ctx);
             chrome::main_toolbar(self, ctx);
             chrome::status_bar(self, ctx);
         }

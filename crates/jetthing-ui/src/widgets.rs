@@ -24,44 +24,22 @@ pub fn chrome_frame(ctx: &egui::Context) -> egui::Frame {
     egui::Frame::new().fill(Theme::colors(ctx).frame)
 }
 
-/// Like [`chrome_frame`] without a fill: the window clears to the frame color, so
-/// the toolbar glow shows through (the stripe beside the toolbar's strongest glow).
-pub fn glow_through_frame() -> egui::Frame {
-    egui::Frame::new()
-}
-
 pub const TOOL_WINDOW_HEADER_HEIGHT: f32 = theme::layout::TOOLBAR_HEIGHT;
 pub const ROW_HEIGHT: f32 = theme::layout::ROW_HEIGHT;
 
-/// Tool window title bar. `actions` adds right-aligned icon buttons; returns
-/// `true` when the hide button was clicked.
+/// Tool window title bar: the kit's island header (`Panel`) with the title, `actions`
+/// (right-aligned icon buttons, the first one rightmost) and the Hide button. Returns
+/// `true` when Hide was clicked. The caller draws the body below it.
 pub fn tool_window_header(
     ui: &mut egui::Ui,
     title: &str,
     actions: impl FnOnce(&mut egui::Ui),
 ) -> bool {
     let mut hide = false;
-    let (rect, _) = ui.allocate_exact_size(
-        vec2(ui.available_width(), TOOL_WINDOW_HEADER_HEIGHT),
-        Sense::hover(),
-    );
-    let mut child = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(rect.shrink2(vec2(theme::layout::CONTENT_INSET, 0.0)))
-            .layout(egui::Layout::left_to_right(egui::Align::Center)),
-    );
-    child.label(
-        egui::RichText::new(title)
-            .font(theme::semibold(theme::UI_FONT_SIZE))
-            .color(theme::TEXT_BRIGHT),
-    );
-    child.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        ui.spacing_mut().item_spacing.x = 2.0;
-        if icons::button(ui, Icon::Minimize, "Hide").clicked() {
-            hide = true;
-        }
-        actions(ui);
-    });
+    archipel_kit::components::Panel::new(title)
+        .on_hide(|| hide = true)
+        .actions(actions)
+        .show(ui, |_| {});
     hide
 }
 
@@ -173,35 +151,6 @@ pub fn flat_widget(
             colors.text_secondary,
         );
     }
-    response
-}
-
-/// [`flat_widget`] whose text is elided with "…" so it never grows past
-/// `max_width` (status messages must not run over the breadcrumbs).
-pub fn flat_widget_elided(
-    ui: &mut egui::Ui,
-    text: &str,
-    font: egui::FontId,
-    color: impl Into<Color32>,
-    max_width: f32,
-    height: f32,
-) -> egui::Response {
-    let color = color.into();
-    let galley =
-        ui.painter()
-            .layout_job(elided_job(text, font, color, (max_width - 16.0).max(0.0)));
-    let width = 8.0 + galley.size().x + 8.0;
-    let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::click());
-    let fill = if response.is_pointer_button_down_on() {
-        *theme::PRESSED
-    } else if response.hovered() {
-        *theme::HOVER
-    } else {
-        Color32::TRANSPARENT
-    };
-    ui.painter().rect_filled(rect, 6.0, fill);
-    let text_pos = egui::pos2(rect.left() + 8.0, rect.center().y - galley.size().y / 2.0);
-    ui.painter().galley(text_pos, galley, color);
     response
 }
 
@@ -559,7 +508,7 @@ pub fn busy_spinner(ui: &mut egui::Ui, size: f32, color: Color32) {
 
 /// A menu or popup entry: the kit's `MenuItem` (selection-colored hover, arrow cursor,
 /// icon column). Add it with `ui.add(menu_item("Open"))`.
-pub fn menu_item(label: impl Into<String>) -> MenuItem {
+pub fn menu_item(label: impl Into<String>) -> MenuItem<'static> {
     MenuItem::new(label)
 }
 

@@ -124,3 +124,117 @@ fn dropping_a_file_on_a_folder_moves_it() {
     );
     assert!(root.join("src/main/Main.java").exists());
 }
+
+/// The window chrome as the workbench draws it: glow, main toolbar, status bar and both
+/// stripes around an empty center, in a 1280×720 window.
+fn chrome_harness(theme: Theme, app: IdeApp) -> testing::Harness<'static, IdeApp> {
+    let mut installed = false;
+    let mut harness = testing::builder::<IdeApp>()
+        .with_size(egui::vec2(1280.0, 720.0))
+        .build_state(
+            move |ctx, app| {
+                if !installed {
+                    archipel_kit::install(ctx, theme.clone());
+                    installed = true;
+                    ctx.request_repaint();
+                    return;
+                }
+                crate::chrome::project_glow(app, ctx);
+                crate::chrome::main_toolbar(app, ctx);
+                crate::chrome::status_bar(app, ctx);
+                crate::chrome::left_stripe(app, ctx);
+                crate::plugin_ui::right_side(app, ctx);
+                egui::CentralPanel::default()
+                    .frame(egui::Frame::new())
+                    .show(ctx, |_| {});
+            },
+            app,
+        );
+    harness.run_ok();
+    harness
+}
+
+#[test]
+fn window_chrome_passes_the_audit() {
+    for (name, theme) in themes() {
+        let app = app_with_project(&format!("chrome-{name}"));
+        let mut harness = chrome_harness(theme, app);
+        harness.run_ok();
+        // Toolbar widgets, stripe buttons and status bar items are named controls.
+        // The project widget and the project crumb of the navigation path.
+        assert!(
+            harness
+                .query_all_by_label_contains("jetthing-ui-audit-chrome")
+                .count()
+                >= 2
+        );
+        harness.get_by_label("Current File");
+        harness.get_by_label("IDE and Project Settings");
+        harness.get_by_label("Project");
+        harness.get_by_label("Terminal");
+        harness.get_by_label("Main.java");
+        harness.get_by_label("UTF-8");
+        testing::audit(&mut harness).assert_clean();
+    }
+}
+
+#[test]
+fn stripe_buttons_open_and_close_their_tool_windows() {
+    let app = app_with_project("chrome-stripe");
+    let mut harness = chrome_harness(Theme::dark(), app);
+    assert!(
+        !harness
+            .state()
+            .state()
+            .tool_windows
+            .is_visible(jetthing_core::ToolWindow::Terminal)
+    );
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Terminal")
+        .click();
+    harness.run_ok();
+    assert!(
+        harness
+            .state()
+            .state()
+            .tool_windows
+            .is_visible(jetthing_core::ToolWindow::Terminal)
+    );
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Terminal")
+        .click();
+    harness.run_ok();
+    assert!(
+        !harness
+            .state()
+            .state()
+            .tool_windows
+            .is_visible(jetthing_core::ToolWindow::Terminal)
+    );
+}
+
+#[test]
+fn toolbar_widgets_open_their_menus_on_click() {
+    let app = app_with_project("chrome-menus");
+    let mut harness = chrome_harness(Theme::dark(), app);
+    // The project widget comes first (the toolbar), then the project crumb in the status bar.
+    harness
+        .query_all_by_label_contains("jetthing-ui-audit-chrome-menus")
+        .next()
+        .unwrap()
+        .click();
+    harness.run_ok();
+    harness.get_by_label("Open Project…");
+    harness.get_by_label("New Project…");
+    harness.key_press(egui::Key::Escape);
+    harness.run_ok();
+    assert!(harness.query_by_label("Open Project…").is_none());
+    harness.get_by_label("Current File").click();
+    harness.run_ok();
+    harness.get_by_label("Edit Configurations…");
+    harness.key_press(egui::Key::Escape);
+    harness.run_ok();
+    harness.get_by_label("IDE and Project Settings").click();
+    harness.run_ok();
+    harness.get_by_label("Plugins…");
+}

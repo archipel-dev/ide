@@ -1,6 +1,7 @@
 //! Android device selector (main toolbar) and the Device Manager tool window.
 
 use crate::{IdeApp, icons, theme, widgets};
+use archipel_kit::components::{MenuHeader, MenuItem, MenuSeparator};
 use eframe::egui::{self, Color32, Rect, RichText, Sense, vec2};
 use icons::Icon;
 use jetthing_android::api_release_name;
@@ -23,32 +24,22 @@ pub fn device_selector(app: &mut IdeApp, ui: &mut egui::Ui) {
         return;
     }
     let (label, active) = selector_label(app);
-    let icon_color = if active {
-        icons::ICON
+    let button = archipel_kit::components::ToolbarButton::new(label)
+        .icon(archipel_kit::Glyph::Device)
+        .enabled(true);
+    let tooltip = archipel_kit::components::Tooltip::new(if active {
+        "Target device"
     } else {
-        theme::TEXT_DISABLED
-    };
-    let response = widgets::flat_widget(
-        ui,
-        Some((Icon::Device, *icon_color)),
-        &label,
-        egui::FontId::proportional(theme::UI_FONT_SIZE),
-        if active {
-            *theme::TEXT_BRIGHT
-        } else {
-            *theme::TEXT_INFO
-        },
-        true,
-        28.0,
-    );
-    egui::Popup::menu(&response).show(|ui| {
+        "Select a device to run on"
+    });
+    crate::chrome::toolbar_menu(ui, button, Some(tooltip), |ui| {
         ui.set_min_width(260.0);
         let hub = &app.state.android.devices;
         let mut select = None;
         let mut start = None;
-        ui.label(RichText::new("Running devices").color(theme::TEXT_INFO));
+        ui.add(MenuHeader::new("Running devices"));
         if hub.devices.is_empty() {
-            ui.label(RichText::new("  None").color(theme::TEXT_DISABLED));
+            ui.add(MenuItem::new("None").enabled(false));
         }
         for device in &hub.devices {
             let selected = hub.selected.as_deref() == Some(device.serial.as_str());
@@ -56,7 +47,7 @@ pub fn device_selector(app: &mut IdeApp, ui: &mut egui::Ui) {
             if !device.is_online() {
                 text.push_str(&format!(" [{}]", device.state.label()));
             }
-            if ui.selectable_label(selected, text).clicked() {
+            if ui.add(MenuItem::new(text).checked(selected)).clicked() {
                 select = Some(device.serial.clone());
                 ui.close();
             }
@@ -67,8 +58,8 @@ pub fn device_selector(app: &mut IdeApp, ui: &mut egui::Ui) {
             .filter(|avd| hub.running_avd(&avd.name).is_none())
             .collect();
         if !available.is_empty() {
-            ui.separator();
-            ui.label(RichText::new("Available devices").color(theme::TEXT_INFO));
+            ui.add(MenuSeparator);
+            ui.add(MenuHeader::new("Available devices"));
             for avd in available {
                 let launching = hub.is_launching(&avd.name);
                 let text = if launching {
@@ -76,17 +67,13 @@ pub fn device_selector(app: &mut IdeApp, ui: &mut egui::Ui) {
                 } else {
                     avd.display_name.clone()
                 };
-                if ui
-                    .add_enabled(!launching, egui::Button::new(text))
-                    .on_hover_text("Start this virtual device")
-                    .clicked()
-                {
+                if ui.add(MenuItem::new(text).enabled(!launching)).clicked() {
                     start = Some(avd.name.clone());
                     ui.close();
                 }
             }
         }
-        ui.separator();
+        ui.add(MenuSeparator);
         let can_run = app.commands.is_enabled("android.app.run", &app.state)
             && hub.selected_device().is_some_and(|d| d.is_online());
         let run_label = match hub.selected_device() {
@@ -95,13 +82,17 @@ pub fn device_selector(app: &mut IdeApp, ui: &mut egui::Ui) {
         };
         let mut run = false;
         if ui
-            .add_enabled(can_run, egui::Button::new(run_label))
+            .add(
+                MenuItem::new(run_label)
+                    .icon(archipel_kit::Glyph::Run)
+                    .enabled(can_run),
+            )
             .clicked()
         {
             run = true;
             ui.close();
         }
-        if ui.button("Device Manager").clicked() {
+        if ui.add(MenuItem::new("Device Manager")).clicked() {
             app.dispatch("toolwindow.activate.deviceManager", Value::Null);
             ui.close();
         }
@@ -219,7 +210,7 @@ pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
     if window != ToolWindow::DeviceManager {
         return;
     }
-    egui::SidePanel::right("right_tool_window")
+    let island = egui::SidePanel::right("right_tool_window")
         .default_width(520.0)
         .min_width(280.0)
         .resizable(true)
@@ -244,6 +235,7 @@ pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
             dm_dialogs(app, ui.ctx(), &mut dm);
             ui.data_mut(|d| d.insert_temp(id, dm));
         });
+    crate::chrome::remember_island(ctx, jetthing_core::Anchor::Right, island.response.rect);
 }
 
 /// UI-only Device Manager state, kept in egui memory.

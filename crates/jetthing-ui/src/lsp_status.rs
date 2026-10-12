@@ -1,6 +1,6 @@
 //! Language server status bar widget and notification balloons.
 
-use crate::{IdeApp, icons::Icon, theme, widgets};
+use crate::{IdeApp, icons::Icon, theme};
 use eframe::egui::{self, RichText, vec2};
 use jetthing_lsp::{ServerInfo, ServerStatus, describe_progress};
 use serde_json::{Value, json};
@@ -48,62 +48,79 @@ fn summary(app: &IdeApp, servers: &[ServerInfo]) -> Option<(String, bool, bool)>
 }
 
 /// Status bar entry; hover lists every server, right-click offers a restart.
-pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::FontId) {
+pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
     let servers = app.state.lsp.servers();
     let Some((text, busy, problem)) = summary(app, &servers) else {
         return;
     };
-    let icon = if problem {
-        Some((Icon::Warning, *theme::WARNING))
-    } else if text.is_empty() {
-        Some((Icon::Success, *theme::TEXT_INFO))
-    } else {
-        None
-    };
-    let color = if problem {
-        *theme::TEXT_SECONDARY
-    } else if busy {
-        *theme::TEXT_INFO
-    } else {
-        *theme::TEXT_SECONDARY
-    };
-    let response = widgets::flat_widget(ui, icon, &text, font, color, false, 22.0);
+    // Right to left: the spinner sits after the text.
     if busy {
-        widgets::busy_spinner(ui, 12.0, *theme::TEXT_INFO);
+        ui.add(archipel_kit::components::Spinner::new().size(archipel_kit::tokens::size::ICON));
     }
-    let response = response.on_hover_ui(|ui| {
-        ui.set_max_width(420.0);
-        ui.label(RichText::new("Language servers").strong());
-        if servers.is_empty() {
-            ui.label("No language server is running.");
+    let healthy = text.is_empty();
+    let response = if healthy {
+        // A healthy server: an icon button whose name (and tooltip) says which servers run.
+        let ids: Vec<&str> = servers.iter().map(|server| server.id.as_str()).collect();
+        ui.add(
+            archipel_kit::components::IconButton::new(
+                archipel_kit::Glyph::Success,
+                format!("Language servers ready: {}", ids.join(", ")),
+            )
+            .small(true),
+        )
+    } else {
+        let mut item = archipel_kit::components::StatusBarItem::new(text);
+        if problem {
+            item = item
+                .icon(archipel_kit::Glyph::Warning)
+                .tone(archipel_kit::Tone::Warning);
         }
-        for server in &servers {
-            let state = match &server.status {
-                ServerStatus::Starting => "starting".to_owned(),
-                ServerStatus::Ready => "ready".to_owned(),
-                ServerStatus::Restarting { attempt } => format!("restarting (attempt {attempt})"),
-                ServerStatus::Failed { reason } => {
-                    format!("failed: {}", reason.lines().next().unwrap_or_default())
-                }
-            };
-            ui.label(format!(
-                "{} ({}) — {state}\n{}",
-                server.id,
-                server.language,
-                server.root.display()
-            ));
-            for progress in &server.progress {
-                ui.label(RichText::new(describe_progress(progress)).color(theme::TEXT_INFO));
+        ui.add(item)
+    };
+    let response = if healthy {
+        response
+    } else {
+        response.on_hover_ui(|ui| {
+            ui.set_max_width(420.0);
+            ui.label(RichText::new("Language servers").strong());
+            if servers.is_empty() {
+                ui.label("No language server is running.");
             }
-        }
-        for missing in app.state.lsp.missing_servers() {
-            ui.label(format!("{missing} — not installed"));
-        }
-        ui.label(RichText::new("Right-click for actions").color(theme::TEXT_INFO));
-    });
+            for server in &servers {
+                let state = match &server.status {
+                    ServerStatus::Starting => "starting".to_owned(),
+                    ServerStatus::Ready => "ready".to_owned(),
+                    ServerStatus::Restarting { attempt } => {
+                        format!("restarting (attempt {attempt})")
+                    }
+                    ServerStatus::Failed { reason } => {
+                        format!("failed: {}", reason.lines().next().unwrap_or_default())
+                    }
+                };
+                ui.label(format!(
+                    "{} ({}) — {state}\n{}",
+                    server.id,
+                    server.language,
+                    server.root.display()
+                ));
+                for progress in &server.progress {
+                    ui.label(RichText::new(describe_progress(progress)).color(theme::TEXT_INFO));
+                }
+            }
+            for missing in app.state.lsp.missing_servers() {
+                ui.label(format!("{missing} — not installed"));
+            }
+            ui.label(RichText::new("Right-click for actions").color(theme::TEXT_INFO));
+        })
+    };
     let mut restart = false;
     response.context_menu(|ui| {
-        if ui.button("Restart Language Servers").clicked() {
+        if ui
+            .add(archipel_kit::components::MenuItem::new(
+                "Restart Language Servers",
+            ))
+            .clicked()
+        {
             restart = true;
             ui.close();
         }

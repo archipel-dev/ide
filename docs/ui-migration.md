@@ -26,7 +26,7 @@ Read the kit docs first (`docs/README.md`, `getting-started.md`, `theming.md`, `
 
 | Piece | Where | State |
 |---|---|---|
-| Dependencies | `Cargo.toml` (`archipel-kit`, `archipel-icons`, git, branch `feat/components-v0.1` until kit PR #1 merges, then switch to `main`) | egui/eframe 0.33, same as the kit. Engine crates stay egui-free. |
+| Dependencies | `Cargo.toml` (`archipel-kit`, `archipel-icons`, git, branch `main`; `Cargo.lock` pins the release, now v0.3.0) | egui/eframe 0.33, same as the kit. Engine crates stay egui-free. |
 | Theme | `theme_engine.rs`, `theme.rs` | `theme::install` calls `archipel_kit::install`. Each palette (theme + editor scheme, switched at runtime in Settings) builds one `archipel_kit::Theme`; `Theme::apply` runs on every switch, so kit components and the IDE's old tokens always agree. Workbench tokens take the kit's value; the editor tokens follow the editor color scheme and feed the kit's `EditorColors`. |
 | Layout tokens | `theme::layout` | Re-exports of `archipel_kit::tokens::size`. |
 | Icons | `icons.rs`, `file_icon.rs` | `icons::Icon` is an adapter: every variant maps to a kit `Glyph` (`Icon::kit()`), file icons come from `archipel_kit::Icon::for_file`, `icons::paint/show/button` delegate to the kit. |
@@ -167,7 +167,13 @@ your area needs one.
 | `IconButton` takes a `Tone`, not a color | `icons::button_colored` matches the color to the tone of the same value | AI chat, run widget, debug |
 | `Surface` has no chrome variant (toolbar, status bar, stripes) | `chrome_frame(ctx)` fills with `colors.frame` | main toolbar, status bar |
 | No tool-window title bar with a hide button | `tool_window_header` (icon buttons from the kit) | all tool windows (`Panel` may cover it) |
-| No kit equivalent of `widgets::flat_widget` (status-bar and toolbar dropdown text with icon and chevron) | Uses `State` and `cursor::on_hover_action` | main toolbar, status bar |
+| No kit equivalent of `widgets::flat_widget` (status-bar and toolbar dropdown text with icon and chevron) | Solved: `ToolbarButton`, `StatusBarItem`; only the Android view switcher still uses `flat_widget` (`Panel::views` covers it) | Project tool window header |
+| `IconButton` always shows its label as tooltip and has no shortcut slot; adding a `Tooltip` behaviour shows two tooltips | Toolbar buttons put the shortcut into the label: `Run (Shift+F10)` | main toolbar, tool window actions |
+| `StatusBarItem` with only an icon has no accessible name | Icon-only status widgets (AI, healthy LSP) are small `IconButton`s | status bar |
+| `StripeButton` has no badge | The Problems error dot and the running-build dot are gone | left stripe |
+| `Panel` header without a body (callers that draw their own body) cannot fade its actions on island hover | `tool_window_header` draws a `Panel` with an empty body, actions always visible | every tool window |
+| `TabBar` has no per-tab responses (context menu, drag, double-click), preview or pinned tabs | Editor tabs stay hand-painted (`editor.rs::tabs`) | editor tabs |
+| `Workbench` has one tool window per region | Tool windows stay egui side/bottom panels with `island_frame` | all tool windows |
 
 ## Areas
 
@@ -189,7 +195,7 @@ days, **L** three days or more. Areas that touch the same file (`chrome.rs`, `to
 | Editor tabs and chrome | `editor.rs` (`tabs`, `tab_drag`, ~450 lines), `completion_ui.rs`, `intentions_ui.rs`, `doc_ui.rs`, `folding.rs`, `blame_gutter.rs`, banners (`disk_banner.rs`, `gradle_banner.rs`, `toolchain_banner.rs`) | L | `TabBar` with `DragSource`/`DropTarget` for tab moves between splits. The text editor itself stays custom. |
 | Popups and Search Everywhere | `popups.rs`, `palette.rs`, `navigation_ui.rs`, `switcher.rs`, `gutter_popup.rs`, `refactor_ui.rs`, `lsp_status.rs`, `notifications.rs` | L | 22 `Frame::popup` call sites to `Surface::Popup` / `Popover`. Do before the dialogs so they share the popup shell. |
 | Dialogs | `new_project.rs`, `settings_dialog.rs` (+ `settings_keymap.rs`, `settings_live_templates.rs`, `settings_pages.rs`), `plugin_manager.rs`, `run_config_dialog.rs`, `clone_dialog.rs`, `push_dialog.rs`, `first_run.rs`, `about.rs`, `crash_notice.rs` | L (split: Settings L, Plugins M, Run Configurations M, New Project / Clone / Push S each) | `Dialog` plus `TextField`, `Dropdown`, `Checkbox`, `PropertyGrid`. About 100 plain buttons. |
-| Main toolbar, status bar, stripes | `chrome.rs`, `main_menu.rs`, `toolchain_status.rs`, `lsp_status.rs`, `plugin_ui.rs` (status widgets) | M | One worker for all of `chrome.rs`. Run widget to `Button` + `Dropdown`; main menu needs the submenu gap. |
+| Main toolbar, status bar, stripes | `chrome.rs`, `main_menu.rs`, `toolchain_status.rs`, `lsp_status.rs`, `plugin_ui.rs` (status widgets) | done (main menu left) | `WindowToolbar` + `ToolbarButton` (project with `Avatar` and glow, VCS, run configuration, device), `IconButton::large`, `ToolStripe`, `Panel` headers, `Breadcrumbs` + `StatusBarItem`; evidence in `docs/ux/evidence/kit-chrome/`. Left: the ☰ main menu still uses egui's `MenuBar`. |
 | Welcome screen | `welcome.rs` | S | `EmptyState`, `ListRow`, `TextField::search`, avatars (`Avatar`). |
 | AI chat and plugin panels | `ai_chat.rs`, `ai_agent.rs`, `ai_actions.rs`, `ai_inline.rs`, `ai_vcs.rs`, `plugin_ui.rs`, `markdown_ui.rs` | M | Lowest priority; markdown rendering stays custom. |
 

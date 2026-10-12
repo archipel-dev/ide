@@ -1,23 +1,34 @@
-//! Workbench chrome: merged main toolbar, tool window stripes and status bar.
+//! Workbench chrome on archipel-kit: the integrated main toolbar (`WindowToolbar` with the
+//! project, VCS and run widgets), the tool window stripes (`ToolStripe`) and the status bar
+//! (`Breadcrumbs`, `StatusBarItem`), laid out like Android Studio's Islands UI.
 
-use crate::icons::{self, Icon};
-use crate::widgets::{self, chrome_frame, glow_through_frame};
+use crate::icons::Icon;
+use crate::widgets::{self, chrome_frame};
 use crate::{IdeApp, keys, theme};
-use eframe::egui::{self, Color32, Rect, Sense, vec2};
+use archipel_kit::components::{
+    Avatar, Breadcrumbs, IconButton, MenuHeader, MenuItem, MenuSeparator, Spinner, StatusBarItem,
+    StripeButton, ToolStripe, ToolbarButton, Tooltip, WindowChrome, WindowToolbar,
+};
+use archipel_kit::parts::Slot;
+use archipel_kit::{Glyph, Tone, tokens};
+use eframe::egui::{self, Rect, Sense, vec2};
 use jetthing_core::{Anchor, ToolWindow};
 use serde_json::{Value, json};
 
-pub const TOOLBAR_HEIGHT: f32 = 40.0;
-pub const STATUS_BAR_HEIGHT: f32 = 26.0;
-pub const STRIPE_WIDTH: f32 = 40.0;
+/// Height of the status bar on the frame (Android Studio: 30 pt).
+pub const STATUS_BAR_HEIGHT: f32 = tokens::size::STATUS_BAR_HEIGHT;
+/// Width of a tool window stripe including the gap to the islands.
+pub const STRIPE_WIDTH: f32 = tokens::stripe::WIDTH;
 
-/// Width reserved at the left of the main toolbar for the macOS traffic-light
-/// buttons, which overlay the content in the unified title bar.
-pub const MAC_TRAFFIC_LIGHT_INSET: f32 = 72.0;
-
-/// Left inset of the toolbar content: room for the traffic lights on macOS only.
-pub fn toolbar_leading_inset(macos: bool) -> f32 {
-    if macos { MAC_TRAFFIC_LIGHT_INSET } else { 0.0 }
+/// How the main window meets the native chrome: on macOS the toolbar sits in the
+/// transparent title area beside the traffic lights; elsewhere the window is undecorated and
+/// the toolbar draws minimize, maximize and close (`custom_title_bar`).
+pub fn window_chrome() -> WindowChrome {
+    if cfg!(target_os = "macos") {
+        WindowChrome::Integrated
+    } else {
+        WindowChrome::Borderless
+    }
 }
 
 /// Whether the window draws its own title bar (no OS decorations).
@@ -25,246 +36,189 @@ pub fn custom_title_bar() -> bool {
     !cfg!(target_os = "macos")
 }
 
-pub fn main_toolbar(app: &mut IdeApp, ctx: &egui::Context) {
-    egui::TopBottomPanel::top("main_toolbar")
-        .exact_height(TOOLBAR_HEIGHT)
-        .show_separator_line(false)
-        .frame(chrome_frame(ctx))
-        .show(ctx, |ui| {
-            let bar = ui.max_rect();
-            let glow = app
-                .state
-                .settings
-                .bool(jetthing_settings::ids::PROJECT_COLORS)
-                .unwrap_or(true)
-                .then(|| crate::toolbar_gradient::reserve(ctx));
-            // Empty toolbar space drags the window, like a native title bar.
-            let drag = ui.interact(bar, egui::Id::new("toolbar_drag"), Sense::click_and_drag());
-            if drag.drag_started() {
-                ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
-            }
-            if drag.double_clicked() {
-                let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
-            }
-            let mut content = ui.new_child(
-                egui::UiBuilder::new()
-                    .max_rect(bar.shrink2(vec2(6.0, 0.0)))
-                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
-            );
-            if custom_title_bar() && app.state.project.is_some() {
-                let active = app
-                    .state
-                    .active_document
-                    .and_then(|index| app.state.documents.get(index));
-                let title = window_title(&app.project_name(), active.map(|doc| doc.path.as_path()));
-                ui.painter().text(
-                    bar.center(),
-                    egui::Align2::CENTER_CENTER,
-                    &title,
-                    egui::FontId::proportional(theme::UI_FONT_SIZE),
-                    *theme::TEXT_SECONDARY,
-                );
-            }
-            let ui = &mut content;
-            ui.spacing_mut().item_spacing.x = 4.0;
-            ui.add_space(toolbar_leading_inset(cfg!(target_os = "macos")));
-            if !crate::main_menu::show(app, ui) {
-                ui.add_space(4.0);
-                let badge = project_widget(app, ui);
-                if let Some(slot) = glow {
-                    let anchor = crate::toolbar_gradient::Anchor {
-                        bar,
-                        badge_left: badge.left(),
-                        badge_right: badge.right(),
-                    };
-                    let color = theme::avatar_color(&app.project_name());
-                    crate::toolbar_gradient::paint(ctx, slot, anchor, color);
-                }
-                vcs_widget(app, ui);
-            }
-
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.spacing_mut().item_spacing.x = 2.0;
-                if custom_title_bar() {
-                    window_controls(ui);
-                    ui.add_space(8.0);
-                }
-                if icons::button(
-                    ui,
-                    Icon::Search,
-                    &format!(
-                        "Search Everywhere ({})",
-                        app.action_shortcut("SearchEverywhere").unwrap_or_default()
-                    ),
-                )
-                .clicked()
-                {
-                    app.dispatch("navigate.searchEverywhere", serde_json::Value::Null);
-                }
-                ui.add_space(6.0);
-                run_widget(app, ui);
-                crate::device_manager::device_selector(app, ui);
-            });
-        });
+/// The project's color for the toolbar glow, when "Use project colors in main toolbar" is on.
+fn project_color(app: &IdeApp) -> Option<egui::Color32> {
+    app.state
+        .settings
+        .bool(jetthing_settings::ids::PROJECT_COLORS)
+        .unwrap_or(true)
+        .then(|| theme::avatar_color(&app.project_name()))
 }
 
-/// Returns the project badge's rectangle.
-fn project_widget(app: &mut IdeApp, ui: &mut egui::Ui) -> Rect {
+/// "Action (Shortcut)": the name and tooltip of a toolbar icon button. The kit's
+/// `IconButton` shows its label as its tooltip (it has no separate shortcut slot yet).
+fn action_label(action: &str, shortcut: Option<String>) -> String {
+    match shortcut {
+        Some(shortcut) if !shortcut.is_empty() => format!("{action} ({shortcut})"),
+        _ => action.to_owned(),
+    }
+}
+
+/// A toolbar widget that opens an egui menu below it; it stays filled while the menu is
+/// open (Android Studio's project, VCS and run configuration widgets).
+pub(crate) fn toolbar_menu(
+    ui: &mut egui::Ui,
+    button: ToolbarButton<'_>,
+    tooltip: Option<Tooltip>,
+    menu: impl FnOnce(&mut egui::Ui),
+) -> egui::Response {
+    // The button's id is the next auto id; its menu's id derives from it.
+    let popup = ui.next_auto_id().with("popup");
+    let open = egui::Popup::is_id_open(ui.ctx(), popup);
+    let response = button.dropdown(true).open(open).show(ui);
+    if let Some(tooltip) = tooltip
+        && !open
+    {
+        tooltip.show_for(&response);
+    }
+    egui::Popup::menu(&response)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show(menu);
+    response
+}
+
+pub fn main_toolbar(app: &mut IdeApp, ctx: &egui::Context) {
+    let mut toolbar = WindowToolbar::new("main_toolbar").chrome(window_chrome());
+    if let Some(color) = project_color(app) {
+        toolbar = toolbar.project_color(color);
+    }
+    toolbar.show(ctx, |ui| {
+        if !crate::main_menu::show(app, ui) {
+            project_widget(app, ui);
+            vcs_widget(app, ui);
+        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = tokens::size::TOOLBAR_GAP;
+            settings_widget(app, ui);
+            let search = IconButton::new(
+                Glyph::Search,
+                action_label("Search Everywhere", app.action_shortcut("SearchEverywhere")),
+            )
+            .large(true);
+            if ui.add(search).clicked() {
+                app.dispatch("navigate.searchEverywhere", Value::Null);
+            }
+            ui.add_space(tokens::toolbar::GAP);
+            run_widget(app, ui);
+            crate::device_manager::device_selector(app, ui);
+        });
+    });
+}
+
+/// The project widget: the project's avatar tile, its name and a menu of project actions.
+fn project_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
     let name = app.project_name();
-    let galley = ui.painter().layout_no_wrap(
-        name.clone(),
-        theme::semibold(theme::UI_FONT_SIZE),
-        *theme::TEXT_BRIGHT,
-    );
-    let width = 8.0 + 20.0 + 8.0 + galley.size().x + 22.0;
-    let (rect, response) = ui.allocate_exact_size(vec2(width, 28.0), Sense::click());
-    let fill = if response.hovered() {
-        *theme::HOVER
-    } else {
-        Color32::TRANSPARENT
-    };
-    ui.painter().rect_filled(rect, 6.0, fill);
-    let badge = Rect::from_min_size(rect.left_center() + vec2(8.0, -10.0), vec2(20.0, 20.0));
-    ui.painter()
-        .rect_filled(badge, 4.0, theme::avatar_color(&name));
-    ui.painter().text(
-        badge.center(),
-        egui::Align2::CENTER_CENTER,
-        theme::project_initials(&name),
-        theme::semibold(10.0),
-        Color32::WHITE,
-    );
-    let text_pos = egui::pos2(badge.right() + 8.0, rect.center().y - galley.size().y / 2.0);
-    let text_right = text_pos.x + galley.size().x;
-    ui.painter().galley(text_pos, galley, *theme::TEXT_BRIGHT);
-    icons::paint(
-        ui.painter(),
-        Rect::from_min_size(
-            egui::pos2(text_right + 4.0, rect.center().y - 7.0),
-            vec2(14.0, 14.0),
-        ),
-        Icon::ChevronDown,
-        *theme::TEXT_SECONDARY,
-    );
     let root = app
         .state
         .project
         .as_ref()
         .map(|project| project.root().display().to_string());
-    let response = response.on_hover_text(root.clone().unwrap_or_default());
-    egui::Popup::menu(&response).show(|ui| {
+    let tile_name = name.clone();
+    let button =
+        ToolbarButton::new(name).leading(Slot::ui_width(tokens::toolbar::ICON, move |ui| {
+            ui.add(Avatar::new(tile_name).size(tokens::toolbar::ICON));
+        }));
+    let tooltip = root.clone().map(Tooltip::new);
+    let active_plugins = app
+        .state
+        .plugin_host
+        .registry
+        .entries()
+        .iter()
+        .filter(|entry| entry.is_active())
+        .count();
+    toolbar_menu(ui, button, tooltip, |ui| {
         ui.set_min_width(260.0);
         if let Some(root) = &root {
-            ui.label(egui::RichText::new(root).color(theme::TEXT_SECONDARY));
-            ui.separator();
+            ui.add(MenuHeader::new(root.clone()));
+            ui.add(MenuSeparator);
         }
-        if ui.button("Open Project…").clicked() {
+        if ui.add(MenuItem::new("Open Project…")).clicked() {
             app.open_project_dialog();
             ui.close();
         }
-        if ui.button("New Project…").clicked() {
+        if ui.add(MenuItem::new("New Project…")).clicked() {
             app.new_project_dialog();
             ui.close();
         }
-        if ui.button("Refresh Plugins").clicked() {
+        ui.add(MenuSeparator);
+        let plugins = widgets::pluralize(active_plugins, "plugin active", "plugins active");
+        if ui
+            .add(MenuItem::new(format!("Refresh Plugins ({plugins})")))
+            .clicked()
+        {
             app.dispatch("plugin.refresh", Value::Null);
             ui.close();
         }
-        ui.label(
-            egui::RichText::new(widgets::pluralize(
-                app.state
-                    .plugin_host
-                    .registry
-                    .entries()
-                    .iter()
-                    .filter(|entry| entry.is_active())
-                    .count(),
-                "plugin active",
-                "plugins active",
-            ))
-            .color(theme::TEXT_INFO),
-        );
     });
-    badge
 }
 
 fn vcs_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
     let Some(git) = app.state.git.as_ref() else {
         return;
     };
-    let branch = git.branch.clone();
-    let response = widgets::flat_widget(
-        ui,
-        Some((Icon::Branch, *icons::ICON)),
-        &branch,
-        egui::FontId::proportional(theme::UI_FONT_SIZE),
-        *theme::TEXT_BRIGHT,
-        true,
-        28.0,
-    )
-    .on_hover_text("Git Branch");
+    let button = ToolbarButton::new(git.branch.clone()).icon(Glyph::Branch);
+    toolbar_menu(ui, button, Some(Tooltip::new("Git Branch")), |ui| {
+        crate::branches_popup::menu(app, ui)
+    });
+}
+
+/// The settings gear at the right end of the toolbar and its menu.
+fn settings_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
+    let response = ui.add(IconButton::new(Glyph::Settings, "IDE and Project Settings").large(true));
     egui::Popup::menu(&response)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-        .show(|ui| crate::branches_popup::menu(app, ui));
+        .show(|ui| {
+            ui.set_min_width(220.0);
+            let mut settings = MenuItem::new("Settings…");
+            if let Some(shortcut) = app.action_shortcut("ShowSettings") {
+                settings = settings.shortcut(shortcut);
+            }
+            if ui.add(settings).clicked() {
+                app.dispatch("settings.open", Value::Null);
+                ui.close();
+            }
+            if ui.add(MenuItem::new("Plugins…")).clicked() {
+                app.dispatch("plugin.manager.open", Value::Null);
+                ui.close();
+            }
+        });
 }
 
 fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
     let running = app.state.runner.is_running();
-    // Right-to-left layout: rightmost item first.
-    if running
-        && icons::button_colored(
-            ui,
-            Icon::Stop,
-            *theme::STOP_RED,
-            &format!("Stop ({})", app.action_shortcut("Stop").unwrap_or_default()),
-            false,
+    // Right-to-left layout: rightmost item first (Stop, Debug, Run, configuration, Build).
+    if running {
+        let stop = IconButton::new(
+            Glyph::Stop,
+            action_label("Stop", app.action_shortcut("Stop")),
         )
-        .clicked()
-    {
-        app.dispatch("run.cancel", Value::Null);
+        .large(true)
+        .tone(Tone::Stop);
+        if ui.add(stop).clicked() {
+            app.dispatch("run.cancel", Value::Null);
+        }
     }
     let detected = app.state.detected_build.clone();
-    // Right-to-left: the Debug button sits right of Run, as in the reference.
     if app.state.is_debugging() {
-        if icons::button_colored(ui, Icon::Stop, theme::STOP_RED, "Stop Debugging", false).clicked()
-        {
+        let stop = IconButton::new(Glyph::Stop, "Stop Debugging")
+            .large(true)
+            .tone(Tone::Stop);
+        if ui.add(stop).clicked() {
             app.dispatch("debug.stop", Value::Null);
         }
     } else {
         let can_debug = app.commands.is_enabled("debug.start", &app.state);
-        let color = if can_debug {
-            theme::RUN_GREEN
-        } else {
-            theme::TEXT_DISABLED
-        };
-        if ui
-            .add_enabled_ui(can_debug, |ui| {
-                icons::button_colored(
-                    ui,
-                    Icon::Debug,
-                    color,
-                    &format!("Debug ({})", keys::display("⌃D")),
-                    false,
-                )
-            })
-            .inner
-            .clicked()
-        {
+        let debug = IconButton::new(
+            Glyph::Debug,
+            action_label("Debug", Some(keys::display("⌃D"))),
+        )
+        .large(true)
+        .tone(Tone::Run)
+        .enabled(can_debug);
+        if ui.add(debug).clicked() {
             app.dispatch("debug.start", Value::Null);
         }
-    }
-    let can_build = app.commands.is_enabled("build.project", &app.state);
-    let build_tip = match &detected {
-        None if app.state.project.is_some() => "No supported build system detected".to_owned(),
-        _ => format!(
-            "Build Project ({})",
-            app.action_shortcut("CompileDirty").unwrap_or_default()
-        ),
-    };
-    let build = ui.add_enabled_ui(can_build, |ui| icons::button(ui, Icon::Build, &build_tip));
-    if build.inner.clicked() {
-        app.dispatch("build.project", Value::Null);
     }
     // Android apps have no `gradlew run`; Run deploys 'app' to the selected device.
     let android_run = app.state.android.project.is_some();
@@ -274,242 +228,140 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
         "run.project"
     };
     let can_run = app.commands.is_enabled(run_command, &app.state);
-    let run_color = if can_run {
-        *theme::RUN_GREEN
-    } else {
-        *theme::TEXT_DISABLED
-    };
+    let run_shortcut = app.action_shortcut("Run");
     let run_tip = match &detected {
-        _ if android_run => format!(
-            "Run 'app' ({})",
-            app.action_shortcut("Run").unwrap_or_default()
+        _ if android_run => action_label("Run 'app'", run_shortcut),
+        _ if app.state.run_configurations.selected().is_some() => action_label(
+            &format!("Run '{}'", app.state.run_widget_label().unwrap_or_default()),
+            run_shortcut,
         ),
-        _ if app.state.run_configurations.selected().is_some() => {
-            format!(
-                "Run '{}' ({})",
-                app.state.run_widget_label().unwrap_or_default(),
-                app.action_shortcut("Run").unwrap_or_default()
-            )
-        }
-        Some(build) if build.run_unavailable.is_some() => {
-            format!(
-                "Run unavailable: {}",
-                build.run_unavailable.as_deref().unwrap_or_default()
-            )
-        }
+        Some(build) if build.run_unavailable.is_some() => format!(
+            "Run unavailable: {}",
+            build.run_unavailable.as_deref().unwrap_or_default()
+        ),
         None if app.state.project.is_some() => "No supported build system detected".to_owned(),
-        _ => format!("Run ({})", app.action_shortcut("Run").unwrap_or_default()),
+        _ => action_label("Run", run_shortcut),
     };
-    let run = ui.add_enabled_ui(can_run, |ui| {
-        icons::button_colored(ui, Icon::Run, run_color, &run_tip, false)
-    });
-    // Disabled widgets do not show the normal tooltip; keep the reason discoverable.
-    if !can_run {
-        run.response.on_disabled_hover_text(&run_tip);
-    } else if run.inner.clicked() {
+    let run = IconButton::new(Glyph::Run, run_tip)
+        .large(true)
+        .tone(Tone::Run)
+        .enabled(can_run);
+    if ui.add(run).clicked() {
         app.dispatch(run_command, Value::Null);
     }
     if let Some(label) = app.state.run_widget_label() {
-        let response = widgets::flat_widget(
-            ui,
-            None,
-            &label,
-            egui::FontId::proportional(theme::UI_FONT_SIZE),
-            *theme::TEXT_BRIGHT,
-            true,
-            28.0,
-        );
-        egui::Popup::menu(&response).show(|ui| {
+        run_configurations(app, ui, label, detected.as_ref());
+    }
+    let can_build = app.commands.is_enabled("build.project", &app.state);
+    let build_tip = match &detected {
+        None if app.state.project.is_some() => "No supported build system detected".to_owned(),
+        _ => action_label("Build Project", app.action_shortcut("CompileDirty")),
+    };
+    let build = IconButton::new(Glyph::Build, build_tip)
+        .large(true)
+        .enabled(can_build);
+    if ui.add(build).clicked() {
+        app.dispatch("build.project", Value::Null);
+    }
+}
+
+/// The run configuration widget and its menu: Current File, the configurations with Run,
+/// Debug and Edit submenus, and Edit Configurations….
+fn run_configurations(
+    app: &mut IdeApp,
+    ui: &mut egui::Ui,
+    label: String,
+    detected: Option<&jetthing_core::DetectedBuild>,
+) {
+    let selected = app
+        .state
+        .run_configurations
+        .selected()
+        .map(|config| config.name.clone());
+    let names: Vec<String> = app
+        .state
+        .run_configurations
+        .configurations()
+        .iter()
+        .map(|config| config.name.clone())
+        .collect();
+    let idle = !app.state.runner.is_running();
+    let unavailable = detected
+        .filter(|_| selected.is_none())
+        .and_then(|build| build.run_unavailable.clone());
+    let can_edit = app.commands.is_enabled("runConfig.edit", &app.state);
+    let mut action = None;
+    toolbar_menu(
+        ui,
+        ToolbarButton::new(label),
+        Some(Tooltip::new("Run / Debug Configurations")),
+        |ui| {
             ui.set_min_width(240.0);
-            let selected = app
-                .state
-                .run_configurations
-                .selected()
-                .map(|config| config.name.clone());
-            let names: Vec<(String, bool)> = app
-                .state
-                .run_configurations
-                .configurations()
-                .iter()
-                .map(|config| (config.name.clone(), config.temporary))
-                .collect();
-            let idle = !app.state.runner.is_running();
             // `Current File` runs the entry point or test at the caret.
-            let clicked = run_row(ui, "Current File", false, selected.is_none(), false);
-            if clicked == RowAction::Select {
-                app.dispatch("runConfig.selectCurrentFile", Value::Null);
-                ui.close();
-            }
-            for (name, temporary) in names {
-                let action = run_row(
-                    ui,
-                    &name,
-                    temporary,
-                    selected.as_deref() == Some(name.as_str()),
-                    idle,
-                );
-                match action {
-                    RowAction::None => {}
-                    RowAction::Select => {
-                        app.dispatch("runConfig.select", json!({"name": name}));
-                        ui.close();
-                    }
-                    RowAction::Run => {
-                        app.dispatch("runConfig.run", json!({"name": name}));
-                        ui.close();
-                    }
-                    RowAction::Debug => {
-                        app.dispatch("runConfig.select", json!({"name": name}));
-                        app.dispatch("debug.start", Value::Null);
-                        ui.close();
-                    }
-                    RowAction::More => {
-                        app.dispatch("runConfig.edit", json!({"name": name}));
-                        ui.close();
-                    }
-                }
-            }
-            if let Some(build) = &detected
-                && selected.is_none()
-                && let Some(reason) = &build.run_unavailable
-            {
-                ui.label(
-                    egui::RichText::new(format!("Run unavailable: {reason}"))
-                        .color(theme::TEXT_INFO)
-                        .size(theme::UI_FONT_SIZE - 1.0),
-                );
-            }
-            ui.separator();
-            let enabled = app.commands.is_enabled("runConfig.edit", &app.state);
             if ui
-                .add_enabled(enabled, egui::Button::new("Edit Configurations…"))
+                .add(MenuItem::new("Current File").checked(selected.is_none()))
                 .clicked()
             {
-                app.dispatch("runConfig.edit", Value::Null);
-                ui.close();
+                action = Some(RunAction::CurrentFile);
             }
-        });
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum RowAction {
-    None,
-    Select,
-    Run,
-    Debug,
-    More,
-}
-
-/// One row of the run widget popup; Run / Debug / ⋮ buttons appear on hover.
-/// `buttons` is false while a task runs (or for `Current File`, which has no extras).
-fn run_row(
-    ui: &mut egui::Ui,
-    name: &str,
-    temporary: bool,
-    selected: bool,
-    buttons: bool,
-) -> RowAction {
-    let (rect, response) =
-        ui.allocate_exact_size(vec2(ui.available_width().max(240.0), 24.0), Sense::click());
-    if response.hovered() || selected {
-        let fill = if response.hovered() {
-            *theme::HOVER
-        } else {
-            *theme::SELECTION
-        };
-        ui.painter().rect_filled(rect, 2.0, fill);
-    }
-    let color = if temporary {
-        *theme::TEXT_SECONDARY
-    } else {
-        *theme::TEXT
-    };
-    ui.painter().text(
-        rect.left_center() + vec2(8.0, 0.0),
-        egui::Align2::LEFT_CENTER,
-        name,
-        egui::FontId::proportional(theme::UI_FONT_SIZE),
-        color,
-    );
-    let mut action = if response.clicked() {
-        RowAction::Select
-    } else {
-        RowAction::None
-    };
-    if buttons && response.hovered() {
-        let slots = [
-            (RowAction::Run, Some(Icon::Run), *theme::RUN_GREEN, "Run"),
-            (RowAction::Debug, Some(Icon::Debug), *icons::ICON, "Debug"),
-            (RowAction::More, None, *icons::ICON, "More actions"),
-        ];
-        for (index, (kind, icon, tint, tip)) in slots.into_iter().rev().enumerate() {
-            let slot = Rect::from_center_size(
-                egui::pos2(rect.right() - 14.0 - 22.0 * index as f32, rect.center().y),
-                vec2(20.0, 20.0),
-            );
-            let hit = ui.interact(slot, response.id.with(tip), Sense::click());
-            if hit.hovered() {
-                ui.painter().rect_filled(slot, 3.0, *theme::PRESSED);
-            }
-            match icon {
-                Some(icon) => icons::paint(ui.painter(), slot.shrink(3.0), icon, tint),
-                None => {
-                    for step in [-4.0, 0.0, 4.0] {
-                        ui.painter()
-                            .circle_filled(slot.center() + vec2(0.0, step), 1.2, tint);
-                    }
+            for name in &names {
+                let current = selected.as_deref() == Some(name.as_str());
+                let item = MenuItem::new(name.clone()).checked(current);
+                let item = if idle {
+                    item.submenu(|ui| {
+                        if ui.add(MenuItem::new("Run").icon(Glyph::Run)).clicked() {
+                            action = Some(RunAction::Run(name.clone()));
+                        }
+                        if ui.add(MenuItem::new("Debug").icon(Glyph::Debug)).clicked() {
+                            action = Some(RunAction::Debug(name.clone()));
+                        }
+                        if ui.add(MenuItem::new("Edit…").icon(Glyph::Edit)).clicked() {
+                            action = Some(RunAction::Edit(name.clone()));
+                        }
+                    })
+                } else {
+                    item
+                };
+                if ui.add(item).clicked() && action.is_none() {
+                    action = Some(RunAction::Select(name.clone()));
                 }
             }
-            if hit.on_hover_text(tip).clicked() {
-                action = kind;
+            if let Some(reason) = &unavailable {
+                ui.add(MenuItem::new(format!("Run unavailable: {reason}")).enabled(false));
             }
+            ui.add(MenuSeparator);
+            if ui
+                .add(MenuItem::new("Edit Configurations…").enabled(can_edit))
+                .clicked()
+            {
+                action = Some(RunAction::EditAll);
+            }
+            if action.is_some() {
+                ui.close();
+            }
+        },
+    );
+    match action {
+        None => {}
+        Some(RunAction::CurrentFile) => app.dispatch("runConfig.selectCurrentFile", Value::Null),
+        Some(RunAction::Select(name)) => app.dispatch("runConfig.select", json!({"name": name})),
+        Some(RunAction::Run(name)) => app.dispatch("runConfig.run", json!({"name": name})),
+        Some(RunAction::Debug(name)) => {
+            app.dispatch("runConfig.select", json!({"name": name}));
+            app.dispatch("debug.start", Value::Null);
         }
+        Some(RunAction::Edit(name)) => app.dispatch("runConfig.edit", json!({"name": name})),
+        Some(RunAction::EditAll) => app.dispatch("runConfig.edit", Value::Null),
     }
-    action
 }
 
-pub(crate) fn window_controls(ui: &mut egui::Ui) {
-    let ctx = ui.ctx().clone();
-    let control = |ui: &mut egui::Ui, kind: u8, hover: Color32| {
-        let (rect, response) = ui.allocate_exact_size(vec2(40.0, TOOLBAR_HEIGHT), Sense::click());
-        if response.hovered() {
-            ui.painter().rect_filled(rect, 0.0, hover);
-        }
-        let center = rect.center();
-        let stroke = egui::Stroke::new(1.0_f32, icons::ICON);
-        match kind {
-            0 => {
-                ui.painter()
-                    .line_segment([center + vec2(-5.0, 4.0), center + vec2(5.0, 4.0)], stroke);
-            }
-            1 => {
-                ui.painter().rect_stroke(
-                    Rect::from_center_size(center, vec2(10.0, 10.0)),
-                    1.0,
-                    stroke,
-                    egui::StrokeKind::Middle,
-                );
-            }
-            _ => {
-                ui.painter()
-                    .line_segment([center + vec2(-5.0, -5.0), center + vec2(5.0, 5.0)], stroke);
-                ui.painter()
-                    .line_segment([center + vec2(5.0, -5.0), center + vec2(-5.0, 5.0)], stroke);
-            }
-        }
-        response
-    };
-    if control(ui, 2, Color32::from_rgb(0xC4, 0x2B, 0x1C)).clicked() {
-        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-    }
-    if control(ui, 1, *theme::HOVER).clicked() {
-        let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
-    }
-    if control(ui, 0, *theme::HOVER).clicked() {
-        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-    }
+enum RunAction {
+    CurrentFile,
+    Select(String),
+    Run(String),
+    Debug(String),
+    Edit(String),
+    EditAll,
 }
 
 /// Edge handles that resize an undecorated window.
@@ -593,92 +445,97 @@ pub fn window_resize_handles(ctx: &egui::Context) {
         });
 }
 
-pub(crate) fn stripe_button(app: &mut IdeApp, ui: &mut egui::Ui, window: ToolWindow, icon: Icon) {
-    let selected = app.state.tool_windows.is_visible(window);
-    let (rect, response) = ui.allocate_exact_size(vec2(32.0, 32.0), Sense::click());
-    let fill = if selected {
-        *theme::ACCENT
-    } else if response.hovered() {
-        *theme::HOVER
-    } else {
-        Color32::TRANSPARENT
+/// Remembers where the island of `anchor`'s tool window is this frame, so the stripe can
+/// tell next frame whether the keyboard focus is inside it (the active tool window).
+pub(crate) fn remember_island(ctx: &egui::Context, anchor: Anchor, rect: Rect) {
+    ctx.data_mut(|data| data.insert_temp(island_key(anchor), rect));
+}
+
+fn island_key(anchor: Anchor) -> egui::Id {
+    egui::Id::new(("tool_window_island", anchor))
+}
+
+/// Whether the keyboard focus is inside the island of `anchor`'s tool window.
+fn island_has_focus(ctx: &egui::Context, anchor: Anchor) -> bool {
+    let Some(island) = ctx.data(|data| data.get_temp::<Rect>(island_key(anchor))) else {
+        return false;
     };
-    ui.painter().rect_filled(rect, 6.0, fill);
-    let color = if selected {
-        Color32::WHITE
-    } else {
-        *icons::ICON
-    };
-    icons::paint(
-        ui.painter(),
-        Rect::from_center_size(rect.center(), vec2(16.0, 16.0)),
-        icon,
-        color,
-    );
-    let mut badge = None;
-    if window == ToolWindow::Problems {
-        let counts = app.state.problems.counts();
-        if counts.errors > 0 {
-            badge = Some(theme::ERROR);
-        } else if counts.warnings > 0 {
-            badge = Some(theme::WARNING);
-        }
-    }
-    if window == ToolWindow::Build && app.state.runner.is_running() {
-        badge = Some(theme::RUN_GREEN);
-    }
-    if let Some(color) = badge {
-        ui.painter()
-            .circle_filled(rect.right_top() + vec2(-7.0, 7.0), 3.0, color);
-    }
-    let tooltip = match window.shortcut() {
-        "" => window.title().to_owned(),
-        shortcut => format!("{} ({})", window.title(), keys::display(shortcut)),
-    };
-    if response.on_hover_text(tooltip).clicked() {
-        app.toggle_tool_window(window);
+    ctx.memory(|memory| memory.focused())
+        .and_then(|id| ctx.read_response(id))
+        .is_some_and(|response| island.contains_rect(response.rect))
+}
+
+/// The stripe button of a built-in tool window: filled while it is open, accent-filled
+/// while it has the focus; its tooltip names it with its shortcut.
+fn stripe_button(
+    app: &IdeApp,
+    ctx: &egui::Context,
+    window: ToolWindow,
+    icon: Icon,
+) -> StripeButton {
+    let open = app.state.tool_windows.is_visible(window);
+    let button = StripeButton::new(icon, window.title())
+        .open(open)
+        .active(open && island_has_focus(ctx, window.anchor()));
+    match window.shortcut() {
+        "" => button,
+        shortcut => button.shortcut(keys::display(shortcut)),
     }
 }
 
+/// Paints the project color's glow on the window background, under the toolbar's glow:
+/// it shows through the stripes and the gaps between the islands, as in Android Studio.
+pub fn project_glow(app: &IdeApp, ctx: &egui::Context) {
+    if let Some(color) = project_color(app) {
+        let painter = ctx.layer_painter(egui::LayerId::background());
+        archipel_kit::parts::project_glow(&painter, ctx.input(|i| i.viewport_rect()), color);
+    }
+}
+
+/// The left stripe: the left tool windows at the top, the bottom ones at the bottom.
 pub fn left_stripe(app: &mut IdeApp, ctx: &egui::Context) {
+    let mut top = vec![
+        (ToolWindow::Project, Icon::Project),
+        (ToolWindow::Commit, Icon::Commit),
+        (ToolWindow::Structure, Icon::Structure),
+    ];
+    if app.state.android.project.is_some() {
+        top.push((ToolWindow::ResourceManager, Icon::Variants));
+        top.push((ToolWindow::BuildVariants, Icon::Variants));
+    }
+    let mut bottom = vec![
+        (ToolWindow::Find, Icon::Find),
+        (ToolWindow::Debug, Icon::Debug),
+        (ToolWindow::Build, Icon::Build),
+        (ToolWindow::Terminal, Icon::Terminal),
+        (ToolWindow::Problems, Icon::Problems),
+    ];
+    if app.state.android.project.is_some() {
+        bottom.push((ToolWindow::Logcat, Icon::Logcat));
+    }
+    if app.state.hierarchy.current.is_some() {
+        bottom.push((ToolWindow::Hierarchy, Icon::Structure));
+    }
+    bottom.push((ToolWindow::Git, Icon::Branch));
+    // Top to bottom, as on the reference's stripe: Git sits lowest.
+    bottom.reverse();
     egui::SidePanel::left("left_stripe")
         .exact_width(STRIPE_WIDTH)
         .resizable(false)
         .show_separator_line(false)
-        .frame(glow_through_frame().inner_margin(egui::Margin::symmetric(4, 6)))
+        .frame(egui::Frame::new())
         .show(ctx, |ui| {
-            ui.spacing_mut().item_spacing.y = 6.0;
-            ui.vertical(|ui| {
-                stripe_button(app, ui, ToolWindow::Project, Icon::Project);
-                stripe_button(app, ui, ToolWindow::Commit, Icon::Commit);
-                stripe_button(app, ui, ToolWindow::Structure, Icon::Structure);
-                if app.state.android.project.is_some() {
-                    stripe_button(app, ui, ToolWindow::ResourceManager, Icon::Variants);
-                    stripe_button(app, ui, ToolWindow::BuildVariants, Icon::Variants);
-                }
-                let (rect, _) = ui.allocate_exact_size(vec2(32.0, 1.0), Sense::hover());
-                ui.painter().line_segment(
-                    [
-                        rect.left_center() + vec2(6.0, 0.0),
-                        rect.right_center() - vec2(6.0, 0.0),
-                    ],
-                    egui::Stroke::new(1.0_f32, theme::TOOLBAR_SEPARATOR),
-                );
-                ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-                    stripe_button(app, ui, ToolWindow::Git, Icon::Branch);
-                    if app.state.hierarchy.current.is_some() {
-                        stripe_button(app, ui, ToolWindow::Hierarchy, Icon::Structure);
-                    }
-                    if app.state.android.project.is_some() {
-                        stripe_button(app, ui, ToolWindow::Logcat, Icon::Logcat);
-                    }
-                    stripe_button(app, ui, ToolWindow::Problems, Icon::Problems);
-                    stripe_button(app, ui, ToolWindow::Terminal, Icon::Terminal);
-                    stripe_button(app, ui, ToolWindow::Build, Icon::Build);
-                    stripe_button(app, ui, ToolWindow::Debug, Icon::Debug);
-                    stripe_button(app, ui, ToolWindow::Find, Icon::Find);
-                });
-            });
+            let mut stripe = ToolStripe::new("left_stripe");
+            for (window, icon) in &top {
+                stripe = stripe.top(stripe_button(app, ctx, *window, *icon));
+            }
+            for (window, icon) in &bottom {
+                stripe = stripe.bottom(stripe_button(app, ctx, *window, *icon));
+            }
+            let windows: Vec<ToolWindow> = top.iter().chain(&bottom).map(|(w, _)| *w).collect();
+            if let Some(index) = stripe.show(ui) {
+                app.toggle_tool_window(windows[index]);
+            }
         });
 }
 
@@ -704,25 +561,61 @@ pub(crate) fn right_stripe_windows(app: &IdeApp) -> Vec<(ToolWindow, Icon)> {
     {
         windows.push((ToolWindow::RunningDevices, Icon::Device));
     }
+    windows.push((ToolWindow::AiChat, Icon::Ai));
     windows
 }
 
-/// Right tool window stripe: the project's right-anchored tool windows (Gradle,
-/// Bazel, Device Manager) and AI Chat, which is always offered. Plugin tool
-/// windows join this stripe (`plugin_ui::right_side`).
-pub fn right_stripe(app: &mut IdeApp, ctx: &egui::Context) {
-    let windows = right_stripe_windows(app);
+/// A plugin's tool window on the right stripe.
+pub(crate) struct PluginStripeEntry {
+    pub plugin: String,
+    pub id: String,
+    pub title: String,
+    /// A kit glyph name (`"database"`, `"globe"`, …); other text falls back to the plugin
+    /// glyph.
+    pub icon: String,
+}
+
+/// The right stripe: the project's right-anchored tool windows (Gradle, Bazel, Device
+/// Manager, Running Devices), AI Chat, and the plugins' tool windows.
+pub(crate) fn right_stripe(app: &mut IdeApp, ctx: &egui::Context, plugins: &[PluginStripeEntry]) {
+    let built_in = right_stripe_windows(app);
     egui::SidePanel::right("right_stripe")
         .exact_width(STRIPE_WIDTH)
         .resizable(false)
         .show_separator_line(false)
-        .frame(chrome_frame(ctx).inner_margin(egui::Margin::symmetric(4, 6)))
+        .frame(egui::Frame::new())
         .show(ctx, |ui| {
-            ui.spacing_mut().item_spacing.y = 6.0;
-            for (window, icon) in windows {
-                stripe_button(app, ui, window, icon);
+            let mut stripe = ToolStripe::new("right_stripe");
+            for (window, icon) in &built_in {
+                stripe = stripe.top(stripe_button(app, ctx, *window, *icon));
             }
-            stripe_button(app, ui, ToolWindow::AiChat, Icon::Ai);
+            for entry in plugins {
+                let open = app.state.plugin_host.tool_window.as_ref()
+                    == Some(&(entry.plugin.clone(), entry.id.clone()));
+                let glyph = Glyph::ALL
+                    .iter()
+                    .copied()
+                    .find(|glyph| glyph.name() == entry.icon)
+                    .unwrap_or(Glyph::Plugin);
+                stripe = stripe.top(
+                    StripeButton::new(glyph, entry.title.clone())
+                        .open(open)
+                        .active(open && island_has_focus(ctx, Anchor::Right)),
+                );
+            }
+            match stripe.show(ui) {
+                Some(index) if index < built_in.len() => {
+                    app.toggle_tool_window(built_in[index].0);
+                }
+                Some(index) => {
+                    let entry = &plugins[index - built_in.len()];
+                    app.dispatch(
+                        "plugin.toolwindow.toggle",
+                        json!({"plugin": entry.plugin, "id": entry.id}),
+                    );
+                }
+                None => {}
+            }
         });
 }
 
@@ -778,218 +671,148 @@ pub fn window_title(project: &str, file: Option<&std::path::Path>) -> String {
     format!("{project} – {name} [{module}]")
 }
 
+/// The status bar on the frame: the navigation path at the left (project › directories ›
+/// file › declarations around the caret), status text and widgets at the right.
 pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
     egui::TopBottomPanel::bottom("status_bar")
         .exact_height(STATUS_BAR_HEIGHT)
         .show_separator_line(false)
-        .frame(chrome_frame(ctx).inner_margin(egui::Margin::symmetric(8, 0)))
+        .frame(chrome_frame(ctx).inner_margin(egui::Margin::symmetric(
+            tokens::size::STATUS_BAR_INSET as i8,
+            0,
+        )))
         .show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
-                let font = egui::FontId::proportional(theme::UI_FONT_SIZE - 1.0);
-                // Navigation bar breadcrumbs: project › directories › file, then
-                // the declarations around the caret (class › method).
-                let mut crumbs = vec![app.project_name()];
-                let mut code_crumbs = Vec::new();
-                let mut file_replaced = false;
-                if let Some(document) = app
-                    .state
-                    .active_document
-                    .and_then(|index| app.state.documents.get(index))
-                {
-                    crumbs.extend(
-                        document
-                            .path
-                            .components()
-                            .map(|part| part.as_os_str().to_string_lossy().into_owned()),
-                    );
-                    code_crumbs = crate::structure_view::breadcrumbs(ctx, document);
-                    // Like IntelliJ, a top-level declaration named after the file
-                    // stands in for the file itself (`App.java` → `App`).
-                    let stem = document.path.file_stem().map(|stem| stem.to_string_lossy());
-                    if code_crumbs.first().map(|(_, name)| name.as_str()) == stem.as_deref() {
-                        crumbs.pop();
-                        file_replaced = true;
-                    }
-                }
-                let last = crumbs.len().saturating_sub(1);
-                let file_icon = app
-                    .state
-                    .active_document
-                    .and_then(|index| app.state.documents.get(index))
-                    .map(|document| app.file_icon(&document.path));
-                for (index, crumb) in crumbs.iter().enumerate() {
-                    let icon = if index == 0 {
-                        Some((Icon::Project, *theme::TEXT_SECONDARY))
-                    } else if index == last && !file_replaced {
-                        Some((
-                            file_icon.unwrap_or_else(|| Icon::for_file(crumb)),
-                            *icons::ICON,
-                        ))
-                    } else {
-                        None
-                    };
-                    let color = if index == last && !file_replaced {
-                        *theme::TEXT
-                    } else {
-                        *theme::TEXT_SECONDARY
-                    };
-                    widgets::flat_widget(ui, icon, crumb, font.clone(), color, false, 22.0);
-                    if index != last {
-                        icons::show(ui, Icon::ChevronRight, 12.0, *theme::TEXT_INFO);
-                    }
-                }
-                for (kind, name) in code_crumbs {
-                    icons::show(ui, Icon::ChevronRight, 12.0, theme::TEXT_INFO);
-                    let (rect, _) = ui.allocate_exact_size(vec2(20.0, 22.0), Sense::hover());
-                    icons::paint(
-                        ui.painter(),
-                        Rect::from_center_size(rect.center(), vec2(14.0, 14.0)),
-                        Icon::Kit(crate::structure_view::icon(kind)),
-                        theme::ICON,
-                    );
-                    widgets::flat_widget(ui, None, &name, font.clone(), theme::TEXT, false, 22.0);
-                }
-
+                navigation_path(app, ui);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    crate::plugin_ui::status_widgets(app, ui, &font, None);
-                    if app.state.project.is_some() {
-                        crate::ai_chat::status_widget(app, ui, font.clone());
-                    }
-                    let secondary = theme::TEXT_SECONDARY;
-                    crate::lsp_status::status_widget(app, ui, font.clone());
-                    crate::toolchain_status::status_widget(app, ui, font.clone());
-                    let active = app
-                        .state
-                        .active_document
-                        .and_then(|index| app.state.documents.get(index));
-                    if let Some(document) = active {
-                        // Bounded detection: never copy the whole buffer per frame.
-                        let indent = jetthing_text::format::detect_indent(&document.text)
-                            .unwrap_or(jetthing_text::format::Indent::Spaces(4));
-                        let separator =
-                            jetthing_text::format::detect_line_separator(&document.text);
-                        let caret = document.selections.primary().head;
-                        let (line, column) =
-                            document.text.char_to_line_column(caret).unwrap_or((0, 0));
-                        widgets::flat_widget(
-                            ui,
-                            None,
-                            &indent.label(),
-                            font.clone(),
-                            secondary,
-                            false,
-                            22.0,
-                        );
-                        widgets::flat_widget(
-                            ui,
-                            None,
-                            "UTF-8",
-                            font.clone(),
-                            secondary,
-                            false,
-                            22.0,
-                        );
-                        widgets::flat_widget(
-                            ui,
-                            None,
-                            separator.label(),
-                            font.clone(),
-                            secondary,
-                            false,
-                            22.0,
-                        )
-                        .on_hover_text("Line separator");
-                        widgets::flat_widget(
-                            ui,
-                            None,
-                            &crate::editor_keys::caret_position_label(
-                                &document.text,
-                                &document.selections,
-                                (line, column),
-                            ),
-                            font.clone(),
-                            secondary,
-                            false,
-                            22.0,
-                        );
-                        if is_read_only(ctx, &app.state.absolute_path(&document.path)) {
-                            widgets::flat_widget(
-                                ui,
-                                None,
-                                "Read-only",
-                                font.clone(),
-                                *theme::WARNING,
-                                false,
-                                22.0,
-                            )
-                            .on_hover_text("File is read-only");
-                        }
-                        if document.selections.column_mode() {
-                            widgets::flat_widget(
-                                ui,
-                                None,
-                                "Column",
-                                font.clone(),
-                                secondary,
-                                false,
-                                22.0,
-                            );
-                        }
-                    }
-                    if let jetthing_core::UpdateState::Available { version, .. }
-                    | jetthing_core::UpdateState::Installed(version) = &app.state.update_state
-                    {
-                        let label = if matches!(
-                            app.state.update_state,
-                            jetthing_core::UpdateState::Installed(_)
-                        ) {
-                            "Restart to update".to_owned()
-                        } else {
-                            format!("Update {version}")
-                        };
-                        if widgets::flat_widget(
-                            ui,
-                            Some((Icon::Refresh, *theme::MODIFIED)),
-                            &label,
-                            font.clone(),
-                            *theme::MODIFIED,
-                            false,
-                            22.0,
-                        )
-                        .clicked()
-                        {
-                            app.state.update_notification = true;
-                        }
-                    }
-                    if app.state.runner.is_running() || app.state.search.is_running() {
-                        widgets::busy_spinner(ui, 12.0, *theme::ACCENT);
-                        ui.add_space(6.0);
-                    }
-                    if !app.state.status.is_empty() {
-                        let status = first_line_truncated(&app.state.status, 70);
-                        // Whatever room the right-hand widgets left, minus a gap
-                        // to the breadcrumbs, so a long message is elided instead
-                        // of painting over the navigation bar.
-                        let max_width = (ui.available_width() - 24.0).max(40.0);
-                        let response = widgets::flat_widget_elided(
-                            ui,
-                            &status,
-                            font.clone(),
-                            *theme::TEXT_INFO,
-                            max_width,
-                            22.0,
-                        );
-                        let response = response.on_hover_text(app.state.status.clone());
-                        if response.clicked()
-                            && app.state.tool_windows.visible(Anchor::Bottom).is_none()
-                        {
-                            app.dispatch("toolwindow.toggle", json!({"id": "build"}));
-                        }
-                    }
+                    status_widgets(app, ui);
                 });
             });
         });
+}
+
+/// Navigation bar breadcrumbs: project › directories › file, then the declarations around
+/// the caret (class › method), with a top-level declaration named after the file standing
+/// in for the file itself (`App.java` → `App`), as in the reference.
+fn navigation_path(app: &IdeApp, ui: &mut egui::Ui) {
+    let mut crumbs: Vec<(String, Option<archipel_kit::Icon>)> =
+        vec![(app.project_name(), Some(Glyph::Project.into()))];
+    if let Some(document) = app
+        .state
+        .active_document
+        .and_then(|index| app.state.documents.get(index))
+    {
+        let parts: Vec<String> = document
+            .path
+            .components()
+            .map(|part| part.as_os_str().to_string_lossy().into_owned())
+            .collect();
+        let code = crate::structure_view::breadcrumbs(ui.ctx(), document);
+        let stem = document.path.file_stem().map(|stem| stem.to_string_lossy());
+        let file_replaced = code.first().map(|(_, name)| name.as_str()) == stem.as_deref();
+        let last = parts.len().saturating_sub(1);
+        for (index, part) in parts.into_iter().enumerate() {
+            if index == last {
+                if !file_replaced {
+                    crumbs.push((part, Some(app.file_icon(&document.path).kit())));
+                }
+            } else {
+                crumbs.push((part, None));
+            }
+        }
+        for (kind, name) in code {
+            crumbs.push((name, Some(crate::structure_view::icon(kind))));
+        }
+    }
+    let mut path = Breadcrumbs::new();
+    for (label, icon) in crumbs {
+        path = path.crumb(label, icon);
+    }
+    let _ = path.show(ui);
+}
+
+/// The right-hand status bar widgets, laid out right to left.
+fn status_widgets(app: &mut IdeApp, ui: &mut egui::Ui) {
+    crate::plugin_ui::status_widgets(app, ui, None);
+    if app.state.project.is_some() {
+        crate::ai_chat::status_widget(app, ui);
+    }
+    crate::lsp_status::status_widget(app, ui);
+    crate::toolchain_status::status_widget(app, ui);
+    if let Some(document) = app
+        .state
+        .active_document
+        .and_then(|index| app.state.documents.get(index))
+    {
+        // Bounded detection: never copy the whole buffer per frame.
+        let indent = jetthing_text::format::detect_indent(&document.text)
+            .unwrap_or(jetthing_text::format::Indent::Spaces(4));
+        let separator = jetthing_text::format::detect_line_separator(&document.text);
+        let caret = document.selections.primary().head;
+        let (line, column) = document.text.char_to_line_column(caret).unwrap_or((0, 0));
+        let caret_label = crate::editor_keys::caret_position_label(
+            &document.text,
+            &document.selections,
+            (line, column),
+        );
+        let read_only = is_read_only(ui.ctx(), &app.state.absolute_path(&document.path));
+        let column_mode = document.selections.column_mode();
+        ui.add(StatusBarItem::new(indent.label()).with(Tooltip::new("Indentation")));
+        ui.add(StatusBarItem::new("UTF-8").with(Tooltip::new("File encoding")));
+        ui.add(StatusBarItem::new(separator.label()).with(Tooltip::new("Line separator")));
+        ui.add(StatusBarItem::new(caret_label).with(Tooltip::new("Caret position")));
+        if read_only {
+            ui.add(
+                StatusBarItem::new("Read-only")
+                    .tone(Tone::Warning)
+                    .with(Tooltip::new("File is read-only")),
+            );
+        }
+        if column_mode {
+            ui.add(StatusBarItem::new("Column").with(Tooltip::new("Column selection mode")));
+        }
+    }
+    if let jetthing_core::UpdateState::Available { version, .. }
+    | jetthing_core::UpdateState::Installed(version) = &app.state.update_state
+    {
+        let label = if matches!(
+            app.state.update_state,
+            jetthing_core::UpdateState::Installed(_)
+        ) {
+            "Restart to update".to_owned()
+        } else {
+            format!("Update {version}")
+        };
+        if ui
+            .add(
+                StatusBarItem::new(label)
+                    .icon(Glyph::Refresh)
+                    .tone(Tone::Modified),
+            )
+            .clicked()
+        {
+            app.state.update_notification = true;
+        }
+    }
+    if app.state.runner.is_running() || app.state.search.is_running() {
+        ui.add(Spinner::new().size(tokens::size::ICON).label("Working"));
+        ui.add_space(tokens::size::ICON_TEXT_GAP);
+    }
+    if !app.state.status.is_empty() {
+        let status = first_line_truncated(&app.state.status, 70);
+        // Whatever room the right-hand widgets left, minus a gap to the breadcrumbs, so a
+        // long message is elided instead of painting over the navigation bar.
+        let max_width = (ui.available_width() - 24.0).max(40.0);
+        let response = ui.add(
+            StatusBarItem::new(status)
+                .max_width(max_width)
+                .with(Tooltip::new(app.state.status.clone())),
+        );
+        if response.clicked() && app.state.tool_windows.visible(Anchor::Bottom).is_none() {
+            app.dispatch("toolwindow.toggle", json!({"id": "build"}));
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1012,11 +835,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn only_macos_reserves_room_for_the_traffic_lights() {
-        assert_eq!(toolbar_leading_inset(true), MAC_TRAFFIC_LIGHT_INSET);
-        assert_eq!(toolbar_leading_inset(false), 0.0);
-    }
     use super::*;
 
     #[test]

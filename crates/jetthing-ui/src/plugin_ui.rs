@@ -2,9 +2,9 @@
 //! windows, editor tabs, status widgets, menu items, keybindings, the Plugins
 //! dialog with plugin settings, notifications and standalone app mode.
 
-use crate::chrome::{self, STATUS_BAR_HEIGHT, STRIPE_WIDTH, TOOLBAR_HEIGHT};
+use crate::chrome::{self, STATUS_BAR_HEIGHT};
 use crate::icons::{self, Icon};
-use crate::widgets::{self, chrome_frame, island_frame, tool_window_header};
+use crate::widgets::{chrome_frame, island_frame, tool_window_header};
 use crate::{IdeApp, keys, theme};
 use eframe::egui::{self, Color32, Rect, RichText, Sense, vec2};
 use jetthing_plugins::{
@@ -191,56 +191,16 @@ fn tool_windows(app: &IdeApp) -> Vec<(String, String, String, String)> {
 /// contributed tool window docks here in API 1.
 pub fn right_side(app: &mut IdeApp, ctx: &egui::Context) {
     let windows = tool_windows(app);
-    if windows.is_empty() {
-        chrome::right_stripe(app, ctx);
-        return;
-    }
-    let built_in = chrome::right_stripe_windows(app);
-    egui::SidePanel::right("right_stripe")
-        .exact_width(STRIPE_WIDTH)
-        .resizable(false)
-        .show_separator_line(false)
-        .frame(chrome_frame(ctx))
-        .show(ctx, |ui| {
-            ui.add_space(6.0);
-            ui.vertical_centered(|ui| {
-                ui.spacing_mut().item_spacing.y = 4.0;
-                for (window, icon) in built_in {
-                    chrome::stripe_button(app, ui, window, icon);
-                }
-                chrome::stripe_button(app, ui, jetthing_core::ToolWindow::AiChat, Icon::Ai);
-                for (plugin, id, title, icon) in &windows {
-                    let selected = app.state.plugin_host.tool_window.as_ref()
-                        == Some(&(plugin.clone(), id.clone()));
-                    let (rect, response) = ui.allocate_exact_size(vec2(32.0, 32.0), Sense::click());
-                    let fill = if selected {
-                        *theme::ACCENT
-                    } else if response.hovered() {
-                        *theme::HOVER
-                    } else {
-                        Color32::TRANSPARENT
-                    };
-                    ui.painter().rect_filled(rect, 6.0, fill);
-                    ui.painter().text(
-                        rect.center(),
-                        egui::Align2::CENTER_CENTER,
-                        icon,
-                        theme::semibold(12.0),
-                        if selected {
-                            Color32::WHITE
-                        } else {
-                            *icons::ICON
-                        },
-                    );
-                    if response.on_hover_text(title).clicked() {
-                        app.dispatch(
-                            "plugin.toolwindow.toggle",
-                            json!({"plugin": plugin, "id": id}),
-                        );
-                    }
-                }
-            });
-        });
+    let entries: Vec<chrome::PluginStripeEntry> = windows
+        .iter()
+        .map(|(plugin, id, title, icon)| chrome::PluginStripeEntry {
+            plugin: plugin.clone(),
+            id: id.clone(),
+            title: title.clone(),
+            icon: icon.clone(),
+        })
+        .collect();
+    chrome::right_stripe(app, ctx, &entries);
     let Some((plugin, id)) = app.state.plugin_host.tool_window.clone() else {
         return;
     };
@@ -259,7 +219,7 @@ pub fn right_side(app: &mut IdeApp, ctx: &egui::Context) {
         .and_then(|entry| entry.contributions.tool_windows.iter().find(|w| w.id == id))
         .map(|window| window.view.clone())
         .unwrap_or_default();
-    egui::SidePanel::right("plugin_tool_window")
+    let island = egui::SidePanel::right("plugin_tool_window")
         .default_width(320.0)
         .min_width(180.0)
         .resizable(true)
@@ -286,6 +246,7 @@ pub fn right_side(app: &mut IdeApp, ctx: &egui::Context) {
                     );
                 });
         });
+    crate::chrome::remember_island(ctx, jetthing_core::Anchor::Right, island.response.rect);
 }
 
 /// Plugin tabs after the document tabs in the editor tab bar. Returns the
@@ -383,31 +344,18 @@ pub fn active_tab_body(app: &mut IdeApp, ui: &mut egui::Ui) {
 
 /// Contributed status bar widgets (call inside a right-to-left layout).
 /// `only` restricts them to one plugin (standalone app mode).
-pub fn status_widgets(
-    app: &mut IdeApp,
-    ui: &mut egui::Ui,
-    font: &egui::FontId,
-    only: Option<&str>,
-) {
+pub fn status_widgets(app: &mut IdeApp, ui: &mut egui::Ui, only: Option<&str>) {
     for widget in app
         .state
         .plugin_status_widgets()
         .into_iter()
         .filter(|widget| only.is_none_or(|plugin| widget.plugin == plugin))
     {
-        let mut response = widgets::flat_widget(
-            ui,
-            None,
-            &widget.state.text,
-            font.clone(),
-            *theme::TEXT_SECONDARY,
-            false,
-            22.0,
-        );
+        let mut item = archipel_kit::components::StatusBarItem::new(widget.state.text.clone());
         if let Some(tooltip) = &widget.state.tooltip {
-            response = response.on_hover_text(tooltip);
+            item = item.with(archipel_kit::components::Tooltip::new(tooltip.clone()));
         }
-        if response.clicked()
+        if ui.add(item).clicked()
             && let Some(command) = &widget.command
         {
             app.dispatch(command, Value::Null);
@@ -533,54 +481,32 @@ pub fn app_window(app: &mut IdeApp, ctx: &egui::Context, plugin: &str) {
         .and_then(|manifest| manifest.app)
         .map(|app| app.view)
         .unwrap_or_default();
-    egui::TopBottomPanel::top("app_toolbar")
-        .exact_height(TOOLBAR_HEIGHT)
-        .show_separator_line(false)
-        .frame(chrome_frame(ctx))
+    archipel_kit::components::WindowToolbar::new("app_toolbar")
+        .chrome(chrome::window_chrome())
         .show(ctx, |ui| {
-            let bar = ui.max_rect();
-            let drag = ui.interact(
-                bar,
-                egui::Id::new("app_toolbar_drag"),
-                Sense::click_and_drag(),
-            );
-            if drag.drag_started() {
-                ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
-            }
-            if drag.double_clicked() {
-                let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
-            }
-            let mut content = ui.new_child(
-                egui::UiBuilder::new()
-                    .max_rect(bar.shrink2(vec2(12.0, 0.0)))
-                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
-            );
-            content.label(
+            ui.label(
                 RichText::new(&title)
                     .font(theme::semibold(theme::UI_FONT_SIZE))
                     .color(theme::TEXT_BRIGHT),
             );
-            content.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if chrome::custom_title_bar() {
-                    chrome::window_controls(ui);
-                }
-            });
         });
     egui::TopBottomPanel::bottom("app_status_bar")
         .exact_height(STATUS_BAR_HEIGHT)
         .show_separator_line(false)
-        .frame(chrome_frame(ctx).inner_margin(egui::Margin::symmetric(8, 0)))
+        .frame(chrome_frame(ctx).inner_margin(egui::Margin::symmetric(
+            archipel_kit::tokens::size::STATUS_BAR_INSET as i8,
+            0,
+        )))
         .show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
-                let font = egui::FontId::proportional(theme::UI_FONT_SIZE - 1.0);
-                ui.label(
-                    RichText::new(&app.state.status)
-                        .font(font.clone())
-                        .color(theme::TEXT_INFO),
-                );
+                ui.spacing_mut().item_spacing.x = 0.0;
+                if !app.state.status.is_empty() {
+                    ui.add(archipel_kit::components::StatusBarItem::new(
+                        app.state.status.clone(),
+                    ));
+                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    status_widgets(app, ui, &font, Some(plugin));
+                    status_widgets(app, ui, Some(plugin));
                 });
             });
         });

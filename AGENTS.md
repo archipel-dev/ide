@@ -15,6 +15,13 @@
   `rect_filled` or `CornerRadius::same` outside the kit; after migrating an area, lower
   the baseline with `cargo xtask design-lint --update`.
 - Avoid panics on user-controlled input. Return structured, actionable errors.
+- Mouse-and-keyboard verification under Xvfb (xdotool) before a PR; screenshots in the PR.
+  UI/UX is verified with real input (xdotool pointer moves, clicks, drags, scroll and keys
+  under Xvfb; simulated pointer and key events in egui_kittest tests), never by dispatching
+  commands through the control socket, `jetthing-cli ui` or xtask scenes: the socket is
+  only for automation that is not itself the thing being checked. Give the window X focus
+  first (`xdotool windowfocus --sync <id>`, or run a window manager such as openbox),
+  otherwise key presses are silently dropped.
 
 ## Required checks
 

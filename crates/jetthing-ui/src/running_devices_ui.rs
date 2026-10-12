@@ -13,7 +13,7 @@ pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
     if app.state.tool_windows.visible(Anchor::Right) != Some(ToolWindow::RunningDevices) {
         return;
     }
-    egui::SidePanel::right("right_tool_window")
+    let island = egui::SidePanel::right("right_tool_window")
         .default_width(340.0)
         .min_width(240.0)
         .resizable(true)
@@ -48,6 +48,7 @@ pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
                 empty_state(app, ui);
             }
         });
+    crate::chrome::remember_island(ctx, jetthing_core::Anchor::Right, island.response.rect);
 }
 
 fn empty_state(app: &mut IdeApp, ui: &mut egui::Ui) {

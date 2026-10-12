@@ -5,7 +5,6 @@
 use crate::icons::Icon;
 use crate::widgets::{self, chrome_frame};
 use crate::{IdeApp, keys, theme};
-use archipel_kit::behaviour::WidgetExt;
 use archipel_kit::components::{
     Avatar, Breadcrumbs, IconButton, MenuHeader, MenuItem, MenuSeparator, Spinner, StatusBarItem,
     StripeButton, ToolStripe, ToolbarButton, Tooltip, WindowChrome, WindowToolbar,
@@ -46,12 +45,12 @@ fn project_color(app: &IdeApp) -> Option<egui::Color32> {
         .then(|| theme::avatar_color(&app.project_name()))
 }
 
-/// "Action (Shortcut)" for a tooltip, or just the action.
-fn with_shortcut(action: &str, shortcut: Option<String>) -> Tooltip {
-    let tooltip = Tooltip::new(action);
+/// "Action (Shortcut)": the name and tooltip of a toolbar icon button. The kit's
+/// `IconButton` shows its label as its tooltip (it has no separate shortcut slot yet).
+fn action_label(action: &str, shortcut: Option<String>) -> String {
     match shortcut {
-        Some(shortcut) if !shortcut.is_empty() => tooltip.shortcut(shortcut),
-        _ => tooltip,
+        Some(shortcut) if !shortcut.is_empty() => format!("{action} ({shortcut})"),
+        _ => action.to_owned(),
     }
 }
 
@@ -91,12 +90,11 @@ pub fn main_toolbar(app: &mut IdeApp, ctx: &egui::Context) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = tokens::size::TOOLBAR_GAP;
             settings_widget(app, ui);
-            let search = IconButton::new(Glyph::Search, "Search Everywhere")
-                .large(true)
-                .with(with_shortcut(
-                    "Search Everywhere",
-                    app.action_shortcut("SearchEverywhere"),
-                ));
+            let search = IconButton::new(
+                Glyph::Search,
+                action_label("Search Everywhere", app.action_shortcut("SearchEverywhere")),
+            )
+            .large(true);
             if ui.add(search).clicked() {
                 app.dispatch("navigate.searchEverywhere", Value::Null);
             }
@@ -167,15 +165,7 @@ fn vcs_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
 
 /// The settings gear at the right end of the toolbar and its menu.
 fn settings_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let popup = ui.next_auto_id().with("popup");
-    let open = egui::Popup::is_id_open(ui.ctx(), popup);
-    let button = IconButton::new(Glyph::Settings, "IDE and Project Settings")
-        .large(true)
-        .selected(open);
-    let response = ui.add(button);
-    if !open {
-        Tooltip::new("IDE and Project Settings").show_for(&response);
-    }
+    let response = ui.add(IconButton::new(Glyph::Settings, "IDE and Project Settings").large(true));
     egui::Popup::menu(&response)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
@@ -199,10 +189,12 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
     let running = app.state.runner.is_running();
     // Right-to-left layout: rightmost item first (Stop, Debug, Run, configuration, Build).
     if running {
-        let stop = IconButton::new(Glyph::Stop, "Stop")
-            .large(true)
-            .tone(Tone::Stop)
-            .with(with_shortcut("Stop", app.action_shortcut("Stop")));
+        let stop = IconButton::new(
+            Glyph::Stop,
+            action_label("Stop", app.action_shortcut("Stop")),
+        )
+        .large(true)
+        .tone(Tone::Stop);
         if ui.add(stop).clicked() {
             app.dispatch("run.cancel", Value::Null);
         }
@@ -211,18 +203,19 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
     if app.state.is_debugging() {
         let stop = IconButton::new(Glyph::Stop, "Stop Debugging")
             .large(true)
-            .tone(Tone::Stop)
-            .with(Tooltip::new("Stop Debugging"));
+            .tone(Tone::Stop);
         if ui.add(stop).clicked() {
             app.dispatch("debug.stop", Value::Null);
         }
     } else {
         let can_debug = app.commands.is_enabled("debug.start", &app.state);
-        let debug = IconButton::new(Glyph::Debug, "Debug")
-            .large(true)
-            .tone(Tone::Run)
-            .enabled(can_debug)
-            .with(with_shortcut("Debug", Some(keys::display("⌃D"))));
+        let debug = IconButton::new(
+            Glyph::Debug,
+            action_label("Debug", Some(keys::display("⌃D"))),
+        )
+        .large(true)
+        .tone(Tone::Run)
+        .enabled(can_debug);
         if ui.add(debug).clicked() {
             app.dispatch("debug.start", Value::Null);
         }
@@ -237,23 +230,22 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
     let can_run = app.commands.is_enabled(run_command, &app.state);
     let run_shortcut = app.action_shortcut("Run");
     let run_tip = match &detected {
-        _ if android_run => with_shortcut("Run 'app'", run_shortcut),
-        _ if app.state.run_configurations.selected().is_some() => with_shortcut(
+        _ if android_run => action_label("Run 'app'", run_shortcut),
+        _ if app.state.run_configurations.selected().is_some() => action_label(
             &format!("Run '{}'", app.state.run_widget_label().unwrap_or_default()),
             run_shortcut,
         ),
-        Some(build) if build.run_unavailable.is_some() => Tooltip::new(format!(
+        Some(build) if build.run_unavailable.is_some() => format!(
             "Run unavailable: {}",
             build.run_unavailable.as_deref().unwrap_or_default()
-        )),
-        None if app.state.project.is_some() => Tooltip::new("No supported build system detected"),
-        _ => with_shortcut("Run", run_shortcut),
+        ),
+        None if app.state.project.is_some() => "No supported build system detected".to_owned(),
+        _ => action_label("Run", run_shortcut),
     };
-    let run = IconButton::new(Glyph::Run, "Run")
+    let run = IconButton::new(Glyph::Run, run_tip)
         .large(true)
         .tone(Tone::Run)
-        .enabled(can_run)
-        .with(run_tip);
+        .enabled(can_run);
     if ui.add(run).clicked() {
         app.dispatch(run_command, Value::Null);
     }
@@ -262,13 +254,12 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
     }
     let can_build = app.commands.is_enabled("build.project", &app.state);
     let build_tip = match &detected {
-        None if app.state.project.is_some() => Tooltip::new("No supported build system detected"),
-        _ => with_shortcut("Build Project", app.action_shortcut("CompileDirty")),
+        None if app.state.project.is_some() => "No supported build system detected".to_owned(),
+        _ => action_label("Build Project", app.action_shortcut("CompileDirty")),
     };
-    let build = IconButton::new(Glyph::Build, "Build Project")
+    let build = IconButton::new(Glyph::Build, build_tip)
         .large(true)
-        .enabled(can_build)
-        .with(build_tip);
+        .enabled(can_build);
     if ui.add(build).clicked() {
         app.dispatch("build.project", Value::Null);
     }
@@ -731,7 +722,7 @@ fn navigation_path(app: &IdeApp, ui: &mut egui::Ui) {
             }
         }
         for (kind, name) in code {
-            crumbs.push((name, Some(crate::structure_view::icon(kind).into())));
+            crumbs.push((name, Some(crate::structure_view::icon(kind))));
         }
     }
     let mut path = Breadcrumbs::new();

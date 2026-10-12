@@ -1016,11 +1016,22 @@ pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
     } else {
         archipel_kit::Tone::Secondary
     };
-    let item = archipel_kit::components::StatusBarItem::new(text)
-        .icon(archipel_kit::Glyph::Sparkle)
-        .tone(tone)
-        .with(archipel_kit::components::Tooltip::new(tooltip));
-    if ui.add(item).clicked() {
+    // Icon only at rest: an icon button named by its tooltip; with text, a status item.
+    let response = if text.is_empty() {
+        ui.add(
+            archipel_kit::components::IconButton::new(archipel_kit::Glyph::Sparkle, tooltip)
+                .small(true)
+                .tone(tone),
+        )
+    } else {
+        ui.add(
+            archipel_kit::components::StatusBarItem::new(text)
+                .icon(archipel_kit::Glyph::Sparkle)
+                .tone(tone)
+                .with(archipel_kit::components::Tooltip::new(tooltip)),
+        )
+    };
+    if response.clicked() {
         app.dispatch("toolwindow.activate.aiChat", Value::Null);
     }
 }

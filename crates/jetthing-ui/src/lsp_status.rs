@@ -1,6 +1,6 @@
 //! Language server status bar widget and notification balloons.
 
-use crate::{IdeApp, icons::Icon, theme, widgets};
+use crate::{IdeApp, icons::Icon, theme};
 use eframe::egui::{self, RichText, vec2};
 use jetthing_lsp::{ServerInfo, ServerStatus, describe_progress};
 use serde_json::{Value, json};
@@ -48,29 +48,24 @@ fn summary(app: &IdeApp, servers: &[ServerInfo]) -> Option<(String, bool, bool)>
 }
 
 /// Status bar entry; hover lists every server, right-click offers a restart.
-pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::FontId) {
+pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
     let servers = app.state.lsp.servers();
     let Some((text, busy, problem)) = summary(app, &servers) else {
         return;
     };
-    let icon = if problem {
-        Some((Icon::Warning, *theme::WARNING))
+    let mut item = archipel_kit::components::StatusBarItem::new(text.clone());
+    if problem {
+        item = item
+            .icon(archipel_kit::Glyph::Warning)
+            .tone(archipel_kit::Tone::Warning);
     } else if text.is_empty() {
-        Some((Icon::Success, *theme::TEXT_INFO))
-    } else {
-        None
-    };
-    let color = if problem {
-        *theme::TEXT_SECONDARY
-    } else if busy {
-        *theme::TEXT_INFO
-    } else {
-        *theme::TEXT_SECONDARY
-    };
-    let response = widgets::flat_widget(ui, icon, &text, font, color, false, 22.0);
-    if busy {
-        widgets::busy_spinner(ui, 12.0, *theme::TEXT_INFO);
+        item = item.icon(archipel_kit::Glyph::Success);
     }
+    // Right to left: the spinner sits after the text.
+    if busy {
+        ui.add(archipel_kit::components::Spinner::new().size(archipel_kit::tokens::size::ICON));
+    }
+    let response = ui.add(item);
     let response = response.on_hover_ui(|ui| {
         ui.set_max_width(420.0);
         ui.label(RichText::new("Language servers").strong());
@@ -103,7 +98,12 @@ pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::FontId) {
     });
     let mut restart = false;
     response.context_menu(|ui| {
-        if ui.button("Restart Language Servers").clicked() {
+        if ui
+            .add(archipel_kit::components::MenuItem::new(
+                "Restart Language Servers",
+            ))
+            .clicked()
+        {
             restart = true;
             ui.close();
         }

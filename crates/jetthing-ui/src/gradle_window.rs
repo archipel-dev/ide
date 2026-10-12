@@ -194,13 +194,14 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     if !app.state.tool_windows.is_visible(ToolWindow::Gradle) {
         return;
     }
-    egui::SidePanel::right("right_tool_window")
+    let island = egui::SidePanel::right("right_tool_window")
         .default_width(340.0)
         .min_width(220.0)
         .resizable(true)
         .show_separator_line(false)
         .frame(island_frame(ctx))
         .show(ctx, |ui| content(app, ui));
+    crate::chrome::remember_island(ctx, jetthing_core::Anchor::Right, island.response.rect);
 }
 
 fn content(app: &mut IdeApp, ui: &mut egui::Ui) {

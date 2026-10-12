@@ -84,7 +84,7 @@ pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
         return;
     }
     let mut actions = Vec::new();
-    egui::SidePanel::right("right_tool_window")
+    let island = egui::SidePanel::right("right_tool_window")
         .default_width(400.0)
         .min_width(280.0)
         .resizable(true)
@@ -130,6 +130,7 @@ pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
                     .show_inside(ui, |ui| conversation(app, ui, &mut actions));
             }
         });
+    crate::chrome::remember_island(ctx, jetthing_core::Anchor::Right, island.response.rect);
     for action in actions {
         perform(app, ctx, action);
     }
@@ -993,49 +994,33 @@ pub fn diff_preview(app: &mut IdeApp, ctx: &egui::Context) {
 }
 
 /// Status bar AI widget: provider/model or "off"; toggles the AI Chat window.
-pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::FontId) {
+pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
     let ai = &app.state.ai;
-    let (text, color, tooltip) = if !ai.policy.allow_ai {
+    let (text, tooltip) = if !ai.policy.allow_ai {
         (
             String::new(),
-            theme::TEXT_INFO,
             format!("AI is disabled for this project ({PROJECT_POLICY_FILE})"),
         )
     } else if !ai.is_enabled() {
         (
             String::new(),
-            theme::TEXT_INFO,
             "AI Assistant is off — click to set up a provider".to_owned(),
         )
     } else if ai.chat.is_streaming() {
-        (
-            "AI: generating…".to_owned(),
-            theme::TEXT_SECONDARY,
-            ai.summary(),
-        )
+        ("AI: generating…".to_owned(), ai.summary())
     } else {
-        let model = ai.summary();
-        (
-            String::new(),
-            theme::TEXT_SECONDARY,
-            format!("AI Assistant: {model}"),
-        )
+        (String::new(), format!("AI Assistant: {}", ai.summary()))
     };
-    let icon_color = if ai.is_enabled() {
-        theme::MODIFIED
+    let tone = if ai.is_enabled() {
+        archipel_kit::Tone::Modified
     } else {
-        theme::TEXT_INFO
+        archipel_kit::Tone::Secondary
     };
-    let response = widgets::flat_widget(
-        ui,
-        Some((Icon::Ai, *icon_color)),
-        &text,
-        font,
-        color,
-        false,
-        22.0,
-    );
-    if response.on_hover_text(tooltip).clicked() {
+    let item = archipel_kit::components::StatusBarItem::new(text)
+        .icon(archipel_kit::Glyph::Sparkle)
+        .tone(tone)
+        .with(archipel_kit::components::Tooltip::new(tooltip));
+    if ui.add(item).clicked() {
         app.dispatch("toolwindow.activate.aiChat", Value::Null);
     }
 }

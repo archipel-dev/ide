@@ -78,29 +78,12 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     }
 }
 
-/// Drag area with window controls; the welcome window has no toolbar.
+/// The welcome window's title area: the kit's window toolbar (drag, double-click to
+/// maximize, window controls where the platform has no native ones), with no actions.
 fn title_strip(ctx: &egui::Context) {
-    egui::TopBottomPanel::top("welcome_title")
-        .exact_height(chrome::TOOLBAR_HEIGHT)
-        .show_separator_line(false)
-        .frame(widgets::chrome_frame(ctx))
-        .show(ctx, |ui| {
-            let bar = ui.max_rect();
-            let drag = ui.interact(bar, egui::Id::new("welcome_drag"), Sense::click_and_drag());
-            if drag.drag_started() {
-                ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
-            }
-            if drag.double_clicked() {
-                let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
-            }
-            if chrome::custom_title_bar() {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    chrome::window_controls(ui);
-                });
-            }
-        });
+    archipel_kit::components::WindowToolbar::new("welcome_title")
+        .chrome(chrome::window_chrome())
+        .show(ctx, |_| {});
 }
 
 fn nav_column(app: &mut IdeApp, ui: &mut egui::Ui) {

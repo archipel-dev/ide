@@ -27,7 +27,7 @@ pub fn left(app: &mut IdeApp, ctx: &egui::Context) {
     let Some(window) = app.state.tool_windows.visible(Anchor::Left) else {
         return;
     };
-    egui::SidePanel::left("left_tool_window")
+    let island = egui::SidePanel::left("left_tool_window")
         .default_width(280.0)
         .min_width(160.0)
         .resizable(true)
@@ -70,6 +70,7 @@ pub fn left(app: &mut IdeApp, ctx: &egui::Context) {
                 _ => {}
             }
         });
+    crate::chrome::remember_island(ctx, Anchor::Left, island.response.rect);
 }
 
 pub fn bottom(app: &mut IdeApp, ctx: &egui::Context) {
@@ -106,6 +107,7 @@ pub fn bottom(app: &mut IdeApp, ctx: &egui::Context) {
                 _ => {}
             }
         });
+    crate::chrome::remember_island(ctx, Anchor::Bottom, response.response.rect);
     let shown = response.response.rect.height();
     // Only a splitter drag changes the stored height, never a window clamp.
     if (shown - height).abs() > 0.5 && ctx.input(|i| i.pointer.any_down()) {

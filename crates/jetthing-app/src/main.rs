@@ -15,23 +15,11 @@ enum Mode {
     App(String),
 }
 
-/// Window chrome per platform. macOS keeps its traffic-light buttons but merges
-/// the title bar into the content (transparent bar, full-size content view,
-/// no title text) so the main toolbar draws in the title-bar area; the toolbar
-/// reserves `jetthing_ui::chrome::MAC_TRAFFIC_LIGHT_INSET` for the buttons. Other
-/// platforms draw their own controls in the toolbar.
-fn platform_viewport(
-    viewport: eframe::egui::ViewportBuilder,
-    macos: bool,
-) -> eframe::egui::ViewportBuilder {
-    if macos {
-        viewport
-            .with_fullsize_content_view(true)
-            .with_titlebar_shown(false)
-            .with_title_shown(false)
-    } else {
-        viewport.with_decorations(false)
-    }
+/// Window chrome per platform, from the kit (`jetthing_ui::chrome::window_chrome`): macOS
+/// keeps its traffic lights in a transparent full-size title area that the main toolbar
+/// shares; other platforms are undecorated and the toolbar draws the window controls.
+fn platform_viewport(viewport: eframe::egui::ViewportBuilder) -> eframe::egui::ViewportBuilder {
+    jetthing_ui::window_chrome().viewport(viewport)
 }
 
 fn native_options(renderer: eframe::Renderer, title: &str) -> eframe::NativeOptions {
@@ -46,7 +34,7 @@ fn native_options(renderer: eframe::Renderer, title: &str) -> eframe::NativeOpti
     {
         viewport = viewport.with_icon(icon);
     }
-    viewport = platform_viewport(viewport, cfg!(target_os = "macos"));
+    viewport = platform_viewport(viewport);
     eframe::NativeOptions {
         viewport,
         renderer,
@@ -297,19 +285,15 @@ mod window_tests {
     use super::*;
 
     #[test]
-    fn macos_merges_the_title_bar_and_keeps_native_buttons() {
-        let viewport = platform_viewport(Default::default(), true);
-        assert_eq!(viewport.fullsize_content_view, Some(true));
-        assert_eq!(viewport.titlebar_shown, Some(false));
-        assert_eq!(viewport.title_shown, Some(false));
-        assert_eq!(viewport.decorations, None);
-    }
-
-    #[test]
-    fn other_platforms_draw_their_own_title_bar() {
-        let viewport = platform_viewport(Default::default(), false);
-        assert_eq!(viewport.decorations, Some(false));
-        assert_eq!(viewport.fullsize_content_view, None);
-        assert_eq!(viewport.titlebar_shown, None);
+    fn the_window_chrome_comes_from_the_kit() {
+        let viewport = platform_viewport(Default::default());
+        if cfg!(target_os = "macos") {
+            assert_eq!(viewport.fullsize_content_view, Some(true));
+            assert_eq!(viewport.titlebar_shown, Some(false));
+            assert_eq!(viewport.title_shown, Some(false));
+        } else {
+            // Undecorated: the main toolbar draws minimize, maximize and close.
+            assert_eq!(viewport.decorations, Some(false));
+        }
     }
 }

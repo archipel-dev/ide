@@ -15,7 +15,7 @@ observations are written down.
 
 ## Where the IDE stands
 
-- Chrome on the kit (this foundation): `WindowToolbar` with `ToolbarButton` project, VCS,
+- Chrome on the kit (the foundation PR, kit v0.3.0): `WindowToolbar` with `ToolbarButton` project, VCS,
   run configuration and device widgets, `Avatar` project tile and the project-color glow,
   `IconButton::large` for Build/Run/Debug/Stop/Search/Settings, `ToolStripe` with
   `StripeButton`s on both sides, tool window title bars from `Panel`, and a status bar of
@@ -37,9 +37,8 @@ observations are written down.
 ### 1. Editor tabs on the kit `TabBar`
 
 Kit: `TabBar` per-tab responses (so callers attach `ContextMenu`, `DragSource`,
-`DropTarget` and double-click), an italic preview tab, a pinned tab, overflow that scrolls
-with the wheel and keeps the active tab in view, and room for trailing header actions
-(split/markdown layout toggles).
+`DropTarget` and double-click), an italic preview tab and a pinned tab. Overflow scrolling,
+the "Show hidden tabs" chevron and `TabBar::more_menu` arrived in kit v0.3.0.
 
 Acceptance: `editor.rs::tabs` and `tab_drag` are gone; click, middle-click, close button,
 drag to reorder and to another split, double-click to maximise, the tab context menu, pinned
@@ -50,7 +49,8 @@ with three tabs.
 ### 2. Tool windows on the kit `Workbench`
 
 Kit: `Workbench` with several tool windows per region (one visible per anchor, like the
-IDE's model), stripe badges (`StripeButton::badge(Tone)` for the Problems error dot and the
+IDE's model) and `frame_background(false)` so the IDE's one-surface frame and glow stay,
+stripe badges (`StripeButton::badge(Tone)` for the Problems error dot and the
 running build), and a header-only `Panel` variant whose hover-actions use the whole island
 (today `widgets::tool_window_header` draws a `Panel` with an empty body, so header actions
 are always visible instead of appearing on hover).
@@ -160,6 +160,17 @@ Rename in place (inline rename with live preview instead of a dialog for locals)
 Definition (Ctrl+Shift+I), Type Info (Ctrl+Shift+P), Error description (Ctrl+F1), Select
 In (Alt+F1), Last Edit Location — IJ-ED-102/103/106, IJ-NAV-013/014.
 
+### Small kit follow-ups the chrome needs
+
+- `IconButton` tooltip with a shortcut (today the label carries `Run (Shift+F10)`, and a
+  `Tooltip` behaviour on an `IconButton` shows a second tooltip).
+- An accessible name for icon-only `StatusBarItem`s (AI and healthy-LSP widgets are small
+  `IconButton`s meanwhile).
+- The ☰ main menu as kit `MenuItem` submenus instead of egui's `MenuBar`; the VCS widget's
+  branch menu (`branches_popup.rs`) as kit rows with the search field on top.
+- Run widget like the reference: Run, Debug, ⋮ more actions (Build, Stop, profile),
+  instead of Build left of the configuration.
+
 ## UX defects found in this round
 
 Found with real mouse and keyboard input under Xvfb on the Kotlin sample (no command
@@ -169,9 +180,12 @@ dispatch); each becomes part of the slice named above or its own fix:
 |---|---|---|
 | Settings dialog: empty bordered search column, tree pushed out of the dialog | Settings (Ctrl+Alt+S) | 5 |
 | Ctrl+Space with no suggestions only writes "No suggestions" into the status bar | Editor | 3 |
-| A Kotlin/Gradle project first shows a "Java project: the Java language server and Java debugger are missing" banner | Editor banner after opening | own fix |
 | Stray "s" glyphs after declaration lines when no language server runs | Editor (code vision) | 6 |
 | Horizontal scrollbar thumb visible at rest under the editor | Editor | 6 |
 | Status bar breadcrumbs are not navigable (clicks do nothing) | Status bar | 8 |
 | Tool window header actions always visible (no hover fade) | Tool windows | 2 |
 | Problems stripe button lost its error dot with the kit stripe (no badge in the kit yet) | Left stripe | 2 |
+| Problems content tabs are underlined text tabs, the reference uses pills | Problems tool window | 11 |
+| Double-clicking a file in the tree right after expanding folders by double click sometimes leaves it a preview tab: the next file opened replaces it ("Closed …/Main.kt"); a slow double click works | Project tree | own fix |
+| The "Java project" missing-server banner shows first on a Kotlin project, then a "Kotlin project" banner after dismissing | Editor banner | own fix |
+| Find in Files has no file-mask checkbox/combo, filter or pin in its title row | Find in Files popup | 4 |

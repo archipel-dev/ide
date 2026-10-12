@@ -1,5 +1,8 @@
 # Roadmap
 
+The Android Studio parity programme (next PRs, in order) is in
+[roadmap-as-parity.md](roadmap-as-parity.md).
+
 ## M0 — repository and contracts (complete)
 
 - Modular workspace and enforced dependency direction by convention.

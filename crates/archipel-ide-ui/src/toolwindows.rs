@@ -102,6 +102,7 @@ pub fn bottom(app: &mut IdeApp, ctx: &egui::Context) {
                 ToolWindow::Logcat => crate::logcat_ui::show(app, ui),
                 ToolWindow::Debug => crate::debug_window::show(app, ui),
                 ToolWindow::Hierarchy => crate::hierarchy_ui::show(app, ui),
+                ToolWindow::Todo => crate::todo_window::show(app, ui),
                 ToolWindow::Git => crate::git_log_ui::show(app, ui),
                 _ => {}
             }

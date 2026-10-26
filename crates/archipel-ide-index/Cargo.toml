@@ -1,0 +1,27 @@
+[package]
+name = "archipel-ide-index"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Persistent file-based and stub indexes, indexing scheduler with per-index readiness (dumb mode), TODO index and local history store"
+
+[dependencies]
+archipel-ide-analysis = { path = "../archipel-ide-analysis" }
+archipel-ide-language = { path = "../archipel-ide-language" }
+flate2 = "1"
+parking_lot.workspace = true
+redb = "3"
+regex = "1"
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+thiserror.workspace = true
+walkdir.workspace = true
+
+[dev-dependencies]
+proptest = "1.7"
+tempfile = "3"
+
+[[bench]]
+name = "index"
+harness = false

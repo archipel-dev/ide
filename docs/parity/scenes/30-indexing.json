@@ -1,0 +1,19 @@
+{
+  "id": "30",
+  "title": "Indexing progress and dumb mode",
+  "fixture": "java-gradle",
+  "open": ["src/main/java/com/example/App.java"],
+  "env": {"ARCHIPEL_INDEX_THROTTLE_MS": "3000"},
+  "steps": [
+    {"op": "sleep", "ms": 1500},
+    {"op": "assert", "pointer": "/index/dumb", "equals": true},
+    {"op": "assert", "pointer": "/index/indexes/FileName", "equals": "ready"},
+    {"op": "assert", "pointer": "/index/indexes/Words", "equals": "building"},
+    {"op": "screenshot", "name": "30-indexing-progress.png"},
+    {"op": "wait", "until": "idle", "timeoutMs": 30000},
+    {"op": "assert", "pointer": "/index/dumb", "equals": false},
+    {"op": "assert", "pointer": "/index/indexes/Words", "equals": "ready"},
+    {"op": "assert", "pointer": "/index/indexes/Stub:ShortName", "equals": "ready"},
+    {"op": "screenshot", "name": "30-indexing-done.png"}
+  ]
+}

@@ -125,6 +125,42 @@ package develops against the contracts before the real implementations exist
   the changed ranges drained from `LanguageAnalysis::take_syntax_changes`; plain-text buffers are
   copied after a 300 ms typing pause.
 
+## Indexing (`archipel-ide-index`)
+
+The index package implements the contracts of `analysis::index` and owns everything behind
+`Snapshot::require::<I>()`.
+
+- **Storage.** `IndexStore` has two backends: `MemIndexStore`/`MemStore` and `RedbStore`
+  (`redb`, MIT OR Apache-2.0, pure Rust). One database file per index (`<id>.redb`) plus
+  `files.redb` with the file table, under `<cache>/archipel/index/<project hash>/`. An index
+  stores `key ++ file id -> value` (inverted map), `file id -> keys` (forward map, for removal),
+  `file id -> content hash` and its version and completeness. A version or settings change drops
+  one index only; a damaged or truncated file is deleted and rebuilt, never a startup failure; an
+  open file is never replaced (a second window falls back to memory). Writes are buffered and
+  applied in one transaction per `commit` (batch), readers see the last commit.
+- **Indexes.** `FileName`, `FileType`, `Words` (hash of an identifier -> mask of code, comment,
+  string, literal), `Trigram` (text only), `Todo` (pattern -> occurrences in comments), `Stubs`
+  (file -> serialized declarations from the tags query: kind, flags, name, ranges, parent,
+  extras such as `extends`) and the stub-derived `Stub:ShortName`, `Stub:Qualified`,
+  `Stub:SuperTypes`, `Stub:Members`. One parse and one stub tree per file feed all of them.
+  `StubBuilders` lets a language tier replace the generic builder; `StubInterface` (the interface
+  hash of the stub tree) replaces the structure-based default of the early-cutoff epoch.
+- **Scheduler** (`IndexService`, UI thread, `poll` per frame; work runs as `Background` host jobs):
+  scan and name indexes first, then open and changed files, source files, the rest; every file is
+  read once, hashed (content plus language) and fed only to indexes that have not seen this
+  content; batches commit after ~50 ms or 48 files and publish `Change::IndexCommit`. Text-only
+  indexes (`Trigram`) are built in a second pass once everything else is ready and do not keep the
+  IDE in dumb mode. Removals run alone so a late batch cannot resurrect a deleted file.
+- **Dumb mode** is per index: `IndexState` is `Absent`, `Building {done,total}`, `Ready` or
+  `Failed`, `Snapshot::require` returns `IndexNotReady` until `Ready`, and `Change::DumbMode`
+  is on while an index that is not `dumb_aware` is not ready. Readers (`readers.rs`) return
+  `Result<_, IndexNotReady>` so features degrade individually.
+- **Overlay.** Unsaved buffers are indexed into an in-memory layer (`OverlayStore`) that shadows
+  the persistent entries of that file; closing the buffer reconciles with the disk.
+- **Local History** (`history`): content-addressed blob store (SHA-256, deflate) and a per-path
+  revision log on `redb`, retention by age and size. The host records revisions before it
+  overwrites a file on save and when an external change is applied.
+
 ## Native and LSP coexistence
 
 The LSP client (`archipel-ide-lsp`) stays a transport. WP8 wraps it as adapters implementing the

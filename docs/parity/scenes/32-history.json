@@ -1,0 +1,70 @@
+{
+  "id": "32",
+  "title": "Local History (Show History)",
+  "fixture": "java-gradle",
+  "open": [
+    "src/main/java/com/example/App.java"
+  ],
+  "steps": [
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "appendFile",
+      "path": "src/main/java/com/example/App.java",
+      "contents": "// edited outside the IDE\n"
+    },
+    {
+      "op": "sleep",
+      "ms": 1200
+    },
+    {
+      "op": "execute",
+      "command": "history.show"
+    },
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "assert",
+      "pointer": "/popups/history",
+      "equals": true
+    },
+    {
+      "op": "assert",
+      "pointer": "/history/revisions",
+      "equals": 2
+    },
+    {
+      "op": "execute",
+      "command": "history.select",
+      "args": {
+        "index": 1
+      }
+    },
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "assert",
+      "pointer": "/history/selected",
+      "equals": 1
+    },
+    {
+      "op": "screenshot",
+      "name": "32-history.png"
+    },
+    {
+      "op": "execute",
+      "command": "history.close"
+    },
+    {
+      "op": "assert",
+      "pointer": "/popups/history",
+      "equals": false
+    }
+  ]
+}

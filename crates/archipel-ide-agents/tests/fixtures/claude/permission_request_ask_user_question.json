@@ -1,0 +1,21 @@
+{
+  "session_id": "3f0c8c1e-6a52-4c1d-9d7a-2b5e0f9a1c44",
+  "transcript_path": "/home/user/.claude/projects/-data-archipel-agents-ide-fix-login/3f0c8c1e-6a52-4c1d-9d7a-2b5e0f9a1c44.jsonl",
+  "cwd": "/data/archipel/worktrees/ide/fix-login",
+  "permission_mode": "default",
+  "hook_event_name": "PermissionRequest",
+  "tool_name": "AskUserQuestion",
+  "tool_input": {
+    "questions": [
+      {
+        "question": "Which session store should the fix target?",
+        "header": "Store",
+        "multiSelect": false,
+        "options": [
+          { "label": "Cookie", "description": "Signed cookie session" },
+          { "label": "Server", "description": "Server-side session table" }
+        ]
+      }
+    ]
+  }
+}

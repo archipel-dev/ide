@@ -1,0 +1,18 @@
+{
+  "session_id": "3f0c8c1e-6a52-4c1d-9d7a-2b5e0f9a1c44",
+  "transcript_path": "/home/user/.claude/projects/-data-archipel-agents-ide-fix-login/3f0c8c1e-6a52-4c1d-9d7a-2b5e0f9a1c44.jsonl",
+  "cwd": "/data/archipel/worktrees/ide/fix-login",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "/data/archipel/worktrees/ide/fix-login/crates/auth/tests/redirect.rs",
+    "content": "#[test]\nfn redirect_does_not_loop() {}\n"
+  },
+  "tool_response": {
+    "filePath": "/data/archipel/worktrees/ide/fix-login/crates/auth/tests/redirect.rs",
+    "type": "create"
+  },
+  "tool_use_id": "toolu_01B7yLrMn4qRsTuVwXyZab34",
+  "duration_ms": 12
+}

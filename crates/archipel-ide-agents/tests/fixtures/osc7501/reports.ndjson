@@ -1,0 +1,8 @@
+{"why":"query sent by a program; a supporting terminal replies with the capability list","bytes":"\u001b]7501;?\u001b\\","expect":{"type":"query"}}
+{"why":"terminal reply to the query (what Archipel must write to the PTY if it supports the protocol)","bytes":"\u001b]7501;?:states=idle,working,done,blocked,error:kinds=permission,question,auth\u001b\\","expect":{"type":"reply"}}
+{"why":"root working, ST terminator","bytes":"\u001b]7501;state=working:app=claude-code\u001b\\","expect":{"id":null,"state":"working","app":"claude-code"}}
+{"why":"blocked on permission, BEL terminator, base64 msg","bytes":"\u001b]7501;state=blocked:kind=permission:app=claude-code:msg=QWxsb3cgQmFzaD8=\u0007","expect":{"id":null,"state":"blocked","kind":"permission","app":"claude-code","msg":"Allow Bash?"}}
+{"why":"done record","bytes":"\u001b]7501;state=done:app=claude-code\u001b\\","expect":{"id":null,"state":"done","app":"claude-code"}}
+{"why":"child record with id path and progress","bytes":"\u001b]7501;id=build/test:state=working:progress=40\u001b\\","expect":{"id":"build/test","state":"working","progress":40}}
+{"why":"clear removes record and children","bytes":"\u001b]7501;state=clear:id=build\u001b\\","expect":{"id":"build","state":"clear"}}
+{"why":"malformed (state missing) is discarded whole","bytes":"\u001b]7501;kind=permission\u001b\\","expect":null}

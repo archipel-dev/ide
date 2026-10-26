@@ -55,6 +55,18 @@ pub fn tool_window_header(
     actions: impl FnOnce(&mut egui::Ui),
 ) -> bool {
     let mut hide = false;
+    panel_header(ui, title, |ui| {
+        if icons::button(ui, Icon::Minimize, "Hide").clicked() {
+            hide = true;
+        }
+        actions(ui);
+    });
+    hide
+}
+
+/// Title bar of a panel that cannot be hidden (Agents mode sidebar, Changes, Review):
+/// the title on the left, `actions` right-aligned (laid out right to left).
+pub fn panel_header(ui: &mut egui::Ui, title: &str, actions: impl FnOnce(&mut egui::Ui)) {
     let (rect, _) = ui.allocate_exact_size(
         vec2(ui.available_width(), tool_window_header_height(ui.ctx())),
         Sense::hover(),
@@ -71,12 +83,8 @@ pub fn tool_window_header(
     );
     child.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         ui.spacing_mut().item_spacing.x = 2.0;
-        if icons::button(ui, Icon::Minimize, "Hide").clicked() {
-            hide = true;
-        }
         actions(ui);
     });
-    hide
 }
 
 /// Full-width list row with hover/selection painting, for callers that paint the

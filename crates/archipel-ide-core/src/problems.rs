@@ -223,12 +223,55 @@ pub fn document_problems(document: &Document, published: Option<&[LspDiagnostic]
     problems
 }
 
+/// Problems of an open document from the daemon's markup (`native`) and the
+/// server's diagnostics. The daemon's own syntax errors give way to the
+/// server's once it has published (servers report syntax errors themselves);
+/// without daemon data the parse errors of the editor are shown.
+pub fn document_problems_with(
+    document: &Document,
+    published: Option<&[LspDiagnostic]>,
+    native: Option<&[Problem]>,
+) -> Vec<Problem> {
+    let Some(native) = native else {
+        return document_problems(document, published);
+    };
+    let mut problems: Vec<Problem> = match published {
+        Some(diagnostics) => {
+            let mut all: Vec<Problem> = diagnostics
+                .iter()
+                .map(|diagnostic| from_lsp(diagnostic, Some(&document.text)))
+                .collect();
+            all.extend(
+                native
+                    .iter()
+                    .filter(|p| p.source.as_deref() != Some("syntax"))
+                    .cloned(),
+            );
+            all
+        }
+        None => native.to_vec(),
+    };
+    sort(&mut problems);
+    problems
+}
+
 /// Builds the project-wide index from open documents and every published
 /// diagnostic. `root` must be canonical, like the paths servers publish.
+#[cfg(test)]
 pub fn build_index<'a>(
     root: &Path,
     documents: &[Document],
     published: impl IntoIterator<Item = (&'a Path, &'a [LspDiagnostic])>,
+) -> ProblemIndex {
+    build_index_with(root, documents, published, &BTreeMap::new())
+}
+
+/// [`build_index`] with the daemon's problems of the open documents (by path).
+pub fn build_index_with<'a>(
+    root: &Path,
+    documents: &[Document],
+    published: impl IntoIterator<Item = (&'a Path, &'a [LspDiagnostic])>,
+    native: &BTreeMap<PathBuf, Vec<Problem>>,
 ) -> ProblemIndex {
     let mut by_path: BTreeMap<PathBuf, Option<&'a [LspDiagnostic]>> = documents
         .iter()
@@ -243,7 +286,9 @@ pub fn build_index<'a>(
     let mut error_paths = BTreeSet::new();
     for (path, published) in by_path {
         let mut problems = match documents.iter().find(|document| document.path == path) {
-            Some(document) => document_problems(document, published),
+            Some(document) => {
+                document_problems_with(document, published, native.get(&path).map(Vec::as_slice))
+            }
             None => {
                 let mut problems: Vec<Problem> = published
                     .unwrap_or_default()
@@ -280,7 +325,80 @@ pub(crate) struct ActiveProblemsCache {
     problems: std::sync::Arc<Vec<Problem>>,
 }
 
+/// Converts a highlight into a problem of `document`.
+fn from_highlight(
+    document: &Document,
+    info: &archipel_ide_analysis::HighlightInfo,
+) -> Option<Problem> {
+    use archipel_ide_analysis::HighlightKind;
+    let severity = match info.kind {
+        HighlightKind::Unused | HighlightKind::Deprecated | HighlightKind::MarkedForRemoval
+            if !info.severity.is_problem() =>
+        {
+            Severity::Hint
+        }
+        _ if info.severity >= archipel_ide_analysis::Severity::ERROR => Severity::Error,
+        _ if info.severity >= archipel_ide_analysis::Severity::WARNING => Severity::Warning,
+        _ if info.severity >= archipel_ide_analysis::Severity::WEAK_WARNING => {
+            Severity::WeakWarning
+        }
+        _ => return None,
+    };
+    let text = &document.text;
+    let to_char =
+        |byte: u32| text.byte_to_char((byte as usize).min(text.len_chars().saturating_mul(4)));
+    let (start, end) = (
+        to_char(info.range.start).min(text.len_chars()),
+        to_char(info.range.end).min(text.len_chars()),
+    );
+    let (line, column) = text.char_to_line_column(start).unwrap_or((0, 0));
+    let (end_line, end_column) = text.char_to_line_column(end).unwrap_or((line, column));
+    let tool = info.tool.as_str();
+    let tool = tool.strip_prefix("native:").unwrap_or(tool);
+    Some(Problem {
+        severity,
+        message: info.message.as_deref().unwrap_or("").to_owned(),
+        source: Some(tool.to_owned()),
+        code: None,
+        line,
+        column,
+        end_line,
+        end_column,
+        unnecessary: matches!(info.kind, HighlightKind::Unused),
+        deprecated: matches!(
+            info.kind,
+            HighlightKind::Deprecated | HighlightKind::MarkedForRemoval
+        ),
+    })
+}
+
 impl IdeState {
+    /// The daemon's problems of an open document, converted to lines and
+    /// columns; `None` while the daemon has nothing for the current text.
+    pub(crate) fn native_problems(&self, document: &Document) -> Option<Vec<Problem>> {
+        let service = self.daemon_service()?;
+        let file = self.analysis.host.lookup(&document.path)?;
+        let daemon = service.lock();
+        let markup = daemon.markup(file)?;
+        if markup.rev() != archipel_ide_analysis::FileRev(document.text.revision()) {
+            return None;
+        }
+        Some(
+            markup
+                .iter()
+                .filter(|info| !info.file_level || info.severity.is_problem())
+                .filter(|info| {
+                    !matches!(
+                        info.kind,
+                        archipel_ide_analysis::HighlightKind::Semantic(_)
+                            | archipel_ide_analysis::HighlightKind::TextAttributes(_)
+                    )
+                })
+                .filter_map(|info| from_highlight(document, info))
+                .collect(),
+        )
+    }
+
     /// [`IdeState::active_problems`], recomputed only when the document revision
     /// or the diagnostics generation changed.
     pub fn cached_active_problems(&mut self) -> std::sync::Arc<Vec<Problem>> {
@@ -294,7 +412,7 @@ impl IdeState {
             index,
             document.path.clone(),
             document.text.revision(),
-            self.lsp.diagnostics_generation(),
+            self.lsp.diagnostics_generation() ^ self.daemon_version().rotate_left(32),
         );
         // One entry per document, so split groups showing different files
         // don't evict each other.
@@ -325,7 +443,8 @@ impl IdeState {
         let published = self
             .lsp
             .published_diagnostics(&project.root().join(&document.path));
-        document_problems(document, published.as_deref())
+        let native = self.native_problems(document);
+        document_problems_with(document, published.as_deref(), native.as_deref())
     }
 
     pub fn active_problems(&self) -> Vec<Problem> {
@@ -344,6 +463,7 @@ impl IdeState {
             use std::hash::{Hash, Hasher};
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
             self.lsp.diagnostics_generation().hash(&mut hasher);
+            self.daemon_version().hash(&mut hasher);
             for document in &self.documents {
                 document.path.hash(&mut hasher);
                 document.text.revision().hash(&mut hasher);
@@ -357,7 +477,13 @@ impl IdeState {
             .root()
             .canonicalize()
             .unwrap_or_else(|_| project.root().to_owned());
-        self.problems = build_index(&root, &self.documents, self.lsp.all_diagnostics());
+        let native: BTreeMap<PathBuf, Vec<Problem>> = self
+            .documents
+            .iter()
+            .filter_map(|document| Some((document.path.clone(), self.native_problems(document)?)))
+            .collect();
+        self.problems =
+            build_index_with(&root, &self.documents, self.lsp.all_diagnostics(), &native);
         self.problems.key = Some(key);
     }
 

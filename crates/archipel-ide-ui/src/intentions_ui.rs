@@ -44,7 +44,11 @@ pub fn handle(app: &mut IdeApp, ctx: &egui::Context) {
         })
     };
     if app.state.code_actions.popup {
-        if app.state.current_code_actions().is_none() {
+        if app
+            .state
+            .current_alerts()
+            .is_none_or(|set| set.actions.is_empty())
+        {
             app.state.code_actions.popup = false;
         } else {
             popup_keys(app, ctx, &consume);
@@ -88,30 +92,65 @@ fn request_when_resting(app: &mut IdeApp, ctx: &egui::Context) {
         return;
     }
     ctx.data_mut(|data| data.insert_temp(id, (Some(key), since, true)));
-    if app.state.current_code_actions().is_none() && app.state.active_supports_code_actions() {
-        // Background refresh: failures (server busy, …) are not worth a status message.
+    if app.state.current_code_actions().is_none() {
+        // Background refresh (native actions are computed at once): failures
+        // (server busy, …) are not worth a status message.
         let _ = app
             .commands
             .execute("code.requestActions", &mut app.state, Value::Null);
     }
 }
 
-/// Display order: quick fixes first, then intentions, keeping server order.
-fn display_order(app: &IdeApp) -> Vec<usize> {
-    let Some(list) = app.state.current_code_actions() else {
+/// One visible row of the popup.
+#[derive(Clone)]
+enum Row {
+    /// Index into the alert set.
+    Action(usize),
+    /// A submenu header (title, expanded).
+    Submenu(String, bool),
+}
+
+fn expanded_id() -> egui::Id {
+    egui::Id::new("intention_expanded_submenu")
+}
+
+/// Rows in display order: the set's order, with each submenu collapsed into
+/// one header row below the actions of its inspection (expanded on demand).
+fn display_rows(set: &archipel_ide_core::intentions::AlertSet, expanded: Option<&str>) -> Vec<Row> {
+    let mut rows = Vec::new();
+    let mut titles: Vec<String> = Vec::new();
+    for (index, action) in set.actions.iter().enumerate() {
+        match &action.submenu {
+            None => rows.push(Row::Action(index)),
+            Some(title) if !titles.contains(title) => titles.push(title.clone()),
+            Some(_) => {}
+        }
+    }
+    for title in titles {
+        let open = expanded == Some(title.as_str());
+        rows.push(Row::Submenu(title.clone(), open));
+        if open {
+            for (index, action) in set.actions.iter().enumerate() {
+                if action.submenu.as_deref() == Some(title.as_str()) {
+                    rows.push(Row::Action(index));
+                }
+            }
+        }
+    }
+    rows
+}
+
+fn current_rows(app: &mut IdeApp, ctx: &egui::Context) -> Vec<Row> {
+    let Some(set) = app.state.current_alerts() else {
         return Vec::new();
     };
-    let mut order: Vec<usize> = (0..list.items.len()).collect();
-    order.sort_by_key(|&index| {
-        let item = &list.items[index];
-        (!item.quick_fix, !item.preferred, item.disabled.is_some())
-    });
-    order
+    let expanded: Option<String> = ctx.data(|data| data.get_temp(expanded_id()));
+    display_rows(&set, expanded.as_deref())
 }
 
 fn popup_keys(app: &mut IdeApp, ctx: &egui::Context, consume: &dyn Fn(Modifiers, Key) -> bool) {
-    let order = display_order(app);
-    let count = order.len();
+    let rows = current_rows(app, ctx);
+    let count = rows.len();
     let mut selected: usize = ctx.data(|data| data.get_temp(selected_id()).unwrap_or(0));
     if consume(Modifiers::NONE, Key::ArrowDown) && count > 0 {
         selected = (selected + 1) % count;
@@ -124,10 +163,20 @@ fn popup_keys(app: &mut IdeApp, ctx: &egui::Context, consume: &dyn Fn(Modifiers,
         app.state.code_actions.popup = false;
         return;
     }
-    if consume(Modifiers::NONE, Key::Enter)
-        && let Some(&index) = order.get(selected)
-    {
-        app.dispatch("code.applyAction", json!({"index": index}));
+    if consume(Modifiers::NONE, Key::Enter) {
+        match rows.get(selected) {
+            Some(Row::Action(index)) => {
+                app.dispatch("code.applyAlert", json!({"index": index}));
+            }
+            Some(Row::Submenu(title, open)) => {
+                let next = (!open).then(|| title.clone());
+                ctx.data_mut(|data| match next {
+                    Some(title) => data.insert_temp(expanded_id(), title),
+                    None => data.remove::<String>(expanded_id()),
+                });
+            }
+            None => {}
+        }
     }
 }
 
@@ -143,16 +192,16 @@ fn paint_bulb(painter: &egui::Painter, center: Pos2, color: Color32) {
 
 /// The lightbulb at the caret line; a click opens the popup.
 pub fn lightbulb(app: &mut IdeApp, ui: &mut egui::Ui, anchor: Option<Pos2>) {
-    let (Some(anchor), Some(list)) = (anchor, app.state.current_code_actions()) else {
+    let Some(anchor) = anchor else {
         return;
     };
-    if list.items.is_empty() {
+    let Some(set) = app.state.current_alerts() else {
         return;
-    }
-    let color = if list.has_quick_fix() {
-        BULB_RED
-    } else {
-        BULB_YELLOW
+    };
+    let color = match set.bulb() {
+        archipel_ide_core::intentions::Bulb::None => return,
+        archipel_ide_core::intentions::Bulb::ErrorFix => BULB_RED,
+        archipel_ide_core::intentions::Bulb::Intention => BULB_YELLOW,
     };
     let rect = Rect::from_center_size(anchor, vec2(18.0, 18.0));
     let response = ui.interact(rect, egui::Id::new("intention_bulb"), Sense::click());
@@ -176,15 +225,16 @@ pub fn popup(app: &mut IdeApp, ctx: &egui::Context) {
     if !app.state.code_actions.popup {
         return;
     }
-    let Some(list) = app.state.current_code_actions().cloned() else {
+    let Some(set) = app.state.current_alerts() else {
         return;
     };
-    let order = display_order(app);
+    let rows = current_rows(app, ctx);
     let selected: usize = ctx.data(|data| data.get_temp(selected_id()).unwrap_or(0));
     let anchor = app
         .caret_screen_pos
         .unwrap_or_else(|| ctx.content_rect().center());
     let mut apply = None;
+    let mut toggle: Option<Option<String>> = None;
     let response = egui::Area::new(egui::Id::new("intention_popup"))
         .order(egui::Order::Foreground)
         .fixed_pos(anchor + vec2(-24.0, 4.0))
@@ -195,70 +245,85 @@ pub fn popup(app: &mut IdeApp, ctx: &egui::Context) {
                     ui.set_min_width(320.0);
                     ui.spacing_mut().item_spacing.y = 0.0;
                     let font = egui::FontId::proportional(theme::UI_FONT_SIZE);
-                    let width = order
+                    let label = |row: &Row| match row {
+                        Row::Action(index) => set.actions[*index].text.clone(),
+                        Row::Submenu(title, _) => title.clone(),
+                    };
+                    let width = rows
                         .iter()
-                        .map(|&index| {
+                        .map(|row| {
                             ui.painter()
-                                .layout_no_wrap(
-                                    list.items[index].title.clone(),
-                                    font.clone(),
-                                    *theme::TEXT,
-                                )
+                                .layout_no_wrap(label(row), font.clone(), *theme::TEXT)
                                 .size()
                                 .x
                         })
                         .fold(320.0_f32, f32::max)
                         .min(720.0)
-                        + 48.0;
-                    for (row, &index) in order.iter().enumerate() {
-                        let item = &list.items[index];
+                        + 64.0;
+                    for (position, row) in rows.iter().enumerate() {
                         let (rect, response) =
                             ui.allocate_exact_size(vec2(width, 24.0), Sense::click());
-                        if row == selected {
+                        if position == selected {
                             ui.painter()
                                 .rect_filled(rect, 4.0, theme::COMPLETION_SELECTION);
                         } else if response.hovered() {
                             ui.painter().rect_filled(rect, 4.0, theme::HOVER);
                         }
-                        let color = if item.quick_fix {
-                            BULB_RED
-                        } else {
-                            BULB_YELLOW
+                        let (indent, text, color) = match row {
+                            Row::Action(index) => {
+                                let action = &set.actions[*index];
+                                let error = matches!(
+                                    action.group,
+                                    archipel_ide_core::intentions::IntentionGroup::Error
+                                        | archipel_ide_core::intentions::IntentionGroup::RemoteError
+                                );
+                                (
+                                    if action.submenu.is_some() { 30.0 } else { 0.0 },
+                                    action.text.clone(),
+                                    if error { BULB_RED } else { BULB_YELLOW },
+                                )
+                            }
+                            Row::Submenu(title, open) => (
+                                0.0,
+                                format!("{} {title}", if *open { "v" } else { ">" }),
+                                BULB_YELLOW,
+                            ),
                         };
-                        paint_bulb(
-                            ui.painter(),
-                            egui::pos2(rect.left() + 14.0, rect.center().y),
-                            color,
-                        );
-                        let text_color = if item.disabled.is_some() {
-                            theme::TEXT_DISABLED
-                        } else {
-                            theme::TEXT_BRIGHT
-                        };
+                        if matches!(row, Row::Action(_)) {
+                            paint_bulb(
+                                ui.painter(),
+                                egui::pos2(rect.left() + 14.0 + indent, rect.center().y),
+                                color,
+                            );
+                        }
                         crate::widgets::row_text(
                             ui,
                             rect,
-                            rect.left() + 30.0,
-                            &item.title,
+                            rect.left() + 30.0 + indent,
+                            &text,
                             font.clone(),
-                            text_color,
+                            theme::TEXT_BRIGHT,
                         );
-                        let response = match &item.disabled {
-                            Some(reason) => response.on_hover_text(reason),
-                            None => response,
-                        };
                         if response.clicked() {
-                            apply = Some(index);
+                            match row {
+                                Row::Action(index) => apply = Some(*index),
+                                Row::Submenu(title, open) => {
+                                    toggle = Some((!open).then(|| title.clone()));
+                                }
+                            }
                         }
-                    }
-                    if order.is_empty() {
-                        ui.label(egui::RichText::new("No actions").color(theme::TEXT_SECONDARY));
                     }
                 });
         })
         .response;
+    if let Some(next) = toggle {
+        ctx.data_mut(|data| match next {
+            Some(title) => data.insert_temp(expanded_id(), title),
+            None => data.remove::<String>(expanded_id()),
+        });
+    }
     if let Some(index) = apply {
-        app.dispatch("code.applyAction", json!({"index": index}));
+        app.dispatch("code.applyAlert", json!({"index": index}));
         ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
     } else if ctx.input(|input| input.pointer.any_pressed()) && !response.contains_pointer() {
         app.state.code_actions.popup = false;

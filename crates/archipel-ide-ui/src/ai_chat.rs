@@ -827,6 +827,12 @@ fn markdown(ui: &mut egui::Ui, turn: usize, text: &str, done: bool, actions: &mu
     }
 }
 
+/// Renders markdown without code-block actions (agent transcripts); `key` keeps
+/// scroll areas of different messages apart.
+pub(crate) fn render_markdown(ui: &mut egui::Ui, key: usize, text: &str) {
+    markdown(ui, key, text, false, &mut Vec::new());
+}
+
 /// Code block text with the editor's syntax colors when the fence names a known language.
 fn highlighted(language: &str, code: &str) -> LayoutJob {
     let base = egui::TextFormat {

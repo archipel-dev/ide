@@ -394,6 +394,7 @@ dependencies = [
  "archipel-ide-bazel",
  "archipel-ide-command",
  "archipel-ide-compat",
+ "archipel-ide-daemon",
  "archipel-ide-dap",
  "archipel-ide-git",
  "archipel-ide-gradle",
@@ -422,6 +423,21 @@ dependencies = [
  "tempfile",
  "toml",
  "url",
+]
+
+[[package]]
+name = "archipel-ide-daemon"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-analysis",
+ "archipel-ide-language",
+ "parking_lot",
+ "proptest",
+ "serde",
+ "similar",
+ "smallvec",
+ "thiserror 2.0.21",
+ "toml",
 ]
 
 [[package]]

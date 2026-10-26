@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 754ca0476a8f8b3340037f3d3dd38147691ce6800feddfdcda1a98435b60cec9 # shrinks to ops = [Write { slot: 1, content: 0, variant: 0 }, RenameDir { from: 1, to: 3 }]
+cc e9e7495d6ff846df8ff6125724264cda646b1a98cbe432838acb1f11189eee3e # shrinks to ops = [Write { slot: 5, content: 0, variant: 0 }, Delete { slot: 5 }]
+cc 5e5825bc5770d2fa930335e33a866935f1b5ae8673bae070729896abd2f3430d # shrinks to ops = [Write { slot: 4, content: 0, variant: 0 }, Rename { from: 4, to: 6 }, Settle, Rename { from: 6, to: 0 }]

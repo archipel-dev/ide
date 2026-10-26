@@ -46,7 +46,9 @@ mod gradle_banner;
 mod gradle_window;
 mod gutter_popup;
 mod hierarchy_ui;
+mod history_ui;
 mod icons;
+mod index_status;
 mod intentions_ui;
 mod keybindings;
 mod keys;
@@ -81,6 +83,7 @@ mod terminal_ui;
 mod test_view;
 mod theme;
 mod theme_engine;
+mod todo_window;
 mod toolbar_gradient;
 mod toolchain_banner;
 mod toolchain_status;
@@ -231,6 +234,11 @@ impl IdeApp {
         if let Some(dir) = archipel_ide_settings::default_config_dir() {
             app.state.detect_first_run(&dir);
         }
+        // Indexes persist across restarts (tests keep them in memory).
+        let index_dir = archipel_ide_compat::env_var_os("ARCHIPEL_INDEX_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(archipel_ide_lsp::registry::cache_dir);
+        app.state.enable_index_persistence(Some(index_dir));
         app
     }
 
@@ -689,6 +697,8 @@ impl IdeApp {
                 self.dispatch("debug.closeBreakpointEditor", Value::Null);
             } else if self.menu_bar_open {
                 self.menu_bar_open = false;
+            } else if self.state.analysis.history.dialog.is_some() {
+                self.dispatch("history.close", Value::Null);
             } else if self.state.about_open {
                 self.dispatch("app.closeAbout", Value::Null);
             } else if self.state.first_run_open {
@@ -916,6 +926,10 @@ impl IdeApp {
         }
         self.state.poll_lsp();
         self.state.poll_analysis();
+        if !self.state.analysis.index.is_idle() {
+            // Indexing progress changes the status bar without user input.
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
         self.state.poll_updates();
         if self.state.poll_android() {
             ctx.request_repaint();
@@ -1057,6 +1071,7 @@ impl IdeApp {
         crash_notice::show(self, ctx);
         first_run::show(self, ctx);
         about::show(self, ctx);
+        history_ui::show(self, ctx);
         android_run_ui::show(self, ctx);
         lsp_status::notices(self, ctx);
         plugin_ui::notifications(self, ctx);

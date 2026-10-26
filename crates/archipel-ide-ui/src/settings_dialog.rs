@@ -557,8 +557,11 @@ fn page(
                 .enabled(!dialog.forward.is_empty()),
             );
             let back = ui.add(
-                archipel_kit::action_system::ActionButton::new(archipel_kit::Glyph::ArrowLeft, "Back")
-                    .enabled(!dialog.back.is_empty()),
+                archipel_kit::action_system::ActionButton::new(
+                    archipel_kit::Glyph::ArrowLeft,
+                    "Back",
+                )
+                .enabled(!dialog.back.is_empty()),
             );
             if forward.clicked() {
                 dialog.navigate(false);

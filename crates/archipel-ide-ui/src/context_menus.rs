@@ -548,7 +548,8 @@ fn render(ui: &mut egui::Ui, items: &[MenuItem], model: &Model, chosen: &mut Opt
             MenuItem::Submenu { label, items, .. } => {
                 // The kit has no submenu item yet: a kit `MenuItem` with an arrow, opened
                 // by egui's submenu logic, so it lines up with the actions around it.
-                let entry = ui.add(archipel_kit::action_system::ActionMenuItem::new(label).shortcut("›"));
+                let entry =
+                    ui.add(archipel_kit::action_system::ActionMenuItem::new(label).shortcut("›"));
                 egui::containers::menu::SubMenu::new().show(ui, &entry, |ui| {
                     ui.set_min_width(200.0);
                     render(ui, items, model, chosen);

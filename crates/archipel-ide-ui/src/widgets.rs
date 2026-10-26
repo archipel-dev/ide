@@ -2,11 +2,11 @@
 
 use crate::icons::{self, Icon};
 use crate::theme;
-use archipel_kit::behaviour::{Behaviour, Behaviours};
 use archipel_kit::action_system::ActionMenuItem;
-use archipel_kit::ui::ColoredListCellRenderer;
+use archipel_kit::behaviour::{Behaviour, Behaviours};
 use archipel_kit::parts::{State, Surface, Tone, row_pill};
 use archipel_kit::tokens::size;
+use archipel_kit::ui::ColoredListCellRenderer;
 use archipel_kit::{Theme, cursor};
 use eframe::egui::{self, Color32, Rect, Sense, vec2};
 
@@ -732,6 +732,8 @@ mod tests {
     fn tree_rows_pick_the_kit_tone_of_their_color() {
         let ctx = egui::Context::default();
         crate::theme::install(&ctx);
+        // The active palette is process-global; pin the measured dark theme.
+        Theme::dark().apply(&ctx);
         let colors = Theme::colors(&ctx);
         // Tones that share a color (modified files and links) are interchangeable: the
         // tone found draws the same color.

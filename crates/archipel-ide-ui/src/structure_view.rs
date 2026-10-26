@@ -7,10 +7,10 @@ use crate::widgets;
 use crate::{IdeApp, theme};
 use archipel_ide_core::Document;
 use archipel_ide_language::{StructureItem, SymbolKind, structure};
-use archipel_kit::behaviour::PopupHandler;
 use archipel_kit::action_system::ActionMenuItem;
-use archipel_kit::ui::{ColoredListCellRenderer, JBList};
+use archipel_kit::behaviour::PopupHandler;
 use archipel_kit::icons::{Glyph, Symbol, SymbolKind as Kind};
+use archipel_kit::ui::{ColoredListCellRenderer, JBList};
 use eframe::egui;
 use serde_json::json;
 use std::path::PathBuf;
@@ -309,7 +309,10 @@ pub fn tool_window(app: &mut IdeApp, ui: &mut egui::Ui) {
     let target = |index: usize| (*visible[index].1).clone();
     let navigate_to = match (out.activated, selected) {
         (Some(index), _) => Some((target(index), true)),
-        (None, Some(index)) if out.selection_changed && toggle.is_none() => {
+        // A right click selects the row for its menu; it must not move the editor caret.
+        (None, Some(index))
+            if out.selection_changed && toggle.is_none() && out.secondary_clicked.is_none() =>
+        {
             Some((target(index), !by_key))
         }
         _ => None,

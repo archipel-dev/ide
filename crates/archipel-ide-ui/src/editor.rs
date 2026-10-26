@@ -1112,13 +1112,10 @@ fn paint_collapsed_tail(
 ) {
     let folded = crate::syntax::attributes("FOLDED_TEXT_ATTRIBUTES");
     let width = row.placeholder.chars().count() as f32 * char_width;
-    let to_color = |rgba: archipel_ide_language::Rgba| Color32::from_rgb(rgba.r, rgba.g, rgba.b);
     painter.rect_filled(
         Rect::from_min_size(origin + vec2(0.0, 3.0), vec2(width, row_height - 6.0)),
         3.0,
-        folded
-            .background
-            .map_or(*theme::editor::MATCHED_BRACE, to_color),
+        folded.background.unwrap_or(*theme::editor::MATCHED_BRACE),
     );
     painter.text(
         origin + vec2(0.0, row_height / 2.0),
@@ -1127,7 +1124,7 @@ fn paint_collapsed_tail(
         font.clone(),
         folded
             .foreground
-            .map_or(*theme::editor::LINE_NUMBER_CARET, to_color),
+            .unwrap_or(*theme::editor::LINE_NUMBER_CARET),
     );
     let end_line_start = document.text.line_to_char(row.end_line).unwrap_or(0);
     let end_text = document.text.line(row.end_line).unwrap_or_default();

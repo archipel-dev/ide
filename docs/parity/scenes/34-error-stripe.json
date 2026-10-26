@@ -10,6 +10,8 @@
     {"op": "sleep", "ms": 1500},
     {"op": "key", "chord": "Alt+6"},
     {"op": "wait", "until": "idle"},
+    {"op": "assert", "pointer": "/activeTab", "equals": "src/broken.rs"},
+    {"op": "assert", "pointer": "/editor/text", "contains": "// TODO later"},
     {"op": "screenshot", "name": "34-error-stripe.png"}
   ]
 }

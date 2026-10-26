@@ -9,6 +9,7 @@
     {"op": "execute", "command": "settings.open", "args": {"page": "Errors"}},
     {"op": "wait", "until": "idle"},
     {"op": "sleep", "ms": 500},
+    {"op": "assert", "pointer": "/activeTab", "equals": "src/broken.rs"},
     {"op": "screenshot", "name": "33-settings-inspections.png"}
   ]
 }

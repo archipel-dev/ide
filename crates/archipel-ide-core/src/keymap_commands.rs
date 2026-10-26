@@ -227,9 +227,18 @@ pub const ACTION_COMMANDS: &[ActionCommand] = &[
     menu("CheckForUpdate", "app.checkForUpdates"),
 ];
 
+/// Archipel-only actions: no reference id, so no bundled shortcut, but a keymap override
+/// can bind them like any other action.
+pub const ARCHIPEL_ACTIONS: &[ActionCommand] = &[global(
+    "Archipel.ToggleAgentsMode",
+    "workbench.toggleMode",
+    "{}",
+)];
+
 pub fn command_for_action(action: &str) -> Option<&'static ActionCommand> {
     ACTION_COMMANDS
         .iter()
+        .chain(ARCHIPEL_ACTIONS)
         .find(|binding| binding.action == action)
 }
 
@@ -237,6 +246,7 @@ pub fn command_for_action(action: &str) -> Option<&'static ActionCommand> {
 pub fn actions_for_command(command: &str) -> impl Iterator<Item = &'static str> + '_ {
     ACTION_COMMANDS
         .iter()
+        .chain(ARCHIPEL_ACTIONS)
         .filter(move |binding| binding.command == command)
         .map(|binding| binding.action)
 }

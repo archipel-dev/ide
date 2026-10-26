@@ -78,6 +78,9 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
         .show(ctx, |ui| {
             let mut body = |app: &mut IdeApp, ui: &mut egui::Ui, strip: Option<&TabStrip>| {
                 let primary = strip.is_none_or(|strip| strip.primary);
+                if primary {
+                    crate::agents_ui::back_banner(app, ui);
+                }
                 tabs(app, ui, strip);
                 if app.state.diff_active && app.state.diff.is_some() {
                     crate::diff_ui::show(app, ui);

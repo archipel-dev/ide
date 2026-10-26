@@ -68,5 +68,6 @@ Chords use the Linux keymap (`Alt+0`, `Alt+F12`); `Primary` means ⌘ on macOS a
 | 20 Problems | `20-problems.json` | Alt+6 lists the 2 syntax errors of `src/broken.rs` |
 | 30 Indexing | `30-indexing.json` | while the content indexes build the IDE is in dumb mode with `FileName` ready and `Words` building; afterwards every index is ready |
 | 31 TODO window | `31-todo.json` | an outside change adds a TODO and a FIXME comment (a TODO in a string is ignored): the TODO window lists 2 items for the project and for the current file |
+| 32 Local History | `32-history.json` | an outside change to an open file records two revisions (initial and external); Show History lists them and previews the diff of the older one |
 
 Coordinates in `click`/`move` are logical points in the default 1440×900 window.

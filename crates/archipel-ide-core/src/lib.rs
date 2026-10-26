@@ -572,6 +572,11 @@ impl IdeState {
     }
     pub fn save(&mut self, index: usize) -> Result<(), String> {
         disk_sync::ensure_no_conflict(self, index)?;
+        // Local History: keep what the disk held before the first overwrite.
+        let history_path = self.documents.get(index).map(|d| d.path.clone());
+        let history_previous = history_path
+            .as_deref()
+            .and_then(|path| self.history_previous(path));
         let project = self.project.as_ref().ok_or("no project is open")?;
         let document = self
             .documents
@@ -586,6 +591,9 @@ impl IdeState {
         self.status = format!("Saved {}", document.path.display());
         let absolute = project.root().join(&document.path);
         let _ = self.lsp.save_document(&absolute);
+        if let Some(path) = history_path {
+            self.history_saved(&path, history_previous.as_deref(), &text);
+        }
         Ok(())
     }
 

@@ -46,6 +46,7 @@ mod gradle_banner;
 mod gradle_window;
 mod gutter_popup;
 mod hierarchy_ui;
+mod history_ui;
 mod icons;
 mod index_status;
 mod intentions_ui;
@@ -692,6 +693,8 @@ impl IdeApp {
                 self.dispatch("debug.closeBreakpointEditor", Value::Null);
             } else if self.menu_bar_open {
                 self.menu_bar_open = false;
+            } else if self.state.analysis.history.dialog.is_some() {
+                self.dispatch("history.close", Value::Null);
             } else if self.state.about_open {
                 self.dispatch("app.closeAbout", Value::Null);
             } else if self.state.first_run_open {
@@ -1064,6 +1067,7 @@ impl IdeApp {
         crash_notice::show(self, ctx);
         first_run::show(self, ctx);
         about::show(self, ctx);
+        history_ui::show(self, ctx);
         android_run_ui::show(self, ctx);
         lsp_status::notices(self, ctx);
         plugin_ui::notifications(self, ctx);

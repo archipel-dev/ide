@@ -42,6 +42,7 @@ impl IdeState {
     pub(crate) fn sync_index_project(&mut self) {
         let root = self.project.as_ref().map(|p| p.root().to_path_buf());
         let cache = self.analysis.index_cache_dir.clone();
+        self.sync_history_project();
         let todo = self.todo_settings();
         let waker = self.waker.clone();
         let services = &mut self.analysis;

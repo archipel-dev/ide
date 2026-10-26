@@ -192,6 +192,16 @@ impl IdeState {
 
     /// Replaces the buffer with `disk` as one undoable edit and marks it saved.
     fn load_disk_text(&mut self, index: usize, disk: &str) {
+        if self.analysis.history.is_enabled() {
+            // Local History: the outside version becomes a revision.
+            let document = &self.documents[index];
+            let (path, buffer, dirty) = (
+                document.path.clone(),
+                document.text.text(),
+                document.text.is_dirty(),
+            );
+            self.history_external(&path, &buffer, dirty, disk);
+        }
         let document = &mut self.documents[index];
         if document.text.replace_from_snapshot(disk).is_err() {
             document.text = archipel_ide_text::TextDocument::new(disk);

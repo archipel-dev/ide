@@ -53,6 +53,8 @@ pub mod ids {
     /// Switched-off live template groups and templates (`group` or `group/abbreviation`).
     pub const LIVE_TEMPLATES_DISABLED: &str = "editor.liveTemplates.disabled";
     /// TODO patterns, one `i|s <color key> <regex>` line each (`i`: ignore case).
+    /// Days Local History keeps revisions.
+    pub const LOCAL_HISTORY_DAYS: &str = "system.localHistory.retentionDays";
     pub const TODO_PATTERNS: &str = "editor.todo.patterns";
     /// TODO tool window filters, one `Name: 0,1` line each (pattern indexes).
     pub const TODO_FILTERS: &str = "editor.todo.filters";
@@ -600,6 +602,14 @@ fn add_definitions(registry: &mut SettingsRegistry) {
             B(true),
         )
         .group("Project"),
+        SettingDef::new(
+            ids::LOCAL_HISTORY_DAYS,
+            "preferences.general",
+            "Keep Local History for (days)",
+            SettingKind::Int { min: 1, max: 365 },
+            I(5),
+        )
+        .group("Local History"),
         SettingDef::new(
             ids::AUTOSAVE_FOCUS,
             "preferences.general",

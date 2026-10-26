@@ -1,0 +1,9 @@
+; Control flow that keeps its header pinned (definitions come from tags.scm).
+(for_statement) @sticky
+(for_range_loop) @sticky
+(while_statement) @sticky
+(do_statement) @sticky
+(if_statement) @sticky
+(switch_statement) @sticky
+(try_statement) @sticky
+(lambda_expression) @sticky

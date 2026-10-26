@@ -91,7 +91,7 @@ impl Document {
     /// file opens.
     pub fn collapse_default_regions(&mut self) {
         for fold in self.analysis.folds_in(0..self.analysis.source.len()) {
-            if matches!(fold.kind, FoldKind::Imports | FoldKind::OneLineBody) {
+            if fold.collapsed_by_default {
                 self.folds.collapse(&fold);
             }
         }
@@ -172,14 +172,14 @@ impl Document {
         if start_line == end_line {
             return false;
         }
-        let fold = FoldRange {
-            start_byte: self.text.char_to_byte(start),
-            end_byte: self.text.char_to_byte(end),
+        let fold = FoldRange::new(
+            self.text.char_to_byte(start),
+            self.text.char_to_byte(end),
             start_line,
             end_line,
-            placeholder: "...".into(),
-            kind: FoldKind::Block,
-        };
+            "...".into(),
+            FoldKind::Block,
+        );
         if self.folds.is_collapsed(&fold) {
             self.folds.expand(&fold);
         } else {

@@ -1,21 +1,13 @@
-; Archipel IDE extensions appended after the upstream tree-sitter-java tags query,
-; covering declarations IntelliJ's Structure view lists that upstream omits.
-
-(constructor_declaration
-  name: (identifier) @name) @definition.constructor
-
-(field_declaration
-  declarator: (variable_declarator
-    name: (identifier) @name)) @definition.field
-
-(enum_declaration
-  name: (identifier) @name) @definition.enum
-
-(enum_constant
-  name: (identifier) @name) @definition.constant
-
-(record_declaration
-  name: (identifier) @name) @definition.class
-
-(annotation_type_declaration
-  name: (identifier) @name) @definition.interface
+; Java structure: declarations with their modifiers and details.
+(class_declaration (modifiers)? @modifier name: (identifier) @name) @definition.class
+(interface_declaration (modifiers)? @modifier name: (identifier) @name) @definition.interface
+(annotation_type_declaration (modifiers)? @modifier name: (identifier) @name) @definition.interface
+(enum_declaration (modifiers)? @modifier name: (identifier) @name) @definition.enum
+(record_declaration (modifiers)? @modifier name: (identifier) @name) @definition.class
+(constructor_declaration (modifiers)? @modifier name: (identifier) @name) @definition.constructor
+(method_declaration (modifiers)? @modifier name: (identifier) @name) @definition.method
+(field_declaration (modifiers)? @modifier
+  type: (_) @detail
+  declarator: (variable_declarator name: (identifier) @name)
+  (#set! detail.prefix ": ")) @definition.field
+(enum_constant name: (identifier) @name) @definition.constant

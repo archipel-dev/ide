@@ -1,47 +1,15 @@
-; Vendored from tree-sitter-kotlin-sg 0.4.1 (queries/tags.scm), MIT License,
-; https://github.com/ast-grep/tree-sitter-kotlin. The crate ships this file
-; without exporting it as a constant.
-
-; Classes
-(class_declaration
-  (type_identifier) @name) @definition.class
-
-; Objects
-(object_declaration
-  (type_identifier) @name) @definition.class
-
-; Functions (top-level and member)
-(function_declaration
-  (simple_identifier) @name) @definition.function
-
-; Properties
-(property_declaration
-  (variable_declaration
-    (simple_identifier) @name)) @definition.constant
-
-; Enum entries
-(enum_entry
-  (simple_identifier) @name) @definition.constant
-
-; Type aliases
-(type_alias
-  (type_identifier) @name) @definition.type
-
-; Companion objects (only named ones)
-(companion_object
-  (type_identifier) @name) @definition.class
-
-; Function calls
-(call_expression
-  (simple_identifier) @name) @reference.call
-
-; Method calls via navigation
-(call_expression
-  (navigation_expression
-    (navigation_suffix
-      (simple_identifier) @name))) @reference.call
-
-; Constructor invocations (class references)
-(constructor_invocation
-  (user_type
-    (type_identifier) @name)) @reference.class
+; Kotlin structure: declarations with their modifiers and details.
+(class_declaration (modifiers)? @modifier (type_identifier) @name) @definition.class
+(object_declaration (modifiers)? @modifier (type_identifier) @name) @definition.class
+(companion_object (type_identifier) @name) @definition.class
+(function_declaration (modifiers)? @modifier (simple_identifier) @name) @definition.function
+(class_body
+  (property_declaration (modifiers)? @modifier
+    (variable_declaration (simple_identifier) @name (user_type)? @detail
+      (#set! detail.prefix ": "))) @definition.field)
+(source_file
+  (property_declaration (modifiers)? @modifier
+    (variable_declaration (simple_identifier) @name (user_type)? @detail
+      (#set! detail.prefix ": "))) @definition.field)
+(enum_entry (simple_identifier) @name) @definition.constant
+(type_alias (type_identifier) @name) @definition.type

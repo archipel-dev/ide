@@ -1,11 +1,14 @@
-//! Code folding regions from the syntax tree. A grammar's bundled
-//! `folds.scm` is used when it ships one; otherwise regions come from
-//! generic structure: bracket- or tag-delimited nodes, block comments and
-//! runs of import declarations that span several lines.
+//! Code folding regions from the syntax tree. A language's `folds.scm` says
+//! which nodes fold (`@fold`, `@fold.comment`, `@fold.doc`, `@fold.imports`,
+//! `@fold.open`/`@fold.close`, `@fold.marker`; `#set! placeholder`, `#set!
+//! collapsed`, `#set! group`); without one, regions come from generic
+//! structure: bracket- or tag-delimited nodes, block comments and runs of
+//! import declarations that span several lines. Custom `region` /
+//! `endregion` comments fold in every language that marks them.
 
-use crate::registry::{LANGUAGES, LanguageSpec};
+use crate::queryset::{self, QueryKind};
+use crate::registry::LanguageSpec;
 use std::ops::Range;
-use std::sync::OnceLock;
 use tree_sitter::{Node, Query, QueryCursor, StreamingIterator, Tree};
 
 /// What a folding region contains; used for defaults such as collapsing
@@ -14,10 +17,22 @@ use tree_sitter::{Node, Query, QueryCursor, StreamingIterator, Tree};
 pub enum FoldKind {
     Block,
     Comment,
+    /// A documentation comment (`/** ... */`).
+    DocComment,
     Imports,
     /// A method or function body holding a single one-line statement,
     /// shown as `{ statement }`; collapsed by default.
     OneLineBody,
+    /// A user-defined region between `region` and `endregion` comments.
+    Region,
+}
+
+impl FoldKind {
+    /// Collapsed when a file opens unless the pattern says otherwise (IntelliJ
+    /// Editor | General | Code Folding defaults: imports and one-line bodies).
+    pub fn collapsed_by_default(self) -> bool {
+        matches!(self, FoldKind::Imports | FoldKind::OneLineBody)
+    }
 }
 
 /// A foldable region. When collapsed, the editor shows the text before
@@ -31,20 +46,33 @@ pub struct FoldRange {
     pub end_line: usize,
     pub placeholder: String,
     pub kind: FoldKind,
+    /// Collapsed when the file opens (`#set! collapsed` or the kind's default).
+    pub collapsed_by_default: bool,
+    /// Regions of one group collapse and expand together (`#set! group "name"`).
+    pub group: Option<u32>,
 }
 
-fn folds_query(spec: &'static LanguageSpec) -> Option<&'static Query> {
-    static CACHE: OnceLock<Vec<OnceLock<Option<Query>>>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| LANGUAGES.iter().map(|_| OnceLock::new()).collect());
-    let index = LANGUAGES
-        .iter()
-        .position(|candidate| std::ptr::eq(candidate, spec))?;
-    cache[index]
-        .get_or_init(|| {
-            spec.folds
-                .and_then(|source| Query::new(&spec.grammar(), source).ok())
-        })
-        .as_ref()
+impl FoldRange {
+    /// A region with the kind's default collapse state and no group.
+    pub fn new(
+        start_byte: usize,
+        end_byte: usize,
+        start_line: usize,
+        end_line: usize,
+        placeholder: String,
+        kind: FoldKind,
+    ) -> Self {
+        Self {
+            start_byte,
+            end_byte,
+            start_line,
+            end_line,
+            placeholder,
+            kind,
+            collapsed_by_default: kind.collapsed_by_default(),
+            group: None,
+        }
+    }
 }
 
 fn text<'a>(source: &'a str, node: Node<'_>) -> &'a str {
@@ -52,6 +80,10 @@ fn text<'a>(source: &'a str, node: Node<'_>) -> &'a str {
 }
 
 const OPENERS: &[&str] = &["{", "[", "(", "<", "\"\"\"", "'''", "`"];
+
+fn rows(node: Node<'_>) -> (usize, usize) {
+    (node.start_position().row, node.end_position().row)
+}
 
 /// A node delimited by an opening and closing token on different lines
 /// (`{ … }`, `[ … ]`, `<tag> … </tag>`).
@@ -69,36 +101,37 @@ fn delimited(node: Node<'_>, source: &str) -> Option<FoldRange> {
         |child: Node<'_>| child.is_named() && child.kind().to_ascii_lowercase().contains("tag");
     if tag(first) && tag(last) {
         // `<a …>` … `</a>`: keep both tags visible around the placeholder.
-        return Some(FoldRange {
-            start_byte: first.end_byte(),
-            end_byte: last.start_byte(),
-            start_line: first.end_position().row,
-            end_line: last.start_position().row,
-            placeholder: "...".into(),
-            kind: FoldKind::Block,
-        });
+        return Some(FoldRange::new(
+            first.end_byte(),
+            last.start_byte(),
+            first.end_position().row,
+            last.start_position().row,
+            "...".into(),
+            FoldKind::Block,
+        ));
     }
     if first.is_named() || last.is_named() || !OPENERS.contains(&text(source, first)) {
         return None;
     }
+    let (start_line, end_line) = (first.start_position().row, last.end_position().row);
     if let Some(placeholder) = one_line_body(node, source) {
-        return Some(FoldRange {
-            start_byte: first.start_byte(),
-            end_byte: last.end_byte(),
-            start_line: first.start_position().row,
-            end_line: last.end_position().row,
+        return Some(FoldRange::new(
+            first.start_byte(),
+            last.end_byte(),
+            start_line,
+            end_line,
             placeholder,
-            kind: FoldKind::OneLineBody,
-        });
+            FoldKind::OneLineBody,
+        ));
     }
-    Some(FoldRange {
-        start_byte: first.start_byte(),
-        end_byte: last.end_byte(),
-        start_line: first.start_position().row,
-        end_line: last.end_position().row,
-        placeholder: format!("{}...{}", text(source, first), text(source, last)),
-        kind: FoldKind::Block,
-    })
+    Some(FoldRange::new(
+        first.start_byte(),
+        last.end_byte(),
+        start_line,
+        end_line,
+        format!("{}...{}", text(source, first), text(source, last)),
+        FoldKind::Block,
+    ))
 }
 
 /// `{ statement }` for a method/function body block holding exactly one
@@ -122,8 +155,8 @@ fn one_line_body(block: Node<'_>, source: &str) -> Option<String> {
     Some(format!("{{ {} }}", text(source, statement)))
 }
 
-fn comment(node: Node<'_>, source: &str) -> Option<FoldRange> {
-    if !node.kind().contains("comment") || node.start_position().row == node.end_position().row {
+fn comment(node: Node<'_>, source: &str, kind: FoldKind) -> Option<FoldRange> {
+    if node.start_position().row == node.end_position().row {
         return None;
     }
     let body = text(source, node);
@@ -134,13 +167,38 @@ fn comment(node: Node<'_>, source: &str) -> Option<FoldRange> {
         ""
     };
     let head: String = first_line.chars().take(60).collect();
-    Some(FoldRange {
-        start_byte: node.start_byte(),
-        end_byte: node.end_byte(),
-        start_line: node.start_position().row,
-        end_line: node.end_position().row,
-        placeholder: format!("{head}...{closing}"),
-        kind: FoldKind::Comment,
+    let (start_line, end_line) = rows(node);
+    Some(FoldRange::new(
+        node.start_byte(),
+        node.end_byte(),
+        start_line,
+        end_line,
+        format!("{head}...{closing}"),
+        kind,
+    ))
+}
+
+/// A `@fold` node without delimiters (Python blocks, YAML mappings, Markdown
+/// sections): folds from the end of the text before the node (the header) to
+/// the end of the node.
+fn headed(node: Node<'_>, source: &str) -> Option<FoldRange> {
+    let start = source.get(..node.start_byte())?.trim_end().len();
+    let end = node.end_byte();
+    let (_, end_line) = rows(node);
+    // Line of the header's last character.
+    let start_line = source[..start]
+        .bytes()
+        .filter(|byte| *byte == b'\n')
+        .count();
+    (start_line < end_line && start < end).then(|| {
+        FoldRange::new(
+            start,
+            end,
+            start_line,
+            end_line,
+            "...".into(),
+            FoldKind::Block,
+        )
     })
 }
 
@@ -169,26 +227,32 @@ fn imports(run: &[Node<'_>], source: &str) -> Option<FoldRange> {
     if start_byte >= last.end_byte() || !source.is_char_boundary(start_byte) {
         return None;
     }
-    Some(FoldRange {
+    Some(FoldRange::new(
         start_byte,
-        end_byte: last.end_byte(),
-        start_line: first.start_position().row,
-        end_line: last.end_position().row,
-        placeholder: "...".into(),
-        kind: FoldKind::Imports,
-    })
+        last.end_byte(),
+        first.start_position().row,
+        last.end_position().row,
+        "...".into(),
+        FoldKind::Imports,
+    ))
 }
 
 fn intersects(node: Node<'_>, range: &Range<usize>) -> bool {
     node.start_byte() < range.end.max(range.start + 1) && node.end_byte() > range.start
 }
 
+/// Generic regions for a grammar without a `folds.scm`.
 fn collect(node: Node<'_>, source: &str, range: &Range<usize>, out: &mut Vec<FoldRange>) {
     // Single-line nodes cannot contain multi-line regions.
     if node.start_position().row == node.end_position().row || !intersects(node, range) {
         return;
     }
-    if let Some(fold) = comment(node, source).or_else(|| delimited(node, source)) {
+    let comment_fold = node
+        .kind()
+        .contains("comment")
+        .then(|| comment(node, source, FoldKind::Comment))
+        .flatten();
+    if let Some(fold) = comment_fold.or_else(|| delimited(node, source)) {
         out.push(fold);
     }
     let mut cursor = node.walk();
@@ -219,6 +283,80 @@ fn collect(node: Node<'_>, source: &str, range: &Range<usize>, out: &mut Vec<Fol
     out.extend(imports(&run, source).filter(|fold| fold.end_byte > range.start));
 }
 
+fn group_id(name: &str) -> u32 {
+    name.bytes().fold(2_166_136_261u32, |hash, byte| {
+        (hash ^ u32::from(byte)).wrapping_mul(16_777_619)
+    })
+}
+
+/// Region markers in comments: `region Title` / `endregion`, `#region` /
+/// `#endregion`, `<editor-fold desc="Title">` / `</editor-fold>`.
+#[derive(Debug, PartialEq, Eq)]
+enum Marker {
+    Start(String),
+    End,
+}
+
+fn marker(comment_text: &str) -> Option<Marker> {
+    let mut body = comment_text.trim();
+    for prefix in ["<!--", "//", "/*", "#", "--", "!", ";"] {
+        if let Some(rest) = body.strip_prefix(prefix) {
+            body = rest;
+            break;
+        }
+    }
+    let body = body.trim_end_matches("-->").trim_end_matches("*/").trim();
+    let body = body.strip_prefix('#').unwrap_or(body).trim_start();
+    if let Some(rest) = body.strip_prefix("<editor-fold") {
+        let title = rest
+            .split_once("desc=\"")
+            .and_then(|(_, tail)| tail.split_once('"'))
+            .map(|(title, _)| title.to_owned())
+            .unwrap_or_default();
+        return Some(Marker::Start(title));
+    }
+    if body.starts_with("</editor-fold") {
+        return Some(Marker::End);
+    }
+    if let Some(rest) = body.strip_prefix("endregion") {
+        return (rest.is_empty() || rest.starts_with(char::is_whitespace)).then_some(Marker::End);
+    }
+    let rest = body.strip_prefix("region")?;
+    (rest.is_empty() || rest.starts_with(char::is_whitespace))
+        .then(|| Marker::Start(rest.trim().to_owned()))
+}
+
+fn region_folds(markers: &[Node<'_>], source: &str, out: &mut Vec<FoldRange>) {
+    let mut stack: Vec<(Node<'_>, String)> = Vec::new();
+    for node in markers {
+        match marker(text(source, *node)) {
+            Some(Marker::Start(title)) => stack.push((*node, title)),
+            Some(Marker::End) => {
+                let Some((start, title)) = stack.pop() else {
+                    continue;
+                };
+                let (start_line, end_line) = (start.start_position().row, node.end_position().row);
+                if start_line < end_line {
+                    let placeholder = if title.is_empty() {
+                        "region".to_owned()
+                    } else {
+                        title
+                    };
+                    out.push(FoldRange::new(
+                        start.start_byte(),
+                        node.end_byte(),
+                        start_line,
+                        end_line,
+                        placeholder,
+                        FoldKind::Region,
+                    ));
+                }
+            }
+            None => {}
+        }
+    }
+}
+
 fn from_query(
     query: &Query,
     tree: &Tree,
@@ -226,34 +364,125 @@ fn from_query(
     range: &Range<usize>,
     out: &mut Vec<FoldRange>,
 ) {
+    let names = query.capture_names();
     let mut cursor = QueryCursor::new();
     cursor.set_byte_range(range.start..range.end.max(range.start + 1));
-    let mut captures = cursor.captures(query, tree.root_node(), source.as_bytes());
-    while let Some((query_match, index)) = captures.next() {
-        let node = query_match.captures[*index].node;
-        let (start, end) = (node.start_position(), node.end_position());
-        if start.row >= end.row {
+    let mut matches = cursor.matches(query, tree.root_node(), source.as_bytes());
+    let mut import_nodes: Vec<(Node<'_>, bool)> = Vec::new();
+    let mut markers: Vec<Node<'_>> = Vec::new();
+    while let Some(found) = matches.next() {
+        let collapsed = queryset::setting(query, found.pattern_index, "collapsed").is_some();
+        let placeholder = queryset::setting(query, found.pattern_index, "placeholder");
+        let group = queryset::setting(query, found.pattern_index, "group").map(group_id);
+        let (mut open, mut close) = (None, None);
+        for capture in found.captures {
+            let node = capture.node;
+            let fold = match names[capture.index as usize] {
+                "fold" => delimited(node, source).or_else(|| headed(node, source)),
+                "fold.comment" => comment(node, source, FoldKind::Comment),
+                "fold.doc" => comment(node, source, FoldKind::DocComment),
+                "fold.imports" => {
+                    import_nodes.push((node, collapsed));
+                    None
+                }
+                "fold.marker" => {
+                    markers.push(node);
+                    None
+                }
+                "fold.open" => {
+                    open = Some(node);
+                    None
+                }
+                "fold.close" => {
+                    close = Some(node);
+                    None
+                }
+                _ => None,
+            };
+            if let Some(mut fold) = fold {
+                if let Some(placeholder) = placeholder.filter(|value| !value.is_empty()) {
+                    fold.placeholder = placeholder.to_owned();
+                }
+                fold.collapsed_by_default |= collapsed;
+                fold.group = group;
+                out.push(fold);
+            }
+        }
+        if let (Some(open), Some(close)) = (open, close)
+            && open.end_position().row < close.start_position().row
+        {
+            let placeholder = placeholder.filter(|value| !value.is_empty());
+            let mut fold = FoldRange::new(
+                open.end_byte(),
+                close.start_byte(),
+                open.end_position().row,
+                close.start_position().row,
+                placeholder.unwrap_or("...").to_owned(),
+                FoldKind::Block,
+            );
+            fold.collapsed_by_default |= collapsed;
+            fold.group = group;
+            out.push(fold);
+        }
+    }
+    // Runs of consecutive sibling imports fold as one region.
+    import_nodes.sort_by_key(|(node, _)| node.start_byte());
+    import_nodes.dedup_by_key(|(node, _)| node.id());
+    let mut run: Vec<Node<'_>> = Vec::new();
+    let mut run_collapsed = false;
+    let flush = |run: &mut Vec<Node<'_>>, collapsed: bool, out: &mut Vec<FoldRange>| {
+        if let Some(mut fold) = imports(run, source) {
+            fold.collapsed_by_default |= collapsed;
+            out.push(fold);
+        }
+        run.clear();
+    };
+    for (node, collapsed) in import_nodes {
+        let adjacent = run.last().is_some_and(|last| {
+            last.next_named_sibling()
+                .is_some_and(|next| next.id() == node.id())
+        });
+        if !adjacent {
+            flush(&mut run, run_collapsed, out);
+        }
+        run_collapsed = collapsed;
+        run.push(node);
+    }
+    flush(&mut run, run_collapsed, out);
+    markers.sort_by_key(|node| node.start_byte());
+    region_folds(&markers, source, out);
+}
+
+/// Drops regions that cross another one (partial overlap): regions must be
+/// disjoint or nested so gutter markers and collapsing stay consistent.
+/// `sorted` is ordered by start, outermost first.
+fn drop_crossing(sorted: Vec<FoldRange>) -> Vec<FoldRange> {
+    let mut kept: Vec<FoldRange> = Vec::with_capacity(sorted.len());
+    let mut open: Vec<usize> = Vec::new();
+    for fold in sorted {
+        while let Some(&top) = open.last() {
+            if kept[top].end_byte <= fold.start_byte {
+                open.pop();
+            } else {
+                break;
+            }
+        }
+        if let Some(&top) = open.last()
+            && fold.end_byte > kept[top].end_byte
+        {
             continue;
         }
-        // Fold after the node's first line: `def f(x):...`.
-        let line_end = source[node.start_byte()..node.end_byte()]
-            .find('\n')
-            .map_or(node.end_byte(), |offset| node.start_byte() + offset);
-        out.push(FoldRange {
-            start_byte: line_end,
-            end_byte: node.end_byte(),
-            start_line: start.row,
-            end_line: end.row,
-            placeholder: "...".into(),
-            kind: FoldKind::Block,
-        });
+        open.push(kept.len());
+        kept.push(fold);
     }
+    kept
 }
 
 /// Folding regions whose syntax nodes intersect the byte `range` (use
 /// `0..source.len()` for all), sorted by start; at most one region starts on
-/// any line (the outermost wins, as gutter markers are per line). Only nodes
-/// intersecting `range` are visited, so viewport queries stay cheap.
+/// any line (the outermost wins, as gutter markers are per line) and regions
+/// never cross. Only nodes intersecting `range` are visited, so viewport
+/// queries stay cheap.
 pub fn fold_ranges(
     spec: &'static LanguageSpec,
     tree: &Tree,
@@ -261,7 +490,7 @@ pub fn fold_ranges(
     range: Range<usize>,
 ) -> Vec<FoldRange> {
     let mut ranges = Vec::new();
-    match folds_query(spec) {
+    match queryset::query(spec, QueryKind::Folds) {
         Some(query) => from_query(query, tree, source, &range, &mut ranges),
         None => collect(tree.root_node(), source, &range, &mut ranges),
     }
@@ -272,7 +501,15 @@ pub fn fold_ranges(
             .then(b.end_byte.cmp(&a.end_byte))
     });
     ranges.dedup_by(|later, earlier| later.start_line == earlier.start_line);
-    ranges
+    ranges.sort_by(|a, b| {
+        a.start_byte
+            .cmp(&b.start_byte)
+            .then(b.end_byte.cmp(&a.end_byte))
+    });
+    ranges.dedup_by(|later, earlier| {
+        later.start_byte == earlier.start_byte && later.end_byte == earlier.end_byte
+    });
+    drop_crossing(ranges)
 }
 
 #[cfg(test)]

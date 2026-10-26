@@ -100,6 +100,38 @@ pub fn expand(tree: &Tree, source: &str, range: Range<usize>) -> Option<Range<us
     }
 }
 
+/// Extend Selection over a snapshot: the tree walk of [`expand`], the
+/// selection groups of `textobjects.scm` (an element, the elements up to it,
+/// all of them) and injected fragments (JavaScript inside HTML); the smallest
+/// strictly larger candidate wins. `None` once the whole file is selected.
+pub fn expand_snapshot(
+    snap: &crate::node::SyntaxSnapshot,
+    range: Range<usize>,
+) -> Option<Range<usize>> {
+    let text = snap.text();
+    let range = range.start.min(text.len())..range.end.min(text.len());
+    let mut candidates: Vec<Range<usize>> = Vec::new();
+    candidates.extend(expand(snap.tree(), text, range.clone()));
+    candidates.extend(crate::textobjects::group_candidates(snap, &range));
+    if let Ok(start) = u32::try_from(range.start)
+        && let Some(fragment) = snap.fragment_at(start)
+        && fragment.snapshot.text().len() == text.len()
+        && range.end
+            <= fragment
+                .host_ranges
+                .iter()
+                .map(|r| r.end as usize)
+                .max()
+                .unwrap_or(0)
+    {
+        candidates.extend(expand_snapshot(&fragment.snapshot, range.clone()));
+    }
+    candidates
+        .into_iter()
+        .filter(|candidate| strictly_contains(candidate, &range))
+        .min_by_key(|candidate| candidate.len())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

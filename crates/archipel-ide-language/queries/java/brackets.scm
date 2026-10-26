@@ -1,0 +1,10 @@
+; Java pairs: classify code blocks and add the angle brackets of generics.
+(block "{" @open.block "}" @close.block)
+(class_body "{" @open.block "}" @close.block)
+(interface_body "{" @open.block "}" @close.block)
+(enum_body "{" @open.block "}" @close.block)
+(annotation_type_body "{" @open.block "}" @close.block)
+(constructor_body "{" @open.block "}" @close.block)
+(switch_block "{" @open.block "}" @close.block)
+(type_arguments "<" @open.angle ">" @close.angle)
+(type_parameters "<" @open.angle ">" @close.angle)

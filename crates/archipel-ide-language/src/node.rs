@@ -249,12 +249,12 @@ impl SyntaxSnapshot {
 
     /// Extend Selection from `range`.
     pub fn expand_selection(&self, range: Range<usize>) -> Option<Range<usize>> {
-        crate::selection::expand(&self.inner.tree, &self.inner.text, range)
+        crate::selection::expand_snapshot(self, range)
     }
 
     /// Matching bracket of the bracket token starting at `byte`.
     pub fn matching_bracket(&self, byte: usize) -> Option<(usize, usize)> {
-        crate::brackets::matching_bracket(&self.inner.tree, byte)
+        crate::brackets::pair_at(self, byte).map(|pair| pair.offsets())
     }
 
     /// Syntax diagnostics (row/column, capped like the editor's).

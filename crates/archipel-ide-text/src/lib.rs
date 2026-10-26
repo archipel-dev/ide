@@ -1,10 +1,13 @@
 use ropey::Rope;
 use thiserror::Error;
 
+pub mod edit_map;
 pub mod format;
 pub mod multicaret;
 pub mod ops;
 pub mod transform;
+
+pub use edit_map::EditMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct AtomicEdit {

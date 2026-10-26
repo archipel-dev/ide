@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 6a2c20ef138a67ac187bc63204f49d0272a0ef3135374bf7a25d8c6503e8a8df # shrinks to (len, first) = (40, [ByteEdit { start_byte: 15, old_end_byte: 15, new_end_byte: 17, start_point: BytePoint { row: 0, column: 0 }, old_end_point: BytePoint { row: 0, column: 0 }, new_end_point: BytePoint { row: 0, column: 0 } }, ByteEdit { start_byte: 30, old_end_byte: 34, new_end_byte: 35, start_point: BytePoint { row: 0, column: 0 }, old_end_point: BytePoint { row: 0, column: 0 }, new_end_point: BytePoint { row: 0, column: 0 } }, ByteEdit { start_byte: 30, old_end_byte: 33, new_end_byte: 30, start_point: BytePoint { row: 0, column: 0 }, old_end_point: BytePoint { row: 0, column: 0 }, new_end_point: BytePoint { row: 0, column: 0 } }, ByteEdit { start_byte: 37, old_end_byte: 37, new_end_byte: 38, start_point: BytePoint { row: 0, column: 0 }, old_end_point: BytePoint { row: 0, column: 0 }, new_end_point: BytePoint { row: 0, column: 0 } }, ByteEdit { start_byte: 13, old_end_byte: 16, new_end_byte: 13, start_point: BytePoint { row: 0, column: 0 }, old_end_point: BytePoint { row: 0, column: 0 }, new_end_point: BytePoint { row: 0, column: 0 } }]), split = 0

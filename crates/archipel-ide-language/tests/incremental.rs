@@ -1,7 +1,7 @@
 //! Incremental reparse + re-highlight must equal a full analysis after any
 //! sequence of buffer edits.
 
-use archipel_ide_language::{LanguageAnalysis, analyze, analyze_with_budget};
+use archipel_ide_language::{EditMap, LanguageAnalysis, analyze, analyze_with_budget};
 use archipel_ide_text::{EditJournal, TextDocument};
 use proptest::prelude::*;
 use std::path::Path;
@@ -179,6 +179,103 @@ proptest! {
             complete.ensure_highlighted(0..source.len());
             assert!(complete.fully_highlighted());
             assert_same(path, &complete, &source);
+        }
+    }
+}
+
+/// Kind and byte range of every node of a tree.
+fn nodes(tree: &tree_sitter::Tree) -> Vec<(u16, usize, usize)> {
+    let mut out = Vec::new();
+    let mut cursor = tree.walk();
+    loop {
+        let node = cursor.node();
+        out.push((node.kind_id(), node.start_byte(), node.end_byte()));
+        if cursor.goto_first_child() {
+            continue;
+        }
+        loop {
+            if cursor.goto_next_sibling() {
+                break;
+            }
+            if !cursor.goto_parent() {
+                return out;
+            }
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(96))]
+
+    /// The changed ranges an incremental reparse reports (the host's
+    /// `SyntaxChanged` payload) cover every node that is new: each node of
+    /// the new tree either existed before (same kind, same range mapped
+    /// through the edits, no edit inside) or intersects a reported range.
+    #[test]
+    fn changed_ranges_cover_every_structural_change(
+        sample in 0..SAMPLES.len(),
+        ops in prop::collection::vec(op(), 1..16),
+    ) {
+        let (path, initial) = SAMPLES[sample];
+        let mut document = TextDocument::new(initial);
+        let mut analysis = analyze(Path::new(path), initial);
+        document.take_edits();
+        analysis.take_syntax_changes();
+        for op in ops {
+            let before: std::collections::HashSet<_> = analysis
+                .syntax
+                .as_ref()
+                .map(|syntax| nodes(syntax.tree()))
+                .unwrap_or_default()
+                .into_iter()
+                .collect();
+            match op {
+                Op::Edit { at, delete, insert } => {
+                    let len = document.len_chars();
+                    let start = ((len as f64) * at) as usize;
+                    let end = (start + delete).min(len);
+                    document.edit(start, end, FRAGMENTS[insert]).unwrap();
+                }
+                Op::Undo => {
+                    document.undo();
+                }
+                Op::Redo => {
+                    document.redo();
+                }
+            }
+            let source = document.text();
+            let edits = match document.take_edits() {
+                EditJournal::Edits(edits) => edits,
+                EditJournal::Reset => {
+                    analysis = analyze(Path::new(path), &source);
+                    analysis.take_syntax_changes();
+                    continue;
+                }
+            };
+            if edits.is_empty() {
+                continue;
+            }
+            let map = EditMap::from_edits(&edits);
+            analysis.apply_edits(Path::new(path), &source, &edits);
+            let changes = analysis.take_syntax_changes();
+            prop_assert!(!changes.is_empty());
+            let survived: std::collections::HashSet<_> = before
+                .iter()
+                .filter(|(_, start, end)| map.untouched(*start..*end))
+                .map(|(kind, start, end)| (*kind, map.map(*start), map.map(*end)))
+                .collect();
+            let Some(syntax) = analysis.syntax.as_ref() else {
+                continue;
+            };
+            for (kind, start, end) in nodes(syntax.tree()) {
+                if survived.contains(&(kind, start, end)) {
+                    continue;
+                }
+                prop_assert!(
+                    changes.iter().any(|range| range.start <= end && start <= range.end),
+                    "{path}: new node {kind}@{start}..{end} outside {changes:?} in {source:?}"
+                );
+            }
         }
     }
 }

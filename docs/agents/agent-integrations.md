@@ -9,7 +9,7 @@ carries its source:
 - `[INFER]` our reading of the above; not stated anywhere. Each of these must be confirmed on a real
   install before a profile default depends on it (see "Verification status" at the end).
 
-Synthetic payloads built from these schemas live in `crates/archipel-ide-agents/tests/fixtures/`.
+Synthetic payloads built from these schemas live in `docs/agents/fixtures/`.
 
 ## Summary
 

@@ -1,5 +1,5 @@
 {
-  "id": "32",
+  "id": "43",
   "title": "Theme: Islands Light",
   "fixture": "java-gradle",
   "open": [
@@ -32,7 +32,7 @@
     },
     {
       "op": "screenshot",
-      "name": "32-theme-light.png"
+      "name": "43-theme-light.png"
     }
   ]
 }

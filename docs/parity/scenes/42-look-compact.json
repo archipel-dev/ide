@@ -1,6 +1,6 @@
 {
-  "id": "30",
-  "title": "UI look: Classic with Darcula",
+  "id": "42",
+  "title": "UI look: Islands, compact",
   "fixture": "java-gradle",
   "open": [
     "src/main/java/com/example/App.java"
@@ -15,9 +15,9 @@
       "command": "settings.apply",
       "args": {
         "changes": {
-          "appearance.uiLook": "classic",
-          "appearance.theme": "Darcula",
-          "appearance.compactMode": false
+          "appearance.uiLook": "islands",
+          "appearance.theme": "Islands Dark",
+          "appearance.compactMode": true
         }
       }
     },
@@ -32,7 +32,7 @@
     },
     {
       "op": "screenshot",
-      "name": "30-look-classic.png"
+      "name": "42-look-compact.png"
     }
   ]
 }

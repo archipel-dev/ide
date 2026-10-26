@@ -1,6 +1,6 @@
 {
-  "id": "31",
-  "title": "UI look: Islands, compact",
+  "id": "40",
+  "title": "UI look: New UI (Islands Dark theme)",
   "fixture": "java-gradle",
   "open": [
     "src/main/java/com/example/App.java"
@@ -15,9 +15,9 @@
       "command": "settings.apply",
       "args": {
         "changes": {
-          "appearance.uiLook": "islands",
+          "appearance.uiLook": "new_ui",
           "appearance.theme": "Islands Dark",
-          "appearance.compactMode": true
+          "appearance.compactMode": false
         }
       }
     },
@@ -32,7 +32,7 @@
     },
     {
       "op": "screenshot",
-      "name": "31-look-compact.png"
+      "name": "40-look-new-ui.png"
     }
   ]
 }

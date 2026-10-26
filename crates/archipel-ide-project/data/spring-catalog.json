@@ -1,0 +1,1301 @@
+{
+ "version": 2,
+ "bootVersions": [
+  "4.1.2",
+  "4.0.9"
+ ],
+ "kotlinVersions": {
+  "4.1": "2.3.21",
+  "4.0": "2.2.21"
+ },
+ "javaVersions": [
+  17,
+  21,
+  25
+ ],
+ "categories": [
+  {
+   "id": "developer-tools",
+   "name": "Developer Tools"
+  },
+  {
+   "id": "web",
+   "name": "Web"
+  },
+  {
+   "id": "template-engines",
+   "name": "Template Engines"
+  },
+  {
+   "id": "security",
+   "name": "Security"
+  },
+  {
+   "id": "sql",
+   "name": "SQL"
+  },
+  {
+   "id": "nosql",
+   "name": "NoSQL"
+  },
+  {
+   "id": "messaging",
+   "name": "Messaging"
+  },
+  {
+   "id": "io",
+   "name": "I/O"
+  },
+  {
+   "id": "ops",
+   "name": "Ops"
+  },
+  {
+   "id": "observability",
+   "name": "Observability"
+  },
+  {
+   "id": "testing",
+   "name": "Testing"
+  }
+ ],
+ "dependencies": [
+  {
+   "id": "devtools",
+   "name": "Spring Boot DevTools",
+   "category": "developer-tools",
+   "description": "Automatic restart, live reload and sensible development-time defaults while the application runs from your IDE.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-devtools",
+     "scopes": [
+      "developmentOnly"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "lombok",
+   "name": "Lombok",
+   "category": "developer-tools",
+   "description": "Annotation processor that generates getters, builders and constructors at compile time so classes stay short.",
+   "coordinates": [
+    {
+     "group": "org.projectlombok",
+     "artifact": "lombok",
+     "scopes": [
+      "compileOnly",
+      "annotationProcessor",
+      "testCompileOnly",
+      "testAnnotationProcessor"
+     ],
+     "processor": "lombok.launch.AnnotationProcessorHider$AnnotationProcessor"
+    }
+   ]
+  },
+  {
+   "id": "configuration-processor",
+   "name": "Configuration Processor",
+   "category": "developer-tools",
+   "description": "Generates metadata for your own @ConfigurationProperties classes so editors can complete and document them.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-configuration-processor",
+     "scopes": [
+      "annotationProcessor"
+     ],
+     "processor": "org.springframework.boot.configurationprocessor.ConfigurationMetadataAnnotationProcessor"
+    }
+   ]
+  },
+  {
+   "id": "docker-compose",
+   "name": "Docker Compose Support",
+   "category": "developer-tools",
+   "description": "Starts the services from a compose file when the application starts and wires their connection details in.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-docker-compose",
+     "scopes": [
+      "developmentOnly"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "web",
+   "name": "Spring Web",
+   "category": "web",
+   "description": "Servlet-based web applications and REST APIs with Spring MVC, running on an embedded Tomcat.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-webmvc",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-webmvc-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "webflux",
+   "name": "Spring Reactive Web",
+   "category": "web",
+   "description": "Non-blocking web applications and REST APIs built on Spring WebFlux and Netty.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-webflux",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-webflux-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "graphql",
+   "name": "Spring for GraphQL",
+   "category": "web",
+   "description": "Serve a GraphQL schema over HTTP or WebSocket using GraphQL Java.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-graphql",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-graphql-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "websocket",
+   "name": "WebSocket",
+   "category": "web",
+   "description": "Two-way messaging between browser and server with WebSocket and STOMP support.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-websocket",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-websocket-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "web-services",
+   "name": "Web Services",
+   "category": "web",
+   "description": "Contract-first SOAP services and clients with Spring Web Services.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-webservices",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-webservices-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "hateoas",
+   "name": "Spring HATEOAS",
+   "category": "web",
+   "description": "Build hypermedia-driven REST representations with links between resources.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-hateoas",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-hateoas-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "data-rest",
+   "name": "Rest Repositories",
+   "category": "web",
+   "description": "Exposes Spring Data repositories as REST resources without writing controllers.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-data-rest",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-data-rest-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "jersey",
+   "name": "Jersey",
+   "category": "web",
+   "description": "JAX-RS REST endpoints with the Jersey framework as an alternative to Spring MVC.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-jersey",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-jersey-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "rsocket",
+   "name": "RSocket",
+   "category": "web",
+   "description": "Reactive, multiplexed application protocol for request-response, streaming and fire-and-forget messaging.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-rsocket",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-rsocket-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "thymeleaf",
+   "name": "Thymeleaf",
+   "category": "template-engines",
+   "description": "Server-side HTML templates that stay valid when opened directly in a browser.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-thymeleaf",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-thymeleaf-test",
+     "scopes": [
+      "test"
+     ]
+    },
+    {
+     "group": "org.thymeleaf.extras",
+     "artifact": "thymeleaf-extras-springsecurity6",
+     "scopes": [
+      "implementation"
+     ],
+     "when": "security"
+    }
+   ]
+  },
+  {
+   "id": "mustache",
+   "name": "Mustache",
+   "category": "template-engines",
+   "description": "Logic-less server-side templates with the Mustache syntax.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-mustache",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-mustache-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "freemarker",
+   "name": "Apache Freemarker",
+   "category": "template-engines",
+   "description": "Server-side templates written in the FreeMarker language.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-freemarker",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-freemarker-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "groovy-templates",
+   "name": "Groovy Templates",
+   "category": "template-engines",
+   "description": "Server-side markup generated with the Groovy template engine.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-groovy-templates",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-groovy-templates-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "security",
+   "name": "Spring Security",
+   "category": "security",
+   "description": "Authentication and access control for web and method calls, with sensible secure defaults.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-security",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-security-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "oauth2-client",
+   "name": "OAuth2 Client",
+   "category": "security",
+   "description": "Sign users in with an external OAuth 2.0 or OpenID Connect provider and call APIs on their behalf.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-security-oauth2-client",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-security-oauth2-client-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "oauth2-resource-server",
+   "name": "OAuth2 Resource Server",
+   "category": "security",
+   "description": "Protect an API by validating bearer tokens such as JWTs issued by an authorization server.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-security-oauth2-resource-server",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-security-oauth2-resource-server-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "oauth2-authorization-server",
+   "name": "OAuth2 Authorization Server",
+   "category": "security",
+   "description": "Run your own OAuth 2.1 and OpenID Connect authorization server.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-security-oauth2-authorization-server",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-security-oauth2-authorization-server-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "validation",
+   "name": "Validation",
+   "category": "io",
+   "description": "Bean validation with Hibernate Validator: annotate fields and parameters with constraints.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-validation",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-validation-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mail",
+   "name": "Java Mail Sender",
+   "category": "io",
+   "description": "Send email through an SMTP server with the JavaMail based sender.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-mail",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-mail-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "cache",
+   "name": "Spring Cache Abstraction",
+   "category": "io",
+   "description": "Annotation-driven caching on top of the cache provider of your choice.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-cache",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-cache-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "batch",
+   "name": "Spring Batch",
+   "category": "io",
+   "description": "Chunk-oriented processing of large data sets with restart, skip and retry handling.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-batch",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-batch-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "quartz",
+   "name": "Quartz Scheduler",
+   "category": "io",
+   "description": "Persistent job scheduling with the Quartz library.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-quartz",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-quartz-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "integration",
+   "name": "Spring Integration",
+   "category": "io",
+   "description": "Enterprise integration patterns: channels, transformers and adapters for connecting systems.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-integration",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.integration",
+     "artifact": "spring-integration-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "jdbc",
+   "name": "JDBC API",
+   "category": "sql",
+   "description": "Plain JDBC access with a connection pool and JdbcTemplate.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-jdbc",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-jdbc-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "data-jpa",
+   "name": "Spring Data JPA",
+   "category": "sql",
+   "description": "Repositories on top of JPA with Hibernate as the default implementation.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-data-jpa",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-data-jpa-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "data-jdbc",
+   "name": "Spring Data JDBC",
+   "category": "sql",
+   "description": "Simple aggregate-oriented repositories over JDBC without a persistence context.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-data-jdbc",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-data-jdbc-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "jooq",
+   "name": "JOOQ Access Layer",
+   "category": "sql",
+   "description": "Type-safe SQL queries built with the jOOQ fluent API.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-jooq",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-jooq-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "flyway",
+   "name": "Flyway Migration",
+   "category": "sql",
+   "description": "Version-controlled database schema migrations that run at startup.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-flyway",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-flyway-test",
+     "scopes": [
+      "test"
+     ]
+    },
+    {
+     "group": "org.flywaydb",
+     "artifact": "flyway-mysql",
+     "scopes": [
+      "implementation"
+     ],
+     "when": "mysql"
+    },
+    {
+     "group": "org.flywaydb",
+     "artifact": "flyway-mysql",
+     "scopes": [
+      "implementation"
+     ],
+     "when": "mariadb"
+    },
+    {
+     "group": "org.flywaydb",
+     "artifact": "flyway-database-postgresql",
+     "scopes": [
+      "implementation"
+     ],
+     "when": "postgresql"
+    },
+    {
+     "group": "org.flywaydb",
+     "artifact": "flyway-sqlserver",
+     "scopes": [
+      "implementation"
+     ],
+     "when": "sqlserver"
+    },
+    {
+     "group": "org.flywaydb",
+     "artifact": "flyway-database-oracle",
+     "scopes": [
+      "implementation"
+     ],
+     "when": "oracle"
+    }
+   ]
+  },
+  {
+   "id": "liquibase",
+   "name": "Liquibase Migration",
+   "category": "sql",
+   "description": "Database schema changes tracked in changelog files and applied at startup.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-liquibase",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-liquibase-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "h2",
+   "name": "H2 Database",
+   "category": "sql",
+   "description": "Fast in-memory or file based SQL database with a browser console, handy for tests and prototypes.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-h2console",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "com.h2database",
+     "artifact": "h2",
+     "scopes": [
+      "runtimeOnly"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "postgresql",
+   "name": "PostgreSQL Driver",
+   "category": "sql",
+   "description": "JDBC and R2DBC driver for PostgreSQL databases.",
+   "coordinates": [
+    {
+     "group": "org.postgresql",
+     "artifact": "postgresql",
+     "scopes": [
+      "runtimeOnly"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mysql",
+   "name": "MySQL Driver",
+   "category": "sql",
+   "description": "JDBC driver for MySQL databases.",
+   "coordinates": [
+    {
+     "group": "com.mysql",
+     "artifact": "mysql-connector-j",
+     "scopes": [
+      "runtimeOnly"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mariadb",
+   "name": "MariaDB Driver",
+   "category": "sql",
+   "description": "JDBC driver for MariaDB databases.",
+   "coordinates": [
+    {
+     "group": "org.mariadb.jdbc",
+     "artifact": "mariadb-java-client",
+     "scopes": [
+      "runtimeOnly"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sqlserver",
+   "name": "MS SQL Server Driver",
+   "category": "sql",
+   "description": "JDBC driver for Microsoft SQL Server.",
+   "coordinates": [
+    {
+     "group": "com.microsoft.sqlserver",
+     "artifact": "mssql-jdbc",
+     "scopes": [
+      "runtimeOnly"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "oracle",
+   "name": "Oracle Driver",
+   "category": "sql",
+   "description": "JDBC driver for Oracle databases.",
+   "coordinates": [
+    {
+     "group": "com.oracle.database.jdbc",
+     "artifact": "ojdbc17",
+     "scopes": [
+      "runtimeOnly"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "data-mongodb",
+   "name": "Spring Data MongoDB",
+   "category": "nosql",
+   "description": "Document storage and repositories for MongoDB.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-data-mongodb",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-data-mongodb-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "data-redis",
+   "name": "Spring Data Redis",
+   "category": "nosql",
+   "description": "Access Redis as a key-value store, cache or message broker with Lettuce.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-data-redis",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-data-redis-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "data-elasticsearch",
+   "name": "Spring Data Elasticsearch",
+   "category": "nosql",
+   "description": "Index and search documents in Elasticsearch through repositories and templates.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-data-elasticsearch",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-data-elasticsearch-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "data-cassandra",
+   "name": "Spring Data for Apache Cassandra",
+   "category": "nosql",
+   "description": "Repositories and templates for the wide-column Cassandra database.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-data-cassandra",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-data-cassandra-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "data-neo4j",
+   "name": "Spring Data Neo4j",
+   "category": "nosql",
+   "description": "Graph database access and repositories for Neo4j.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-data-neo4j",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-data-neo4j-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kafka",
+   "name": "Spring for Apache Kafka",
+   "category": "messaging",
+   "description": "Produce and consume Kafka records with listener containers and templates.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-kafka",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-kafka-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "rabbitmq",
+   "name": "Spring for RabbitMQ",
+   "category": "messaging",
+   "description": "Send and receive messages through RabbitMQ using the AMQP protocol.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-amqp",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-amqp-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "activemq",
+   "name": "Spring for Apache ActiveMQ Classic",
+   "category": "messaging",
+   "description": "JMS messaging with an ActiveMQ Classic broker.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-activemq",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-activemq-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "artemis",
+   "name": "Spring for Apache ActiveMQ Artemis",
+   "category": "messaging",
+   "description": "JMS messaging with an ActiveMQ Artemis broker.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-artemis",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-artemis-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "actuator",
+   "name": "Spring Boot Actuator",
+   "category": "ops",
+   "description": "Production-ready endpoints for health, metrics, environment and more, over HTTP or JMX.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-actuator",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-actuator-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "prometheus",
+   "name": "Prometheus",
+   "category": "observability",
+   "description": "Publishes Micrometer metrics in the Prometheus scrape format.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-actuator",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "io.micrometer",
+     "artifact": "micrometer-registry-prometheus",
+     "scopes": [
+      "runtimeOnly"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "distributed-tracing",
+   "name": "Distributed Tracing",
+   "category": "observability",
+   "description": "Traces requests across services with the Micrometer tracing bridge to Brave.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-micrometer-tracing-brave",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "io.micrometer",
+     "artifact": "micrometer-tracing-bridge-brave",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-micrometer-tracing-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "testcontainers",
+   "name": "Testcontainers",
+   "category": "testing",
+   "description": "Throwaway Docker containers for integration tests, with Spring Boot connection wiring.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-testcontainers",
+     "scopes": [
+      "test"
+     ]
+    },
+    {
+     "group": "org.testcontainers",
+     "artifact": "testcontainers-junit-jupiter",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "zipkin",
+   "name": "Zipkin",
+   "category": "observability",
+   "description": "Reports trace spans to a Zipkin server.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-zipkin",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-zipkin-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "opentelemetry",
+   "name": "OpenTelemetry",
+   "category": "observability",
+   "description": "Exports metrics, traces and logs over OTLP with the OpenTelemetry integration.",
+   "coordinates": [
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-opentelemetry",
+     "scopes": [
+      "implementation"
+     ]
+    },
+    {
+     "group": "org.springframework.boot",
+     "artifact": "spring-boot-starter-opentelemetry-test",
+     "scopes": [
+      "test"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sqlite",
+   "name": "SQLite Driver",
+   "category": "sql",
+   "description": "JDBC driver for file based SQLite databases.",
+   "coordinates": [
+    {
+     "group": "org.xerial",
+     "artifact": "sqlite-jdbc",
+     "scopes": [
+      "runtimeOnly"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "hsql",
+   "name": "HyperSQL Database",
+   "category": "sql",
+   "description": "Embeddable, in-memory capable SQL database with a JDBC driver.",
+   "coordinates": [
+    {
+     "group": "org.hsqldb",
+     "artifact": "hsqldb",
+     "scopes": [
+      "runtimeOnly"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "derby",
+   "name": "Apache Derby Database",
+   "category": "sql",
+   "description": "Small embeddable Java SQL database.",
+   "coordinates": [
+    {
+     "group": "org.apache.derby",
+     "artifact": "derby",
+     "scopes": [
+      "runtimeOnly"
+     ]
+    },
+    {
+     "group": "org.apache.derby",
+     "artifact": "derbytools",
+     "scopes": [
+      "runtimeOnly"
+     ]
+    }
+   ]
+  }
+ ]
+}

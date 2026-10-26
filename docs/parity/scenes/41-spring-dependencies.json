@@ -1,0 +1,40 @@
+{
+  "id": "41",
+  "title": "New Project wizard: Spring Boot dependency picker with a search",
+  "reference": null,
+  "steps": [
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "execute",
+      "command": "ui.newProject",
+      "args": {
+        "generator": "Spring Boot",
+        "name": "demo-app",
+        "build": "maven",
+        "page": "dependencies",
+        "query": "data",
+        "select": [
+          "web",
+          "data-jpa",
+          "postgresql"
+        ]
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 500
+    },
+    {
+      "op": "assert",
+      "pointer": "/popups/dialog",
+      "equals": "newProject"
+    },
+    {
+      "op": "screenshot",
+      "name": "41-spring-dependencies.png"
+    }
+  ]
+}

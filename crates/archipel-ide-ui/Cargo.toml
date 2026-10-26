@@ -31,6 +31,7 @@ archipel-ide-lsp = { path = "../archipel-ide-lsp" }
 archipel-ide-markdown = { path = "../archipel-ide-markdown" }
 archipel-ide-plugins = { path = "../archipel-ide-plugins" }
 archipel-ide-runner = { path = "../archipel-ide-runner" }
+archipel-ide-project = { path = "../archipel-ide-project" }
 archipel-ide-settings = { path = "../archipel-ide-settings" }
 archipel-ide-split = { path = "../archipel-ide-split" }
 archipel-ide-templates = { path = "../archipel-ide-templates" }

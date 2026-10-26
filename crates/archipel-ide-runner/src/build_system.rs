@@ -176,6 +176,18 @@ impl BuildSystemRegistry {
                     kind.display_name()
                 ))
             })?;
+        // Spring Boot configurations run as the Gradle, Maven or Bazel target they resolve to.
+        let resolved;
+        let config = match config.target.resolve_spring() {
+            Some(target) => {
+                resolved = RunConfiguration {
+                    target,
+                    ..config.clone()
+                };
+                &resolved
+            }
+            None => config,
+        };
         let plan = provider.configuration_plan(root, config)?;
         Ok(config.finish_plan(plan, root))
     }

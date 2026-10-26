@@ -393,6 +393,7 @@ dependencies = [
  "archipel-ide-bazel",
  "archipel-ide-command",
  "archipel-ide-compat",
+ "archipel-ide-daemon",
  "archipel-ide-dap",
  "archipel-ide-git",
  "archipel-ide-gradle",

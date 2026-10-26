@@ -7,12 +7,22 @@
 #![forbid(unsafe_code)]
 
 pub mod clock;
+pub mod daemon;
+pub mod inspection;
 pub mod markup;
+pub mod passes;
+pub mod problem_files;
 pub mod scheduler;
+pub mod service;
+pub mod stripe;
 
 pub use clock::{Clock, ManualClock, SystemClock};
+pub use daemon::{Daemon, DaemonSettings};
 pub use markup::{FileMarkup, HighlightId, MarkupCounts, MarkupLimits, MarkupStore, ReplaceStats};
+pub use passes::{LineMarker, LineMarkerProvider, Shared};
+pub use problem_files::{FileSummary, ProblemFiles};
 pub use scheduler::{
     Completion, PassSpec, PassStats, Phase, RunId, RunOutcome, RunRequest, Scheduler,
     SchedulerConfig, Trigger, Triggers,
 };
+pub use service::DaemonService;

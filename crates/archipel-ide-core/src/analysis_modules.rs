@@ -38,8 +38,8 @@ pub(crate) const MODULES: &[AnalysisModule] = &[
     // WP3 daemon, inspections, intentions (`archipel-ide-daemon`).
     AnalysisModule {
         id: "daemon",
-        services: none,
-        commands: no_commands,
+        services: crate::inspection_commands::daemon_services,
+        commands: crate::inspection_commands::register,
     },
     // WP4 structural features and typed editing (`archipel-ide-language` queries).
     AnalysisModule {

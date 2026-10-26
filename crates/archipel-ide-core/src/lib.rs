@@ -16,6 +16,8 @@ mod ai_actions;
 mod analysis_host;
 mod analysis_modules;
 pub use analysis_host::AnalysisServices;
+mod inspection_commands;
+pub use inspection_commands::{INSPECTIONS_PAGE, SETTING_DELAY, SETTING_ENABLED, SETTING_PROFILE};
 mod ai_agent;
 mod ai_commands;
 mod ai_inline;

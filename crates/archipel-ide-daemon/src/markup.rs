@@ -356,6 +356,32 @@ impl HighlightMarkup for FileMarkup {
     }
 }
 
+/// Moves `infos` through `map` into `text` (see [`FileMarkup::shift`]);
+/// non-empty ranges that collapsed are dropped. With the identity map this
+/// clamps ranges into the text.
+pub fn shift_infos(infos: Vec<HighlightInfo>, map: &EditMap, text: &str) -> Vec<HighlightInfo> {
+    let fix = |range: &Range<u32>| -> Range<u32> {
+        let mapped = map.map_range(range.start as usize..range.end as usize);
+        let start = floor_boundary(text, mapped.start);
+        let end = ceil_boundary(text, mapped.end).max(start);
+        start as u32..end as u32
+    };
+    infos
+        .into_iter()
+        .filter_map(|mut info| {
+            let new = fix(&info.range);
+            if !info.range.is_empty() && new.is_empty() && !info.file_level {
+                return None;
+            }
+            info.range = new;
+            if let Some(gutter) = &info.problem_range_for_gutter {
+                info.problem_range_for_gutter = Some(fix(gutter));
+            }
+            Some(info)
+        })
+        .collect()
+}
+
 /// The markup of every file the daemon covers.
 #[derive(Debug, Default)]
 pub struct MarkupStore {

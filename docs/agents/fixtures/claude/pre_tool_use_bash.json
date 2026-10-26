@@ -1,0 +1,16 @@
+{
+  "session_id": "3f0c8c1e-6a52-4c1d-9d7a-2b5e0f9a1c44",
+  "prompt_id": "550e8400-e29b-41d4-a716-446655440000",
+  "transcript_path": "/home/user/.claude/projects/-data-archipel-agents-ide-fix-login/3f0c8c1e-6a52-4c1d-9d7a-2b5e0f9a1c44.jsonl",
+  "cwd": "/data/archipel/worktrees/ide/fix-login",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "cargo test -p auth",
+    "description": "Run the auth crate tests",
+    "timeout": 120000,
+    "run_in_background": false
+  },
+  "tool_use_id": "toolu_01A9xKqLmN3pQrStUvWxYz12"
+}

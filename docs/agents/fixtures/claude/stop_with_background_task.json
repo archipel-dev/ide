@@ -1,0 +1,13 @@
+{
+  "session_id": "3f0c8c1e-6a52-4c1d-9d7a-2b5e0f9a1c44",
+  "transcript_path": "/home/user/.claude/projects/-data-archipel-agents-ide-fix-login/3f0c8c1e-6a52-4c1d-9d7a-2b5e0f9a1c44.jsonl",
+  "cwd": "/data/archipel/worktrees/ide/fix-login",
+  "permission_mode": "default",
+  "hook_event_name": "Stop",
+  "stop_hook_active": false,
+  "last_assistant_message": "Started the dev server in the background.",
+  "background_tasks": [
+    { "id": "task-001", "type": "shell", "status": "running", "description": "dev server", "command": "npm run dev" }
+  ],
+  "session_crons": []
+}

@@ -7,6 +7,7 @@
 //! | `kotlin-lsp` | JetBrains kotlin-lsp (fwcd/kotlin-language-server as fallback) |
 //! | `java-debug` | Maven Central (microsoft/java-debug jdtls plugin) |
 //! | `gradle` | services.gradle.org distributions (for projects without `gradlew`) |
+//! | `maven` | Maven Central binary distributions (for projects without `mvnw`) |
 //! | `rust-analyzer` | GitHub releases of rust-lang/rust-analyzer |
 //! | `bazelisk` | GitHub releases of bazelbuild/bazelisk |
 //! | `taplo` | GitHub releases of tamasfe/taplo |
@@ -17,6 +18,7 @@ pub mod java_debug;
 pub mod jdk;
 pub mod jdtls;
 pub mod kotlin_lsp;
+pub mod maven;
 
 use crate::{Arch, ArchiveKind, Catalog, ComponentKind, ComponentSpec, Os, Platform};
 use github::GithubReleaseProvider;
@@ -30,6 +32,7 @@ pub fn builtin_catalog() -> Catalog {
     catalog.register(Arc::new(java_debug::JavaDebugPlugin::default()));
     catalog.register(Arc::new(kotlin_lsp::KotlinLsp::default()));
     catalog.register(Arc::new(gradle::GradleDistributions::default()));
+    catalog.register(Arc::new(maven::MavenDistributions::default()));
     catalog.register(Arc::new(rust_analyzer()));
     catalog.register(Arc::new(bazelisk()));
     catalog.register(Arc::new(taplo()));
@@ -219,6 +222,14 @@ const JAVA_GRADLE_WITHOUT_WRAPPER: ProjectRequirement = ProjectRequirement {
     file_names: &["pom.xml"],
 };
 
+/// A Maven project without the wrapper also needs a Maven distribution.
+const JAVA_MAVEN_WITHOUT_WRAPPER: ProjectRequirement = ProjectRequirement {
+    language: "Java",
+    components: &["jdk", "maven", "jdtls", "java-debug"],
+    extensions: &["java", "gradle"],
+    file_names: &["pom.xml"],
+};
+
 const KOTLIN: ProjectRequirement = ProjectRequirement {
     language: "Kotlin",
     components: &["kotlin-lsp"],
@@ -258,12 +269,15 @@ fn base_requirements(root: &std::path::Path) -> Vec<ProjectRequirement> {
     let has = |name: &str| root.join(name).exists();
     let gradle_without_wrapper =
         GRADLE_MARKERS.iter().any(|marker| has(marker)) && !has("gradlew") && !has("gradlew.bat");
+    let maven_without_wrapper = has("pom.xml") && !has("mvnw") && !has("mvnw.cmd");
     REQUIREMENTS
         .iter()
         .filter(|(markers, _)| markers.iter().any(|marker| has(marker)))
         .map(|(_, requirement)| {
             if requirement.language == "Java" && gradle_without_wrapper {
                 JAVA_GRADLE_WITHOUT_WRAPPER
+            } else if requirement.language == "Java" && maven_without_wrapper {
+                JAVA_MAVEN_WITHOUT_WRAPPER
             } else {
                 requirement.clone()
             }
@@ -275,6 +289,24 @@ fn base_requirements(root: &std::path::Path) -> Vec<ProjectRequirement> {
 mod tests {
     use super::*;
     use std::path::Path;
+
+    #[test]
+    fn maven_projects_without_the_wrapper_need_maven() {
+        let dir = std::env::temp_dir().join(format!("archipel-ide-mvn-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("pom.xml"), "<project/>").unwrap();
+        assert_eq!(
+            project_requirements(&dir)[0].components,
+            ["jdk", "maven", "jdtls", "java-debug"]
+        );
+        std::fs::write(dir.join("mvnw"), "").unwrap();
+        assert_eq!(
+            project_requirements(&dir)[0].components,
+            ["jdk", "jdtls", "java-debug"]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn detects_project_requirements_from_markers() {

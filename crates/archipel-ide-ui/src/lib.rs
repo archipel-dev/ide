@@ -367,6 +367,12 @@ impl IdeApp {
 
     /// Standalone app mode (`archipel-ide --app <plugin-id>`): a window showing
     /// only the plugin's app view.
+    /// Installs missing toolchains whenever a project opens, starting with the open one.
+    pub fn enable_toolchain_auto_setup(&mut self) {
+        self.state.toolchains.auto_setup = true;
+        self.state.auto_setup_toolchains();
+    }
+
     pub fn standalone(plugin: &str, plugins: PluginSet) -> Result<Self, String> {
         let mut app = Self::with_plugin_set(None, Vec::new(), plugins);
         plugin_ui::app_mode_error(&app.state.plugin_host.registry, plugin)?;

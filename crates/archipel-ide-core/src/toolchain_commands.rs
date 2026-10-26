@@ -30,6 +30,9 @@ pub struct ToolchainState {
     missing: Vec<(ProjectRequirement, Vec<String>)>,
     /// Languages whose "missing toolchain" bar was dismissed this session.
     dismissed: BTreeSet<String>,
+    /// Install what an opened project is missing without asking. The app turns this on;
+    /// it stays off in tests and headless runs so they never download.
+    pub auto_setup: bool,
 }
 
 /// The "missing toolchain" editor notification for one language.
@@ -65,6 +68,7 @@ impl ToolchainState {
             requirements: Vec::new(),
             missing: Vec::new(),
             dismissed: BTreeSet::new(),
+            auto_setup: false,
         }
     }
 
@@ -236,6 +240,35 @@ impl IdeState {
         Ok(jobs)
     }
 
+    /// Starts installing everything the open project is missing when automatic
+    /// setup is on. Components that are already being installed are skipped.
+    pub fn auto_setup_toolchains(&mut self) {
+        if !self.toolchains.auto_setup {
+            return;
+        }
+        let mut components: Vec<String> = Vec::new();
+        for (_, missing) in &self.toolchains.missing {
+            for id in missing {
+                let running = self
+                    .toolchains
+                    .service
+                    .jobs()
+                    .iter()
+                    .any(|job| &job.component == id);
+                if !running && !components.contains(id) {
+                    components.push(id.clone());
+                }
+            }
+        }
+        if components.is_empty() {
+            return;
+        }
+        let ids: Vec<&str> = components.iter().map(String::as_str).collect();
+        if let Err(error) = self.setup_toolchains(&ids) {
+            self.status = error;
+        }
+    }
+
     /// Applies finished installs to the status line. Call from the UI loop.
     pub fn poll_toolchains(&mut self) {
         let events = self.toolchains.service.poll();
@@ -321,7 +354,7 @@ impl IdeState {
 pub(crate) fn tool_environment(toolchains: &Toolchains) -> archipel_ide_runner::ToolEnvironment {
     use archipel_ide_toolchains::LocateSource;
     let mut environment = archipel_ide_runner::ToolEnvironment::default();
-    for id in ["jdk", "gradle"] {
+    for id in ["jdk", "gradle", "maven", "bazelisk"] {
         let Some(located) = toolchains.locate(id) else {
             continue;
         };

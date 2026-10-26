@@ -39,9 +39,9 @@ mod layout {
     pub const FIRST_RUN_SKIP: Point = (699, 411);
     // New Project dialog (1440×900).
     pub const NP_GENERATOR_RUST_APP: Point = (440, 621);
-    pub const NP_NAME: Point = (850, 239);
-    pub const NP_LOCATION: Point = (820, 279);
-    pub const NP_CREATE: Point = (989, 673);
+    pub const NP_NAME: Point = (815, 237);
+    pub const NP_LOCATION: Point = (785, 271);
+    pub const NP_CREATE: Point = (1044, 793);
     // New Project dialog in the 800×500 minimum window.
     pub const NP_SMALL_GENERATOR_EMPTY: Point = (77, 163);
     pub const NP_SMALL_NAME: Point = (540, 111);
@@ -241,6 +241,7 @@ impl Driver {
             .env("XDG_STATE_HOME", home.join(".local/state"))
             .env(archipel_ide_control::SOCKET_ENV, &socket)
             .env("ARCHIPEL_NO_UPDATE_CHECK", "1")
+            .env("ARCHIPEL_NO_TOOLCHAIN_SETUP", "1")
             .env("DISPLAY", &display_name)
             .stdout(log.try_clone()?)
             .stderr(log);

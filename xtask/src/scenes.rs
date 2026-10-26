@@ -337,6 +337,7 @@ fn run_scene(
     command
         .env(archipel_ide_control::SOCKET_ENV, &socket)
         .env("ARCHIPEL_NO_UPDATE_CHECK", "1")
+        .env("ARCHIPEL_NO_TOOLCHAIN_SETUP", "1")
         // Indexes and history of a scene never touch the user's cache.
         .env("ARCHIPEL_INDEX_DIR", scene_dir.join("cache"))
         .envs(&scene.env)

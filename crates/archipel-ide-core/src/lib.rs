@@ -548,6 +548,7 @@ impl IdeState {
         self.load_breakpoints();
         self.restore_workspace();
         self.load_ai_project();
+        self.auto_setup_toolchains();
         Ok(())
     }
     pub fn open_file(&mut self, path: &Path) -> Result<(), String> {

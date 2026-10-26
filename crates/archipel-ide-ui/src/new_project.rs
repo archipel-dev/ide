@@ -12,10 +12,18 @@ use serde_json::json;
 use spring::{Page, SpringForm};
 
 /// Preferred height of the generator list and form row; the button row sits below it.
-const CONTENT_HEIGHT: f32 = 420.0;
+const CONTENT_HEIGHT: f32 = 540.0;
 
 /// Room the dialog needs around the content row: title, button row, margins and
 /// a gap to the window edges. Taller content would push Create/Cancel off-screen.
+/// Width of the generator list on the left.
+const GENERATORS_WIDTH: f32 = 250.0;
+/// Width of the settings form; fits the four-way build system chooser and its labels.
+const FORM_WIDTH: f32 = 600.0;
+/// Room kept between the dialog and the window edges.
+const DIALOG_MARGIN: f32 = 40.0;
+/// Room kept free for a scroll bar next to scrolled content.
+const SCROLL_BAR_LANE: f32 = 14.0;
 const CHROME_HEIGHT: f32 = 150.0;
 
 /// Content row height that still leaves the button row visible in a window of
@@ -278,258 +286,278 @@ pub fn show(
         && !egui::Popup::is_any_open(ctx)
         && ctx.input(|input| input.key_pressed(egui::Key::Enter));
     let content_height = content_height(ctx.content_rect().height());
-    popup_frame(ctx, "dialog_new_project", 780.0, |ui| {
-        title(ui, "New Project");
-        ui.horizontal_top(|ui| {
-            // Bound the row: the vertical separator below grows to the available height,
-            // which would otherwise push the Create/Cancel row off-screen.
-            ui.set_max_height(content_height);
-            if !deps_page {
-                ui.allocate_ui_with_layout(
-                    vec2(210.0, content_height),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        ui.set_width(210.0);
-                        egui::ScrollArea::vertical()
-                            .id_salt("new_project_generators")
-                            .show(ui, |ui| {
-                                let mut section = "";
-                                for (index, generator) in GENERATORS.iter().enumerate() {
-                                    if generator.section != section {
-                                        section = generator.section;
-                                        ui.add_space(4.0);
-                                        ui.label(
-                                            RichText::new(section).color(theme::TEXT_SECONDARY),
-                                        );
-                                    }
-                                    let selected = form.generator == index;
-                                    let (rect, response) = widgets::list_row(ui, selected);
-                                    widgets::row_text(
-                                        ui,
-                                        rect,
-                                        rect.left() + 12.0,
-                                        generator.label,
-                                        egui::FontId::proportional(theme::UI_FONT_SIZE),
-                                        *theme::TEXT,
-                                    );
-                                    if response.clicked() {
-                                        form.select(index);
-                                    }
-                                }
-                            });
-                    },
-                );
-                ui.separator();
-            }
-            if deps_page {
-                ui.vertical(|ui| {
-                    ui.set_width(700.0);
-                    spring::dependencies_page(ui, form, app, content_height);
-                });
-            } else if is_spring {
-                egui::ScrollArea::vertical()
-                    .id_salt("new_project_form")
-                    .max_height(content_height)
-                    .auto_shrink([false, true])
-                    .show(ui, |ui| {
-                        ui.vertical(|ui| {
-                            ui.set_width(520.0);
-                            go_next =
-                                spring::settings_page(ui, form, app, focus, browse, &mut download);
-                            if let Some(message) = &form.error {
-                                ui.add_space(6.0);
-                                ui.label(RichText::new(message).color(theme::ERROR));
-                            }
-                        })
-                    });
-            } else {
-                egui::ScrollArea::vertical()
-                    .id_salt("new_project_form")
-                    .max_height(content_height)
-                    .auto_shrink([false, true])
-                    .show(ui, |ui| {
-                        ui.vertical(|ui| {
-                            ui.set_width(520.0);
-                            egui::Grid::new("new_project_fields")
-                                .num_columns(2)
-                                .spacing([16.0, 10.0])
+    // The form gives up width first in small windows (the minimum window is 800 wide).
+    let form_width = (ctx.content_rect().width() - DIALOG_MARGIN - GENERATORS_WIDTH - 60.0)
+        .clamp(360.0, FORM_WIDTH);
+    popup_frame(
+        ctx,
+        "dialog_new_project",
+        GENERATORS_WIDTH + form_width + 60.0,
+        |ui| {
+            title(ui, "New Project");
+            ui.horizontal_top(|ui| {
+                // Bound the row: the vertical separator below grows to the available height,
+                // which would otherwise push the Create/Cancel row off-screen.
+                ui.set_max_height(content_height);
+                if !deps_page {
+                    ui.allocate_ui_with_layout(
+                        vec2(GENERATORS_WIDTH, content_height),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            ui.set_width(GENERATORS_WIDTH);
+                            egui::ScrollArea::vertical()
+                                .id_salt("new_project_generators")
                                 .show(ui, |ui| {
-                                    field_label(ui, "Name");
-                                    let response = ui.add(
-                                        egui::TextEdit::singleline(&mut form.name)
-                                            .id(egui::Id::new("new_project_name"))
-                                            .desired_width(380.0),
-                                    );
-                                    if focus {
-                                        response.request_focus();
-                                    }
-                                    ui.end_row();
-                                    field_label(ui, "Location");
-                                    ui.horizontal(|ui| {
-                                        ui.add(
-                                            egui::TextEdit::singleline(&mut form.location)
-                                                .id(egui::Id::new("new_project_parent"))
-                                                .desired_width(320.0),
-                                        );
-                                        if ui.button("Browse…").clicked() {
-                                            *browse = Some(Purpose::NewProjectLocation);
-                                        }
-                                    });
-                                    ui.end_row();
-                                    ui.label("");
-                                    ui.add(
-                                        egui::Label::new(
-                                            RichText::new(format!(
-                                                "Project will be created in: {}/{}",
-                                                form.location.trim_end_matches(['/', '\\']),
-                                                form.name
-                                            ))
-                                            .color(theme::TEXT_INFO),
-                                        )
-                                        .truncate(),
-                                    );
-                                    ui.end_row();
-                                    ui.label("");
-                                    ui.checkbox(&mut form.git, "Create Git repository");
-                                    ui.end_row();
-                                    if let Preset::Jvm { .. } = form.preset() {
-                                        field_label(ui, "Language");
-                                        segmented(
-                                            ui,
-                                            &[
-                                                ("java", "Java"),
-                                                ("kotlin", "Kotlin"),
-                                                ("groovy", "Groovy"),
-                                            ],
-                                            &mut form.language,
-                                        );
-                                        ui.end_row();
-                                        field_label(ui, "Build system");
-                                        segmented(
-                                            ui,
-                                            &[
-                                                ("intellij", "IntelliJ"),
-                                                ("maven", "Maven"),
-                                                ("gradle", "Gradle"),
-                                                ("bazel", "Bazel"),
-                                            ],
-                                            &mut form.build,
-                                        );
-                                        ui.end_row();
-                                        if form.build == "gradle" {
-                                            field_label(ui, "Gradle DSL");
-                                            segmented(
-                                                ui,
-                                                &[("kotlin", "Kotlin"), ("groovy", "Groovy")],
-                                                &mut form.dsl,
-                                            );
-                                            ui.end_row();
-                                        }
-                                        field_label(ui, "JDK");
-                                        ui.horizontal(|ui| {
-                                            let selected = form
-                                                .jdks
-                                                .iter()
-                                                .find(|choice| choice.major == form.jdk)
-                                                .map_or_else(
-                                                    || format!("{} (not installed)", form.jdk),
-                                                    |choice| choice.label.clone(),
-                                                );
-                                            egui::ComboBox::from_id_salt("new_project_jdk")
-                                                .selected_text(selected)
-                                                .width(300.0)
-                                                .show_ui(ui, |ui| {
-                                                    for choice in &form.jdks {
-                                                        ui.selectable_value(
-                                                            &mut form.jdk,
-                                                            choice.major,
-                                                            &choice.label,
-                                                        );
-                                                    }
-                                                });
-                                            ui.menu_button("Download JDK…", |ui| {
-                                                for major in [17_u32, 21, 25] {
-                                                    if ui.button(format!("JDK {major}")).clicked() {
-                                                        download = Some(major);
-                                                        form.jdk = major;
-                                                        ui.close();
-                                                    }
-                                                }
-                                            });
-                                        });
-                                        ui.end_row();
-                                        if let Some((text, _)) = &progress {
-                                            ui.label("");
+                                    // Keep the rows out of the scroll bar's lane.
+                                    ui.set_max_width(GENERATORS_WIDTH - SCROLL_BAR_LANE);
+                                    let mut section = "";
+                                    for (index, generator) in GENERATORS.iter().enumerate() {
+                                        if generator.section != section {
+                                            section = generator.section;
+                                            ui.add_space(4.0);
                                             ui.label(
-                                                RichText::new(text).color(theme::TEXT_SECONDARY),
+                                                RichText::new(section).color(theme::TEXT_SECONDARY),
                                             );
-                                            ui.end_row();
                                         }
-                                        ui.label("");
-                                        ui.checkbox(&mut form.sample, "Add sample code");
-                                        ui.end_row();
+                                        let selected = form.generator == index;
+                                        let (rect, response) = widgets::list_row(ui, selected);
+                                        widgets::row_text(
+                                            ui,
+                                            rect,
+                                            rect.left() + 12.0,
+                                            generator.label,
+                                            egui::FontId::proportional(theme::UI_FONT_SIZE),
+                                            *theme::TEXT,
+                                        );
+                                        if response.clicked() {
+                                            form.select(index);
+                                        }
                                     }
                                 });
-                            if matches!(form.preset(), Preset::Jvm { .. }) {
-                                ui.add_space(8.0);
-                                egui::CollapsingHeader::new("Advanced Settings")
-                                    .id_salt("new_project_advanced")
-                                    .show(ui, |ui| {
-                                        egui::Grid::new("new_project_advanced_fields")
-                                            .spacing([16.0, 8.0])
-                                            .show(ui, |ui| {
-                                                field_label(ui, "GroupId");
-                                                ui.add_sized(
-                                                    vec2(300.0, ui.spacing().interact_size.y),
-                                                    egui::TextEdit::singleline(&mut form.group)
-                                                        .id(egui::Id::new("new_project_group")),
-                                                );
-                                                ui.end_row();
-                                                field_label(ui, "ArtifactId");
-                                                ui.label(
-                                                    RichText::new(&form.name)
-                                                        .color(theme::TEXT_INFO),
-                                                );
-                                                ui.end_row();
-                                            });
-                                    });
-                            }
-                            if let Some(message) = &form.error {
-                                ui.add_space(6.0);
-                                ui.label(RichText::new(message).color(theme::ERROR));
-                            }
-                        })
-                    });
-            }
-        });
-        ui.add_space(10.0);
-        ui.horizontal(|ui| {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.add(Button::secondary("Cancel")).clicked() {
-                    keep = false;
+                        },
+                    );
+                    ui.separator();
                 }
-                let filled = !form.name.trim().is_empty() && !form.location.trim().is_empty();
-                if is_spring && !deps_page {
-                    if ui
-                        .add(
-                            Button::primary("Next")
-                                .enabled(filled && form.spring.problem().is_none()),
-                        )
-                        .clicked()
-                    {
-                        go_next = true;
-                    }
+                if deps_page {
+                    ui.vertical(|ui| {
+                        ui.set_width(GENERATORS_WIDTH + form_width);
+                        spring::dependencies_page(ui, form, app, content_height);
+                    });
+                } else if is_spring {
+                    egui::ScrollArea::vertical()
+                        .id_salt("new_project_form")
+                        .max_height(content_height)
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| {
+                            ui.vertical(|ui| {
+                                ui.set_width(form_width);
+                                go_next = spring::settings_page(
+                                    ui,
+                                    form,
+                                    app,
+                                    focus,
+                                    browse,
+                                    &mut download,
+                                );
+                                if let Some(message) = &form.error {
+                                    ui.add_space(6.0);
+                                    ui.label(RichText::new(message).color(theme::ERROR));
+                                }
+                            })
+                        });
                 } else {
-                    if ui.add(Button::primary("Create").enabled(filled)).clicked() {
-                        create = true;
-                    }
-                    if deps_page && ui.add(Button::secondary("Previous")).clicked() {
-                        go_back = true;
-                    }
+                    egui::ScrollArea::vertical()
+                        .id_salt("new_project_form")
+                        .max_height(content_height)
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| {
+                            ui.vertical(|ui| {
+                                ui.set_width(form_width);
+                                egui::Grid::new("new_project_fields")
+                                    .num_columns(2)
+                                    .spacing([16.0, 10.0])
+                                    .show(ui, |ui| {
+                                        field_label(ui, "Name");
+                                        let response = ui.add(
+                                            egui::TextEdit::singleline(&mut form.name)
+                                                .id(egui::Id::new("new_project_name"))
+                                                .desired_width(380.0),
+                                        );
+                                        if focus {
+                                            response.request_focus();
+                                        }
+                                        ui.end_row();
+                                        field_label(ui, "Location");
+                                        ui.horizontal(|ui| {
+                                            ui.add(
+                                                egui::TextEdit::singleline(&mut form.location)
+                                                    .id(egui::Id::new("new_project_parent"))
+                                                    .desired_width(320.0),
+                                            );
+                                            if ui.button("Browse…").clicked() {
+                                                *browse = Some(Purpose::NewProjectLocation);
+                                            }
+                                        });
+                                        ui.end_row();
+                                        ui.label("");
+                                        ui.add(
+                                            egui::Label::new(
+                                                RichText::new(format!(
+                                                    "Project will be created in: {}/{}",
+                                                    form.location.trim_end_matches(['/', '\\']),
+                                                    form.name
+                                                ))
+                                                .color(theme::TEXT_INFO),
+                                            )
+                                            .truncate(),
+                                        );
+                                        ui.end_row();
+                                        ui.label("");
+                                        ui.checkbox(&mut form.git, "Create Git repository");
+                                        ui.end_row();
+                                        if let Preset::Jvm { .. } = form.preset() {
+                                            field_label(ui, "Language");
+                                            segmented(
+                                                ui,
+                                                &[
+                                                    ("java", "Java"),
+                                                    ("kotlin", "Kotlin"),
+                                                    ("groovy", "Groovy"),
+                                                ],
+                                                &mut form.language,
+                                            );
+                                            ui.end_row();
+                                            field_label(ui, "Build system");
+                                            segmented(
+                                                ui,
+                                                &[
+                                                    ("intellij", "IntelliJ"),
+                                                    ("maven", "Maven"),
+                                                    ("gradle", "Gradle"),
+                                                    ("bazel", "Bazel"),
+                                                ],
+                                                &mut form.build,
+                                            );
+                                            ui.end_row();
+                                            if form.build == "gradle" {
+                                                field_label(ui, "Gradle DSL");
+                                                segmented(
+                                                    ui,
+                                                    &[("kotlin", "Kotlin"), ("groovy", "Groovy")],
+                                                    &mut form.dsl,
+                                                );
+                                                ui.end_row();
+                                            }
+                                            field_label(ui, "JDK");
+                                            ui.horizontal(|ui| {
+                                                let selected = form
+                                                    .jdks
+                                                    .iter()
+                                                    .find(|choice| choice.major == form.jdk)
+                                                    .map_or_else(
+                                                        || format!("{} (not installed)", form.jdk),
+                                                        |choice| choice.label.clone(),
+                                                    );
+                                                egui::ComboBox::from_id_salt("new_project_jdk")
+                                                    .selected_text(selected)
+                                                    .width(300.0)
+                                                    .show_ui(ui, |ui| {
+                                                        for choice in &form.jdks {
+                                                            ui.selectable_value(
+                                                                &mut form.jdk,
+                                                                choice.major,
+                                                                &choice.label,
+                                                            );
+                                                        }
+                                                    });
+                                                ui.menu_button("Download JDK…", |ui| {
+                                                    for major in [17_u32, 21, 25] {
+                                                        if ui
+                                                            .button(format!("JDK {major}"))
+                                                            .clicked()
+                                                        {
+                                                            download = Some(major);
+                                                            form.jdk = major;
+                                                            ui.close();
+                                                        }
+                                                    }
+                                                });
+                                            });
+                                            ui.end_row();
+                                            if let Some((text, _)) = &progress {
+                                                ui.label("");
+                                                ui.label(
+                                                    RichText::new(text)
+                                                        .color(theme::TEXT_SECONDARY),
+                                                );
+                                                ui.end_row();
+                                            }
+                                            ui.label("");
+                                            ui.checkbox(&mut form.sample, "Add sample code");
+                                            ui.end_row();
+                                        }
+                                    });
+                                if matches!(form.preset(), Preset::Jvm { .. }) {
+                                    ui.add_space(8.0);
+                                    egui::CollapsingHeader::new("Advanced Settings")
+                                        .id_salt("new_project_advanced")
+                                        .show(ui, |ui| {
+                                            egui::Grid::new("new_project_advanced_fields")
+                                                .spacing([16.0, 8.0])
+                                                .show(ui, |ui| {
+                                                    field_label(ui, "GroupId");
+                                                    ui.add_sized(
+                                                        vec2(300.0, ui.spacing().interact_size.y),
+                                                        egui::TextEdit::singleline(&mut form.group)
+                                                            .id(egui::Id::new("new_project_group")),
+                                                    );
+                                                    ui.end_row();
+                                                    field_label(ui, "ArtifactId");
+                                                    ui.label(
+                                                        RichText::new(&form.name)
+                                                            .color(theme::TEXT_INFO),
+                                                    );
+                                                    ui.end_row();
+                                                });
+                                        });
+                                }
+                                if let Some(message) = &form.error {
+                                    ui.add_space(6.0);
+                                    ui.label(RichText::new(message).color(theme::ERROR));
+                                }
+                            })
+                        });
                 }
             });
-        });
-    });
+            ui.add_space(10.0);
+            ui.horizontal(|ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.add(Button::secondary("Cancel")).clicked() {
+                        keep = false;
+                    }
+                    let filled = !form.name.trim().is_empty() && !form.location.trim().is_empty();
+                    if is_spring && !deps_page {
+                        if ui
+                            .add(
+                                Button::primary("Next")
+                                    .enabled(filled && form.spring.problem().is_none()),
+                            )
+                            .clicked()
+                        {
+                            go_next = true;
+                        }
+                    } else {
+                        if ui.add(Button::primary("Create").enabled(filled)).clicked() {
+                            create = true;
+                        }
+                        if deps_page && ui.add(Button::secondary("Previous")).clicked() {
+                            go_back = true;
+                        }
+                    }
+                });
+            });
+        },
+    );
     if go_next
         && form.spring.problem().is_none()
         && !form.name.trim().is_empty()

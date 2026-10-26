@@ -11,6 +11,7 @@ mod log;
 mod remote;
 mod watcher;
 mod worktree;
+pub mod worktrees;
 pub use blame::{BlameLine, blame};
 pub use branch::{
     PendingOperation, abort_operation, checkout, cherry_pick, create_branch, delete_branch, merge,
@@ -23,8 +24,18 @@ pub use log::{
 };
 pub use remote::{PushPlan, RemoteEvent, RemoteJob, RemoteOperation, push_plan, remotes};
 pub use watcher::{Notify, StatusWatcher};
+// Generic names (`list`, `add`, `remove`, `prune`, `lock`, `unlock`, `merge_base`, `diff_stat`)
+// stay namespaced: `archipel_ide_git::worktrees::add`.
 pub use worktree::{
     StashEntry, last_commit_message, stash_apply, stash_drop, stash_list, stash_push,
+};
+pub use worktrees::{
+    AddOptions, Added, DiffStat, FileStat, Orphan, RemoveOptions, SetupReport, WorktreeError,
+    WorktreeInfo, add_unserialized, branch_base, check_ignored, clear_branch_base,
+    copy_include_paths, delete_branch_if_merged, detect_orphans, ensure_within, is_dangerous_path,
+    link_shared_directories, managed_base, parse_include_file, plan_path, preflight_clean,
+    remove_orphan_dir, repo_dir_name, resolve_include_paths, resolve_shared_directories,
+    sanitize_name, set_branch_base,
 };
 
 #[derive(Debug, Error)]

@@ -422,6 +422,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "archipel-ide-daemon"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-analysis",
+ "archipel-ide-language",
+ "parking_lot",
+ "proptest",
+ "serde",
+ "similar",
+ "smallvec",
+ "thiserror 2.0.21",
+ "toml",
+]
+
+[[package]]
 name = "archipel-ide-dap"
 version = "0.0.9"
 dependencies = [

@@ -333,8 +333,13 @@ pub fn parse_coordinates(json: &str, remote: &mut Remote) -> Result<(), String> 
 /// Fetches Boot versions and starters from `base` (normally [`INITIALIZR_URL`]).
 /// Blocking: call it from a worker thread. Errors are phrased for the wizard.
 pub fn fetch_remote(base: &str) -> Result<Remote, String> {
+    // A loopback service (a local mirror, the tests) is reached directly, not via a proxy.
+    let loopback = ["://127.0.0.1", "://localhost", "://[::1]"]
+        .iter()
+        .any(|host| base.contains(host));
     let agent = ureq::AgentBuilder::new()
         .timeout(std::time::Duration::from_secs(10))
+        .try_proxy_from_env(!loopback)
         .build();
     let get = |path: &str| -> Result<String, String> {
         agent

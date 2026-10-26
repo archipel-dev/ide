@@ -77,6 +77,25 @@ pub enum RunTarget {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         program_arguments: Vec<String>,
     },
+    /// A Spring Boot application, run through the project's build tool: `bootRun`
+    /// (Gradle), `spring-boot:run` (Maven) or `bazel run` (see [`RunTarget::resolve_spring`]).
+    SpringBoot {
+        /// `gradle`, `maven` or `bazel`.
+        build: String,
+        /// Gradle project path (`:app`; the root project when empty), Maven module
+        /// directory relative to the project (the root when empty) or Bazel label
+        /// (`//:app`).
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        target: String,
+        /// Main class to start when the project has several; the build tool decides when empty.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        main_class: String,
+        /// Comma separated `spring.profiles.active`.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        profiles: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        program_arguments: Vec<String>,
+    },
     /// Any executable.
     Shell {
         program: String,
@@ -92,6 +111,12 @@ impl RunTarget {
             RunTarget::Gradle { .. } | RunTarget::Application { .. } => {
                 Some(BuildSystemKind::Gradle)
             }
+            RunTarget::SpringBoot { build, .. } => match build.as_str() {
+                "gradle" => Some(BuildSystemKind::Gradle),
+                "maven" => Some(BuildSystemKind::Maven),
+                "bazel" => Some(BuildSystemKind::Bazel),
+                _ => None,
+            },
             RunTarget::Cargo { .. } => Some(BuildSystemKind::Cargo),
             RunTarget::Bazel { .. } => Some(BuildSystemKind::Bazel),
             RunTarget::Maven { .. } => Some(BuildSystemKind::Maven),
@@ -105,6 +130,7 @@ impl RunTarget {
         match self {
             RunTarget::Gradle { .. } => "gradle",
             RunTarget::Application { .. } => "application",
+            RunTarget::SpringBoot { .. } => "springboot",
             RunTarget::Cargo { .. } => "cargo",
             RunTarget::Bazel { .. } => "bazel",
             RunTarget::Maven { .. } => "maven",
@@ -119,6 +145,7 @@ impl RunTarget {
         match self {
             RunTarget::Shell { .. } => "Shell Command",
             RunTarget::Application { .. } => "Application",
+            RunTarget::SpringBoot { .. } => "Spring Boot",
             other => other
                 .build_system()
                 .map(BuildSystemKind::display_name)
@@ -166,6 +193,13 @@ impl RunTarget {
                 main_class: String::new(),
                 program_arguments: Vec::new(),
             },
+            "springboot" => RunTarget::SpringBoot {
+                build: "gradle".into(),
+                target: String::new(),
+                main_class: String::new(),
+                profiles: String::new(),
+                program_arguments: Vec::new(),
+            },
             "shell" => RunTarget::Shell {
                 program: String::new(),
                 arguments: Vec::new(),
@@ -174,8 +208,85 @@ impl RunTarget {
         })
     }
 
-    pub const TYPE_IDS: [&'static str; 8] = [
+    /// The concrete Gradle, Maven or Bazel target a Spring Boot configuration runs as;
+    /// `None` for every other type.
+    ///
+    /// Gradle runs `bootRun` of the project, Maven `spring-boot:run` (`-f` selects a
+    /// module, `-Dspring-boot.run.profiles` the profiles), Bazel `run` of the label.
+    /// Profiles become `--spring.profiles.active=…` where arguments are passed to the
+    /// application.
+    pub fn resolve_spring(&self) -> Option<RunTarget> {
+        let RunTarget::SpringBoot {
+            build,
+            target,
+            main_class,
+            profiles,
+            program_arguments,
+        } = self
+        else {
+            return None;
+        };
+        let profiles = profiles.trim();
+        let mut application_arguments = Vec::new();
+        if !profiles.is_empty() {
+            application_arguments.push(format!("--spring.profiles.active={profiles}"));
+        }
+        application_arguments.extend(program_arguments.iter().cloned());
+        Some(match build.as_str() {
+            "maven" => {
+                let mut options = Vec::new();
+                if !target.trim().is_empty() {
+                    options.push("-f".to_owned());
+                    options.push(format!("{}/pom.xml", target.trim().trim_end_matches('/')));
+                }
+                if !main_class.trim().is_empty() {
+                    options.push(format!(
+                        "-Dspring-boot.run.main-class={}",
+                        main_class.trim()
+                    ));
+                }
+                if !profiles.is_empty() {
+                    options.push(format!("-Dspring-boot.run.profiles={profiles}"));
+                }
+                if !program_arguments.is_empty() {
+                    options.push(format!(
+                        "-Dspring-boot.run.arguments={}",
+                        program_arguments.join(" ")
+                    ));
+                }
+                RunTarget::Maven {
+                    goals: vec!["spring-boot:run".into()],
+                    options,
+                }
+            }
+            "bazel" => RunTarget::Bazel {
+                command: "run".into(),
+                target: if target.trim().is_empty() {
+                    "//:app".into()
+                } else {
+                    target.trim().to_owned()
+                },
+                options: Vec::new(),
+                program_arguments: application_arguments,
+            },
+            _ => {
+                let project = target.trim().trim_end_matches(':');
+                RunTarget::Gradle {
+                    tasks: vec![if project.is_empty() {
+                        "bootRun".into()
+                    } else {
+                        format!("{project}:bootRun")
+                    }],
+                    options: Vec::new(),
+                    program_arguments: application_arguments,
+                }
+            }
+        })
+    }
+
+    pub const TYPE_IDS: [&'static str; 9] = [
         "application",
+        "springboot",
         "gradle",
         "cargo",
         "bazel",
@@ -197,7 +308,9 @@ impl RunTarget {
             | RunTarget::Go { command, .. } => command.clone(),
             RunTarget::Maven { goals, .. } => goals.last().cloned().unwrap_or_default(),
             RunTarget::Npm { script, .. } => script.clone(),
-            RunTarget::Application { .. } | RunTarget::Shell { .. } => "run".into(),
+            RunTarget::Application { .. }
+            | RunTarget::SpringBoot { .. }
+            | RunTarget::Shell { .. } => "run".into(),
         };
         match verb.as_str() {
             "test" | "check" | "verify" => TaskKind::Test,
@@ -291,6 +404,27 @@ impl RunConfiguration {
             }
             RunTarget::Application { main_class, .. } if main_class.trim().is_empty() => {
                 Err("Enter the main class to run".into())
+            }
+            RunTarget::SpringBoot { build, .. }
+                if !matches!(build.as_str(), "gradle" | "maven" | "bazel") =>
+            {
+                Err("Build tool must be gradle, maven or bazel".into())
+            }
+            RunTarget::SpringBoot { profiles, .. }
+                if !profiles
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || matches!(c, ',' | '-' | '_' | '.' | '!')) =>
+            {
+                Err("Profiles are names separated by commas, such as dev,local".into())
+            }
+            RunTarget::SpringBoot { build, target, .. }
+                if build == "bazel"
+                    && !target.is_empty()
+                    && !target.starts_with("//")
+                    && !target.starts_with('@')
+                    && !target.starts_with(':') =>
+            {
+                Err("Bazel target must be a label such as //:app".into())
             }
             RunTarget::Shell { program, .. } if program.trim().is_empty() => {
                 Err("Enter the program to run".into())
@@ -520,6 +654,106 @@ impl RunManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn spring(build: &str, target: &str) -> RunTarget {
+        RunTarget::SpringBoot {
+            build: build.into(),
+            target: target.into(),
+            main_class: String::new(),
+            profiles: "dev,local".into(),
+            program_arguments: vec!["--debug".into()],
+        }
+    }
+
+    #[test]
+    fn spring_boot_resolves_to_the_command_of_each_build_tool() {
+        assert_eq!(
+            spring("gradle", "").resolve_spring(),
+            Some(RunTarget::Gradle {
+                tasks: vec!["bootRun".into()],
+                options: Vec::new(),
+                program_arguments: vec![
+                    "--spring.profiles.active=dev,local".into(),
+                    "--debug".into()
+                ],
+            })
+        );
+        match spring("gradle", ":app").resolve_spring() {
+            Some(RunTarget::Gradle { tasks, .. }) => assert_eq!(tasks, [":app:bootRun"]),
+            other => panic!("{other:?}"),
+        }
+        let maven = RunTarget::SpringBoot {
+            build: "maven".into(),
+            target: "web".into(),
+            main_class: "com.example.App".into(),
+            profiles: "dev,local".into(),
+            program_arguments: vec!["--debug".into()],
+        };
+        assert_eq!(
+            maven.resolve_spring(),
+            Some(RunTarget::Maven {
+                goals: vec!["spring-boot:run".into()],
+                options: vec![
+                    "-f".into(),
+                    "web/pom.xml".into(),
+                    "-Dspring-boot.run.main-class=com.example.App".into(),
+                    "-Dspring-boot.run.profiles=dev,local".into(),
+                    "-Dspring-boot.run.arguments=--debug".into(),
+                ],
+            })
+        );
+        assert_eq!(
+            spring("bazel", "").resolve_spring(),
+            Some(RunTarget::Bazel {
+                command: "run".into(),
+                target: "//:app".into(),
+                options: Vec::new(),
+                program_arguments: vec![
+                    "--spring.profiles.active=dev,local".into(),
+                    "--debug".into()
+                ],
+            })
+        );
+        assert_eq!(RunTarget::template("cargo").unwrap().resolve_spring(), None);
+        assert_eq!(spring("bazel", "").task_kind(), TaskKind::Run);
+    }
+
+    #[test]
+    fn spring_boot_configurations_validate_and_round_trip_through_toml() {
+        let config = RunConfiguration::new("DemoApplication", spring("maven", ""));
+        config.validate().unwrap();
+        let text = toml::to_string(&config).unwrap();
+        assert!(text.contains("type = \"springboot\""), "{text}");
+        let parsed: RunConfiguration = toml::from_str(&text).unwrap();
+        assert_eq!(parsed, config);
+        assert_eq!(config.target.build_system(), Some(BuildSystemKind::Maven));
+        assert_eq!(config.target.type_name(), "Spring Boot");
+        for bad in [
+            RunTarget::SpringBoot {
+                build: "ant".into(),
+                target: String::new(),
+                main_class: String::new(),
+                profiles: String::new(),
+                program_arguments: Vec::new(),
+            },
+            RunTarget::SpringBoot {
+                build: "gradle".into(),
+                target: String::new(),
+                main_class: String::new(),
+                profiles: "dev local".into(),
+                program_arguments: Vec::new(),
+            },
+            RunTarget::SpringBoot {
+                build: "bazel".into(),
+                target: "app".into(),
+                main_class: String::new(),
+                profiles: String::new(),
+                program_arguments: Vec::new(),
+            },
+        ] {
+            assert!(RunConfiguration::new("X", bad).validate().is_err());
+        }
+    }
 
     fn temp(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(

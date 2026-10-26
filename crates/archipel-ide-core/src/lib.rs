@@ -86,6 +86,7 @@ mod quick_doc;
 mod refactor;
 mod remote_commands;
 mod search_replace;
+pub mod spring_commands;
 mod test_nav;
 mod welcome_commands;
 pub use welcome_commands::{CloneJob, JdkChoice, jdk_major, repository_name};
@@ -387,6 +388,8 @@ pub struct IdeState {
     pub edit_run_configurations: Option<String>,
     /// Gutter run targets of the active document, cached per text revision.
     pub runnable_cache: gutter_commands::RunnableCache,
+    /// Spring Boot starter catalog of the New Project wizard.
+    pub spring: spring_commands::SpringState,
     /// Breakpoints and the active debug session.
     pub debugger: debug_commands::DebuggerState,
     pub tool_windows: ToolWindowLayout,
@@ -1224,6 +1227,7 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
     search_scopes::register(&mut registry);
     folds::register(&mut registry);
     project_commands::register(&mut registry);
+    spring_commands::register(&mut registry);
     project_view::register(&mut registry);
     new_class::register(&mut registry);
     update_commands::register(&mut registry);

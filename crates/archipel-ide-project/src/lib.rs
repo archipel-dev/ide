@@ -11,6 +11,7 @@ pub mod generator;
 pub mod recent;
 pub mod spring;
 pub mod spring_catalog;
+pub mod spring_detect;
 mod watcher;
 
 pub use watcher::{FileChanges, ProjectWatcher};

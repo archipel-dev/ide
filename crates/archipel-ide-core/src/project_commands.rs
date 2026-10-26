@@ -334,14 +334,16 @@ fn path_param(params: &Value) -> Result<PathBuf, CommandError> {
 pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
     registry.register(Command::new(
         spec("project.create", "Create Project", "Project", None,
-            r#"{"parent":"string","name":"string","kind":"empty|rust-binary|rust-library|java-gradle-kotlin|java-gradle-groovy|android-compose|android-views|android-no-activity|jvm","group":"string?","git":"bool?","language":"java|kotlin?","build":"intellij|maven|gradle?","dsl":"kotlin|groovy?","sample":"bool?","jdk":"number?"}"#),
+            r#"{"parent":"string","name":"string","kind":"empty|rust-binary|rust-library|java-gradle-kotlin|java-gradle-groovy|android-compose|android-views|android-no-activity|jvm|spring-boot","group":"string?","git":"bool?","language":"java|kotlin?","build":"intellij|maven|gradle?","dsl":"kotlin|groovy?","sample":"bool?","jdk":"number?","artifact":"string?","package":"string?","description":"string?","javaVersion":"number?","bootVersion":"string?","packaging":"jar|war?","dependencies":"string[]?"}"#),
         |_| true,
         |state: &mut IdeState, params| {
             let parent = string_param(&params, "parent")?;
             let name = string_param(&params, "name")?;
             let kind_name = string_param(&params, "kind")?;
             let text = |key: &str, default: &str| params.get(key).and_then(Value::as_str).unwrap_or(default).to_owned();
-            let kind = if kind_name == "jvm" {
+            let kind = if kind_name == "spring-boot" {
+                crate::spring_commands::project_kind(state, &params)?
+            } else if kind_name == "jvm" {
                 let jdk = params.get("jdk").and_then(Value::as_u64).unwrap_or(21);
                 let sample = params.get("sample").and_then(Value::as_bool).unwrap_or(true);
                 archipel_ide_project::generator::JvmSpec::parse(

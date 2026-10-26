@@ -13,6 +13,9 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 mod ai_actions;
+mod analysis_host;
+mod analysis_modules;
+pub use analysis_host::AnalysisServices;
 mod ai_agent;
 mod ai_commands;
 mod ai_inline;
@@ -199,6 +202,8 @@ pub struct Document {
     pub selection_history: Vec<Vec<Selection>>,
     /// Collapsed code-folding regions.
     pub folds: FoldState,
+    /// Edits not yet seen by the analysis host (see `poll_analysis`).
+    pub(crate) analysis_sync: analysis_host::PendingAnalysisSync,
 }
 
 impl Document {
@@ -213,6 +218,7 @@ impl Document {
             conflict: None,
             selection_history: Vec::new(),
             folds: FoldState::default(),
+            analysis_sync: Default::default(),
         };
         // The analysis already reflects `text`.
         document.text.take_edits();
@@ -228,10 +234,13 @@ impl Document {
                     self.folds.apply_edit(edit);
                 }
                 self.analysis.apply_edits(&self.path, source, &edits);
+                self.analysis_sync
+                    .record(self.text.revision(), Some(&edits));
             }
             EditJournal::Reset => {
                 self.folds.clear();
                 self.analysis = analyze_lazy(&self.path, source);
+                self.analysis_sync.record(self.text.revision(), None);
             }
         }
     }
@@ -250,6 +259,9 @@ pub struct IdeState {
         std::collections::HashMap<std::path::PathBuf, problems::ActiveProblemsCache>,
     pub documents: Vec<Document>,
     pub active_document: Option<usize>,
+    /// The native analysis world (host, snapshots, services); synced with
+    /// `documents` by [`IdeState::poll_analysis`].
+    pub analysis: AnalysisServices,
     /// Markdown editor layout per file (Editor / Split / Preview).
     pub markdown_layouts:
         std::collections::HashMap<std::path::PathBuf, archipel_ide_markdown::Layout>,
@@ -1215,6 +1227,7 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
     hierarchy::register(&mut registry);
     test_nav::register(&mut registry);
     ai_commands::register(&mut registry);
+    analysis_modules::register_commands(&mut registry);
     registry
         .register(Command::new(
             spec(

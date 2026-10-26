@@ -6,6 +6,18 @@ use archipel_ide_text::{ByteEdit, BytePoint};
 use std::ops::Range;
 use tree_sitter::{InputEdit, Parser, Point, Tree};
 
+/// What an incremental reparse changed, in post-edit byte coordinates.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Reparse {
+    /// Inserted text of every edit (mapped through the later edits).
+    pub edited: Vec<Range<usize>>,
+    /// Ranges whose syntactic structure changed (`Tree::changed_ranges`).
+    pub changed: Vec<Range<usize>>,
+    /// Ranges whose highlighting may have changed (edited lines, changed and
+    /// erroneous ranges), sorted and merged.
+    pub highlight: Vec<Range<usize>>,
+}
+
 /// A parsed document: the language and its current Tree-sitter tree.
 #[derive(Clone)]
 pub struct SyntaxTree {
@@ -121,6 +133,12 @@ impl SyntaxTree {
     /// changed (edited text plus syntactically changed ranges), or `None` if
     /// reparsing failed and the caller should rebuild from scratch.
     pub fn apply_edits(&mut self, source: &str, edits: &[ByteEdit]) -> Option<Vec<Range<usize>>> {
+        self.reparse(source, edits).map(|reparse| reparse.highlight)
+    }
+
+    /// Like [`SyntaxTree::apply_edits`], also reporting the syntactic change
+    /// (the PSI tree-change event analogue).
+    pub fn reparse(&mut self, source: &str, edits: &[ByteEdit]) -> Option<Reparse> {
         let mut edited: Vec<Range<usize>> = Vec::with_capacity(edits.len());
         for edit in edits {
             self.tree.edit(&input_edit(edit));
@@ -135,21 +153,30 @@ impl SyntaxTree {
             *range = line_range(source, range.clone());
         }
         let tree = parser(self.spec)?.parse(source, Some(&self.tree))?;
-        edited.extend(
-            self.tree
-                .changed_ranges(&tree)
-                .map(|range| range.start_byte..range.end_byte),
-        );
+        let clamp =
+            |range: Range<usize>| range.start.min(source.len())..range.end.min(source.len());
+        let mut inserted: Vec<Range<usize>> = Vec::with_capacity(edits.len());
+        for edit in edits {
+            for range in &mut inserted {
+                *range = map_range(range.clone(), edit);
+            }
+            inserted.push(edit.start_byte..edit.new_end_byte);
+        }
+        let changed: Vec<Range<usize>> = self
+            .tree
+            .changed_ranges(&tree)
+            .map(|range| clamp(range.start_byte..range.end_byte))
+            .collect();
+        edited.extend(changed.iter().cloned());
         // `changed_ranges` does not see children relabelled inside an ERROR
         // node that itself kept its extent, so error regions are re-highlighted.
         error_ranges(tree.root_node(), source, &mut edited);
         self.tree = tree;
-        Some(
-            merge_ranges(edited)
-                .into_iter()
-                .map(|range| range.start.min(source.len())..range.end.min(source.len()))
-                .collect(),
-        )
+        Some(Reparse {
+            edited: merge_ranges(inserted).into_iter().map(clamp).collect(),
+            changed: merge_ranges(changed),
+            highlight: merge_ranges(edited).into_iter().map(clamp).collect(),
+        })
     }
 
     /// Highlights `range` of `source` with the language's highlight query.

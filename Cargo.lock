@@ -301,6 +301,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "archipel-ide-analysis"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-language",
+ "archipel-ide-text",
+ "parking_lot",
+ "proptest",
+ "smallvec",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "archipel-ide-android"
 version = "0.0.9"
 dependencies = [
@@ -376,6 +388,7 @@ version = "0.0.9"
 dependencies = [
  "archipel-ide-actions",
  "archipel-ide-ai",
+ "archipel-ide-analysis",
  "archipel-ide-android",
  "archipel-ide-bazel",
  "archipel-ide-command",

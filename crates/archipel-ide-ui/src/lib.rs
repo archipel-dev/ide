@@ -911,6 +911,7 @@ impl IdeApp {
             ctx.request_repaint_after(Duration::from_millis(50));
         }
         self.state.poll_lsp();
+        self.state.poll_analysis();
         self.state.poll_updates();
         if self.state.poll_android() {
             ctx.request_repaint();

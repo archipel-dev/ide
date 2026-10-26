@@ -14,6 +14,7 @@ archipel-ide-command = { path = "../archipel-ide-command" }
 archipel-ide-gradle = { path = "../archipel-ide-gradle" }
 archipel-ide-dap = { path = "../archipel-ide-dap" }
 archipel-ide-git = { path = "../archipel-ide-git" }
+archipel-ide-index = { path = "../archipel-ide-index" }
 archipel-ide-keymap = { path = "../archipel-ide-keymap" }
 archipel-ide-language = { path = "../archipel-ide-language" }
 archipel-ide-lsp = { path = "../archipel-ide-lsp" }

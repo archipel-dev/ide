@@ -475,6 +475,21 @@ impl AnalysisHost {
         self.view_mut().registry = Arc::new(registry);
     }
 
+    /// Installs a persisted file table (stable ids across restarts, so index
+    /// postings stay valid). Only possible while no file was interned yet;
+    /// returns false otherwise.
+    pub fn restore_files(&mut self, table: FileTable) -> bool {
+        if !self.view.files.is_empty() {
+            return false;
+        }
+        let view = self.view_mut();
+        for (id, _) in table.iter() {
+            view.stamps.set_file_rev(id, FileRev(0));
+        }
+        view.files = Arc::new(table);
+        true
+    }
+
     pub fn set_index_store(&mut self, store: Arc<dyn IndexStore>) {
         self.view_mut().index_store = Some(store);
     }

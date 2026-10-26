@@ -169,6 +169,8 @@ License (`crates/archipel-ide-ui/assets/fonts/`). Icons, including the app icon
 (`assets/icon/archipel.svg`), are original vector drawings; no JetBrains icons or
 artwork are bundled. IntelliJ and JetBrains are trademarks of
 JetBrains s.r.o.; Archipel IDE is not affiliated with or endorsed by JetBrains.
+Third-party licenses for studied and re-implemented behavior are in
+`THIRD_PARTY_NOTICES.md`.
 
 See `docs/roadmap.md` for honest status and limitations.
 

@@ -35,6 +35,7 @@ pub struct SettingsDialog {
     pub(crate) plugins_page: crate::plugin_manager::PluginManager,
     /// Settings › Editor › Live Templates (`editing.templates`).
     live_templates_page: crate::settings_live_templates::LiveTemplatesPage,
+    inspections_page: crate::inspections_settings::InspectionsPage,
 }
 
 enum Outcome {
@@ -58,6 +59,7 @@ impl SettingsDialog {
             keymap_page: Default::default(),
             plugins_page: Default::default(),
             live_templates_page: Default::default(),
+            inspections_page: Default::default(),
         };
         dialog.select(registry, page);
         dialog.back.clear();
@@ -592,6 +594,16 @@ fn page(
                     requests,
                 );
             });
+        return;
+    }
+    if page_id == archipel_ide_core::INSPECTIONS_PAGE {
+        // The profile's inspection tree is bespoke; the plain settings of
+        // the page (profile name, analysis delay) follow below it.
+        let settings = registry.page_settings(&page_id);
+        for def in settings {
+            setting_row(ui, dialog, registry, store, def, false, false);
+        }
+        crate::inspections_settings::show(ui, &mut dialog.inspections_page, state, requests);
         return;
     }
     if page_id == "preferences.pluginManager" {

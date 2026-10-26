@@ -213,6 +213,8 @@ impl IdeState {
                 subscriber(event);
             }
         }
+        // WP3 seam: the daemon runs after the host's housekeeping.
+        changed |= self.poll_daemon(&events);
         changed
     }
 }

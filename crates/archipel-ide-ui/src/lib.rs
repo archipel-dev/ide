@@ -50,6 +50,7 @@ mod hierarchy_ui;
 mod history_ui;
 mod icons;
 mod index_status;
+mod inspections_settings;
 mod intentions_ui;
 mod keybindings;
 mod keys;

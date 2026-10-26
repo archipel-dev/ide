@@ -34,10 +34,11 @@ pub enum ToolWindow {
     Hierarchy,
     /// Compact agents list for Code mode (the Agents mode sidebar, smaller).
     Agents,
+    Todo,
 }
 
 impl ToolWindow {
-    pub const ALL: [ToolWindow; 19] = [
+    pub const ALL: [ToolWindow; 20] = [
         ToolWindow::Project,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -57,6 +58,7 @@ impl ToolWindow {
         ToolWindow::Debug,
         ToolWindow::Hierarchy,
         ToolWindow::Agents,
+        ToolWindow::Todo,
     ];
 
     pub fn id(self) -> &'static str {
@@ -78,6 +80,7 @@ impl ToolWindow {
             ToolWindow::Debug => "debug",
             ToolWindow::Hierarchy => "hierarchy",
             ToolWindow::Agents => "agents",
+            ToolWindow::Todo => "todo",
             ToolWindow::Gradle => "gradle",
             ToolWindow::Bazel => "bazel",
         }
@@ -102,6 +105,7 @@ impl ToolWindow {
             ToolWindow::Debug => "Debug",
             ToolWindow::Hierarchy => "Hierarchy",
             ToolWindow::Agents => "Agents",
+            ToolWindow::Todo => "TODO",
             ToolWindow::Gradle => "Gradle",
             ToolWindow::Bazel => "Bazel",
         }
@@ -129,6 +133,7 @@ impl ToolWindow {
             | ToolWindow::Bazel
             | ToolWindow::Hierarchy
             | ToolWindow::Agents
+            | ToolWindow::Todo
             | ToolWindow::AiChat => "",
             ToolWindow::Debug => "⌘5",
             ToolWindow::Git => "⌘9",
@@ -150,6 +155,7 @@ impl ToolWindow {
             | ToolWindow::Logcat
             | ToolWindow::Debug
             | ToolWindow::Hierarchy
+            | ToolWindow::Todo
             | ToolWindow::Git => Anchor::Bottom,
             ToolWindow::DeviceManager
             | ToolWindow::RunningDevices

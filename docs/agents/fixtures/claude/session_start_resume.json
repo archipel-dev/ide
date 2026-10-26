@@ -1,0 +1,12 @@
+{
+  "session_id": "3f0c8c1e-6a52-4c1d-9d7a-2b5e0f9a1c44",
+  "transcript_path": "/home/user/.claude/projects/-data-archipel-agents-ide-fix-login/3f0c8c1e-6a52-4c1d-9d7a-2b5e0f9a1c44.jsonl",
+  "cwd": "/data/archipel/worktrees/ide/fix-login",
+  "hook_event_name": "SessionStart",
+  "source": "resume",
+  "model": "claude-opus-5",
+  "seconds_since_last_response": 5400,
+  "context_tokens": 182340,
+  "prompt_cache_likely_expired": true,
+  "estimated_cache_write_usd": 1.1396
+}

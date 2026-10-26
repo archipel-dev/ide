@@ -16,6 +16,12 @@ pub mod agent_events;
 pub mod agents;
 pub mod agents_mock;
 mod ai_actions;
+mod analysis_host;
+mod analysis_modules;
+mod history_commands;
+mod indexing_commands;
+mod todo_commands;
+pub use analysis_host::AnalysisServices;
 mod ai_agent;
 mod ai_commands;
 mod ai_inline;
@@ -172,6 +178,7 @@ pub use quick_doc::{DocsState, QuickDoc};
 pub use refactor::{RefactorState, Refactoring, RenameSession};
 pub use signature_help::{ParameterInfo, SignatureLine, SignatureState};
 pub use snippet_session::SnippetSession;
+pub use todo_commands::{TodoGroup, TodoRow, TodoScope, TodoState, TodoView};
 pub use toolchain_commands::ToolchainState;
 mod worktree_commands;
 pub use branch_commands::abort_label;
@@ -202,6 +209,8 @@ pub struct Document {
     pub selection_history: Vec<Vec<Selection>>,
     /// Collapsed code-folding regions.
     pub folds: FoldState,
+    /// Edits not yet seen by the analysis host (see `poll_analysis`).
+    pub(crate) analysis_sync: analysis_host::PendingAnalysisSync,
 }
 
 impl Document {
@@ -216,6 +225,7 @@ impl Document {
             conflict: None,
             selection_history: Vec::new(),
             folds: FoldState::default(),
+            analysis_sync: Default::default(),
         };
         // The analysis already reflects `text`.
         document.text.take_edits();
@@ -231,10 +241,13 @@ impl Document {
                     self.folds.apply_edit(edit);
                 }
                 self.analysis.apply_edits(&self.path, source, &edits);
+                self.analysis_sync
+                    .record(self.text.revision(), Some(&edits));
             }
             EditJournal::Reset => {
                 self.folds.clear();
                 self.analysis = analyze_lazy(&self.path, source);
+                self.analysis_sync.record(self.text.revision(), None);
             }
         }
     }
@@ -253,6 +266,9 @@ pub struct IdeState {
         std::collections::HashMap<std::path::PathBuf, problems::ActiveProblemsCache>,
     pub documents: Vec<Document>,
     pub active_document: Option<usize>,
+    /// The native analysis world (host, snapshots, services); synced with
+    /// `documents` by [`IdeState::poll_analysis`].
+    pub analysis: AnalysisServices,
     /// Markdown editor layout per file (Editor / Split / Preview).
     pub markdown_layouts:
         std::collections::HashMap<std::path::PathBuf, archipel_ide_markdown::Layout>,
@@ -563,6 +579,11 @@ impl IdeState {
     }
     pub fn save(&mut self, index: usize) -> Result<(), String> {
         disk_sync::ensure_no_conflict(self, index)?;
+        // Local History: keep what the disk held before the first overwrite.
+        let history_path = self.documents.get(index).map(|d| d.path.clone());
+        let history_previous = history_path
+            .as_deref()
+            .and_then(|path| self.history_previous(path));
         let project = self.project.as_ref().ok_or("no project is open")?;
         let document = self
             .documents
@@ -577,6 +598,9 @@ impl IdeState {
         self.status = format!("Saved {}", document.path.display());
         let absolute = project.root().join(&document.path);
         let _ = self.lsp.save_document(&absolute);
+        if let Some(path) = history_path {
+            self.history_saved(&path, history_previous.as_deref(), &text);
+        }
         Ok(())
     }
 
@@ -1223,6 +1247,7 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
     hierarchy::register(&mut registry);
     test_nav::register(&mut registry);
     ai_commands::register(&mut registry);
+    analysis_modules::register_commands(&mut registry);
     registry
         .register(Command::new(
             spec(

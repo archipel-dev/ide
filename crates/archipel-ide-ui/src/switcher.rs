@@ -74,6 +74,7 @@ fn window_icon(window: ToolWindow) -> Icon {
         ToolWindow::Agents => {
             Icon::Kit(crate::agents_ui::glyph(crate::agents_ui::Concept::Agent).into())
         }
+        ToolWindow::Todo => Icon::Success,
     }
 }
 

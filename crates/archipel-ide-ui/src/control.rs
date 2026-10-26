@@ -274,12 +274,14 @@ impl IdeApp {
             && !self.find_popup.pending()
             && !self.state.runner.is_running()
             && !self.state.updates.is_busy()
+            && self.state.analysis.index.is_idle()
     }
 
     fn popup_visible(&self, ctx: &egui::Context) -> bool {
         self.palette.open
             || self.find_popup.open
             || self.dialog.is_some()
+            || self.state.analysis.history.dialog.is_some()
             || self.state.about_open
             || self.state.first_run_open
             || self.completion_visible()
@@ -371,6 +373,7 @@ impl IdeApp {
                 "other"
             }
         });
+        let index_status = self.state.index_status();
         json!({
             "project": root,
             "tabs": tabs,
@@ -416,6 +419,7 @@ impl IdeApp {
                 "completion": self.completion_visible(),
                 "notification": self.state.update_notification,
                 "about": self.state.about_open,
+                "history": self.state.analysis.history.dialog.is_some(),
                 "customize": self.state.first_run_open,
                 "crashReport": self.state.crash_report.is_some(),
                 "menu": egui::Popup::is_any_open(ctx),
@@ -440,6 +444,26 @@ impl IdeApp {
                 "selected": self.find_popup.selected(),
             },
             "problems": active.map(|_| self.state.active_problems().len()),
+            "history": {
+                "enabled": self.state.analysis.history.is_enabled(),
+                "revisions": self.state.analysis.history.dialog.as_ref().map(|d| d.revisions.len()),
+                "selected": self.state.analysis.history.dialog.as_ref().and_then(|d| d.selected),
+            },
+            "todo": {
+                "rows": self.state.analysis.todo.cached_count(),
+                "scope": self.state.analysis.todo.scope.id(),
+            },
+            "index": {
+                "phase": index_status.phase.label(),
+                "dumb": index_status.dumb,
+                "done": index_status.done,
+                "total": index_status.total,
+                "indexes": index_status
+                    .indexes
+                    .iter()
+                    .map(|info| (info.id.0.to_owned(), json!(archipel_ide_index::progress::state_label(info.state))))
+                    .collect::<serde_json::Map<_, _>>(),
+            },
             "run": {
                 "task": self.state.runner.plan().map(|plan| plan.name.clone()),
                 "running": self.state.runner.is_running(),

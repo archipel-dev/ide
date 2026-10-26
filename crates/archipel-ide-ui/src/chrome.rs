@@ -693,6 +693,7 @@ pub fn left_stripe(app: &mut IdeApp, ctx: &egui::Context) {
                         stripe_button(app, ui, ToolWindow::Logcat, Icon::Logcat);
                     }
                     stripe_button(app, ui, ToolWindow::Problems, Icon::Problems);
+                    stripe_button(app, ui, ToolWindow::Todo, Icon::Success);
                     stripe_button(app, ui, ToolWindow::Terminal, Icon::Terminal);
                     stripe_button(app, ui, ToolWindow::Build, Icon::Build);
                     stripe_button(app, ui, ToolWindow::Debug, Icon::Debug);
@@ -879,6 +880,7 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                     let secondary = theme::TEXT_SECONDARY;
                     crate::agents_ui::status_widget(app, ui, font.clone());
                     crate::lsp_status::status_widget(app, ui, font.clone());
+                    crate::index_status::status_widget(app, ui, font.clone());
                     crate::toolchain_status::status_widget(app, ui, font.clone());
                     let active = app
                         .state

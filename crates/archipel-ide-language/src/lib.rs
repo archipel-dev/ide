@@ -2,25 +2,37 @@
 //! their bundled queries, a generic highlight engine, and IntelliJ color
 //! schemes. No language has its own code path here.
 
+pub mod anchor;
 pub mod brackets;
 mod captures;
+pub mod def;
+pub mod element;
+pub mod extensions;
 pub mod folding;
 pub mod highlight;
+pub mod ids;
 mod injection;
+pub mod node;
 pub mod registry;
 pub mod scheme;
 pub mod selection;
 pub mod structure;
 pub mod syntax;
 
-pub use archipel_ide_text::{ByteEdit, BytePoint};
+pub use anchor::Anchor;
+pub use archipel_ide_text::{ByteEdit, BytePoint, EditMap};
 pub use captures::capture_key;
+pub use def::{CompletenessTier, ExtraQueries, LanguageDef, LanguageQueries, no_services};
+pub use element::{ElementType, ElementTypeTable, FieldId, TokenSet, TokenSetSpec, TokenSets};
+pub use extensions::{Order, Registration, ServiceRegistry};
 pub use folding::{FoldKind, FoldRange};
 pub use highlight::{HighlightLayer, HighlightSpan, QueryError};
+pub use ids::{FileId, FileRev, LanguageId};
+pub use node::{InjectedFragment, SyntaxError, SyntaxNode, SyntaxSnapshot, TextSnapshot};
 pub use registry::{LANGUAGES, LanguageSpec};
 pub use scheme::{ColorScheme, EffectType, FontStyle, Rgba, TextAttributes};
 pub use structure::{StructureItem, SymbolKind};
-pub use syntax::SyntaxTree;
+pub use syntax::{Reparse, SyntaxTree};
 
 use std::path::Path;
 use tree_sitter::Node;
@@ -53,6 +65,9 @@ pub struct LanguageAnalysis {
     pub source: std::sync::Arc<str>,
     /// Byte ranges whose highlights are computed (sorted, disjoint).
     highlighted: Vec<std::ops::Range<usize>>,
+    /// Syntactically changed ranges since the last
+    /// [`LanguageAnalysis::take_syntax_changes`] (current coordinates).
+    syntax_changes: Vec<std::ops::Range<usize>>,
 }
 
 impl LanguageAnalysis {
@@ -61,34 +76,55 @@ impl LanguageAnalysis {
     /// unmatched brackets). Callers fall back to text matching when the
     /// language has no grammar ([`LanguageAnalysis::syntax`] is `None`).
     pub fn matching_bracket(&self, byte: usize) -> Option<(usize, usize)> {
-        brackets::matching_bracket(self.syntax.as_ref()?.tree(), byte)
+        self.snap()?.matching_bracket(byte)
     }
 
     /// Declarations of the file, nested (empty without a tags query).
     pub fn structure(&self) -> Vec<StructureItem> {
-        match &self.syntax {
-            Some(syntax) => structure::structure(syntax.language(), syntax.tree(), &self.source),
-            None => Vec::new(),
-        }
+        self.snap().map(|snap| snap.structure()).unwrap_or_default()
     }
 
     /// Folding regions intersecting the byte `range` (see [`folding::fold_ranges`]).
     pub fn folds_in(&self, range: std::ops::Range<usize>) -> Vec<FoldRange> {
-        match &self.syntax {
-            Some(syntax) => {
-                folding::fold_ranges(syntax.language(), syntax.tree(), &self.source, range)
-            }
-            None => Vec::new(),
-        }
+        self.snap()
+            .map(|snap| snap.folds_in(range))
+            .unwrap_or_default()
     }
 
     /// Extend Selection: the next larger syntactic byte range around `range`.
+    /// `source` must be the analyzed text (kept for API compatibility).
     pub fn expand_selection(
         &self,
         source: &str,
         range: std::ops::Range<usize>,
     ) -> Option<std::ops::Range<usize>> {
-        selection::expand(self.syntax.as_ref()?.tree(), source, range)
+        if source.len() != self.source.len() {
+            return selection::expand(self.syntax.as_ref()?.tree(), source, range);
+        }
+        self.snap()?.expand_selection(range)
+    }
+
+    /// Drains the ranges whose syntax changed since the last call (the
+    /// payload of the analysis host's `SyntaxChanged` event).
+    pub fn take_syntax_changes(&mut self) -> Vec<std::ops::Range<usize>> {
+        syntax::merge_ranges(std::mem::take(&mut self.syntax_changes))
+    }
+
+    /// An immutable [`SyntaxSnapshot`] of the analyzed text (O(1): shares the
+    /// tree and the text). `None` for plain text.
+    pub fn snapshot(&self, file: FileId, rev: FileRev) -> Option<SyntaxSnapshot> {
+        let syntax = self.syntax.as_ref()?;
+        Some(SyntaxSnapshot::from_tree(
+            file,
+            rev,
+            syntax,
+            self.source.clone(),
+        ))
+    }
+
+    /// The facade's own snapshot (identity-less).
+    fn snap(&self) -> Option<SyntaxSnapshot> {
+        self.snapshot(FileId::default(), FileRev::default())
     }
 
     /// Brings the analysis up to date with `source` after `edits` (as
@@ -113,10 +149,29 @@ impl LanguageAnalysis {
             stale.extend(self.highlights.apply_edit(edit));
         }
         self.highlighted = syntax::merge_ranges(std::mem::take(&mut self.highlighted));
-        let Some(mut ranges) = syntax.apply_edits(source, edits) else {
+        for edit in edits {
+            for range in &mut self.syntax_changes {
+                *range = syntax::map_range(range.clone(), edit);
+            }
+        }
+        let Some(reparse) = syntax.reparse(source, edits) else {
             *self = analyze(path, source);
+            self.syntax_changes = std::iter::once(0..source.len()).collect();
             return;
         };
+        self.syntax_changes.extend(reparse.changed);
+        self.syntax_changes.extend(reparse.edited);
+        if self.syntax_changes.len() > 64 {
+            // Nobody drains (diff panes, previews): keep it bounded.
+            let merged = syntax::merge_ranges(std::mem::take(&mut self.syntax_changes));
+            self.syntax_changes = match (merged.first(), merged.last()) {
+                (Some(first), Some(last)) if merged.len() > 64 => {
+                    std::iter::once(first.start..last.end).collect()
+                }
+                _ => merged,
+            };
+        }
+        let mut ranges = reparse.highlight;
         ranges.extend(
             stale
                 .into_iter()
@@ -243,7 +298,7 @@ pub fn analyze_with_budget(path: &Path, source: &str, budget: usize) -> Language
     result
 }
 
-fn collect_diagnostics(node: Node<'_>, diagnostics: &mut Vec<Diagnostic>) {
+pub(crate) fn collect_diagnostics(node: Node<'_>, diagnostics: &mut Vec<Diagnostic>) {
     if diagnostics.len() >= MAX_DIAGNOSTICS || !(node.has_error() || node.is_missing()) {
         return;
     }

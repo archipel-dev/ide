@@ -1185,8 +1185,13 @@ mod tests {
                 ui.allocate_ui(egui::vec2(1100.0, 700.0), |ui| {
                     ui.set_min_size(egui::vec2(1100.0, 700.0));
                     ui.horizontal_top(|ui| {
-                        ui.allocate_ui(egui::vec2(760.0, 700.0), |ui| thread::threads(app, ui));
-                        ui.allocate_ui(egui::vec2(300.0, 700.0), |ui| thread::inspector(app, ui));
+                        let down = egui::Layout::top_down(egui::Align::Min);
+                        ui.allocate_ui_with_layout(egui::vec2(760.0, 700.0), down, |ui| {
+                            thread::threads(app, ui)
+                        });
+                        ui.allocate_ui_with_layout(egui::vec2(300.0, 700.0), down, |ui| {
+                            thread::inspector(app, ui)
+                        });
                     });
                 });
             });

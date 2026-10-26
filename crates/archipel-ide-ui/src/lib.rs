@@ -47,6 +47,7 @@ mod gradle_window;
 mod gutter_popup;
 mod hierarchy_ui;
 mod icons;
+mod inspections_settings;
 mod intentions_ui;
 mod keybindings;
 mod keys;

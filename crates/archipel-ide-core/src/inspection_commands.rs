@@ -211,6 +211,78 @@ impl IdeState {
     }
 }
 
+/// One inspection with its state in the active profile (settings page).
+#[derive(Debug, Clone, PartialEq)]
+pub struct InspectionRow {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub group: &'static [&'static str],
+    pub description: &'static str,
+    pub enabled: bool,
+    pub level: Level,
+    pub default_level: Level,
+    pub languages: Vec<&'static str>,
+    /// `(id, label, current value)`.
+    pub options: Vec<(&'static str, &'static str, Value)>,
+}
+
+impl IdeState {
+    /// All registered inspections with the active profile applied.
+    pub fn inspection_rows(&self) -> Vec<InspectionRow> {
+        let tools = catalog::inspections(self.analysis.host.registry());
+        let profile = self.daemon_service().map(|s| s.profile());
+        let path = self
+            .active_document
+            .and_then(|i| self.documents.get(i))
+            .map(|d| d.path.clone())
+            .unwrap_or_default();
+        tools
+            .iter()
+            .map(|t| {
+                let (enabled, level) = match &profile {
+                    Some(p) => p.state_for(t.id, t.enabled_by_default, t.default_level, &path),
+                    None => (t.enabled_by_default, t.default_level),
+                };
+                let entry = profile.as_ref().and_then(|p| p.entry(t.id));
+                let options = t
+                    .options
+                    .iter()
+                    .map(|o| {
+                        use archipel_ide_analysis::inspect::OptionKind;
+                        let given = entry.and_then(|e| e.options.get(o.id));
+                        let value = match (&o.kind, given) {
+                            (_, Some(toml::Value::Boolean(b))) => json!(b),
+                            (_, Some(toml::Value::Integer(i))) => json!(i),
+                            (_, Some(toml::Value::String(s))) => json!(s),
+                            (OptionKind::Bool(d), _) => json!(d),
+                            (OptionKind::Int { default, .. }, _) => json!(default),
+                            (OptionKind::Text(d), _) => json!(d),
+                            (OptionKind::Choice { default, .. }, _) => json!(default),
+                        };
+                        (o.id, o.label, value)
+                    })
+                    .collect();
+                InspectionRow {
+                    id: t.id,
+                    name: t.name,
+                    group: t.group,
+                    description: t.description,
+                    enabled,
+                    level,
+                    default_level: t.default_level,
+                    languages: t.languages.clone(),
+                    options,
+                }
+            })
+            .collect()
+    }
+}
+
+/// The TOML spelling of a level (`error`, `warning`, ...).
+pub fn level_id(level: Level) -> &'static str {
+    profile::level_name(level)
+}
+
 fn level_name(level: Level) -> &'static str {
     profile::level_name(level)
 }

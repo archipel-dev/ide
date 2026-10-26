@@ -69,7 +69,7 @@ enum Action {
     /// Opens the empty new-thread tab.
     NewThread,
     /// Starts agents (by profile id) on a prompt.
-    Launch(String, Vec<&'static str>),
+    Launch(String, Vec<&'static str>, &'static str),
     /// Answers a permission card with the option at the index.
     Permission(SessionId, usize),
     /// A follow-up message to an agent.
@@ -1022,9 +1022,9 @@ fn apply(app: &mut IdeApp, actions: Vec<Action>) {
                 json!({"page": archipel_ide_settings::AGENTS_PAGE}),
             ),
             Action::NewThread => app.dispatch("agents.newThread", Value::Null),
-            Action::Launch(prompt, profiles) => app.dispatch(
+            Action::Launch(prompt, profiles, mode) => app.dispatch(
                 "agents.launch",
-                json!({"prompt": prompt, "profiles": profiles}),
+                json!({"prompt": prompt, "profiles": profiles, "mode": mode}),
             ),
             Action::Permission(id, option) => app.dispatch(
                 "agents.send",

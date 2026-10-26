@@ -294,6 +294,16 @@ pub trait AgentsBackend {
     fn sessions(&self) -> Vec<SessionInfo>;
     /// Starts one agent per profile on a new task; returns the task.
     fn launch(&mut self, prompt: &str, profiles: &[AgentProfile]) -> TaskId;
+    /// [`Self::launch`] with a permission mode (`ask`, `auto-edit` or `plan`); backends that
+    /// have no such notion ignore it.
+    fn launch_with_mode(
+        &mut self,
+        prompt: &str,
+        profiles: &[AgentProfile],
+        _mode: Option<&str>,
+    ) -> TaskId {
+        self.launch(prompt, profiles)
+    }
     /// Types `input` into the agent's terminal (an answer, a follow-up prompt).
     fn send(&mut self, session: SessionId, input: &str);
     fn stop(&mut self, session: SessionId);
@@ -532,7 +542,17 @@ impl AgentsState {
 
     /// Starts a task and opens a thread tab for every top-level agent of it.
     pub fn launch(&mut self, prompt: &str, profiles: &[AgentProfile]) -> TaskId {
-        let task = self.backend.launch(prompt, profiles);
+        self.launch_with_mode(prompt, profiles, None)
+    }
+
+    /// [`Self::launch`] with the permission mode chosen in the composer.
+    pub fn launch_with_mode(
+        &mut self,
+        prompt: &str,
+        profiles: &[AgentProfile],
+        mode: Option<&str>,
+    ) -> TaskId {
+        let task = self.backend.launch_with_mode(prompt, profiles, mode);
         self.new_thread = false;
         self.draft_active = false;
         let sessions = self.backend.sessions();
@@ -906,7 +926,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 "Launch Agents",
                 "Agents",
                 None,
-                r#"{"prompt":"string","profiles":"string[]?"}"#,
+                r#"{"prompt":"string","profiles":"string[]?","mode":"ask|auto-edit|plan?"}"#,
             ),
             |s: &IdeState| s.project.is_some(),
             |state: &mut IdeState, params| {
@@ -947,8 +967,19 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 if profiles.is_empty() {
                     return Err(CommandError::InvalidParams("choose an agent".into()));
                 }
+                let mode = match params.get("mode").and_then(Value::as_str) {
+                    None => None,
+                    Some(mode @ ("ask" | "auto-edit" | "plan")) => Some(mode.to_owned()),
+                    Some(other) => {
+                        return Err(CommandError::InvalidParams(format!(
+                            "unknown permission mode `{other}`"
+                        )));
+                    }
+                };
                 state.agents.screen = AgentsScreen::Main;
-                let task = state.agents.launch(prompt.trim(), &profiles);
+                let task = state
+                    .agents
+                    .launch_with_mode(prompt.trim(), &profiles, mode.as_deref());
                 Ok(json!({"task": task}))
             },
         ))

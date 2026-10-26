@@ -133,8 +133,18 @@ impl AgentsBackend for RealAgentsBackend {
     }
 
     fn launch(&mut self, prompt: &str, profiles: &[AgentProfile]) -> TaskId {
+        self.launch_with_mode(prompt, profiles, None)
+    }
+
+    fn launch_with_mode(
+        &mut self,
+        prompt: &str,
+        profiles: &[AgentProfile],
+        mode: Option<&str>,
+    ) -> TaskId {
         let kinds: Vec<AgentKind> = profiles.iter().filter_map(|p| kind_of(*p)).collect();
-        self.engine.launch(prompt, &kinds, None)
+        self.engine
+            .launch(prompt, &kinds, mode.and_then(PermissionMode::parse))
     }
 
     fn send(&mut self, session: SessionId, input: &str) {
@@ -282,5 +292,83 @@ mod tests {
             "empty real backend gives way to the demo"
         );
         assert!(!state.agents.sessions().is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn settings_reach_the_backend_and_launch_explains_a_missing_cli() {
+        use crate::built_in_commands;
+        use archipel_ide_settings::ids;
+        use serde_json::json;
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path().join("proj");
+        std::fs::create_dir_all(&project).unwrap();
+        let commands = built_in_commands();
+        let mut state = crate::IdeState::default();
+        state.load_user_settings(&dir.path().join("config"));
+        commands
+            .execute("project.open", &mut state, json!({"path": project}))
+            .unwrap();
+        state.agents = AgentsState::new(Box::new(RealAgentsBackend::new(dir.path().join("data"))));
+        for (id, value) in [
+            (ids::AGENTS_CLAUDE_PATH, json!(dir.path().join("no-claude"))),
+            (ids::AGENTS_CODEX_PATH, json!(dir.path().join("no-codex"))),
+            (ids::AGENTS_MAX_PARALLEL, json!(2)),
+            (ids::AGENTS_PERMISSION_MODE, json!("plan")),
+        ] {
+            commands
+                .execute(
+                    "settings.set",
+                    &mut state,
+                    json!({"id": id, "value": value}),
+                )
+                .unwrap();
+        }
+        let settings = state.agents_settings();
+        assert_eq!(settings.max_parallel, 2);
+        assert_eq!(settings.permission_mode, "plan");
+        state.poll_agents();
+        assert!(state.agents.backend.available_profiles().is_empty());
+        let error = commands
+            .execute("agents.launch", &mut state, json!({"prompt": "do it"}))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("Set up agents"), "{error}");
+
+        // Installing (here: pointing the override at an executable) makes the agent appear.
+        let bin = dir.path().join("claude");
+        std::fs::write(&bin, "#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        commands
+            .execute(
+                "settings.set",
+                &mut state,
+                json!({"id": ids::AGENTS_CLAUDE_PATH, "value": bin}),
+            )
+            .unwrap();
+        state.poll_agents();
+        assert_eq!(
+            state.agents.backend.available_profiles(),
+            [AgentProfile::Claude]
+        );
+        let bad_agent = commands
+            .execute(
+                "agents.launch",
+                &mut state,
+                json!({"prompt": "x", "profiles": ["codex"]}),
+            )
+            .unwrap_err()
+            .to_string();
+        assert!(bad_agent.contains("not installed"), "{bad_agent}");
+        let bad_mode = commands
+            .execute(
+                "agents.launch",
+                &mut state,
+                json!({"prompt": "x", "mode": "yolo"}),
+            )
+            .unwrap_err()
+            .to_string();
+        assert!(bad_mode.contains("permission mode"), "{bad_mode}");
     }
 }

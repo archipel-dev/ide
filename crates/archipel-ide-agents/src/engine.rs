@@ -1234,7 +1234,16 @@ impl Engine {
                     return;
                 }
                 match result {
-                    Ok(proc) => self.sessions[idx].proc = Some(proc),
+                    Ok(proc) => {
+                        let s = &mut self.sessions[idx];
+                        // Inputs sent while the process was starting go in now.
+                        if s.kind == AgentKind::Claude {
+                            for text in std::mem::take(&mut s.queued) {
+                                let _ = proc.write_line(&ClaudeAdapter::user_message(&text));
+                            }
+                        }
+                        s.proc = Some(proc);
+                    }
                     Err(error) => self.fail(idx, &error),
                 }
                 self.save(idx);

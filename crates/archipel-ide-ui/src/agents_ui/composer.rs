@@ -49,6 +49,15 @@ pub(super) enum PermMode {
 impl PermMode {
     const ALL: [PermMode; 3] = [PermMode::Ask, PermMode::AutoEdit, PermMode::Plan];
 
+    /// The id `agents.launch` takes.
+    pub(super) fn id(self) -> &'static str {
+        match self {
+            PermMode::Ask => "ask",
+            PermMode::AutoEdit => "auto-edit",
+            PermMode::Plan => "plan",
+        }
+    }
+
     fn label(self) -> &'static str {
         match self {
             PermMode::Ask => "Ask",
@@ -541,7 +550,7 @@ pub(super) fn composer(
                 } else if profiles.is_empty() {
                     app.state.status = "Choose at least one agent".into();
                 } else {
-                    actions.push(Action::Launch(prompt.clone(), profiles));
+                    actions.push(Action::Launch(prompt.clone(), profiles, c.mode.id()));
                     app.agents_ui.history.push(prompt);
                     c.clear();
                 }

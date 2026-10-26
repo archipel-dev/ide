@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.1.0](https://github.com/archipel-dev/ide/compare/v0.0.9...v0.1.0) (2026-10-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* rename Jetthing to Archipel IDE ([#34](https://github.com/archipel-dev/ide/issues/34))
+
+### Features
+
+* **analysis:** analysis pipeline contracts and core (wave 0 + WP1) ([#36](https://github.com/archipel-dev/ide/issues/36)) ([56592a4](https://github.com/archipel-dev/ide/commit/56592a4222e95f0ebc64d70e5a56e245ba57fd70))
+* **daemon:** highlighting daemon, inspections and intentions (WP3) ([#40](https://github.com/archipel-dev/ide/issues/40)) ([31c0a80](https://github.com/archipel-dev/ide/commit/31c0a80b67fc1e62988cd3adb149dac151600d6f))
+* **git:** worktree management for agent sessions ([#38](https://github.com/archipel-dev/ide/issues/38)) ([5db5c2a](https://github.com/archipel-dev/ide/commit/5db5c2af36de684b5f078f52e605092fcd204123))
+* **index:** persistent indexes, dumb mode, TODO and Local History (WP2) ([#39](https://github.com/archipel-dev/ide/issues/39)) ([d892d61](https://github.com/archipel-dev/ide/commit/d892d61ed924c5e95dc90439bfa7444f1b225d6f))
+* **project:** Spring Boot initializr wizard with Gradle, Maven and Bazel ([#44](https://github.com/archipel-dev/ide/issues/44)) ([8e8293c](https://github.com/archipel-dev/ide/commit/8e8293c4c800329c7ed83efadc4a83a567b5f833))
+* **ui:** agents mode prototype with a mocked backend ([#41](https://github.com/archipel-dev/ide/issues/41)) ([e8b6866](https://github.com/archipel-dev/ide/commit/e8b6866dd4605e780e53f8434fb2c4ff019c4e29))
+* **ui:** build the UI foundation on archipel-kit ([#28](https://github.com/archipel-dev/ide/issues/28)) ([496e652](https://github.com/archipel-dev/ide/commit/496e652d9e9288a3fd70a14e0ef3bffa9c5ebe5f))
+
+
+### Code Refactoring
+
+* rename Jetthing to Archipel IDE ([#34](https://github.com/archipel-dev/ide/issues/34)) ([4aa1b4b](https://github.com/archipel-dev/ide/commit/4aa1b4b8377abd5886a96ebf34eefef5fca2be4f))
+
 ## [0.0.9](https://github.com/HenrySchwerdt/jetthing/compare/v0.0.8...v0.0.9) (2026-10-11)
 
 v0.0.8 was published without downloads; this release ships its contents plus the changes below.

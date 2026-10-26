@@ -1,0 +1,38 @@
+{
+  "id": "30",
+  "title": "UI look: Classic with Darcula",
+  "fixture": "java-gradle",
+  "open": [
+    "src/main/java/com/example/App.java"
+  ],
+  "steps": [
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "execute",
+      "command": "settings.apply",
+      "args": {
+        "changes": {
+          "appearance.uiLook": "classic",
+          "appearance.theme": "Darcula",
+          "appearance.compactMode": false
+        }
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 800
+    },
+    {
+      "op": "assert",
+      "pointer": "/activeTab",
+      "equals": "src/main/java/com/example/App.java"
+    },
+    {
+      "op": "screenshot",
+      "name": "30-look-classic.png"
+    }
+  ]
+}

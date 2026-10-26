@@ -10,14 +10,24 @@ use archipel_kit::ui::ColoredListCellRenderer;
 use archipel_kit::{Theme, cursor};
 use eframe::egui::{self, Color32, Rect, Sense, vec2};
 
-/// Rounded "island" container used for the editor and docked tool windows: the kit's
-/// island surface without its inner padding (rows inset themselves), with the gap between
-/// islands as outer margin.
+/// "Island" container used for the editor and docked tool windows: the kit's island
+/// surface without its inner padding (rows inset themselves), with the gap between islands
+/// as outer margin. It follows the UI look: rounded islands with a gap in Islands, flush
+/// panels separated by 1 px lines in New UI and Classic.
 pub fn island_frame(ctx: &egui::Context) -> egui::Frame {
-    Surface::Island
+    let metrics = archipel_kit::tokens::metrics(ctx);
+    let frame = Surface::Island
         .frame(ctx)
         .inner_margin(egui::Margin::ZERO)
-        .outer_margin(egui::Margin::same(theme::ISLAND_GAP as i8))
+        .outer_margin(egui::Margin::same((metrics.island_gap / 2.0) as i8));
+    if metrics.panel_line > 0.0 {
+        frame.stroke(egui::Stroke::new(
+            metrics.panel_line,
+            Theme::colors(ctx).divider,
+        ))
+    } else {
+        frame
+    }
 }
 
 /// Flat frame for chrome areas (toolbar, stripes, status bar): the window frame color.
@@ -31,7 +41,10 @@ pub fn glow_through_frame() -> egui::Frame {
     egui::Frame::new()
 }
 
-pub const TOOL_WINDOW_HEADER_HEIGHT: f32 = theme::layout::TOOLBAR_HEIGHT;
+/// Tool window title bar height of the current look and density.
+pub fn tool_window_header_height(ctx: &egui::Context) -> f32 {
+    archipel_kit::tokens::metrics(ctx).header_height
+}
 pub const ROW_HEIGHT: f32 = theme::layout::ROW_HEIGHT;
 
 /// Tool window title bar. `actions` adds right-aligned icon buttons; returns
@@ -43,7 +56,7 @@ pub fn tool_window_header(
 ) -> bool {
     let mut hide = false;
     let (rect, _) = ui.allocate_exact_size(
-        vec2(ui.available_width(), TOOL_WINDOW_HEADER_HEIGHT),
+        vec2(ui.available_width(), tool_window_header_height(ui.ctx())),
         Sense::hover(),
     );
     let mut child = ui.new_child(

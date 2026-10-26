@@ -1,0 +1,38 @@
+{
+  "id": "31",
+  "title": "UI look: Islands, compact",
+  "fixture": "java-gradle",
+  "open": [
+    "src/main/java/com/example/App.java"
+  ],
+  "steps": [
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "execute",
+      "command": "settings.apply",
+      "args": {
+        "changes": {
+          "appearance.uiLook": "islands",
+          "appearance.theme": "Islands Dark",
+          "appearance.compactMode": true
+        }
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 800
+    },
+    {
+      "op": "assert",
+      "pointer": "/activeTab",
+      "equals": "src/main/java/com/example/App.java"
+    },
+    {
+      "op": "screenshot",
+      "name": "31-look-compact.png"
+    }
+  ]
+}

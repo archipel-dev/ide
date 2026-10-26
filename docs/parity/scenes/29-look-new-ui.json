@@ -1,0 +1,38 @@
+{
+  "id": "29",
+  "title": "UI look: New UI (Islands Dark theme)",
+  "fixture": "java-gradle",
+  "open": [
+    "src/main/java/com/example/App.java"
+  ],
+  "steps": [
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "execute",
+      "command": "settings.apply",
+      "args": {
+        "changes": {
+          "appearance.uiLook": "new_ui",
+          "appearance.theme": "Islands Dark",
+          "appearance.compactMode": false
+        }
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 800
+    },
+    {
+      "op": "assert",
+      "pointer": "/activeTab",
+      "equals": "src/main/java/com/example/App.java"
+    },
+    {
+      "op": "screenshot",
+      "name": "29-look-new-ui.png"
+    }
+  ]
+}

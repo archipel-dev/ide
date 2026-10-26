@@ -68,8 +68,6 @@ pub mod layout {
     pub const ICON_SIZE: f32 = size::ICON;
     /// Gap between an icon and its text.
     pub const ICON_TEXT_GAP: f32 = size::ICON_TEXT_GAP;
-    /// Tool-window title bar height.
-    pub const TOOLBAR_HEIGHT: f32 = size::HEADER_HEIGHT;
     /// Square icon-button size in toolbars and headers.
     pub const ICON_BUTTON: f32 = size::ICON_BUTTON;
     /// Space before the first toolbar button so its glyph lines up with the content inset.

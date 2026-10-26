@@ -386,7 +386,10 @@ pub fn tool_window(app: &mut IdeApp, ui: &mut egui::Ui) {
 
     // Header: title, tabs with counts, hide button.
     let (header, _) = ui.allocate_exact_size(
-        vec2(ui.available_width(), widgets::TOOL_WINDOW_HEADER_HEIGHT),
+        vec2(
+            ui.available_width(),
+            widgets::tool_window_header_height(ui.ctx()),
+        ),
         Sense::hover(),
     );
     let mut x = header.left() + theme::layout::CONTENT_INSET;

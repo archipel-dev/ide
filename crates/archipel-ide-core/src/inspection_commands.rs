@@ -29,6 +29,11 @@ pub(crate) fn daemon_services(registry: &mut ServiceRegistry) {
     DaemonService::with_system_clock().register(registry);
 }
 
+/// The config directory (for the intention actions that edit profiles).
+pub(crate) fn config_dir_for_actions() -> Option<&'static Path> {
+    config_dir()
+}
+
 fn config_dir() -> Option<&'static Path> {
     static DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
     DIR.get_or_init(archipel_ide_settings::default_config_dir)
@@ -635,6 +640,102 @@ mod tests {
                 .is_err()
         );
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn quick_fixes_apply_as_one_undo_step_and_are_ordered() {
+        let src = "class A {\n  void f(int a) {\n    a = a;\n    int b = ((1));\n  }\n}\n";
+        let mut state = state_with("A.java", src);
+        settle(&mut state);
+        let caret = src.find("a = a").unwrap() + 2;
+        state.documents[0]
+            .selections
+            .set_single(archipel_ide_text::Selection::caret(caret));
+        state.poll_analysis();
+        let list = built_in_commands()
+            .execute("code.alerts", &mut state, json!({}))
+            .expect("alerts");
+        let actions = list["actions"].as_array().expect("actions");
+        let top: Vec<_> = actions
+            .iter()
+            .filter(|a| a["submenu"].is_null())
+            .map(|a| a["text"].as_str().unwrap())
+            .collect();
+        // The self-assignment fix at the caret (inspection group, 20) comes before the
+        // remote fix of the redundant parentheses on another line is not even listed.
+        assert_eq!(top, ["Remove the assignment"], "{list}");
+        assert!(
+            actions
+                .iter()
+                .any(|a| a["submenu"] == "Inspection 'Self assignment'"
+                    && a["text"] == "Suppress for statement")
+        );
+        let index = actions
+            .iter()
+            .position(|a| a["text"] == "Remove the assignment")
+            .unwrap();
+        built_in_commands()
+            .execute("code.applyAlert", &mut state, json!({"index": index}))
+            .expect("apply");
+        assert_eq!(
+            state.documents[0].text.text(),
+            "class A {\n  void f(int a) {\n    int b = ((1));\n  }\n}\n"
+        );
+        // One undo step restores the file.
+        assert!(state.documents[0].text.undo());
+        assert_eq!(state.documents[0].text.text(), src);
+        assert!(!state.documents[0].text.can_undo());
+        // Suppress from the popup: the comment is inserted and silences the problem.
+        let document = &mut state.documents[0];
+        document.refresh_analysis(src);
+        settle(&mut state);
+        let caret = src.find("a = a").unwrap() + 2;
+        state.documents[0]
+            .selections
+            .set_single(archipel_ide_text::Selection::caret(caret));
+        state.poll_analysis();
+        let list = built_in_commands()
+            .execute("code.alerts", &mut state, json!({}))
+            .unwrap();
+        let actions = list["actions"].as_array().unwrap();
+        let index = actions
+            .iter()
+            .position(|a| a["text"] == "Suppress for statement")
+            .unwrap();
+        built_in_commands()
+            .execute("code.applyAlert", &mut state, json!({"index": index}))
+            .unwrap();
+        assert!(
+            state.documents[0]
+                .text
+                .text()
+                .contains("// noinspection SelfAssignment\n    a = a;")
+        );
+        settle(&mut state);
+        assert!(!tools(&state, "A.java").contains(&"native:SelfAssignment".to_owned()));
+    }
+
+    #[test]
+    fn stale_fixes_are_refused() {
+        let src = "class A { void f(int a) { a = a; } }\n";
+        let mut state = state_with("A.java", src);
+        settle(&mut state);
+        let file = state.analysis.host.lookup(Path::new("A.java")).unwrap();
+        let command = archipel_ide_analysis::ModCommand::UpdateFile {
+            file,
+            edits: vec![archipel_ide_analysis::TextEdit::insert(0, "x")],
+            expected_rev: archipel_ide_analysis::FileRev(999),
+        };
+        let error = state.execute_mod_command(&command).unwrap_err();
+        assert!(error.contains("changed since"), "{error}");
+        assert!(
+            state
+                .execute_mod_command(&archipel_ide_analysis::ModCommand::CreateFile {
+                    path: "x".into(),
+                    text: String::new()
+                })
+                .is_err()
+        );
     }
 
     #[test]

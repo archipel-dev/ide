@@ -9,6 +9,7 @@
 pub mod clock;
 pub mod daemon;
 pub mod inspection;
+pub mod intention;
 pub mod markup;
 pub mod passes;
 pub mod problem_files;

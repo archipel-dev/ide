@@ -67,5 +67,6 @@ Chords use the Linux keymap (`Alt+0`, `Alt+F12`); `Primary` means ⌘ on macOS a
 | 19 Project context menu | `19-project-context-menu.json` | right-click on a tree row opens the context menu with New ▸ |
 | 20 Problems | `20-problems.json` | Alt+6 lists the 2 syntax errors of `src/broken.rs` |
 | 30 Indexing | `30-indexing.json` | while the content indexes build the IDE is in dumb mode with `FileName` ready and `Words` building; afterwards every index is ready |
+| 31 TODO window | `31-todo.json` | an outside change adds a TODO and a FIXME comment (a TODO in a string is ignored): the TODO window lists 2 items for the project and for the current file |
 
 Coordinates in `click`/`move` are logical points in the default 1440×900 window.

@@ -26,6 +26,8 @@ pub(crate) fn register_services(registry: &mut ServiceRegistry) {
 
 pub(crate) fn register_all(registry: &mut CommandRegistry<IdeState>) {
     register(registry);
+    crate::todo_commands::register(registry);
+    crate::history_commands::register(registry);
 }
 
 impl IdeState {
@@ -40,7 +42,7 @@ impl IdeState {
     pub(crate) fn sync_index_project(&mut self) {
         let root = self.project.as_ref().map(|p| p.root().to_path_buf());
         let cache = self.analysis.index_cache_dir.clone();
-        let todo = archipel_ide_index::todo::TodoSettings::default();
+        let todo = self.todo_settings();
         let waker = self.waker.clone();
         let services = &mut self.analysis;
         match (root, services.index.root().map(ToOwned::to_owned)) {

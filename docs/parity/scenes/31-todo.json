@@ -1,0 +1,20 @@
+{
+  "id": "31",
+  "title": "TODO tool window",
+  "fixture": "rust-cargo",
+  "open": ["src/main.rs"],
+  "steps": [
+    {"op": "wait", "until": "idle"},
+    {"op": "appendFile", "path": "src/main.rs", "contents": "// TODO call the greeter twice\n// FIXME handle empty names\nconst NOT_A_TODO: &str = \"TODO in a string\";\n"},
+    {"op": "sleep", "ms": 800},
+    {"op": "execute", "command": "todo.show"},
+    {"op": "wait", "until": "idle"},
+    {"op": "assert", "pointer": "/toolWindows/bottom", "equals": "todo"},
+    {"op": "assert", "pointer": "/todo/rows", "equals": 2},
+    {"op": "screenshot", "name": "31-todo.png"},
+    {"op": "execute", "command": "todo.setScope", "args": {"scope": "file"}},
+    {"op": "wait", "until": "idle"},
+    {"op": "assert", "pointer": "/todo/rows", "equals": 2},
+    {"op": "assert", "pointer": "/todo/scope", "equals": "file"}
+  ]
+}

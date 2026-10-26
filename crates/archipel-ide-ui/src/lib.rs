@@ -82,6 +82,7 @@ mod terminal_ui;
 mod test_view;
 mod theme;
 mod theme_engine;
+mod todo_window;
 mod toolbar_gradient;
 mod toolchain_banner;
 mod toolchain_status;

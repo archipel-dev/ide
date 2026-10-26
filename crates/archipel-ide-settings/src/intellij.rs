@@ -52,6 +52,12 @@ pub mod ids {
     pub const LIVE_TEMPLATES_USER: &str = "editor.liveTemplates.user";
     /// Switched-off live template groups and templates (`group` or `group/abbreviation`).
     pub const LIVE_TEMPLATES_DISABLED: &str = "editor.liveTemplates.disabled";
+    /// TODO patterns, one `i|s <color key> <regex>` line each (`i`: ignore case).
+    pub const TODO_PATTERNS: &str = "editor.todo.patterns";
+    /// TODO tool window filters, one `Name: 0,1` line each (pattern indexes).
+    pub const TODO_FILTERS: &str = "editor.todo.filters";
+    /// Search for TODO patterns in every line of block comments.
+    pub const TODO_MULTILINE: &str = "editor.todo.multiline";
     pub const EDITOR_FONT_FAMILY: &str = "editor.font.family";
     pub const EDITOR_FONT_SIZE: &str = "editor.font.size";
     pub const EDITOR_LINE_HEIGHT: &str = "editor.font.lineHeight";
@@ -432,6 +438,34 @@ fn add_definitions(registry: &mut SettingsRegistry) {
             "Disabled live templates",
             SettingKind::List,
             SettingValue::List(Vec::new()),
+        ),
+        SettingDef::new(
+            ids::TODO_PATTERNS,
+            "preferences.toDoOptions",
+            "Patterns",
+            SettingKind::List,
+            SettingValue::List(vec![
+                r"i todo \btodo\b.*".into(),
+                r"i fixme \bfixme\b.*".into(),
+            ]),
+        )
+        .description(
+            "One pattern per line: i (ignore case) or s (case sensitive), a color key, then a regular expression",
+        ),
+        SettingDef::new(
+            ids::TODO_FILTERS,
+            "preferences.toDoOptions",
+            "Filters",
+            SettingKind::List,
+            SettingValue::List(Vec::new()),
+        )
+        .description("One filter per line: Name: followed by the pattern numbers, e.g. Urgent: 1"),
+        SettingDef::new(
+            ids::TODO_MULTILINE,
+            "preferences.toDoOptions",
+            "Search for TODO patterns in all lines of multiline comments",
+            Bool,
+            B(true),
         ),
         SettingDef::new(
             ids::EDITOR_FONT_FAMILY,

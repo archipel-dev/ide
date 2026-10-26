@@ -417,6 +417,10 @@ impl IdeApp {
                 "selected": self.find_popup.selected(),
             },
             "problems": active.map(|_| self.state.active_problems().len()),
+            "todo": {
+                "rows": self.state.analysis.todo.cached_count(),
+                "scope": self.state.analysis.todo.scope.id(),
+            },
             "index": {
                 "phase": index_status.phase.label(),
                 "dumb": index_status.dumb,

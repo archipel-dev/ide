@@ -74,7 +74,6 @@ pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::FontId) {
 
 /// A one-line banner "Indexing… results may be incomplete" with a spinner,
 /// or nothing when the state has no pending index.
-#[allow(dead_code)] // used by popups and tool windows (TODO window, navigation popups)
 pub fn banner(ui: &mut egui::Ui, state: &IdeState) {
     if !state.analysis.index.is_attached() {
         return;

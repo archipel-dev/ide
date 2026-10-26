@@ -1,0 +1,25 @@
+def constant MAX 4:9
+def class point 7:8
+def constant ON 12:13
+def constant OFF 12:17
+def class point_t 14:22
+def function add 16:12
+def parameter a 16:20
+def parameter b 16:27
+def function main 21:5
+def parameter argc 21:14
+def parameter argv 21:27
+def variable total 23:9
+def variable i 24:14
+ref a 18:12 -> parameter 16:20
+ref b 18:16 -> parameter 16:27
+ref i 24:21 -> variable 24:14
+ref MAX 24:25 -> constant 4:9
+ref i 24:30 -> variable 24:14
+ref i 25:13 -> variable 24:14
+ref total 26:13 -> variable 23:9
+ref add 26:22 -> function 16:12
+ref i 26:26 -> variable 24:14
+ref total 31:13 -> variable 23:9
+ref printf 37:5 -> unresolved
+ref total 37:20 -> variable 23:9

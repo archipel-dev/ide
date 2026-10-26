@@ -1,0 +1,47 @@
+import fs from "fs";
+import path from "path";
+
+/**
+ * A service.
+ */
+export class Service extends Base {
+  constructor(name) {
+    super(name);
+    this.name = name;
+  }
+
+  async run(items) {
+    for (const item of items) {
+      if (item > 0) {
+        console.log(item);
+      } else {
+        continue;
+      }
+    }
+    const map = { a: 1, b: [1, 2, 3] };
+    return map;
+  }
+
+  static helper(a, b) {
+    return a + b;
+  }
+}
+
+function main(argv) {
+  const handler = (event) => {
+    return event.id;
+  };
+  switch (argv.length) {
+    case 1:
+      break;
+    default:
+      break;
+  }
+  try {
+    handler({ id: 1 });
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+const value = () => 42;

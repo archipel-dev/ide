@@ -1,0 +1,31 @@
+def module app 4:11
+def class Shape 7:7
+def method area 10:20
+def field name_ 13:17
+def class Box 17:7
+def function Box 19:14
+def parameter side 19:20
+def method area 21:12
+def field side_ 26:7
+def class Point 29:8
+def field x 29:20
+def field y 29:27
+def constant On 31:19
+def constant Off 31:23
+def function total 33:5
+def parameter values 33:35
+def variable sum 34:9
+def variable value 35:15
+def variable fn 40:10
+def parameter a 40:23
+ref Shape 9:14 -> class 7:7
+ref side 19:34 -> parameter 19:20
+ref side_ 22:16 -> field 26:7
+ref side_ 22:24 -> field 26:7
+ref values 35:23 -> parameter 33:35
+ref value 36:13 -> variable 35:15
+ref sum 37:13 -> variable 34:9
+ref value 37:20 -> variable 35:15
+ref a 41:16 -> parameter 40:23
+ref sum 41:20 -> variable 34:9
+ref fn 43:12 -> variable 40:10

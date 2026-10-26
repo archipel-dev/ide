@@ -1,0 +1,27 @@
+ 10: greet() {
+ 11: greet() {
+ 12: greet() {
+ 15: deploy() {
+ 16: deploy() {
+ 17: deploy() { | if [ -z "$target" ]; then
+ 18: deploy() { | if [ -z "$target" ]; then
+ 19: deploy() { | if [ -z "$target" ]; then
+ 20: deploy() { | if [ -z "$target" ]; then
+ 21: deploy() { | if [ -z "$target" ]; then
+ 22: deploy() { | if [ -z "$target" ]; then
+ 23: deploy() { | if [ -z "$target" ]; then
+ 24: deploy() {
+ 25: deploy() { | for f in *.txt; do
+ 26: deploy() { | for f in *.txt; do
+ 27: deploy() {
+ 28: deploy() { | while read -r line; do
+ 29: deploy() { | while read -r line; do
+ 30: deploy() {
+ 31: deploy() { | case "$target" in
+ 32: deploy() { | case "$target" in
+ 33: deploy() { | case "$target" in
+ 34: deploy() { | case "$target" in
+ 35: deploy() { | case "$target" in
+ 36: deploy() { | case "$target" in
+ 37: deploy() { | case "$target" in
+ 38: deploy() {

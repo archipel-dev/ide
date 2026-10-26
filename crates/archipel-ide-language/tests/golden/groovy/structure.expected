@@ -1,0 +1,7 @@
+Class Task
+  Field name: String
+  Field count: int [private]
+  Constructor Task(String)
+  Method run(List)
+  Method helper(String, int): void [static]
+Method main()

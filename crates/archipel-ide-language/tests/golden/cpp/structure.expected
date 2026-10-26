@@ -1,0 +1,16 @@
+Module app
+  Class Shape
+    Method ~Shape
+    Method area
+    Field name_: std::string
+  Class Box
+    Constructor Box
+    Method area
+    Field side_: T
+  Class Point
+    Field x: int
+    Field y: int
+  Enum Mode
+    Constant On
+    Constant Off
+  Function total

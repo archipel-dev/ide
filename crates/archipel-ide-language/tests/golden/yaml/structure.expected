@@ -1,0 +1,12 @@
+Key name
+Key on
+  Key push
+    Key branches
+Key jobs
+  Key test
+    Key runs-on
+    Key steps
+      Key uses
+      Key name
+      Key run
+Key list

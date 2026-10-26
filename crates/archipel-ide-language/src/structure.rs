@@ -159,6 +159,11 @@ fn compact(text: &str, limit: usize) -> String {
     out
 }
 
+/// A type annotation's text without its leading `:` (TypeScript).
+fn type_text(text: &str) -> &str {
+    text.trim_start_matches(':').trim_start()
+}
+
 /// The type of a parameter or declaration: its `type` field, else its last
 /// named child whose kind names a type.
 fn type_of<'a>(node: Node<'a>) -> Option<Node<'a>> {
@@ -191,7 +196,7 @@ fn signature(node: Node<'_>, source: &str) -> Option<String> {
         .iter()
         .map(|param| {
             let ty = type_of(*param)?;
-            let mut ty_text = compact(source.get(ty.byte_range())?, 40);
+            let mut ty_text = compact(type_text(source.get(ty.byte_range())?), 40);
             // Java `String args[]` keeps its dimensions next to the name.
             if let Some(dims) = param.child_by_field_name("dimensions") {
                 ty_text.push_str(source.get(dims.byte_range()).unwrap_or_default());
@@ -215,7 +220,7 @@ fn signature(node: Node<'_>, source: &str) -> Option<String> {
         })
     {
         detail.push_str(": ");
-        detail.push_str(&compact(source.get(ret.byte_range())?, 40));
+        detail.push_str(&compact(type_text(source.get(ret.byte_range())?), 40));
     }
     Some(detail)
 }

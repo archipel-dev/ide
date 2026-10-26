@@ -15,7 +15,8 @@
   (method_signature name: (_) @name) @definition.method)
 (interface_body
   (property_signature name: (_) @name type: (type_annotation)? @detail) @definition.field)
-(enum_body name: (property_identifier) @name) @definition.constant
+(enum_body name: (property_identifier) @name @definition.constant)
+(enum_body (enum_assignment name: (property_identifier) @name) @definition.constant)
 (program
   (lexical_declaration
     (variable_declarator name: (identifier) @name value: [(arrow_function) (function_expression)])) @definition.function)

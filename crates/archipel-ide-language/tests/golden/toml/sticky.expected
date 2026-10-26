@@ -1,0 +1,11 @@
+  3: [package]
+  4: [package]
+  5: [package]
+  7: [dependencies]
+  8: [dependencies]
+  9: [dependencies] | list = [
+ 10: [dependencies] | list = [
+ 11: [dependencies] | list = [
+ 12: [dependencies]
+ 14: [[bin]]
+ 15: [[bin]]

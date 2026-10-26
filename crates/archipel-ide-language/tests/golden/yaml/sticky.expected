@@ -1,0 +1,12 @@
+  4: on:
+  5: on: | push:
+  7: jobs:
+  8: jobs: | test:
+  9: jobs: | test:
+ 10: jobs: | test: | steps:
+ 11: jobs: | test: | steps:
+ 12: jobs: | test: | steps:
+ 13: jobs: | test: | steps: | run: |
+ 14: jobs: | test: | steps: | run: |
+ 16: list:
+ 17: list:

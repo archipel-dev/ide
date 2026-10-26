@@ -1,0 +1,7 @@
+# Settings
+app.name=demo
+app.version = 1.0
+! other comment
+db.url=j‸dbc:h2:mem
+long.value=one \
+  two

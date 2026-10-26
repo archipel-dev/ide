@@ -1,0 +1,32 @@
+  8: class Service(Base):
+  9: class Service(Base):
+ 10: class Service(Base):
+ 11: class Service(Base):
+ 12: class Service(Base):
+ 13: class Service(Base): | def __init__(self, name):
+ 14: class Service(Base):
+ 15: class Service(Base):
+ 16: class Service(Base):
+ 17: class Service(Base): | def helper(a, b=2):
+ 18: class Service(Base): | def helper(a, b=2): | if a > b:
+ 19: class Service(Base): | def helper(a, b=2): | if a > b:
+ 20: class Service(Base): | def helper(a, b=2): | if a > b:
+ 21: class Service(Base): | def helper(a, b=2): | if a > b:
+ 22: class Service(Base): | def helper(a, b=2): | if a > b:
+ 23: class Service(Base):
+ 24: class Service(Base):
+ 25: class Service(Base): | async def run(self, items: List[int]) -> int:
+ 26: class Service(Base): | async def run(self, items: List[int]) -> int:
+ 27: class Service(Base): | async def run(self, items: List[int]) -> int: | for item in items:
+ 28: class Service(Base): | async def run(self, items: List[int]) -> int: | for item in items: | try:
+ 29: class Service(Base): | async def run(self, items: List[int]) -> int: | for item in items: | try:
+ 30: class Service(Base): | async def run(self, items: List[int]) -> int: | for item in items: | try:
+ 31: class Service(Base): | async def run(self, items: List[int]) -> int: | for item in items: | try:
+ 32: class Service(Base): | async def run(self, items: List[int]) -> int: | for item in items: | try:
+ 33: class Service(Base): | async def run(self, items: List[int]) -> int:
+ 34: class Service(Base): | async def run(self, items: List[int]) -> int: | while total > 0:
+ 35: class Service(Base): | async def run(self, items: List[int]) -> int:
+ 36: class Service(Base): | async def run(self, items: List[int]) -> int: | with open("f") as handle:
+ 37: class Service(Base): | async def run(self, items: List[int]) -> int:
+ 41: def main():
+ 42: def main():

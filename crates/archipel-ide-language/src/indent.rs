@@ -304,8 +304,11 @@ impl<'a> IndentEngine<'a> {
         let around = self.captures(probe..probe + 1);
         let mut node = last_leaf.parent();
         while let Some(ancestor) = node {
+            let unclosed = ancestor
+                .child(ancestor.child_count().saturating_sub(1))
+                .is_some_and(|last| last.is_missing());
             let open = ancestor.start_byte() < caret
-                && (caret < ancestor.end_byte() || ancestor.end_byte() == last_end);
+                && (caret < ancestor.end_byte() || (ancestor.end_byte() == caret && unclosed));
             if open
                 && around
                     .iter()

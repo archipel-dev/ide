@@ -1,0 +1,23 @@
+load("//tools:defs.bzl", "my_rule")
+
+def _impl(ctx):
+    out = ctx.actions.declare_file(ctx.label.name)
+    for src in ctx.files.srcs:
+        if src.extension == "txt":
+            continue
+    return [DefaultInfo(files = depset([out]))]
+
+my_rule = rule(
+    implementation = _impl,
+    attrs = {
+        "srcs": attr.label_list(),
+    },
+)
+
+java_binary(
+    name = "app",
+    srcs = [
+        "A.java",
+        "B.java",
+    ],
+)

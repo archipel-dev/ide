@@ -1,0 +1,6 @@
+Class Service
+  Field limit
+  Method __init__(self, name)
+  Method helper(a, b=2)
+  Method run(self, items: List[int]): int [async]
+Function main()

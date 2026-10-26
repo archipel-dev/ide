@@ -1,0 +1,36 @@
+  8: export class Service extends Base {
+  9: export class Service extends Base { | constructor(name) {
+ 10: export class Service extends Base { | constructor(name) {
+ 11: export class Service extends Base { | constructor(name) {
+ 12: export class Service extends Base {
+ 13: export class Service extends Base {
+ 14: export class Service extends Base { | async run(items) {
+ 15: export class Service extends Base { | async run(items) { | for (const item of items) {
+ 16: export class Service extends Base { | async run(items) { | for (const item of items) { | if (item > 0) {
+ 17: export class Service extends Base { | async run(items) { | for (const item of items) { | if (item > 0) {
+ 18: export class Service extends Base { | async run(items) { | for (const item of items) { | if (item > 0) {
+ 19: export class Service extends Base { | async run(items) { | for (const item of items) { | if (item > 0) {
+ 20: export class Service extends Base { | async run(items) { | for (const item of items) {
+ 21: export class Service extends Base { | async run(items) {
+ 22: export class Service extends Base { | async run(items) {
+ 23: export class Service extends Base { | async run(items) {
+ 24: export class Service extends Base {
+ 25: export class Service extends Base {
+ 26: export class Service extends Base { | static helper(a, b) {
+ 27: export class Service extends Base { | static helper(a, b) {
+ 28: export class Service extends Base {
+ 31: function main(argv) {
+ 32: function main(argv) { | const handler = (event) => {
+ 33: function main(argv) { | const handler = (event) => {
+ 34: function main(argv) {
+ 35: function main(argv) { | switch (argv.length) {
+ 36: function main(argv) { | switch (argv.length) {
+ 37: function main(argv) { | switch (argv.length) {
+ 38: function main(argv) { | switch (argv.length) {
+ 39: function main(argv) { | switch (argv.length) {
+ 40: function main(argv) {
+ 41: function main(argv) { | try {
+ 42: function main(argv) { | try {
+ 43: function main(argv) { | try {
+ 44: function main(argv) { | try {
+ 45: function main(argv) {

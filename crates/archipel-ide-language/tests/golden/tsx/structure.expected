@@ -1,0 +1,5 @@
+Interface Props
+  Field name: string
+  Field items: string[]
+Function List(Props)
+Function total

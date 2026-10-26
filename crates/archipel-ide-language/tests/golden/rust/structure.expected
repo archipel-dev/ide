@@ -1,0 +1,18 @@
+Constant LIMIT: usize
+Class Point [public]
+  Field x: i32 [public]
+  Field y: i32
+Enum Shape [public]
+  Constant Circle
+  Constant Square
+    Field side: f64
+Interface Area [public]
+  Method area(&self): f64
+Other Shape: Area
+  Method area(&self): f64
+Other Point
+  Method new(i32, i32): Self [public]
+  Method total(&self, extra: &[i32]): i32 [internal async]
+Module inner
+  Method helper(&str, usize): String [public]
+Function it_works() [test]

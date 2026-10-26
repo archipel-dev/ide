@@ -1,0 +1,12 @@
+Class Service [public]
+  Field MAX: int [private static final]
+  Field names: List<String> [private final]
+  Constructor Service(String) [public]
+  Method run(): void [public]
+  Method first(List<T>): T [static]
+  Interface Visitor
+    Method visit(Node): void
+  Enum Mode
+    Constant ON
+    Constant OFF
+  Class Pair

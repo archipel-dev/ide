@@ -1,0 +1,23 @@
+Class 4:1-46:2
+Comment 6:1-6:13
+Class 7:1-14:2
+Function 9:5-9:32
+ParameterList 9:19-9:21
+ParameterList 10:24-10:26
+Class 17:1-27:2
+Function 19:5-19:42 inner 19:40-19:42
+ParameterList 19:17-19:25
+Function 21:5-23:6 inner 21:34-23:6
+ParameterList 21:16-21:18
+Class 29:1-29:31
+Class 31:1-31:28
+Function 33:1-44:2 inner 33:43-44:2
+ParameterList 33:10-33:42
+Function 40:15-42:6
+ParameterList 40:18-40:25
+Comment 46:4-46:20
+method 9:13
+method 10:20
+method 19:14
+method 21:12
+method 33:5

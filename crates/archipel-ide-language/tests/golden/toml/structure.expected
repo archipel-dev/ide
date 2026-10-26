@@ -1,0 +1,11 @@
+Heading package
+  Key name
+  Key version
+Heading dependencies
+  Key serde
+    Key version
+    Key features
+  Key list
+Heading bin
+  Key name
+  Key path

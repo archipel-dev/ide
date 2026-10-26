@@ -1,0 +1,30 @@
+def import fs 1:8
+def import path 2:8
+def class Service 7:14
+def parameter name 8:15
+def parameter items 13:13
+def variable item 14:16
+def variable map 21:11
+def parameter a 25:17
+def parameter b 25:20
+def function main 30:10
+def parameter argv 30:15
+def variable handler 31:9
+def parameter event 31:20
+def parameter error 42:12
+def variable value 47:7
+ref Base 7:30 -> unresolved
+ref name 9:11 -> parameter 8:15
+ref name 10:17 -> parameter 8:15
+ref items 14:24 -> parameter 13:13
+ref item 15:11 -> variable 14:16
+ref console 16:9 -> unresolved
+ref item 16:21 -> variable 14:16
+ref map 22:12 -> variable 21:11
+ref a 26:12 -> parameter 25:17
+ref b 26:16 -> parameter 25:20
+ref event 32:12 -> parameter 31:20
+ref argv 34:11 -> parameter 30:15
+ref handler 41:5 -> variable 31:9
+ref console 43:5 -> unresolved
+ref error 43:19 -> parameter 42:12

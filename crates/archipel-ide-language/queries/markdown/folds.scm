@@ -1,6 +1,6 @@
-; Markdown folding: sections fold after their heading, fenced code, lists, quotes.
-(section) @fold
-(fenced_code_block) @fold
-(list) @fold
-(block_quote) @fold
-(html_block) @fold
+; Markdown folding: sections fold below their heading, fenced code, lists, quotes.
+(section) @fold.below
+(fenced_code_block) @fold.below
+(list) @fold.below
+(block_quote) @fold.below
+(html_block) @fold.below

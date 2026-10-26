@@ -202,6 +202,32 @@ fn headed(node: Node<'_>, source: &str) -> Option<FoldRange> {
     })
 }
 
+/// A `@fold.below` node (Markdown sections, TOML tables): folds everything
+/// after the node's first line, which stays visible as the header.
+fn below(node: Node<'_>, source: &str) -> Option<FoldRange> {
+    let body = source.get(node.byte_range())?;
+    let first_line_end = node.start_byte() + body.find('\n')?;
+    let end = node.end_byte();
+    // Trailing blank lines belong to the next block, not to this region.
+    let end = first_line_end + source[first_line_end..end].trim_end().len();
+    let (start_line, _) = rows(node);
+    let end_line = start_line
+        + source[node.start_byte()..end]
+            .bytes()
+            .filter(|b| *b == b'\n')
+            .count();
+    (first_line_end < end && start_line < end_line).then(|| {
+        FoldRange::new(
+            first_line_end,
+            end,
+            start_line,
+            end_line,
+            "...".into(),
+            FoldKind::Block,
+        )
+    })
+}
+
 fn is_import(node: Node<'_>) -> bool {
     let kind = node.kind();
     node.is_named() && (kind.contains("import") || kind.contains("using_declaration"))
@@ -379,6 +405,7 @@ fn from_query(
             let node = capture.node;
             let fold = match names[capture.index as usize] {
                 "fold" => delimited(node, source).or_else(|| headed(node, source)),
+                "fold.below" => below(node, source),
                 "fold.comment" => comment(node, source, FoldKind::Comment),
                 "fold.doc" => comment(node, source, FoldKind::DocComment),
                 "fold.imports" => {

@@ -1,0 +1,5 @@
+Class :root
+Class .container > .item:hover
+Module (max-width: 600px)
+  Class .container
+Module spin

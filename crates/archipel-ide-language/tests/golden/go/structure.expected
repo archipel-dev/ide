@@ -1,0 +1,8 @@
+Type Service
+  Field Name: string
+  Field count: int
+Type Runner
+  Method Run(int): error
+Constant Limit
+Method Run(int): error
+Function main()

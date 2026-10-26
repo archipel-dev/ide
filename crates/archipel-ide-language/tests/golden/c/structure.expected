@@ -1,0 +1,10 @@
+Macro MAX
+Class point
+  Field x: int
+  Field y: int
+Enum mode
+  Constant ON
+  Constant OFF
+Type point_t
+Function add [static]
+Function main

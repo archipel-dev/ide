@@ -1,0 +1,22 @@
+def import A 1:10
+def import B 2:10
+def class Visitor 4:18
+def parameter node 5:9
+def class Id 9:13
+def class Mode 11:13
+def parameter id 20:32
+def parameter count 24:20
+def variable item 25:16
+def parameter node 33:28
+def function helper 37:19
+def parameter a 37:26
+def parameter b 37:37
+def variable fn 42:7
+def parameter x 42:13
+ref count 26:11 -> parameter 24:20
+ref count 27:9 -> parameter 24:20
+ref count 30:12 -> parameter 24:20
+ref Util 36:11 -> unresolved
+ref a 38:12 -> parameter 37:26
+ref b 38:16 -> parameter 37:37
+ref x 43:10 -> parameter 42:13

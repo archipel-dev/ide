@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Demo</title>
+  <style>
+    body { margin: 0; }
+  </style>
+</head>
+<body>
+  <!-- header -->
+  <div id="main" class="box">
+    <ul>
+      <li>One</li>
+      <li>Two</li>
+    </ul>
+    <script>
+      const x = 1;
+    </script>
+  </div>
+</body>
+</html>

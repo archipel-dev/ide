@@ -1,0 +1,35 @@
+def import List 3:27
+def import println 4:18
+def class Service 7:12
+def field name 7:24
+def variable items 8:17
+def variable MAX 11:19
+def function run 14:18
+def parameter count 14:22
+def variable item 15:14
+def variable result 22:13
+def function helper 29:17
+def parameter x 29:24
+def class Registry 32:8
+def function register 33:9
+def parameter s 33:18
+def class Visitor 36:11
+def function visit 37:9
+def parameter node 37:15
+def class Pair 40:12
+def field a 40:21
+def field b 40:33
+ref a 1:9 -> unresolved
+ref b 1:11 -> unresolved
+ref kotlin 3:8 -> unresolved
+ref collections 3:15 -> unresolved
+ref kotlin 4:8 -> unresolved
+ref io 4:15 -> unresolved
+ref mutableListOf 8:25 -> unresolved
+ref items 15:22 -> variable 8:17
+ref item 16:17 -> variable 15:14
+ref println 19:17 -> import 4:18
+ref item 19:25 -> variable 15:14
+ref count 22:28 -> parameter 14:22
+ref result 26:16 -> variable 22:13
+ref x 29:34 -> parameter 29:24

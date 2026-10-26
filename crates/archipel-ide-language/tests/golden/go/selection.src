@@ -1,0 +1,40 @@
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+// Service does things.
+type Service struct {
+	Name  string
+	count int
+}
+
+type Runner interface {
+	Run(n int) error
+}
+
+const Limit = 10
+
+func (s *Service) Run(n int) error {
+	for i := 0; i < n; i++ {
+		if i%2 == 0 {
+			f‸mt.Println(i)
+		} else {
+			continue
+		}
+	}
+	switch n {
+	case 1:
+		return nil
+	default:
+		return os.ErrNotExist
+	}
+}
+
+func main() {
+	s := &Service{Name: "a"}
+	values := []int{1, 2, 3}
+	_ = s.Run(len(values))
+}

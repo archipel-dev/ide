@@ -1,0 +1,11 @@
+caret 11:7
+11:7-11:11 deep
+11:6-11:12 "deep"
+11:6-11:18 "deep": true
+11:5-11:19 {"deep": true}
+9:5-11:19 1,⏎    2,⏎    {"deep": true}
+8:11-12:4 [⏎    1,⏎    2,⏎    {"deep": true}⏎  ]
+8:3-12:4 "list": [⏎    1,⏎    2,⏎    {"deep": true}⏎  ]
+2:3-12:4 "name": "demo",⏎  "version": "1.0.0",⏎  "scripts…
+1:1-13:2 {⏎  "name": "demo",⏎  "version": "1.0.0",⏎  "scr…
+1:1-14:1 {⏎  "name": "demo",⏎  "version": "1.0.0",⏎  "scr…

@@ -1,0 +1,55 @@
+def import HashMap 3:23
+def import fmt 4:10
+def constant LIMIT 7:7
+def function area 23:8
+def parameter self 23:14
+def function area 27:8
+def parameter self 27:14
+def variable r 29:27
+def function new 36:12
+def parameter x 36:16
+def parameter y 36:24
+def function total 40:25
+def parameter self 40:32
+def parameter extra 40:38
+def variable sum 41:17
+def variable value 42:13
+def variable closure 49:13
+def parameter a 49:24
+def function helper 57:12
+def parameter name 57:19
+def parameter count 57:31
+def function it_works 63:4
+def variable map 64:9
+ref std 3:5 -> unresolved
+ref std 4:5 -> unresolved
+ref derive 11:3 -> unresolved
+ref Debug 11:10 -> unresolved
+ref Circle 18:5 -> unresolved
+ref Square 19:5 -> unresolved
+ref self 28:15 -> parameter 27:14
+ref Shape 29:13 -> unresolved
+ref r 29:40 -> variable 29:27
+ref r 29:44 -> variable 29:27
+ref Shape 30:13 -> unresolved
+ref side 30:39 -> unresolved
+ref side 30:46 -> unresolved
+ref x 37:17 -> parameter 36:16
+ref y 37:20 -> parameter 36:24
+ref self 41:23 -> parameter 40:32
+ref self 41:32 -> parameter 40:32
+ref extra 42:22 -> parameter 40:38
+ref value 43:17 -> variable 42:13
+ref sum 44:17 -> variable 41:17
+ref value 44:24 -> variable 42:13
+ref sum 46:17 -> variable 41:17
+ref a 50:13 -> parameter 49:24
+ref sum 52:9 -> variable 41:17
+ref closure 52:15 -> variable 49:13
+ref inner 56:5 -> unresolved
+ref format 58:9 -> unresolved
+ref test 62:3 -> unresolved
+ref HashMap 64:37 -> import 3:23
+ref assert_eq 65:5 -> unresolved
+ref map 65:16 -> variable 64:9
+ref len 65:20 -> unresolved

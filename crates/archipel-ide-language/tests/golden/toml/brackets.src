@@ -1,0 +1,15 @@
+# Manifest
+[package]
+name = "demo"
+version = "0.1.0"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+list = [
+  "a",
+  "b",
+]
+
+[[bin]]
+name = "tool"
+path = "src/main.rs"

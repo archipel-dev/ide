@@ -1,0 +1,19 @@
+def import //tools:defs.bzl 1:7
+def import my_rule 1:27
+def function _impl 3:5
+def parameter ctx 3:11
+def variable out 4:5
+def variable src 5:9
+def variable my_rule 10:1
+ref load 1:1 -> unresolved
+ref ctx 4:11 -> parameter 3:11
+ref ctx 4:36 -> parameter 3:11
+ref ctx 5:16 -> parameter 3:11
+ref src 6:12 -> variable 5:9
+ref DefaultInfo 8:13 -> unresolved
+ref depset 8:33 -> unresolved
+ref out 8:41 -> variable 4:5
+ref rule 10:11 -> unresolved
+ref _impl 11:22 -> function 3:5
+ref attr 13:17 -> unresolved
+ref java_binary 17:1 -> unresolved

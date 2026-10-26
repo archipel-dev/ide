@@ -1,0 +1,52 @@
+package com.example;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * A service.
+ */
+public class Service extends Base implements Runnable {
+    private static final int MAX = 10;
+    private final List<String> names = new ArrayList<>();
+
+    public Service(String name) {
+        super(name);
+    }
+
+    @Override
+    public void run() {
+        for (String name : names) {
+            if (name.isEmpty()) {
+                continue;
+            } else {
+                S‸ystem.out.println(name);
+            }
+        }
+        switch (MAX) {
+            case 1:
+                break;
+            default:
+                break;
+        }
+        try {
+            work(1, 2);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        } finally {
+            names.clear();
+        }
+    }
+
+    static <T> T first(List<T> items) {
+        return items.get(0);
+    }
+
+    interface Visitor {
+        void visit(Node node);
+    }
+
+    enum Mode { ON, OFF }
+
+    record Pair(int a, int b) {}
+}

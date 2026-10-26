@@ -1,0 +1,24 @@
+  8: struct point {
+  9: struct point {
+ 10: struct point {
+ 17: static int add(int a, int b)
+ 18: static int add(int a, int b)
+ 19: static int add(int a, int b)
+ 22: int main(int argc, char **argv)
+ 23: int main(int argc, char **argv)
+ 24: int main(int argc, char **argv)
+ 25: int main(int argc, char **argv) | for (int i = 0; i < MAX; i++) {
+ 26: int main(int argc, char **argv) | for (int i = 0; i < MAX; i++) { | if (i % 2 == 0) {
+ 27: int main(int argc, char **argv) | for (int i = 0; i < MAX; i++) { | if (i % 2 == 0) {
+ 28: int main(int argc, char **argv) | for (int i = 0; i < MAX; i++) { | if (i % 2 == 0) {
+ 29: int main(int argc, char **argv) | for (int i = 0; i < MAX; i++) { | if (i % 2 == 0) {
+ 30: int main(int argc, char **argv) | for (int i = 0; i < MAX; i++) {
+ 31: int main(int argc, char **argv)
+ 32: int main(int argc, char **argv) | switch (total) {
+ 33: int main(int argc, char **argv) | switch (total) {
+ 34: int main(int argc, char **argv) | switch (total) {
+ 35: int main(int argc, char **argv) | switch (total) {
+ 36: int main(int argc, char **argv) | switch (total) {
+ 37: int main(int argc, char **argv)
+ 38: int main(int argc, char **argv)
+ 39: int main(int argc, char **argv)

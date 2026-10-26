@@ -1,0 +1,17 @@
+  4: interface Props {
+  5: interface Props {
+  6: interface Props {
+  9: export function List({ name, items }: Props) {
+ 10: export function List({ name, items }: Props) {
+ 11: export function List({ name, items }: Props) {
+ 12: export function List({ name, items }: Props) {
+ 13: export function List({ name, items }: Props) {
+ 14: export function List({ name, items }: Props) {
+ 15: export function List({ name, items }: Props) {
+ 16: export function List({ name, items }: Props) {
+ 17: export function List({ name, items }: Props) {
+ 18: export function List({ name, items }: Props) {
+ 19: export function List({ name, items }: Props) {
+ 20: export function List({ name, items }: Props) {
+ 23: export const total = (a: number, b: number): num…
+ 24: export const total = (a: number, b: number): num…

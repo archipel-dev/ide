@@ -1,0 +1,44 @@
+import { A } from "./a";
+import { B } from "./b";
+
+export interface Visitor<T> {
+  visit(node: T): void;
+  readonly name: string;
+}
+
+export type Id = string | number;
+
+export enum Mode {
+  On,
+  Off,
+}
+
+export abstract class Service<T> implements Visitor<T> {
+  private items: T[] = [];
+  readonly name: string = "svc";
+
+  constructor(private readonly id: Id) {
+    super();
+  }
+
+  public async run(count: number): Promise<number> {
+    for (const item of this.items) {
+      if (count > 0) {
+        c‸ount -= 1;
+      }
+    }
+    return count;
+  }
+
+  protected abstract visit(node: T): void;
+}
+
+namespace Util {
+  export function helper(a: number, b: number): number {
+    return a + b;
+  }
+}
+
+const fn = (x: number): number => {
+  return x * 2;
+};

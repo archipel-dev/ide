@@ -1,0 +1,49 @@
+def import os 3:8
+def import List 4:20
+def class Service 7:7
+def variable limit 10:5
+def function __init__ 12:9
+def parameter self 12:18
+def parameter name 12:24
+def function helper 16:9
+def parameter a 16:16
+def parameter b 16:19
+def function run 24:15
+def parameter self 24:19
+def parameter items 24:25
+def variable total 25:9
+def variable item 26:13
+def variable total 28:17
+def variable error 29:34
+def variable total 34:13
+def variable handle 35:27
+def variable data 36:13
+def variable x 36:27
+def function main 40:5
+def variable value 41:5
+ref typing 4:6 -> unresolved
+ref Base 7:15 -> unresolved
+ref self 13:9 -> parameter 12:18
+ref name 13:21 -> parameter 12:24
+ref staticmethod 15:6 -> unresolved
+ref a 17:12 -> parameter 16:16
+ref b 17:16 -> parameter 16:19
+ref a 18:20 -> parameter 16:16
+ref a 19:14 -> parameter 16:16
+ref b 19:19 -> parameter 16:19
+ref b 20:20 -> parameter 16:19
+ref List 24:32 -> import 4:20
+ref int 24:37 -> unresolved
+ref int 24:46 -> unresolved
+ref items 26:21 -> parameter 24:25
+ref item 28:26 -> variable 26:13
+ref ValueError 29:20 -> unresolved
+ref print 30:17 -> unresolved
+ref error 30:23 -> variable 29:34
+ref total 33:15 -> variable 28:17
+ref open 35:14 -> unresolved
+ref x 36:21 -> unresolved
+ref handle 36:32 -> variable 35:27
+ref total 37:16 -> variable 34:13
+ref print 42:5 -> unresolved
+ref value 42:11 -> variable 41:5

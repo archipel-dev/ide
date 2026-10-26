@@ -1,0 +1,6 @@
+Class Service
+  Method constructor(name)
+  Method run(items) [async]
+  Method helper(a, b) [static]
+Function main(argv)
+Function value

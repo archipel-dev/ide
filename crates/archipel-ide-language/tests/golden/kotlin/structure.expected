@@ -1,0 +1,10 @@
+Class Service
+  Field items [private]
+  Field MAX [final]
+  Function run(Int): String [override]
+  Function helper(Int) [private]
+Class Registry
+  Function register(Service)
+Class Visitor
+  Function visit(String)
+Class Pair

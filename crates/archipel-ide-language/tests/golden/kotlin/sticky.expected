@@ -1,0 +1,27 @@
+  8: open class Service(val name: String) : Base() {
+  9: open class Service(val name: String) : Base() {
+ 10: open class Service(val name: String) : Base() {
+ 11: open class Service(val name: String) : Base() {
+ 12: open class Service(val name: String) : Base() {
+ 13: open class Service(val name: String) : Base() {
+ 14: open class Service(val name: String) : Base() {
+ 15: open class Service(val name: String) : Base() { | override fun run(count: Int): String {
+ 16: open class Service(val name: String) : Base() { | override fun run(count: Int): String { | for (item in items) {
+ 17: open class Service(val name: String) : Base() { | override fun run(count: Int): String { | for (item in items) { | if (item.isEmpty()) {
+ 18: open class Service(val name: String) : Base() { | override fun run(count: Int): String { | for (item in items) { | if (item.isEmpty()) {
+ 19: open class Service(val name: String) : Base() { | override fun run(count: Int): String { | for (item in items) { | if (item.isEmpty()) {
+ 20: open class Service(val name: String) : Base() { | override fun run(count: Int): String { | for (item in items) { | if (item.isEmpty()) {
+ 21: open class Service(val name: String) : Base() { | override fun run(count: Int): String { | for (item in items) {
+ 22: open class Service(val name: String) : Base() { | override fun run(count: Int): String {
+ 23: open class Service(val name: String) : Base() { | override fun run(count: Int): String { | val result = when (count) {
+ 24: open class Service(val name: String) : Base() { | override fun run(count: Int): String { | val result = when (count) {
+ 25: open class Service(val name: String) : Base() { | override fun run(count: Int): String { | val result = when (count) {
+ 26: open class Service(val name: String) : Base() { | override fun run(count: Int): String {
+ 27: open class Service(val name: String) : Base() { | override fun run(count: Int): String {
+ 28: open class Service(val name: String) : Base() {
+ 29: open class Service(val name: String) : Base() {
+ 30: open class Service(val name: String) : Base() {
+ 33: object Registry {
+ 34: object Registry {
+ 37: interface Visitor {
+ 38: interface Visitor {

@@ -1,0 +1,40 @@
+package a.b
+
+import kotlin.collections.List
+import kotlin.io.println
+
+/** A service. */
+open class Service(val name: String) : Base() {
+    private val items = mutableListOf<String>()
+
+    companion object {
+        const val MAX = 10
+    }
+
+    override fun run(count: Int): String {
+        for (item in items) {
+            if (item.isEmpty()) {
+                continue
+            } else {
+                println(item)
+            }
+        }
+        val result = when (count) {
+            1 -> "one"
+            else -> "many"
+        }
+        return result
+    }
+
+    private fun helper(x: Int) = x + 1
+}
+
+object Registry {
+    fun register(s: Service) {}
+}
+
+interface Visitor {
+    fun visit(node: String)
+}
+
+data class Pair(val a: Int, val b: Int)

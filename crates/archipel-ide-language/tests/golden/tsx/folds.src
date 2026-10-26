@@ -1,0 +1,24 @@
+import React from "react";
+
+interface Props {
+  name: string;
+  items: string[];
+}
+
+export function List({ name, items }: Props) {
+  const count = items.length;
+  return (
+    <div className="list">
+      <h1>{name}</h1>
+      <ul>
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export const total = (a: number, b: number): number => {
+  return a + b;
+};

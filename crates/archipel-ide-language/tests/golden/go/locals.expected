@@ -1,0 +1,23 @@
+def class Service 9:6
+def class Runner 14:6
+def parameter n 15:6
+def constant Limit 18:7
+def parameter s 20:7
+def parameter n 20:23
+def variable i 21:6
+def function main 36:6
+def variable s 37:2
+def variable values 38:2
+ref i 21:14 -> variable 21:6
+ref n 21:18 -> parameter 20:23
+ref i 21:21 -> variable 21:6
+ref i 22:6 -> variable 21:6
+ref fmt 23:4 -> unresolved
+ref i 23:16 -> variable 21:6
+ref n 28:9 -> parameter 20:23
+ref os 32:10 -> unresolved
+ref Name 37:16 -> unresolved
+ref _ 39:2 -> unresolved
+ref s 39:6 -> variable 37:2
+ref len 39:12 -> unresolved
+ref values 39:16 -> variable 38:2

@@ -1,0 +1,23 @@
+def import React 1:8
+def class Props 3:11
+def function List 8:17
+def variable count 9:9
+def parameter item 14:21
+def variable total 22:14
+def parameter a 22:23
+def parameter b 22:34
+ref items 9:17 -> unresolved
+ref div 11:6 -> unresolved
+ref h1 12:8 -> unresolved
+ref name 12:12 -> unresolved
+ref h1 12:19 -> unresolved
+ref ul 13:8 -> unresolved
+ref items 14:10 -> unresolved
+ref li 15:12 -> unresolved
+ref item 15:20 -> parameter 14:21
+ref item 15:27 -> parameter 14:21
+ref li 15:34 -> unresolved
+ref ul 17:9 -> unresolved
+ref div 18:7 -> unresolved
+ref a 23:10 -> parameter 22:23
+ref b 23:14 -> parameter 22:34

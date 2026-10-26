@@ -1,6 +1,6 @@
-; TOML folding: tables fold after their header, arrays and inline tables.
-(table) @fold
-(table_array_element) @fold
+; TOML folding: tables fold below their header; arrays and inline tables by bracket.
+(table) @fold.below
+(table_array_element) @fold.below
 (array) @fold
 (inline_table) @fold
 (comment) @fold.marker

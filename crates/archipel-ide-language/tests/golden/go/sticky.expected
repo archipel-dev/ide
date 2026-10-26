@@ -1,0 +1,23 @@
+ 10: type Service struct {
+ 11: type Service struct {
+ 12: type Service struct {
+ 15: type Runner interface {
+ 16: type Runner interface {
+ 21: func (s *Service) Run(n int) error {
+ 22: func (s *Service) Run(n int) error { | for i := 0; i < n; i++ {
+ 23: func (s *Service) Run(n int) error { | for i := 0; i < n; i++ { | if i%2 == 0 {
+ 24: func (s *Service) Run(n int) error { | for i := 0; i < n; i++ { | if i%2 == 0 {
+ 25: func (s *Service) Run(n int) error { | for i := 0; i < n; i++ { | if i%2 == 0 {
+ 26: func (s *Service) Run(n int) error { | for i := 0; i < n; i++ { | if i%2 == 0 {
+ 27: func (s *Service) Run(n int) error { | for i := 0; i < n; i++ {
+ 28: func (s *Service) Run(n int) error {
+ 29: func (s *Service) Run(n int) error { | switch n {
+ 30: func (s *Service) Run(n int) error { | switch n {
+ 31: func (s *Service) Run(n int) error { | switch n {
+ 32: func (s *Service) Run(n int) error { | switch n {
+ 33: func (s *Service) Run(n int) error { | switch n {
+ 34: func (s *Service) Run(n int) error {
+ 37: func main() {
+ 38: func main() {
+ 39: func main() {
+ 40: func main() {

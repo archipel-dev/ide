@@ -82,7 +82,7 @@ fn snapshot_api_matches_the_facade_and_the_feature_modules() {
         assert_eq!(snap.folds_in(0..source.len()), direct, "{path} folds");
         // Selection and brackets at every char boundary.
         for offset in (0..=source.len()).filter(|i| source.is_char_boundary(*i)) {
-            let direct = selection::expand(syntax.tree(), source, offset..offset);
+            let direct = selection::expand_snapshot(&snap, offset..offset);
             assert_eq!(
                 analysis.expand_selection(source, offset..offset),
                 direct,
@@ -93,7 +93,7 @@ fn snapshot_api_matches_the_facade_and_the_feature_modules() {
                 direct,
                 "{path}@{offset}"
             );
-            let direct = brackets::matching_bracket(syntax.tree(), offset);
+            let direct = brackets::pair_at(&snap, offset).map(|pair| pair.offsets());
             assert_eq!(analysis.matching_bracket(offset), direct, "{path}@{offset}");
             assert_eq!(snap.matching_bracket(offset), direct, "{path}@{offset}");
         }

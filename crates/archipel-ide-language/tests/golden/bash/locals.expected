@@ -1,0 +1,30 @@
+def variable NAME 6:1
+def variable LIMIT 7:10
+def function greet 9:1
+def variable who 10:9
+def function deploy 14:1
+def variable target 15:9
+def variable f 24:7
+def variable -r 27:14
+def variable line 27:17
+ref set 4:1 -> unresolved
+ref 1 10:15 -> unresolved
+ref echo 11:3 -> unresolved
+ref who 11:16 -> variable 10:9
+ref 1 15:18 -> unresolved
+ref target 16:13 -> variable 15:9
+ref echo 17:5 -> unresolved
+ref return 18:5 -> unresolved
+ref target 19:12 -> variable 15:9
+ref echo 20:5 -> unresolved
+ref echo 22:5 -> unresolved
+ref cat 25:5 -> unresolved
+ref f 25:11 -> variable 24:7
+ref read 27:9 -> unresolved
+ref echo 28:5 -> unresolved
+ref line 28:12 -> variable 27:17
+ref target 30:10 -> variable 15:9
+ref greet 32:7 -> function 9:1
+ref greet 35:7 -> function 9:1
+ref deploy 40:1 -> function 14:1
+ref 1 40:10 -> unresolved

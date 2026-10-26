@@ -1,0 +1,17 @@
+# CI
+name: build
+on:
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu
+    steps:
+      - uses: actions/checkout
+      - name: Run
+        run: |
+          cargo test
+          c‸argo fmt
+list:
+  - one
+  - two

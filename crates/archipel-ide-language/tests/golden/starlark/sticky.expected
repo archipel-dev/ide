@@ -1,0 +1,16 @@
+  4: def _impl(ctx):
+  5: def _impl(ctx):
+  6: def _impl(ctx): | for src in ctx.files.srcs:
+  7: def _impl(ctx): | for src in ctx.files.srcs: | if src.extension == "txt":
+  8: def _impl(ctx):
+ 11: my_rule = rule(
+ 12: my_rule = rule(
+ 13: my_rule = rule(
+ 14: my_rule = rule(
+ 15: my_rule = rule(
+ 18: java_binary(
+ 19: java_binary(
+ 20: java_binary(
+ 21: java_binary(
+ 22: java_binary(
+ 23: java_binary(

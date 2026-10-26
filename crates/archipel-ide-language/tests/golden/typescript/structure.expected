@@ -1,0 +1,15 @@
+Interface Visitor
+  Method visit(T): void
+  Field name: string
+Type Id
+Enum Mode
+  Constant On
+  Constant Off
+Class Service
+  Field items: T[] [private]
+  Field name: string [final]
+  Method constructor(Id)
+  Method run(number): Promise<number> [public async]
+Module Util
+  Function helper(number, number): number
+Function fn

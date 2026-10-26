@@ -1,0 +1,35 @@
+def import List 3:18
+def import Map 4:18
+def class Service 9:14
+def field MAX 10:30
+def field names 11:32
+def parameter name 13:27
+def method run 18:17
+def variable name 19:21
+def parameter e 34:28
+def method first 41:18
+def parameter items 41:32
+def class Visitor 45:15
+def method visit 46:14
+def parameter node 46:25
+def class Mode 49:10
+def constant ON 49:17
+def constant OFF 49:21
+def class Pair 51:12
+def parameter a 51:21
+def parameter b 51:28
+ref com 1:9 -> unresolved
+ref java 3:8 -> unresolved
+ref java 4:8 -> unresolved
+ref Service 13:12 -> class 9:14
+ref name 14:15 -> parameter 13:27
+ref Override 17:6 -> unresolved
+ref names 19:28 -> field 11:32
+ref name 20:17 -> variable 19:21
+ref System 23:17 -> unresolved
+ref name 23:36 -> variable 19:21
+ref MAX 26:17 -> field 10:30
+ref work 33:13 -> unresolved
+ref e 35:40 -> parameter 34:28
+ref names 37:13 -> field 11:32
+ref items 42:16 -> parameter 41:32

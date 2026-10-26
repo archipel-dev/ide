@@ -1,0 +1,41 @@
+ 13: pub struct Point {
+ 14: pub struct Point {
+ 15: pub struct Point {
+ 18: pub enum Shape {
+ 19: pub enum Shape {
+ 20: pub enum Shape {
+ 23: pub trait Area {
+ 24: pub trait Area {
+ 27: impl Area for Shape {
+ 28: impl Area for Shape { | fn area(&self) -> f64 {
+ 29: impl Area for Shape { | fn area(&self) -> f64 { | match self {
+ 30: impl Area for Shape { | fn area(&self) -> f64 { | match self {
+ 31: impl Area for Shape { | fn area(&self) -> f64 { | match self {
+ 32: impl Area for Shape { | fn area(&self) -> f64 {
+ 33: impl Area for Shape {
+ 36: impl Point {
+ 37: impl Point { | pub fn new(x: i32, y: i32) -> Self {
+ 38: impl Point { | pub fn new(x: i32, y: i32) -> Self {
+ 39: impl Point {
+ 40: impl Point {
+ 41: impl Point { | pub(crate) async fn total(&self, extra: &[i32]) …
+ 42: impl Point { | pub(crate) async fn total(&self, extra: &[i32]) …
+ 43: impl Point { | pub(crate) async fn total(&self, extra: &[i32]) … | for value in extra {
+ 44: impl Point { | pub(crate) async fn total(&self, extra: &[i32]) … | for value in extra { | if *value > 0 {
+ 45: impl Point { | pub(crate) async fn total(&self, extra: &[i32]) … | for value in extra { | if *value > 0 {
+ 46: impl Point { | pub(crate) async fn total(&self, extra: &[i32]) … | for value in extra { | if *value > 0 {
+ 47: impl Point { | pub(crate) async fn total(&self, extra: &[i32]) … | for value in extra { | if *value > 0 {
+ 48: impl Point { | pub(crate) async fn total(&self, extra: &[i32]) … | for value in extra {
+ 49: impl Point { | pub(crate) async fn total(&self, extra: &[i32]) …
+ 50: impl Point { | pub(crate) async fn total(&self, extra: &[i32]) …
+ 51: impl Point { | pub(crate) async fn total(&self, extra: &[i32]) …
+ 52: impl Point { | pub(crate) async fn total(&self, extra: &[i32]) …
+ 53: impl Point { | pub(crate) async fn total(&self, extra: &[i32]) …
+ 54: impl Point {
+ 57: mod inner {
+ 58: mod inner { | pub fn helper(name: &str, count: usize) -> Strin…
+ 59: mod inner { | pub fn helper(name: &str, count: usize) -> Strin…
+ 60: mod inner {
+ 64: fn it_works() {
+ 65: fn it_works() {
+ 66: fn it_works() {

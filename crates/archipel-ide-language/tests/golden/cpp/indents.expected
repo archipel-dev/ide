@@ -1,0 +1,36 @@
+  1: 0; enter 0
+  2: 0; enter 0
+  4: 0; enter 4
+  6: 0; enter 4
+  7: 0 -> 4; enter 4
+  8: 0 -> 4; enter 4
+  9: 4 -> 8; enter 4
+ 10: 4 -> 8; enter 4
+ 12: 0 -> 4; enter 4
+ 13: 4 -> 8; enter 4
+ 14: 0 -> 4; enter 4
+ 16: 0 -> 4; enter 4
+ 17: 0; enter 4
+ 18: 0; enter 4
+ 19: 4; enter 4
+ 21: 4; enter 8
+ 22: 8; enter 8
+ 23: 4; enter 4
+ 25: 0; enter 4
+ 26: 4; enter 4
+ 27: 0; enter 0
+ 29: 0 -> 4; enter 4
+ 31: 0 -> 4; enter 4
+ 33: 0 -> 4; enter 4
+ 34: 4 -> 8; enter 4
+ 35: 4 -> 8; enter 8
+ 36: 8 -> 12; enter 12
+ 37: 12 -> 16; enter 12
+ 38: 8 -> 12; enter 8
+ 39: 4 -> 8; enter 4
+ 40: 4 -> 8; enter 8
+ 41: 8 -> 12; enter 8
+ 42: 4 -> 8; enter 4
+ 43: 4 -> 8; enter 4
+ 44: 0 -> 4; enter 4
+ 46: 0; enter 0

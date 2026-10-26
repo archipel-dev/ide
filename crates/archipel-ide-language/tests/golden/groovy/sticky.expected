@@ -1,0 +1,28 @@
+  9: class Task extends Base {
+ 10: class Task extends Base {
+ 11: class Task extends Base {
+ 12: class Task extends Base {
+ 13: class Task extends Base { | Task(String name) {
+ 14: class Task extends Base { | Task(String name) {
+ 15: class Task extends Base {
+ 16: class Task extends Base {
+ 17: class Task extends Base { | def run(List items) {
+ 18: class Task extends Base { | def run(List items) { | items.each { item ->
+ 19: class Task extends Base { | def run(List items) { | items.each { item ->
+ 20: class Task extends Base { | def run(List items) {
+ 21: class Task extends Base { | def run(List items) { | for (int i = 0; i < count; i++) {
+ 22: class Task extends Base { | def run(List items) { | for (int i = 0; i < count; i++) { | if (i > 1) {
+ 23: class Task extends Base { | def run(List items) { | for (int i = 0; i < count; i++) { | if (i > 1) {
+ 24: class Task extends Base { | def run(List items) { | for (int i = 0; i < count; i++) { | if (i > 1) {
+ 25: class Task extends Base { | def run(List items) { | for (int i = 0; i < count; i++) { | if (i > 1) {
+ 26: class Task extends Base { | def run(List items) { | for (int i = 0; i < count; i++) {
+ 27: class Task extends Base { | def run(List items) {
+ 28: class Task extends Base { | def run(List items) {
+ 29: class Task extends Base {
+ 30: class Task extends Base {
+ 31: class Task extends Base { | static void helper(String a, int b) {
+ 32: class Task extends Base { | static void helper(String a, int b) {
+ 33: class Task extends Base {
+ 36: def main() {
+ 37: def main() {
+ 38: def main() {

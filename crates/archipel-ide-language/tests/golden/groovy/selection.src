@@ -1,0 +1,38 @@
+package build
+
+import groovy.json.JsonSlurper
+
+/**
+ * A task.
+ */
+class Task extends Base {
+    String name
+    private int count = 0
+
+    Task(String name) {
+        this.name = name
+    }
+
+    def run(List items) {
+        items.each { item ->
+            p‸rintln item
+        }
+        for (int i = 0; i < count; i++) {
+            if (i > 1) {
+                continue
+            } else {
+                break
+            }
+        }
+        return count
+    }
+
+    static void helper(String a, int b) {
+        println a
+    }
+}
+
+def main() {
+    def map = [a: 1, b: [1, 2, 3]]
+    println map
+}

@@ -1,0 +1,42 @@
+  5: namespace app {
+  6: namespace app {
+  7: namespace app {
+  8: namespace app { | class Shape {
+  9: namespace app { | class Shape {
+ 10: namespace app { | class Shape {
+ 11: namespace app { | class Shape {
+ 12: namespace app { | class Shape {
+ 13: namespace app { | class Shape {
+ 14: namespace app { | class Shape {
+ 15: namespace app {
+ 16: namespace app {
+ 17: namespace app {
+ 18: namespace app { | class Box : public Shape {
+ 19: namespace app { | class Box : public Shape {
+ 20: namespace app { | class Box : public Shape {
+ 21: namespace app { | class Box : public Shape {
+ 22: namespace app { | class Box : public Shape { | double area() const override {
+ 23: namespace app { | class Box : public Shape { | double area() const override {
+ 24: namespace app { | class Box : public Shape {
+ 25: namespace app { | class Box : public Shape {
+ 26: namespace app { | class Box : public Shape {
+ 27: namespace app { | class Box : public Shape {
+ 28: namespace app {
+ 29: namespace app {
+ 30: namespace app {
+ 31: namespace app {
+ 32: namespace app {
+ 33: namespace app {
+ 34: namespace app { | int total(const std::vector<int>& values) {
+ 35: namespace app { | int total(const std::vector<int>& values) {
+ 36: namespace app { | int total(const std::vector<int>& values) { | for (auto value : values) {
+ 37: namespace app { | int total(const std::vector<int>& values) { | for (auto value : values) { | if (value > 0) {
+ 38: namespace app { | int total(const std::vector<int>& values) { | for (auto value : values) { | if (value > 0) {
+ 39: namespace app { | int total(const std::vector<int>& values) { | for (auto value : values) {
+ 40: namespace app { | int total(const std::vector<int>& values) {
+ 41: namespace app { | int total(const std::vector<int>& values) { | auto fn = [&](int a) {
+ 42: namespace app { | int total(const std::vector<int>& values) { | auto fn = [&](int a) {
+ 43: namespace app { | int total(const std::vector<int>& values) {
+ 44: namespace app { | int total(const std::vector<int>& values) {
+ 45: namespace app {
+ 46: namespace app {

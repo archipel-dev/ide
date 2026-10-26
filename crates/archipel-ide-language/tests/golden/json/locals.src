@@ -1,0 +1,13 @@
+{
+  "name": "demo",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "tsc",
+    "test": ["a", "b"]
+  },
+  "list": [
+    1,
+    2,
+    {"deep": true}
+  ]
+}

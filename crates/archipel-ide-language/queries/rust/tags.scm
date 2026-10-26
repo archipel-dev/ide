@@ -11,7 +11,7 @@
 (mod_item (visibility_modifier) @modifier name: (identifier) @name) @definition.module
 (macro_definition name: (identifier) @name) @definition.macro
 
-(impl_item type: (_) @name trait: (_)? @detail
+(impl_item trait: (_)? @detail type: (_) @name
   (#set! detail.prefix ": ")) @definition.implementation
 
 (declaration_list

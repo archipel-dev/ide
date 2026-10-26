@@ -1,0 +1,66 @@
+//! Crate docs.
+
+use std::collections::HashMap;
+use std::fmt;
+
+// region helpers
+const LIMIT: usize = 10;
+// endregion
+
+/// A point.
+#[derive(Debug)]
+pub struct Point {
+    pub x: i32,
+    y: i32,
+}
+
+pub enum Shape {
+    Circle(f64),
+    Square { side: f64 },
+}
+
+pub trait Area {
+    fn area(&self) -> f64;
+}
+
+impl Area for Shape {
+    fn area(&self) -> f64 {
+        match self {
+            Shape::Circle(r) => 3.14 * r * r,
+            Shape::Square { side } => side * side,
+        }
+    }
+}
+
+impl Point {
+    pub fn new(x: i32, y: i32) -> Self {
+        Point { x, y }
+    }
+
+    pub(crate) async fn total(&self, extra: &[i32]) -> i32 {
+        let mut sum = self.x + self.y;
+        for value in extra {
+            if *value > 0 {
+                sum += value;
+            } else {
+                sum -= 1;
+            }
+        }
+        let closure = |a: i32| {
+            a + 1
+        };
+        sum + closure(1)
+    }
+}
+
+mod inner {
+    pub fn helper(name: &str, count: usize) -> String {
+        format!("{name}:{count}")
+    }
+}
+
+#[test]
+fn it_works() {
+    let map: HashMap<String, i32> = HashMap::new();
+    assert_eq!(map.len(), 0);
+}

@@ -1,0 +1,46 @@
+#include <vector>
+#include <string>
+
+namespace app {
+
+/// A shape.
+class Shape {
+public:
+    virtual ~Shape() = default;
+    virtual double area() const = 0;
+
+private:
+    std::string name_;
+};
+
+template <typename T>
+class Box : public Shape {
+public:
+    explicit Box(T side) : side_(side) {}
+
+    double area() const override {
+        return side_ * side_;
+    }
+
+private:
+    T side_;
+};
+
+struct Point { int x; int y; };
+
+enum class Mode { On, Off };
+
+int total(const std::vector<int>& values) {
+    int sum = 0;
+    for (auto value : values) {
+        if (value > 0) {
+            s‸um += value;
+        }
+    }
+    auto fn = [&](int a) {
+        return a + sum;
+    };
+    return fn(1);
+}
+
+}  // namespace app

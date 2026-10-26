@@ -486,6 +486,186 @@ fn go<'a>(
     }
 }
 
+/// Finds the `@SpringBootApplication` class of a Java, Kotlin or Groovy file when it has
+/// an entry point (`static void main`, top-level `fun main` or a `@JvmStatic` main in a
+/// companion). The runnable sits on the `main` line; its symbol is the class the JVM
+/// starts (`com.example.DemoApplication`, or `com.example.DemoApplicationKt` for a
+/// top-level Kotlin `main`) and its label the application class's simple name.
+///
+/// This is a scan of the source text with comments and string contents blanked out, not a
+/// parse: it also works for Groovy, which the grammar registry cannot run through
+/// [`find`], and it does not depend on the project's build tool.
+pub fn find_spring_application(path: &Path, source: &str) -> Option<Runnable> {
+    let extension = path.extension()?.to_str()?;
+    let language = match extension {
+        "java" => "java",
+        "kt" => "kotlin",
+        "groovy" => "groovy",
+        _ => return None,
+    };
+    if !source.contains("SpringBootApplication") {
+        return None;
+    }
+    let blanked = blank_comments_and_strings(source);
+    let lines: Vec<&str> = blanked.lines().collect();
+    let identifier = |text: &str| -> String {
+        text.chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '$')
+            .collect()
+    };
+    let package = lines
+        .iter()
+        .find_map(|line| {
+            let rest = line.trim().strip_prefix("package")?;
+            let rest = rest.strip_prefix(char::is_whitespace)?;
+            Some(rest.trim().trim_end_matches(';').trim().to_owned())
+        })
+        .unwrap_or_default();
+    let annotation_line = lines.iter().position(|line| {
+        let mut rest = *line;
+        while let Some(at) = rest.find("@SpringBootApplication") {
+            let after = &rest[at + "@SpringBootApplication".len()..];
+            if !after.starts_with(|c: char| c.is_alphanumeric() || c == '_' || c == '$') {
+                return true;
+            }
+            rest = after;
+        }
+        false
+    })?;
+    let class = lines
+        .iter()
+        .skip(annotation_line)
+        .take(12)
+        .find_map(|line| {
+            let at = line.find("class ")?;
+            let before = &line[..at];
+            if before.ends_with(|c: char| c.is_alphanumeric() || c == '_') {
+                return None;
+            }
+            let name = identifier(line[at + 6..].trim_start());
+            (!name.is_empty()).then_some(name)
+        })?;
+    let (line, top_level) = match language {
+        "kotlin" => {
+            let top = lines.iter().position(|line| {
+                line.starts_with("fun main(") || line.starts_with("suspend fun main(")
+            });
+            match top {
+                Some(index) => (index, true),
+                None => {
+                    // A companion-object main needs @JvmStatic to be a JVM entry point.
+                    let jvm_static = lines.iter().position(|line| line.contains("@JvmStatic"))?;
+                    let main = lines
+                        .iter()
+                        .enumerate()
+                        .skip(jvm_static)
+                        .take(3)
+                        .find(|(_, line)| line.contains("fun main("))?
+                        .0;
+                    (main, false)
+                }
+            }
+        }
+        _ => {
+            let main = lines.iter().position(|line| {
+                line.contains("static")
+                    && line.find("main").is_some_and(|at| {
+                        line[at + 4..].trim_start().starts_with('(')
+                            && !line[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_')
+                    })
+            });
+            (main?, false)
+        }
+    };
+    let owner = if top_level {
+        let stem = path.file_stem()?.to_str()?;
+        format!("{stem}Kt")
+    } else {
+        class.clone()
+    };
+    Some(Runnable {
+        line,
+        kind: RunnableKind::Main,
+        language,
+        symbol: if package.is_empty() {
+            owner
+        } else {
+            format!("{package}.{owner}")
+        },
+        label: class,
+    })
+}
+
+/// Replaces comments and the insides of string literals by spaces, keeping line breaks.
+fn blank_comments_and_strings(source: &str) -> String {
+    #[derive(PartialEq)]
+    enum State {
+        Code,
+        Line,
+        Block,
+        Text(char),
+    }
+    let mut out = String::with_capacity(source.len());
+    let mut state = State::Code;
+    let mut chars = source.chars().peekable();
+    while let Some(c) = chars.next() {
+        match state {
+            State::Code => match (c, chars.peek().copied()) {
+                ('/', Some('/')) => {
+                    chars.next();
+                    out.push_str("  ");
+                    state = State::Line;
+                }
+                ('/', Some('*')) => {
+                    chars.next();
+                    out.push_str("  ");
+                    state = State::Block;
+                }
+                ('"' | '\'', _) => {
+                    out.push(c);
+                    state = State::Text(c);
+                }
+                _ => out.push(c),
+            },
+            State::Line => {
+                if c == '\n' {
+                    out.push('\n');
+                    state = State::Code;
+                } else {
+                    out.push(' ');
+                }
+            }
+            State::Block => {
+                if c == '*' && chars.peek() == Some(&'/') {
+                    chars.next();
+                    out.push_str("  ");
+                    state = State::Code;
+                } else {
+                    out.push(if c == '\n' { '\n' } else { ' ' });
+                }
+            }
+            State::Text(quote) => {
+                if c == '\\' {
+                    out.push(' ');
+                    if let Some(next) = chars.next() {
+                        out.push(if next == '\n' { '\n' } else { ' ' });
+                    }
+                } else if c == quote {
+                    out.push(c);
+                    state = State::Code;
+                } else if c == '\n' {
+                    // Unterminated (or a triple-quoted block): do not swallow the file.
+                    out.push('\n');
+                    state = State::Code;
+                } else {
+                    out.push(' ');
+                }
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -614,5 +794,58 @@ public class App {
         assert!(find(Path::new("notes.txt"), "fn main() {}", "").is_empty());
         let broken = find(Path::new("A.java"), "class { void main(", "");
         assert!(broken.is_empty(), "{broken:?}");
+    }
+
+    #[test]
+    fn spring_boot_applications_are_found_in_java_kotlin_and_groovy() {
+        let java = "package com.example.demo;\n\nimport org.springframework.boot.SpringApplication;\n\n@SpringBootApplication\npublic class DemoApplication {\n\n    public static void main(String[] args) {\n        SpringApplication.run(DemoApplication.class, args);\n    }\n}\n";
+        let found = find_spring_application(Path::new("DemoApplication.java"), java).unwrap();
+        assert_eq!(found.line, 7);
+        assert_eq!(found.symbol, "com.example.demo.DemoApplication");
+        assert_eq!(found.label, "DemoApplication");
+        assert_eq!(found.language, "java");
+
+        let kotlin = "package com.example.demo\n\n@SpringBootApplication\nclass DemoApplication\n\nfun main(args: Array<String>) {\n    runApplication<DemoApplication>(*args)\n}\n";
+        let found = find_spring_application(Path::new("src/DemoApplication.kt"), kotlin).unwrap();
+        assert_eq!(
+            (found.line, found.symbol.as_str()),
+            (5, "com.example.demo.DemoApplicationKt")
+        );
+
+        let companion = "package p\n\n@SpringBootApplication\nopen class App {\n    companion object {\n        @JvmStatic\n        fun main(args: Array<String>) {}\n    }\n}\n";
+        let found = find_spring_application(Path::new("App.kt"), companion).unwrap();
+        assert_eq!((found.line, found.symbol.as_str()), (6, "p.App"));
+
+        let groovy = "package demo\n\n@SpringBootApplication\nclass DemoApplication {\n    static void main(String[] args) {\n        SpringApplication.run(DemoApplication, args)\n    }\n}\n";
+        let found = find_spring_application(Path::new("DemoApplication.groovy"), groovy).unwrap();
+        assert_eq!(
+            (found.line, found.language, found.symbol.as_str()),
+            (4, "groovy", "demo.DemoApplication")
+        );
+    }
+
+    #[test]
+    fn spring_boot_detection_ignores_look_alikes() {
+        let main = "    public static void main(String[] args) {}\n";
+        for source in [
+            format!("// @SpringBootApplication\npublic class A {{\n{main}}}\n"),
+            format!("/* @SpringBootApplication */\npublic class A {{\n{main}}}\n"),
+            format!("@SpringBootApplicationExtra\npublic class A {{\n{main}}}\n"),
+            format!("class A {{ String s = \"@SpringBootApplication\";\n{main}}}\n"),
+            "@SpringBootApplication\npublic class A {}\n".to_owned(),
+        ] {
+            assert!(
+                find_spring_application(Path::new("A.java"), &source).is_none(),
+                "{source}"
+            );
+        }
+        assert!(find_spring_application(Path::new("A.rs"), "@SpringBootApplication").is_none());
+        let annotated = "@SpringBootApplication(scanBasePackages = \"x\")\n@Other\npublic class A {\n    public static void main(String... args) {}\n}\n";
+        assert_eq!(
+            find_spring_application(Path::new("A.java"), annotated)
+                .unwrap()
+                .line,
+            3
+        );
     }
 }

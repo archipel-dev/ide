@@ -506,7 +506,18 @@ pub fn fixture_files(name: &str) -> Result<Vec<(&'static str, &'static str)>> {
             ("src/broken.rs", "fn broken( {\n    let x = ;\n}\n"),
             (".gitignore", "target/\n.archipel/\n"),
         ]),
-        other => bail!("unknown fixture {other:?} (known: java-gradle, rust-cargo)"),
+        "spring-maven" => Ok(vec![
+            (
+                "pom.xml",
+                "<project xmlns=\"http://maven.apache.org/POM/4.0.0\">\n  <modelVersion>4.0.0</modelVersion>\n  <parent>\n    <groupId>org.springframework.boot</groupId>\n    <artifactId>spring-boot-starter-parent</artifactId>\n    <version>4.1.2</version>\n  </parent>\n  <groupId>com.example</groupId>\n  <artifactId>demo</artifactId>\n  <version>0.0.1</version>\n</project>\n",
+            ),
+            (
+                "src/main/java/com/example/demo/DemoApplication.java",
+                "package com.example.demo;\n\nimport org.springframework.boot.SpringApplication;\nimport org.springframework.boot.autoconfigure.SpringBootApplication;\n\n@SpringBootApplication\npublic class DemoApplication {\n\n    public static void main(String[] args) {\n        SpringApplication.run(DemoApplication.class, args);\n    }\n}\n",
+            ),
+            (".gitignore", "target/\n.archipel/\n"),
+        ]),
+        other => bail!("unknown fixture {other:?} (known: java-gradle, rust-cargo, spring-maven)"),
     }
 }
 

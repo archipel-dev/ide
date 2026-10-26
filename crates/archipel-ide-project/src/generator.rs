@@ -3,7 +3,7 @@ use crate::android_template::AndroidActivity;
 use crate::{Project, ProjectError};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectKind {
     Empty,
     RustBinary,
@@ -14,12 +14,19 @@ pub enum ProjectKind {
     Jvm(JvmSpec),
     /// Android app (Gradle, Kotlin DSL) from the New Project wizard.
     Android(crate::android_template::AndroidActivity),
+    /// Spring Boot application from the Spring Boot wizard page; the catalog resolves
+    /// the selected starter ids (it may include starters from an online refresh).
+    Spring {
+        spec: Box<crate::spring::SpringSpec>,
+        catalog: Box<crate::spring_catalog::Catalog>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Language {
     Java,
     Kotlin,
+    Groovy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,6 +34,7 @@ pub enum BuildSystem {
     Intellij,
     Maven,
     Gradle,
+    Bazel,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,16 +55,18 @@ pub struct JvmSpec {
 
 impl JvmSpec {
     pub fn parse(language: &str, build: &str, dsl: &str, sample: bool, jdk: u32) -> Option<Self> {
-        Some(Self {
+        let spec = Self {
             language: match language {
                 "java" => Language::Java,
                 "kotlin" => Language::Kotlin,
+                "groovy" => Language::Groovy,
                 _ => return None,
             },
             build: match build {
                 "intellij" => BuildSystem::Intellij,
                 "maven" => BuildSystem::Maven,
                 "gradle" => BuildSystem::Gradle,
+                "bazel" => BuildSystem::Bazel,
                 _ => return None,
             },
             dsl: match dsl {
@@ -66,7 +76,9 @@ impl JvmSpec {
             },
             sample,
             jdk: (8..=99).contains(&jdk).then_some(jdk)?,
-        })
+        };
+        // Bazel projects are Java only (no Kotlin or Groovy rules are generated).
+        (spec.build != BuildSystem::Bazel || spec.language == Language::Java).then_some(spec)
     }
 }
 
@@ -113,7 +125,7 @@ pub fn create_project_with(
     {
         return Err(ProjectError::InvalidName(name.into()));
     }
-    let jvm = match kind {
+    let jvm = match &kind {
         ProjectKind::JavaGradleKotlin => Some(JvmSpec {
             language: Language::Java,
             build: BuildSystem::Gradle,
@@ -128,7 +140,7 @@ pub fn create_project_with(
             sample: true,
             jdk: 21,
         }),
-        ProjectKind::Jvm(spec) => Some(spec),
+        ProjectKind::Jvm(spec) => Some(*spec),
         _ => None,
     };
     let java = jvm.is_some() || matches!(kind, ProjectKind::Android(_));
@@ -137,6 +149,12 @@ pub fn create_project_with(
             "Java group/package: {group}"
         )));
     }
+    let spring_files = match &kind {
+        ProjectKind::Spring { spec, catalog } => {
+            Some(spec.files(name, catalog).map_err(ProjectError::Invalid)?)
+        }
+        _ => None,
+    };
     // A location typed into the wizard usually does not exist yet; create it
     // like the reference IDE does instead of failing with an OS error.
     std::fs::create_dir_all(parent).map_err(|source| ProjectError::CreateLocation {
@@ -155,15 +173,18 @@ pub fn create_project_with(
         }
         Err(e) => return Err(e.into()),
     }
-    let mut files: Vec<(PathBuf, String)> = vec![
-        ("README.md".into(), format!("# {name}\n")),
-        (
-            ".gitignore".into(),
-            ".archipel/\n.idea/\ntarget/\nbuild/\n.gradle/\nlocal.properties\n".into(),
-        ),
-    ];
+    let mut files: Vec<(PathBuf, String)> = match spring_files {
+        Some(files) => files,
+        None => vec![
+            ("README.md".into(), format!("# {name}\n")),
+            (
+                ".gitignore".into(),
+                ".archipel/\n.idea/\ntarget/\nbuild/\n.gradle/\nlocal.properties\nbazel-*\n".into(),
+            ),
+        ],
+    };
     match kind {
-        ProjectKind::Empty => {}
+        ProjectKind::Empty | ProjectKind::Spring { .. } => {}
         ProjectKind::RustBinary | ProjectKind::RustLibrary => {
             files.push(("Cargo.toml".into(), format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\n")));
             files.push(if kind == ProjectKind::RustBinary {
@@ -223,15 +244,25 @@ pub fn create_project_with(
     Project::open(root)
 }
 
+const GROOVY_VERSION: &str = "4.0.26";
+const KOTLIN_VERSION: &str = "2.0.21";
+
 fn jvm_files(files: &mut Vec<(PathBuf, String)>, name: &str, group: &str, spec: JvmSpec) {
     let kotlin = spec.language == Language::Kotlin;
+    let groovy_language = spec.language == Language::Groovy;
     let groovy = spec.dsl == GradleDsl::Groovy;
     let jdk = spec.jdk;
     let package_dir = group.replace('.', "/");
-    let (source_root, main_class) = match (spec.build, kotlin) {
+    let lang_dir = match spec.language {
+        Language::Java => "java",
+        Language::Kotlin => "kotlin",
+        Language::Groovy => "groovy",
+    };
+    let (source_root, main_class) = match (spec.build, spec.language) {
         (BuildSystem::Intellij, _) => ("src".to_owned(), ""),
-        (_, false) => ("src/main/java".to_owned(), "Main"),
-        (_, true) => ("src/main/kotlin".to_owned(), "MainKt"),
+        (_, Language::Java) => (format!("src/main/{lang_dir}"), "Main"),
+        (_, Language::Kotlin) => (format!("src/main/{lang_dir}"), "MainKt"),
+        (_, Language::Groovy) => (format!("src/main/{lang_dir}"), "Main"),
     };
     match spec.build {
         BuildSystem::Intellij => {}
@@ -245,18 +276,24 @@ fn jvm_files(files: &mut Vec<(PathBuf, String)>, name: &str, group: &str, spec: 
                 .into(),
                 format!("rootProject.name = \"{name}\"\n"),
             ));
-            let build = match (kotlin, groovy) {
-                (false, false) => format!(
+            let build = match (spec.language, groovy) {
+                (Language::Java, false) => format!(
                     "plugins {{\n    application\n}}\n\ngroup = \"{group}\"\nversion = \"1.0-SNAPSHOT\"\n\nrepositories {{\n    mavenCentral()\n}}\n\njava {{\n    toolchain {{\n        languageVersion.set(JavaLanguageVersion.of({jdk}))\n    }}\n}}\n\napplication {{\n    mainClass.set(\"{group}.{main_class}\")\n}}\n"
                 ),
-                (false, true) => format!(
+                (Language::Java, true) => format!(
                     "plugins {{\n    id 'application'\n}}\n\ngroup = '{group}'\nversion = '1.0-SNAPSHOT'\n\nrepositories {{\n    mavenCentral()\n}}\n\njava {{\n    toolchain {{\n        languageVersion = JavaLanguageVersion.of({jdk})\n    }}\n}}\n\napplication {{\n    mainClass = '{group}.{main_class}'\n}}\n"
                 ),
-                (true, false) => format!(
-                    "plugins {{\n    kotlin(\"jvm\") version \"2.0.21\"\n    application\n}}\n\ngroup = \"{group}\"\nversion = \"1.0-SNAPSHOT\"\n\nrepositories {{\n    mavenCentral()\n}}\n\nkotlin {{\n    jvmToolchain({jdk})\n}}\n\napplication {{\n    mainClass.set(\"{group}.{main_class}\")\n}}\n"
+                (Language::Kotlin, false) => format!(
+                    "plugins {{\n    kotlin(\"jvm\") version \"{KOTLIN_VERSION}\"\n    application\n}}\n\ngroup = \"{group}\"\nversion = \"1.0-SNAPSHOT\"\n\nrepositories {{\n    mavenCentral()\n}}\n\nkotlin {{\n    jvmToolchain({jdk})\n}}\n\napplication {{\n    mainClass.set(\"{group}.{main_class}\")\n}}\n"
                 ),
-                (true, true) => format!(
-                    "plugins {{\n    id 'org.jetbrains.kotlin.jvm' version '2.0.21'\n    id 'application'\n}}\n\ngroup = '{group}'\nversion = '1.0-SNAPSHOT'\n\nrepositories {{\n    mavenCentral()\n}}\n\nkotlin {{\n    jvmToolchain({jdk})\n}}\n\napplication {{\n    mainClass = '{group}.{main_class}'\n}}\n"
+                (Language::Kotlin, true) => format!(
+                    "plugins {{\n    id 'org.jetbrains.kotlin.jvm' version '{KOTLIN_VERSION}'\n    id 'application'\n}}\n\ngroup = '{group}'\nversion = '1.0-SNAPSHOT'\n\nrepositories {{\n    mavenCentral()\n}}\n\nkotlin {{\n    jvmToolchain({jdk})\n}}\n\napplication {{\n    mainClass = '{group}.{main_class}'\n}}\n"
+                ),
+                (Language::Groovy, false) => format!(
+                    "plugins {{\n    groovy\n    application\n}}\n\ngroup = \"{group}\"\nversion = \"1.0-SNAPSHOT\"\n\nrepositories {{\n    mavenCentral()\n}}\n\ndependencies {{\n    implementation(\"org.apache.groovy:groovy:{GROOVY_VERSION}\")\n}}\n\njava {{\n    toolchain {{\n        languageVersion.set(JavaLanguageVersion.of({jdk}))\n    }}\n}}\n\napplication {{\n    mainClass.set(\"{group}.{main_class}\")\n}}\n"
+                ),
+                (Language::Groovy, true) => format!(
+                    "plugins {{\n    id 'groovy'\n    id 'application'\n}}\n\ngroup = '{group}'\nversion = '1.0-SNAPSHOT'\n\nrepositories {{\n    mavenCentral()\n}}\n\ndependencies {{\n    implementation 'org.apache.groovy:groovy:{GROOVY_VERSION}'\n}}\n\njava {{\n    toolchain {{\n        languageVersion = JavaLanguageVersion.of({jdk})\n    }}\n}}\n\napplication {{\n    mainClass = '{group}.{main_class}'\n}}\n"
                 ),
             };
             files.push((
@@ -273,13 +310,21 @@ fn jvm_files(files: &mut Vec<(PathBuf, String)>, name: &str, group: &str, spec: 
                 .push_str("\nRequires a JDK and Gradle on PATH. Run `gradle run` or `gradle build`.\nGenerate a pinned wrapper with `gradle wrapper` if desired.\n");
         }
         BuildSystem::Maven => {
+            let groovy_dep = format!(
+                "  <dependencies>\n    <dependency>\n      <groupId>org.apache.groovy</groupId>\n      <artifactId>groovy</artifactId>\n      <version>{GROOVY_VERSION}</version>\n    </dependency>\n  </dependencies>\n"
+            );
             let (plugin, deps) = if kotlin {
                 (
                     "    <sourceDirectory>src/main/kotlin</sourceDirectory>\n    <plugins>\n      <plugin>\n        <groupId>org.jetbrains.kotlin</groupId>\n        <artifactId>kotlin-maven-plugin</artifactId>\n        <version>2.0.21</version>\n        <executions>\n          <execution>\n            <id>compile</id>\n            <phase>compile</phase>\n            <goals><goal>compile</goal></goals>\n          </execution>\n        </executions>\n      </plugin>\n    </plugins>\n".to_owned(),
-                    "  <dependencies>\n    <dependency>\n      <groupId>org.jetbrains.kotlin</groupId>\n      <artifactId>kotlin-stdlib</artifactId>\n      <version>2.0.21</version>\n    </dependency>\n  </dependencies>\n",
+                    "  <dependencies>\n    <dependency>\n      <groupId>org.jetbrains.kotlin</groupId>\n      <artifactId>kotlin-stdlib</artifactId>\n      <version>2.0.21</version>\n    </dependency>\n  </dependencies>\n".to_owned(),
+                )
+            } else if groovy_language {
+                (
+                    "    <plugins>\n      <plugin>\n        <groupId>org.codehaus.gmavenplus</groupId>\n        <artifactId>gmavenplus-plugin</artifactId>\n        <version>4.1.1</version>\n        <executions>\n          <execution>\n            <goals>\n              <goal>addSources</goal>\n              <goal>compile</goal>\n            </goals>\n          </execution>\n        </executions>\n      </plugin>\n    </plugins>\n".to_owned(),
+                    groovy_dep,
                 )
             } else {
-                (String::new(), "")
+                (String::new(), String::new())
             };
             let build = if plugin.is_empty() {
                 String::new()
@@ -291,20 +336,47 @@ fn jvm_files(files: &mut Vec<(PathBuf, String)>, name: &str, group: &str, spec: 
                 format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project xmlns=\"http://maven.apache.org/POM/4.0.0\">\n  <modelVersion>4.0.0</modelVersion>\n  <groupId>{group}</groupId>\n  <artifactId>{name}</artifactId>\n  <version>1.0-SNAPSHOT</version>\n  <properties>\n    <maven.compiler.release>{jdk}</maven.compiler.release>\n    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>\n  </properties>\n{deps}{build}</project>\n"),
             ));
         }
+        BuildSystem::Bazel => {
+            files.push((
+                "MODULE.bazel".into(),
+                format!(
+                    "module(\n    name = \"{}\",\n    version = \"1.0\",\n)\n\nbazel_dep(name = \"rules_java\", version = \"8.11.0\")\n",
+                    crate::spring::bazel_module_name(name)
+                ),
+            ));
+            let build = if spec.sample {
+                format!(
+                    "load(\"@rules_java//java:defs.bzl\", \"java_binary\")\n\njava_binary(\n    name = \"app\",\n    srcs = glob([\"src/main/java/**/*.java\"]),\n    main_class = \"{group}.Main\",\n)\n"
+                )
+            } else {
+                "load(\"@rules_java//java:defs.bzl\", \"java_binary\")\n\n# Add sources under src/main/java and declare the binary:\n#\n# java_binary(\n#     name = \"app\",\n#     srcs = glob([\"src/main/java/**/*.java\"]),\n#     main_class = \"com.example.Main\",\n# )\n".to_owned()
+            };
+            files.push(("BUILD.bazel".into(), build));
+            files.push((".bazelrc".into(), crate::spring::bazel_rc(jdk)));
+            files.push((
+                ".bazelversion".into(),
+                format!("{}\n", crate::spring::BAZEL_VERSION),
+            ));
+        }
     }
     if spec.sample {
-        let (file, text) = if kotlin {
-            (
+        let (file, text) = match spec.language {
+            Language::Kotlin => (
                 "Main.kt",
                 format!("package {group}\n\nfun main() {{\n    println(\"Hello, world!\")\n}}\n"),
-            )
-        } else {
-            (
+            ),
+            Language::Groovy => (
+                "Main.groovy",
+                format!(
+                    "package {group}\n\nclass Main {{\n    static void main(String[] args) {{\n        println 'Hello, world!'\n    }}\n}}\n"
+                ),
+            ),
+            Language::Java => (
                 "Main.java",
                 format!(
                     "package {group};\n\npublic class Main {{\n    public static void main(String[] args) {{\n        System.out.println(\"Hello, world!\");\n    }}\n}}\n"
                 ),
-            )
+            ),
         };
         files.push((format!("{source_root}/{package_dir}/{file}").into(), text));
     } else {
@@ -312,7 +384,7 @@ fn jvm_files(files: &mut Vec<(PathBuf, String)>, name: &str, group: &str, spec: 
     }
 }
 
-fn valid_package(group: &str) -> bool {
+pub(crate) fn valid_package(group: &str) -> bool {
     const RESERVED: &[&str] = &[
         "class",
         "public",
@@ -420,7 +492,7 @@ mod tests {
             if root.exists() {
                 std::fs::remove_dir_all(&root).unwrap();
             }
-            let project = create_project(&parent, name, kind, "org.example").unwrap();
+            let project = create_project(&parent, name, kind.clone(), "org.example").unwrap();
             assert!(project.root().join(expected).is_file());
             assert!(matches!(
                 create_project(&parent, name, kind, "org.example"),

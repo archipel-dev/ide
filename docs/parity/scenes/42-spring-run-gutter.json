@@ -1,0 +1,28 @@
+{
+  "id": "42",
+  "title": "Spring Boot application with the run gutter icon",
+  "reference": null,
+  "fixture": "spring-maven",
+  "open": [
+    "src/main/java/com/example/demo/DemoApplication.java"
+  ],
+  "steps": [
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "sleep",
+      "ms": 800
+    },
+    {
+      "op": "assert",
+      "pointer": "/activeTab",
+      "equals": "src/main/java/com/example/demo/DemoApplication.java"
+    },
+    {
+      "op": "screenshot",
+      "name": "42-spring-run-gutter.png"
+    }
+  ]
+}

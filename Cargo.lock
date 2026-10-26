@@ -615,10 +615,14 @@ dependencies = [
 name = "archipel-ide-project"
 version = "0.0.9"
 dependencies = [
+ "archipel-ide-language",
  "notify",
+ "quick-xml 0.37.5",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+ "tree-sitter",
+ "ureq",
  "walkdir",
 ]
 
@@ -742,6 +746,7 @@ dependencies = [
  "archipel-ide-lsp",
  "archipel-ide-markdown",
  "archipel-ide-plugins",
+ "archipel-ide-project",
  "archipel-ide-runner",
  "archipel-ide-settings",
  "archipel-ide-split",

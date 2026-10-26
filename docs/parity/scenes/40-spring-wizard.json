@@ -1,0 +1,33 @@
+{
+  "id": "40",
+  "title": "New Project wizard: Spring Boot settings with Gradle/Maven/Bazel chooser",
+  "reference": null,
+  "steps": [
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "execute",
+      "command": "ui.newProject",
+      "args": {
+        "generator": "Spring Boot",
+        "name": "demo-app",
+        "build": "bazel"
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 500
+    },
+    {
+      "op": "assert",
+      "pointer": "/popups/dialog",
+      "equals": "newProject"
+    },
+    {
+      "op": "screenshot",
+      "name": "40-spring-wizard.png"
+    }
+  ]
+}

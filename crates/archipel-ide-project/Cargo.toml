@@ -11,3 +11,9 @@ thiserror.workspace = true
 walkdir.workspace = true
 
 notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
+ureq = { version = "2.12", default-features = false, features = ["tls", "native-certs", "proxy-from-env"] }
+
+[dev-dependencies]
+archipel-ide-language = { path = "../archipel-ide-language" }
+quick-xml.workspace = true
+tree-sitter.workspace = true

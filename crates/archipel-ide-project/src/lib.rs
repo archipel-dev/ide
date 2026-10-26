@@ -9,6 +9,9 @@ use walkdir::WalkDir;
 pub mod android_template;
 pub mod generator;
 pub mod recent;
+pub mod spring;
+pub mod spring_catalog;
+pub mod spring_detect;
 mod watcher;
 
 pub use watcher::{FileChanges, ProjectWatcher};
@@ -37,6 +40,8 @@ pub enum ProjectError {
     },
     #[error("invalid name `{0}`: use a relative path without `..`")]
     InvalidName(String),
+    #[error("{0}")]
+    Invalid(String),
     #[error("filesystem error: {0}")]
     Io(#[from] std::io::Error),
 }

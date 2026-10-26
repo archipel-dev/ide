@@ -251,6 +251,14 @@ impl IdeApp {
     }
 
     fn control_execute(&mut self, ctx: &egui::Context, command: &str, args: Value) -> Response {
+        if command == "ui.newProject" {
+            // Opens the New Project wizard (optionally preselecting the Spring Boot page).
+            self.new_project_dialog();
+            if let Some(crate::popups::Dialog::NewProject(form)) = self.dialog.as_mut() {
+                form.preset_for_automation(&args);
+            }
+            return Response::ok(Value::Null);
+        }
         let root_before = self.state.project.as_ref().map(|p| p.root().to_owned());
         let result = self.commands.execute(command, &mut self.state, args);
         let root_after = self.state.project.as_ref().map(|p| p.root().to_owned());

@@ -139,8 +139,17 @@ impl IdeState {
             }
             _ => archipel_ide_runnables::find(relative, source, &module),
         };
-        runnables
+        // A `@SpringBootApplication` entry point runs as a Spring Boot configuration
+        // (`bootRun`, `spring-boot:run`, `bazel run`) instead of a plain main class.
+        let spring = archipel_ide_runnables::find_spring_application(relative, source).and_then(
+            |runnable| {
+                let config = self.spring_configuration(&root, &absolute, &runnable)?;
+                Some((runnable, config))
+            },
+        );
+        let mut marks: Vec<(GutterMark, RunConfiguration)> = runnables
             .into_iter()
+            .filter(|runnable| spring.is_none() || runnable.kind != RunnableKind::Main)
             .filter_map(|runnable| {
                 let config = self.configuration_for(&root, &absolute, &runnable).ok()?;
                 Some((
@@ -152,7 +161,72 @@ impl IdeState {
                     config,
                 ))
             })
-            .collect()
+            .collect();
+        if let Some((runnable, config)) = spring {
+            marks.push((
+                GutterMark {
+                    line: runnable.line,
+                    kind: RunnableKind::Main,
+                    label: format!("Run '{}'", runnable.label),
+                },
+                config,
+            ));
+            marks.sort_by_key(|(mark, _)| mark.line);
+        }
+        marks
+    }
+
+    /// The Spring Boot run configuration of an application class, planned by the build
+    /// tool whose file applies Spring Boot for the file's module.
+    fn spring_configuration(
+        &self,
+        root: &Path,
+        file: &Path,
+        runnable: &Runnable,
+    ) -> Option<RunConfiguration> {
+        use archipel_ide_project::spring_detect::{self, SpringTool};
+        let module = spring_detect::detect(root, file)?;
+        let target = match module.tool {
+            SpringTool::Gradle => GradleBuild::detect(root)
+                .and_then(|build| {
+                    build
+                        .modules
+                        .iter()
+                        .filter(|module| file.starts_with(&module.dir))
+                        .max_by_key(|module| module.dir.components().count())
+                        .map(|module| module.path.clone())
+                })
+                .unwrap_or_default(),
+            SpringTool::Maven => module
+                .dir
+                .strip_prefix(root)
+                .map(|dir| dir.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_default(),
+            SpringTool::Bazel => self
+                .bazel_targets
+                .as_ref()
+                .and_then(|targets| {
+                    targets
+                        .targets
+                        .iter()
+                        .find(|target| target.role() == archipel_ide_bazel::TargetRole::Binary)
+                        .map(|target| target.label.clone())
+                })
+                .unwrap_or_default(),
+        };
+        let mut config = RunConfiguration::new(
+            runnable.label.clone(),
+            RunTarget::SpringBoot {
+                build: module.tool.id().into(),
+                target,
+                main_class: runnable.symbol.clone(),
+                profiles: String::new(),
+                program_arguments: Vec::new(),
+            },
+        );
+        config.validate().ok()?;
+        config.temporary = false;
+        Some(config)
     }
 
     /// Maps a runnable to a configuration for the project's build system.
@@ -639,6 +713,180 @@ mod tests {
             commands
                 .execute("run.gutter", &mut state, json!({"line": 5}))
                 .is_err()
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    const SPRING_JAVA: &str = "package com.example.demo;\n\n@SpringBootApplication\npublic class DemoApplication {\n    public static void main(String[] args) {\n        SpringApplication.run(DemoApplication.class, args);\n    }\n}\n";
+
+    fn spring_target(root: &Path, file: &str) -> (RunTarget, String) {
+        let (mut state, commands) = open(root, file);
+        let marks = state.gutter_marks();
+        assert_eq!(marks.len(), 1, "one Spring Boot icon: {marks:?}");
+        assert_eq!(marks[0].label, "Run 'DemoApplication'");
+        assert_eq!(marks[0].line, 4);
+        commands
+            .execute("run.gutter", &mut state, json!({"line": 4, "edit": true}))
+            .unwrap();
+        let config = state.run_configurations.get("DemoApplication").unwrap();
+        (config.target.clone(), config.name.clone())
+    }
+
+    #[test]
+    fn spring_boot_applications_get_a_spring_boot_run_configuration_per_build_tool() {
+        let maven = project(
+            "spring-maven",
+            &[
+                (
+                    "pom.xml",
+                    "<project><parent><artifactId>spring-boot-starter-parent</artifactId></parent></project>",
+                ),
+                (
+                    "src/main/java/com/example/demo/DemoApplication.java",
+                    SPRING_JAVA,
+                ),
+            ],
+        );
+        let (target, _) = spring_target(
+            &maven,
+            "src/main/java/com/example/demo/DemoApplication.java",
+        );
+        assert_eq!(
+            target,
+            RunTarget::SpringBoot {
+                build: "maven".into(),
+                target: String::new(),
+                main_class: "com.example.demo.DemoApplication".into(),
+                profiles: String::new(),
+                program_arguments: Vec::new(),
+            }
+        );
+        assert!(matches!(
+            target.resolve_spring(),
+            Some(RunTarget::Maven { goals, .. }) if goals == ["spring-boot:run"]
+        ));
+
+        let gradle = project(
+            "spring-gradle",
+            &[
+                (
+                    "settings.gradle",
+                    "rootProject.name = 'demo'\ninclude ':app'\n",
+                ),
+                ("build.gradle", "plugins { id 'java' }\n"),
+                (
+                    "app/build.gradle",
+                    "plugins { id 'org.springframework.boot' version '4.1.2' }\n",
+                ),
+                (
+                    "app/src/main/java/com/example/demo/DemoApplication.java",
+                    SPRING_JAVA,
+                ),
+            ],
+        );
+        let (target, _) = spring_target(
+            &gradle,
+            "app/src/main/java/com/example/demo/DemoApplication.java",
+        );
+        assert!(
+            matches!(&target, RunTarget::SpringBoot { build, target, .. } if build == "gradle" && target == ":app")
+        );
+        assert!(matches!(
+            target.resolve_spring(),
+            Some(RunTarget::Gradle { tasks, .. }) if tasks == [":app:bootRun"]
+        ));
+
+        let bazel = project(
+            "spring-bazel",
+            &[
+                (
+                    "MODULE.bazel",
+                    "maven.install(boms = [\"org.springframework.boot:spring-boot-dependencies:4.1.2\"])\n",
+                ),
+                ("BUILD.bazel", "java_binary(name = \"app\")\n"),
+                (
+                    "src/main/java/com/example/demo/DemoApplication.java",
+                    SPRING_JAVA,
+                ),
+            ],
+        );
+        let (target, _) = spring_target(
+            &bazel,
+            "src/main/java/com/example/demo/DemoApplication.java",
+        );
+        assert!(matches!(
+            target.resolve_spring(),
+            Some(RunTarget::Bazel { command, target, .. }) if command == "run" && target == "//:app"
+        ));
+
+        let kotlin = project(
+            "spring-kotlin",
+            &[
+                (
+                    "build.gradle.kts",
+                    "plugins { id(\"org.springframework.boot\") version \"4.1.2\" }\n",
+                ),
+                (
+                    "src/main/kotlin/com/example/demo/DemoApplication.kt",
+                    "package com.example.demo\n\n@SpringBootApplication\nclass DemoApplication\n\nfun main(args: Array<String>) {\n    runApplication<DemoApplication>(*args)\n}\n",
+                ),
+            ],
+        );
+        let (mut state, _commands) = open(
+            &kotlin,
+            "src/main/kotlin/com/example/demo/DemoApplication.kt",
+        );
+        let marks = state.gutter_marks();
+        assert_eq!(
+            (marks.len(), marks[0].label.as_str(), marks[0].line),
+            (1, "Run 'DemoApplication'", 5)
+        );
+
+        let groovy = project(
+            "spring-groovy",
+            &[
+                (
+                    "build.gradle",
+                    "plugins { id 'org.springframework.boot' version '4.1.2' }\n",
+                ),
+                (
+                    "src/main/groovy/demo/DemoApplication.groovy",
+                    "package demo\n\n@SpringBootApplication\nclass DemoApplication {\n    static void main(String[] args) {}\n}\n",
+                ),
+            ],
+        );
+        let (mut state, _commands) = open(&groovy, "src/main/groovy/demo/DemoApplication.groovy");
+        let marks = state.gutter_marks();
+        assert_eq!((marks.len(), marks[0].line), (1, 4));
+        for root in [maven, gradle, bazel, kotlin, groovy] {
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_main_class_in_a_plain_project_keeps_the_generic_run_icon() {
+        let root = project(
+            "spring-lookalike",
+            &[
+                ("build.gradle", "plugins { id 'application' }\n"),
+                (
+                    "src/main/java/Demo.java",
+                    "@SpringBootApplication\npublic class Demo {\n  public static void main(String[] a) {}\n}\n",
+                ),
+            ],
+        );
+        let (mut state, _commands) = open(&root, "src/main/java/Demo.java");
+        assert!(
+            state
+                .gutter_marks()
+                .iter()
+                .all(|mark| mark.label.contains("main()") || mark.label.contains("Demo"))
+        );
+        assert!(
+            state
+                .gutter_marks()
+                .iter()
+                .all(|mark| mark.label != "Run 'Demo'" || mark.line == 1)
         );
         std::fs::remove_dir_all(root).unwrap();
     }

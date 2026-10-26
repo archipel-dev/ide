@@ -38,10 +38,10 @@ mod layout {
     /// Fallback only: scenes click the position the IDE reports in `/targets/firstRunSkip`.
     pub const FIRST_RUN_SKIP: Point = (699, 411);
     // New Project dialog (1440×900).
-    pub const NP_GENERATOR_RUST_APP: Point = (440, 587);
-    pub const NP_NAME: Point = (850, 231);
-    pub const NP_LOCATION: Point = (820, 265);
-    pub const NP_CREATE: Point = (1006, 665);
+    pub const NP_GENERATOR_RUST_APP: Point = (440, 621);
+    pub const NP_NAME: Point = (850, 239);
+    pub const NP_LOCATION: Point = (820, 279);
+    pub const NP_CREATE: Point = (989, 673);
     // New Project dialog in the 800×500 minimum window.
     pub const NP_SMALL_GENERATOR_EMPTY: Point = (77, 163);
     pub const NP_SMALL_NAME: Point = (540, 111);

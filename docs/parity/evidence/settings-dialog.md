@@ -1,12 +1,12 @@
 # Settings dialog (scene 08)
 
 Reference: `reference/intellij-community/java-gradle/08-settings.png` and
-`reference/android-studio/08-settings.png` (PR #40). Jetthing captures:
-`jetthing/settings/08-settings.png` … `08d-editor-font-applied.png`.
+`reference/android-studio/08-settings.png` (PR #40). Archipel IDE captures:
+`archipel-ide/settings/08-settings.png` … `08d-editor-font-applied.png`.
 
-## Steps (Linux, Xvfb 1600×1000, `JETTHING_RENDERER=glow`)
+## Steps (Linux, Xvfb 1600×1000, `ARCHIPEL_RENDERER=glow`)
 
-1. `JETTHING_CONFIG_DIR=<empty dir> cargo run -p jetthing-app -- . crates/jetthing-settings/src/lib.rs`
+1. `ARCHIPEL_CONFIG_DIR=<empty dir> cargo run -p archipel-ide-app -- . crates/archipel-ide-settings/src/lib.rs`
 2. Ctrl+Alt+S → `08-settings.png`: the dialog opens on Appearance & Behavior › Appearance.
 3. Type `font size` into the search field → the tree shrinks to Editor › General / Font and
    Advanced Settings; the first hit is selected and matching options are outlined. Select
@@ -39,7 +39,7 @@ Reference: `reference/intellij-community/java-gradle/08-settings.png` and
 - Search outlines whole matching options instead of highlighting the matched substring.
 - Theme and Keymap selections are stored but not applied yet (#8, #2/#14); the Theme
   combo lists Islands Dark/Light (the reference shows the theme names of its build).
-- Most pages show "This page has no options in Jetthing yet." Group pages without their
+- Most pages show "This page has no options in Archipel IDE yet." Group pages without their
   own options list their child pages as links.
 - The dialog is modal (it dims and blocks the workbench); #15 asks for non-modal.
 - Android Studio's tree (Android-specific pages) is not modelled.

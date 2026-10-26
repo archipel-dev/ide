@@ -1,15 +1,15 @@
-//! Example Jetthing plugin. It uses every contribution point of plugin API 1
+//! Example Archipel IDE plugin. It uses every contribution point of plugin API 1
 //! and is the reference for `docs/plugins/api.md`.
 
-use jetthing_plugin_api::{
+use archipel_ide_plugin_api::{
     CommandContribution, CommandError, CommandResult, Contributions, EditorContribution,
     EditorTabRequest, MenuLocation, Notification, Plugin, PluginError, PluginHost, PluginManifest,
     SettingField, SettingKind, SettingsPage, StatusWidgetContribution, StatusWidgetState,
     ToolWindowContribution, Value, ViewContext, ViewFrame, json,
 };
-use jetthing_plugin_ui::egui;
+use archipel_ide_plugin_ui::egui;
 
-pub const ID: &str = "dev.jetthing.hello";
+pub const ID: &str = "dev.archipel.hello";
 
 pub struct HelloPlugin {
     manifest: PluginManifest,
@@ -26,7 +26,7 @@ impl Default for HelloPlugin {
 impl HelloPlugin {
     pub fn new() -> Self {
         Self {
-            manifest: PluginManifest::parse(include_str!("../jetthing-plugin.toml"))
+            manifest: PluginManifest::parse(include_str!("../archipel-plugin.toml"))
                 .expect("bundled manifest is valid"),
             greetings: 0,
             name: "world".into(),
@@ -56,7 +56,7 @@ impl HelloPlugin {
     }
 
     fn main_view(&mut self, ui: &mut egui::Ui, host: &mut dyn PluginHost) {
-        jetthing_plugin_ui::header(ui, "Hello", |_| {});
+        archipel_ide_plugin_ui::header(ui, "Hello", |_| {});
         ui.horizontal(|ui| {
             ui.label("Name");
             ui.text_edit_singleline(&mut self.name);
@@ -65,9 +65,9 @@ impl HelloPlugin {
         if ui.button("Say Hello").clicked() {
             self.say_hello(host);
         }
-        jetthing_plugin_ui::section(ui, "Statistics");
-        jetthing_plugin_ui::property(ui, "Greetings", &self.greetings.to_string());
-        jetthing_plugin_ui::property(
+        archipel_ide_plugin_ui::section(ui, "Statistics");
+        archipel_ide_plugin_ui::property(ui, "Greetings", &self.greetings.to_string());
+        archipel_ide_plugin_ui::property(
             ui,
             "Project",
             &host
@@ -155,7 +155,7 @@ impl Plugin for HelloPlugin {
         frame: &mut ViewFrame<'_>,
         host: &mut dyn PluginHost,
     ) {
-        let Some(ui) = jetthing_plugin_ui::ui(frame) else {
+        let Some(ui) = archipel_ide_plugin_ui::ui(frame) else {
             return;
         };
         match view.view.as_str() {
@@ -177,8 +177,8 @@ impl Plugin for HelloPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use archipel_ide_plugin_api::testing::RecordingHost as ApiRecordingHost;
     use archipel_plugin_testing::RecordingHost;
-    use jetthing_plugin_api::testing::RecordingHost as ApiRecordingHost;
 
     #[test]
     fn contributions_are_consistent() {
@@ -227,7 +227,7 @@ mod tests {
         let ctx = egui::Context::default();
         let view = ViewContext {
             view: "hello.main".into(),
-            placement: jetthing_plugin_api::ViewPlacement::App,
+            placement: archipel_ide_plugin_api::ViewPlacement::App,
         };
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {

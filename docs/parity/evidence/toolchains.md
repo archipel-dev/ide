@@ -5,18 +5,18 @@ downloads a vendor JDK chosen from the foojay Disco API into `~/.jdks/<vendor>-<
 shows progress in the status bar and detects JDKs that are already installed
 (`JAVA_HOME`, `/usr/lib/jvm`, SDKMAN) before offering a download — see
 `reference/intellij-community/NOTES.md` (project JDK auto-detected as
-`Java 21.0.12 /usr/lib/jvm/java-1.21.0-openjdk-amd64`). Jetthing generalises this to every
-component a language needs, under `<data dir>/jetthing/toolchains/<component>/<version>/`.
+`Java 21.0.12 /usr/lib/jvm/java-1.21.0-openjdk-amd64`). Archipel IDE generalises this to every
+component a language needs, under `<data dir>/archipel/toolchains/<component>/<version>/`.
 
 ## Slice 1 — provisioning core (this evidence)
 
 Everything below runs headless against a local fake HTTP server
-(`crates/jetthing-toolchains/tests/support/mod.rs`: fixed bodies, `Range: bytes=n-` with
+(`crates/archipel-ide-toolchains/tests/support/mod.rs`: fixed bodies, `Range: bytes=n-` with
 `206`/`416`, one-shot connection cuts, request log). Reproduce with:
 
 ```bash
-cargo test -p jetthing-toolchains
-cargo test -p jetthing-core toolchain
+cargo test -p archipel-ide-toolchains
+cargo test -p archipel-ide-core toolchain
 ```
 
 | Acceptance item (#75) | Test |
@@ -36,40 +36,40 @@ cargo test -p jetthing-core toolchain
 | Commands: install (wait), locate, list, missing, uninstall, usePath, pins, errors | `toolchain_commands::tests::*` |
 
 Results on Linux x86_64 (2026-10-10): 17 unit + 7 integration tests in
-`jetthing-toolchains`, 3 command tests in `jetthing-core`, all passing.
+`archipel-ide-toolchains`, 3 command tests in `archipel-ide-core`, all passing.
 
 CLI smoke run (no catalog entries ship in this slice, so nothing is installable yet):
 
 ```text
-$ JETTHING_TOOLCHAINS_DIR=/tmp/tc jetthing-cli run toolchain.list
+$ ARCHIPEL_TOOLCHAINS_DIR=/tmp/tc archipel-cli run toolchain.list
 {"components":[],"platform":"linux-x86_64","root":"/tmp/tc","settingsError":null}
-$ jetthing-cli run toolchain.install '{"component":"jdk"}'
+$ archipel-cli run toolchain.install '{"component":"jdk"}'
 invalid parameters: unknown toolchain component `jdk`
 ```
 
 ## Slice 3a — first catalog entries
 
-Built-in providers (`crates/jetthing-toolchains/src/providers/`): `jdk` (foojay Disco API),
+Built-in providers (`crates/archipel-ide-toolchains/src/providers/`): `jdk` (foojay Disco API),
 `jdtls` (download.eclipse.org milestones), `rust-analyzer`, `bazelisk` and `taplo` (GitHub
-releases with asset digests). Provider tests: `cargo test -p jetthing-toolchains --test providers`.
+releases with asset digests). Provider tests: `cargo test -p archipel-ide-toolchains --test providers`.
 
 Live run on a Linux x86_64 container, 2026-10-10. A system JDK 21 is present
 (`JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64`), so `toolchain.list` correctly keeps
 preferring it while the managed install exists alongside:
 
 ```text
-$ export JETTHING_TOOLCHAINS_DIR=/tmp/tcroot
-$ jetthing-cli run toolchain.install '{"component":"jdk","version":"21","wait":true}'
+$ export ARCHIPEL_TOOLCHAINS_DIR=/tmp/tcroot
+$ archipel-cli run toolchain.install '{"component":"jdk","version":"21","wait":true}'
 {"component":"jdk","job":1,"path":"/tmp/tcroot/jdk/21.0.12.1+1","version":"21.0.12.1+1"}   # 16.7 s
 $ /tmp/tcroot/jdk/21.0.12.1+1/bin/java -version
 openjdk version "21.0.12.1" 2026-08-18 LTS
-$ cat /tmp/tcroot/jdk/21.0.12.1+1/.jetthing-install.json
+$ cat /tmp/tcroot/jdk/21.0.12.1+1/.archipel-install.json
 { "component": "jdk", "version": "21.0.12.1+1",
   "source_url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jdk_x64_linux_hotspot_21.0.12.1_1.tar.gz",
   "sha256": "ce79869e1307ed8ee1e2baa86a412b1eb5b75d10a01006d788a6f968bcfaee94", ... }
-$ jetthing-cli run toolchain.install '{"component":"jdtls","wait":true}'
+$ archipel-cli run toolchain.install '{"component":"jdtls","wait":true}'
 {"component":"jdtls","job":1,"path":"/tmp/tcroot/jdtls/1.61.0","version":"1.61.0"}       # 5.9 s
-$ jetthing-cli run toolchain.list
+$ archipel-cli run toolchain.list
 jdk:   located JAVA_HOME (/usr/lib/jvm/java-21-openjdk-amd64), installed ["21.0.12.1+1"]
 jdtls: located managed (/tmp/tcroot/jdtls/1.61.0/bin/jdtls), installed ["1.61.0"], requires ["jdk"]
 rust-analyzer: located PATH (/root/.cargo/bin/rust-analyzer)
@@ -81,9 +81,9 @@ their release assets themselves download fine.
 
 ## Slice 4 — LSP integration and the Java end-to-end case
 
-`jetthing-lsp` gained a minimal hook: `ProgramResolver` (`resolve(spec)` →
+`archipel-ide-lsp` gained a minimal hook: `ProgramResolver` (`resolve(spec)` →
 `ResolvedProgram { program, args, env }`, `setup_component(spec)`), consulted after an
-`lsp.toml` command and before `PATH` candidates. `jetthing-core` implements it over
+`lsp.toml` command and before `PATH` candidates. `archipel-ide-core` implements it over
 `Toolchains` (`toolchain_lsp.rs`): managed `rust-analyzer`/`taplo` start from their install;
 managed jdtls runs the Equinox launcher directly on the resolved JDK (its `bin/jdtls` needs
 Python). Missing-server notices carry `setup`, the UI shows **Set up**, which dispatches
@@ -93,7 +93,7 @@ language servers restart.
 ### GUI walkthrough (Linux, Xvfb, 2026-10-10)
 
 "Clean machine": `PATH` without `java`/`javac`/`jdtls`, `JAVA_HOME` unset, empty
-`JETTHING_TOOLCHAINS_DIR`. Java Gradle sample (`settings.gradle`, `build.gradle` with the
+`ARCHIPEL_TOOLCHAINS_DIR`. Java Gradle sample (`settings.gradle`, `build.gradle` with the
 `java` plugin, `src/main/java/demo/App.java`).
 
 1. Opening `App.java` raises *Java language server not found* with **Set up**
@@ -110,11 +110,11 @@ language servers restart.
 
 ### Headless end-to-end test
 
-`cargo test -p jetthing-core --test toolchain_e2e -- --ignored --nocapture` repeats the flow
+`cargo test -p archipel-ide-core --test toolchain_e2e -- --ignored --nocapture` repeats the flow
 through commands with an empty `PATH`:
 
 ```text
-setup in 12.6s: [{"component":"jdk","version":"25.0.4.1+1",...}]   # jdtls reused from JETTHING_E2E_TOOLCHAINS
+setup in 12.6s: [{"component":"jdk","version":"25.0.4.1+1",...}]   # jdtls reused from ARCHIPEL_E2E_TOOLCHAINS
 completion after 9.9s: ["clone", "equals", "finalize", "getClass", "greeting", ...]
 servers: [("jdtls", "Ready")]
 test result: ok. 1 passed
@@ -124,7 +124,7 @@ test result: ok. 1 passed
 
 ## Slice 2a — "missing toolchain" editor notification
 
-`jetthing_toolchains::providers::project_requirements` detects what a project needs from
+`archipel_ide_toolchains::providers::project_requirements` detects what a project needs from
 marker files (Gradle/Maven → `jdk` + `jdtls`, `Cargo.toml` → `rust-analyzer`, Bazel →
 `bazelisk`). Core caches the missing components per language (refreshed on project open,
 `toolchain.usePath` and finished installs); `toolchain.banner {path}` returns the bar for an
@@ -149,7 +149,7 @@ other languages unaffected, `usePath` shrinking the list, dismiss).
 
 User report on 0.0.3: Gradle was not set up and there was no completion. The chain now runs
 end to end. It was verified on Xvfb (glow, 2026-10-10) with `PATH` stripped of `java`,
-`javac`, `jdtls` and `gradle`, no `JAVA_HOME`, an empty `JETTHING_TOOLCHAINS_DIR`, and a
+`javac`, `jdtls` and `gradle`, no `JAVA_HOME`, an empty `ARCHIPEL_TOOLCHAINS_DIR`, and a
 scratch copy of `samples/java-gradle` with `gradlew`, `gradlew.bat` and `gradle/wrapper`
 removed, so Gradle itself has to be installed:
 

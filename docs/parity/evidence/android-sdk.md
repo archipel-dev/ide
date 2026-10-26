@@ -5,13 +5,13 @@ Android SDK) in `docs/parity/evidence/reference/android-studio/`.
 
 ## Setup
 
-Captured 2026-10-10 on Linux under Xvfb (1600x1000x24, openbox), `JETTHING_RENDERER=glow`,
-`JETTHING_NO_UPDATE_CHECK=1`. The SDK was installed with the public command-line tools only:
+Captured 2026-10-10 on Linux under Xvfb (1600x1000x24, openbox), `ARCHIPEL_RENDERER=glow`,
+`ARCHIPEL_NO_UPDATE_CHECK=1`. The SDK was installed with the public command-line tools only:
 
 ```bash
 # commandlinetools-linux-13114758_latest.zip unpacked to ~/Android/Sdk/cmdline-tools/latest
 sdkmanager --sdk_root=$HOME/Android/Sdk "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-ANDROID_HOME=$HOME/Android/Sdk jetthing-app <MyApplication> app/src/main/AndroidManifest.xml
+ANDROID_HOME=$HOME/Android/Sdk archipel-ide <MyApplication> app/src/main/AndroidManifest.xml
 ```
 
 `MyApplication` mirrors the Studio "Empty Views Activity" template: `settings.gradle.kts` with
@@ -22,15 +22,15 @@ ANDROID_HOME=$HOME/Android/Sdk jetthing-app <MyApplication> app/src/main/Android
 
 | File | Shows |
 |---|---|
-| `jetthing/android/a05-sdk-platforms.png` | SDK Platforms tab: `Android 15.0 ("VanillaIceCream")`, API 35, revision 2, Installed; location `/root/Android/Sdk` "Found via ANDROID_HOME" |
-| `jetthing/android/a05-sdk-tools.png` | SDK Tools tab: Build-Tools 35.0.0, Platform-Tools 37.0.1, Command-line Tools 19.0 (read from `source.properties`, no `package.xml`) |
-| `jetthing/android/a05-sdk-invalid-location.png` | Edit › `/tmp/not-an-sdk` › Apply: the location is rejected with an actionable error and the page keeps the previous SDK |
+| `archipel-ide/android/a05-sdk-platforms.png` | SDK Platforms tab: `Android 15.0 ("VanillaIceCream")`, API 35, revision 2, Installed; location `/root/Android/Sdk` "Found via ANDROID_HOME" |
+| `archipel-ide/android/a05-sdk-tools.png` | SDK Tools tab: Build-Tools 35.0.0, Platform-Tools 37.0.1, Command-line Tools 19.0 (read from `source.properties`, no `package.xml`) |
+| `archipel-ide/android/a05-sdk-invalid-location.png` | Edit › `/tmp/not-an-sdk` › Apply: the location is rejected with an actionable error and the page keeps the previous SDK |
 
 Headless equivalent:
 
 ```bash
-ANDROID_HOME=~/Android/Sdk cargo run -p jetthing-cli -- run android.sdk.detect
-env -u ANDROID_HOME cargo run -p jetthing-cli -- run android.sdk.detect   # lists every probed location
+ANDROID_HOME=~/Android/Sdk cargo run -p archipel-ide-cli -- run android.sdk.detect
+env -u ANDROID_HOME cargo run -p archipel-ide-cli -- run android.sdk.detect   # lists every probed location
 ```
 
 ## Matches the reference

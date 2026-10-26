@@ -1,12 +1,23 @@
 # WebAssembly component plugins
 
 Third-party compiled plugins run as [WebAssembly components](https://component-model.bytecodealliance.org/)
-in [wasmtime](https://wasmtime.dev/) (`jetthing-plugin-wasm`). They implement the same contract as
+in [wasmtime](https://wasmtime.dev/) (`archipel-ide-plugin-wasm`). They implement the same contract as
 Rust and Lua plugins ([api.md](api.md)), described in WIT:
-[`crates/jetthing-plugin-wasm/wit/plugin.wit`](../../crates/jetthing-plugin-wasm/wit/plugin.wit).
+[`crates/archipel-ide-plugin-wasm/wit/plugin.wit`](../../crates/archipel-ide-plugin-wasm/wit/plugin.wit).
 The example is [`plugins/hello-wasm`](../../plugins/hello-wasm/src/lib.rs).
 
-## The `jetthing:plugin@1.0.0` world
+## The `archipel:plugin@1.0.0` world
+
+> **Renamed from `jetthing:plugin@1.0.0`.** The two worlds are identical apart from the package
+> name. The host binds both (`wit/plugin.wit` and `wit-legacy/plugin.wit`) and picks the one a
+> component imports, so components built for the old name keep loading; new plugins should
+> target `archipel:plugin`. `plugins/hello-wasm/hello_wasm.wasm` is checked in with the new
+> package name; it was not compiled from source for the rename (the `wasm32-wasip2` target was
+> not installed), the world name was patched in the binary instead (same length, so the
+> component stays valid). The next `cargo xtask build-wasm-example` replaces it with a regular
+> build. The pre-rename binary is kept as
+> `crates/archipel-ide-plugin-wasm/tests/fixtures/hello_wasm_legacy.wasm` to test the
+> compatibility path.
 
 The guest **exports** `contributions`, `activate`, `deactivate`, `execute`, `render-view`,
 `on-view-event`, `status-widget` and `poll`, and **imports** the `host` interface
@@ -45,7 +56,7 @@ struct MyPlugin;
 impl Guest for MyPlugin {
     fn contributions() -> String { r#"{"commands":[{"id":"my.hello","label":"Hello"}]}"#.into() }
     fn execute(command: String, _params: String) -> Result<String, String> {
-        jetthing::plugin::host::status("hi");
+        archipel::plugin::host::status("hi");
         Ok("null".into())
     }
     // … activate, deactivate, render_view, on_view_event, status_widget, poll
@@ -58,7 +69,7 @@ rustup target add wasm32-wasip2
 cargo build --release --target wasm32-wasip2      # produces a component directly
 ```
 
-Put the `.wasm` next to `jetthing-plugin.toml` (`kind = "wasm"`, `entry = "my_plugin.wasm"`), then
+Put the `.wasm` next to `archipel-plugin.toml` (`kind = "wasm"`, `entry = "my_plugin.wasm"`), then
 pack it with `cargo run -p xtask -- pack-plugin <dir>` and install the archive.
 `cargo run -p xtask -- build-wasm-example` rebuilds the checked-in example component. Any language
 with component tooling (C/C++, Go, JavaScript via jco, Python via componentize-py) can target the

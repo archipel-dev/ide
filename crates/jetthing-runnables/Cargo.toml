@@ -1,9 +1,0 @@
-[package]
-name = "jetthing-runnables"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
-[dependencies]
-jetthing-language = { path = "../jetthing-language" }
-tree-sitter.workspace = true

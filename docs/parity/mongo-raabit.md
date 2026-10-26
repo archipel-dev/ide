@@ -1,6 +1,6 @@
 # mongo-raabit parity
 
-mongo-raabit is a first-party Jetthing plugin (`plugins/mongo-raabit/`, issue #50): a
+mongo-raabit is a first-party Archipel IDE plugin (`plugins/mongo-raabit/`, issue #50): a
 clean-room MongoDB GUI modelled on the publicly observable feature set of Studio 3T Pro.
 No Studio 3T code, artwork or branding is used. The headless core
 (`plugins/mongo-raabit/core`, crate `mongo-raabit-core`) is built on the official
@@ -33,4 +33,4 @@ evidence runs used MongoDB Community 8.0.32 on Ubuntu 24.04.
 | MR-019 | Studio 3T | Schema Explorer | Implemented | — | analyzer unit test, live sampling test, app-flow schema test | Schema section of the Structure tab; random/first/last sampling; field table with presence and type-mix bars; detail pane with type legend, min/mean/max, histogram, date range, lengths and top values; charts follow the validated dataviz palette; `evidence/mongo-raabit/schema-*.png` |
 | MR-020 | Studio 3T | Import / Export (JSON, CSV, BSON, SQL) | Partial | — | format round-trip tests, CSV mapping/error tests, live export→import test | export JSON array/lines (relaxed, canonical, shell), CSV with column discovery, mongodump-compatible BSON, SQL INSERTs; import JSON/Extended JSON/shell syntax, BSON, CSV with field mapping and types; insert/upsert/drop-first with per-document failure report and cancellation; SQL import, wizard UI and task scheduler pending |
 | MR-021 | Studio 3T | Table / Tree / JSON result views | Partial | — | drill-down and tree-row unit tests, headless render test | Table with type-colored cells, column types, resizable columns and nested drill-down with breadcrumb; Tree with key/value/type; JSON in syntax-colored shell syntax; column chooser and inline edit pending; `evidence/mongo-raabit/{table,tree,json,drilldown}-*.png` |
-| MR-022 | Studio 3T | Standalone app (`jetthing --app dev.jetthing.mongo-raabit`) and IDE integration | Implemented | `mongo.open` (Tools › MongoDB (mongo-raabit)) | plugin contribution/open-tab unit test | bundled into every Jetthing build as a Rust plugin (plugin API 1): opens as an editor tab in the IDE or fills the window with `--app dev.jetthing.mongo-raabit`; saved connections in the plugin data directory (`connections.json`) |
+| MR-022 | Studio 3T | Standalone app (`archipel-ide --app dev.archipel.mongo-raabit`) and IDE integration | Implemented | `mongo.open` (Tools › MongoDB (mongo-raabit)) | plugin contribution/open-tab unit test | bundled into every Archipel IDE build as a Rust plugin (plugin API 1): opens as an editor tab in the IDE or fills the window with `--app dev.archipel.mongo-raabit`; saved connections in the plugin data directory (`connections.json`) |

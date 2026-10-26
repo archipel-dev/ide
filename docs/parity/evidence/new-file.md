@@ -24,9 +24,9 @@ chooser for File › Open.
 
 ```bash
 Xvfb :99 -screen 0 1600x1000x24 &
-export JETTHING_CONTROL_SOCKET=/tmp/jt.sock DISPLAY=:99 JETTHING_RENDERER=glow JETTHING_NO_UPDATE_CHECK=1
-cargo run -p jetthing-app -- /path/to/project &     # has src/main/java/com/example/Main.java
-cli() { cargo run -q -p jetthing-cli -- ui "$@"; }
+export ARCHIPEL_CONTROL_SOCKET=/tmp/jt.sock DISPLAY=:99 ARCHIPEL_RENDERER=glow ARCHIPEL_NO_UPDATE_CHECK=1
+cargo run -p archipel-ide-app -- /path/to/project &     # has src/main/java/com/example/Main.java
+cli() { cargo run -q -p archipel-ide-cli -- ui "$@"; }
 cli click 208 209 --button secondary; cli move 270 229   # New submenu
 cli click 500 229; cli type model.Order; cli key Down; cli key Down; cli key Down
 cli screenshot new-java-class-popup.png; cli key Enter; cli screenshot created-file.png

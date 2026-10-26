@@ -5,7 +5,7 @@ documentation, observable behaviour, and facts (IDs, names, defaults, shortcuts)
 Apache-2.0 IntelliJ Community sources at tag `idea/262.10968.63`. No code, artwork, or documentation prose
 is copied. Short UI labels are quoted as names only.
 
-Jetthing models IntelliJ IDEA's Java/Gradle support as plugins on the platform core
+Archipel IDE models IntelliJ IDEA's Java/Gradle support as plugins on the platform core
 (see `docs/architecture.md`): a **Java language plugin** (PSI, resolve, completion, inspections,
 refactorings, generation, run/debug), a **Gradle/external-system plugin** (project model import,
 sync, tool window, task execution) and a **JVM build plugin** (internal builder / compiler integration).
@@ -84,7 +84,7 @@ Sources:
 
 Terminology note: in 2026.x the UI wording moved from "reload/re-import" to **"sync"**
 (e.g. "Sync Gradle Changes", "Sync All Gradle Projects", "Auto-Sync Settings…"). Older help pages still
-say "Load Gradle Changes" / "Reload All Gradle Projects". Jetthing should use the "sync" vocabulary and
+say "Load Gradle Changes" / "Reload All Gradle Projects". Archipel IDE should use the "sync" vocabulary and
 treat the others as aliases in Find Action.
 
 ### 1.1 Opening, importing, linking
@@ -1153,7 +1153,7 @@ Counted from the tables above (one row = one feature ID).
 | VCS touchpoints (`JAVA-VCS`) | 8 | 2 |
 | **Total** | **682** | **208** |
 
-Suggested first vertical slice for jetthing (all P0): GRADLE-001/003/020/021/040–046/060–064/080–083/100–103/110/112/113/120,
+Suggested first vertical slice for archipel-ide (all P0): GRADLE-001/003/020/021/040–046/060–064/080–083/100–103/110/112/113/120,
 JAVA-JDK-001–010, JAVA-EDIT-001–004/020/024/040/042/070/074, JAVA-NAV-001–003/008/009/019/021, JAVA-INSP-006/014/101–107,
 JAVA-REF-002/006/013/018/024, JAVA-GEN-001–009, JAVA-RUN-001–013, JAVA-DBG-001/011/013–019/022/024–026, JAVA-BUILD-001/004/005.
 

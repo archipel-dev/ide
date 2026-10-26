@@ -1,5 +1,5 @@
 //! Standalone mongo-raabit window, used for development and screenshot evidence until
-//! `jetthing --app dev.jetthing.mongo-raabit` hosts the plugin.
+//! `archipel-ide --app dev.archipel.mongo-raabit` hosts the plugin.
 //!
 //! ```text
 //! cargo run -p mongo-raabit --example standalone -- [--light] [--uri mongodb://…]
@@ -295,7 +295,7 @@ impl App {
 
 fn main() -> eframe::Result {
     let args = parse_args();
-    let renderer = if std::env::var("JETTHING_RENDERER").is_ok_and(|v| v == "glow") {
+    let renderer = if archipel_ide_compat::env_var("ARCHIPEL_RENDERER").is_ok_and(|v| v == "glow") {
         eframe::Renderer::Glow
     } else {
         eframe::Renderer::Wgpu
@@ -312,7 +312,7 @@ fn main() -> eframe::Result {
         "mongo-raabit",
         options,
         Box::new(move |cc| {
-            jetthing_ui::install_theme(&cc.egui_ctx);
+            archipel_ide_ui::install_theme(&cc.egui_ctx);
             if light {
                 cc.egui_ctx.style_mut(|style| {
                     let p = mongo_raabit::style::Palette::LIGHT;

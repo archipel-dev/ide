@@ -1,0 +1,16 @@
+[package]
+name = "archipel-ide-lsp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+archipel-ide-compat = { path = "../archipel-ide-compat" }
+lsp-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+url.workspace = true
+which.workspace = true
+

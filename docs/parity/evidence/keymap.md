@@ -1,13 +1,13 @@
 # Keymap
 
-Captures in `jetthing/keymap/` (Linux, Xvfb 1600×1000, no desktop environment, so the
+Captures in `archipel-ide/keymap/` (Linux, Xvfb 1600×1000, no desktop environment, so the
 XWin keymap is the default as in the reference IDE).
 
 ## Steps
 
 1. Ctrl+Alt+S › Keymap → `keymap-page.png`: the keymap selector (all 26 bundled keymaps;
    XWin selected) and the action list. The 803 actions bound in XWin are listed, with
-   Jetthing's implemented actions first and the rest marked "not available in Jetthing".
+   Archipel IDE's implemented actions first and the rest marked "not available in Archipel IDE".
 2. Type `settings` into the search → the list filters by action name. The "Find by
    shortcut" checkbox filters by shortcut text instead (`ctrl+shift+a`).
 3. Double-click Settings… and press Ctrl+D → `keymap-capture-conflicts.png`: the recorder
@@ -23,7 +23,7 @@ XWin keymap is the default as in the reference IDE).
 
 ## Dispatch
 
-Key presses become keystrokes (`jetthing-ui::keybindings::stroke`) and resolve against the
+Key presses become keystrokes (`archipel-ide-ui::keybindings::stroke`) and resolve against the
 active keymap. Chords show "Ctrl+K was pressed. Waiting for the second stroke…" in the
 status bar. While the terminal has focus, only tool-window, Find Action, Settings and
 Search Everywhere shortcuts are intercepted, and every other key goes to the shell.
@@ -35,7 +35,7 @@ builds with Ctrl+9, exactly like the reference keymaps.
 ## Gaps
 
 - The reference Keymap page shows an action tree (Main Menu › File › …), mouse-shortcut and
-  abbreviation editors, and duplicates a bundled keymap before editing it. Jetthing shows
+  abbreviation editors, and duplicates a bundled keymap before editing it. Archipel IDE shows
   a flat list and stores overrides per bundled keymap. Edits apply immediately, not on
   Apply.
 - Mouse shortcuts and gestures are parsed and listed, but nothing triggers them yet.

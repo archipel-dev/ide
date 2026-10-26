@@ -1,7 +1,7 @@
 # Git evidence
 
-Captured on Linux under Xvfb (1600×1000, `JETTHING_RENDERER=glow`,
-`JETTHING_NO_UPDATE_CHECK=1`) with a `java-gradle` sample repository whose
+Captured on Linux under Xvfb (1600×1000, `ARCHIPEL_RENDERER=glow`,
+`ARCHIPEL_NO_UPDATE_CHECK=1`) with a `java-gradle` sample repository whose
 `App.java` matches the reference scene: one commit, then the line
 `// Greets each build tool by name` inserted before the `for` loop.
 

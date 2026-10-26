@@ -1,6 +1,6 @@
 # Editor multi-caret, column selection and line transforms
 
-Linux, Xvfb 1600x1000, `JETTHING_RENDERER=glow`, debug build, sample Rust file
+Linux, Xvfb 1600x1000, `ARCHIPEL_RENDERER=glow`, debug build, sample Rust file
 (`fn main` using `value` four times plus a `NAMES` array of strings). Input was driven with
 `xdotool` after `xdotool windowfocus`. No IntelliJ reference capture exists for these scenes
 yet; the reference behaviour is the `PLATFORM-EDIT-*` rows in `docs/spec/features/platform.md`.
@@ -11,6 +11,6 @@ yet; the reference behaviour is the `PLATFORM-EDIT-*` rows in `docs/spec/feature
 | `editor-multicaret/linux-multicaret-typing.png` | type `amount` | all four occurrences replaced; one `ctrl+z` restores all of them (single undo step) |
 | `editor-multicaret/linux-column-block.png` | Alt+drag from line 12 to line 15 inside the strings, `alt+shift+Insert`, `shift+Right` | rectangular selection, one caret per line; status bar `Column` and `4 carets` |
 
-Automated coverage: `jetthing-text` (`multicaret`, `transform`, `ops`, `SelectionSet` typing
-coalescing), `jetthing-core` (`multicaret_and_transform_actions_run_through_the_registry`),
-`jetthing-ui` (`editor_keys` keymap and status label tests).
+Automated coverage: `archipel-ide-text` (`multicaret`, `transform`, `ops`, `SelectionSet` typing
+coalescing), `archipel-ide-core` (`multicaret_and_transform_actions_run_through_the_registry`),
+`archipel-ide-ui` (`editor_keys` keymap and status label tests).

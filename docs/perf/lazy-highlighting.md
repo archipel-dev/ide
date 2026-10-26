@@ -4,7 +4,7 @@ Opening a large file used to highlight the whole buffer up front, and injected
 languages (every Rust macro call, Markdown fences, `<script>`) were overlaid one by
 one onto the full layer, which is quadratic in the number of injections.
 
-Changes (`jetthing-language`, `jetthing-core`, `jetthing-ui`):
+Changes (`archipel-ide-language`, `archipel-ide-core`, `archipel-ide-ui`):
 
 - Injected layers are collected and merged in one pass; injected parsers are reused per
   language and thread.
@@ -19,7 +19,7 @@ Changes (`jetthing-language`, `jetthing-core`, `jetthing-ui`):
 
 ## Measurement
 
-`cargo run --release -p jetthing-language --example highlight_bench` — synthetic Rust
+`cargo run --release -p archipel-ide-language --example highlight_bench` — synthetic Rust
 file, 963,560 bytes, 48,000 lines, one `vec!`/`format!` pair per 6 lines (16,000 macro
 injections). Single run on the CI container, same machine for both columns; "before" is
 `origin/main` at the time of the change.

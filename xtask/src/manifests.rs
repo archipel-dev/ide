@@ -7,9 +7,9 @@
 //! Reads the `<artifact>.sha256` files that `cargo xtask dist` wrote (searched
 //! recursively under `--dir`, e.g. all downloaded CI artifacts) and renders:
 //!
-//! - Homebrew cask `homebrew/jetthing.rb` (both macOS DMGs),
-//! - winget `winget/manifests/h/HenrySchwerdt/Jetthing/<version>/` (MSI, schema 1.6.0),
-//! - Scoop `scoop/jetthing.json` (portable Windows zip, with `checkver`/`autoupdate`).
+//! - Homebrew cask `homebrew/archipel-ide.rb` (both macOS DMGs),
+//! - winget `winget/manifests/a/ArchipelDev/ArchipelIDE/<version>/` (MSI, schema 1.6.0),
+//! - Scoop `scoop/archipel-ide.json` (portable Windows zip, with `checkver`/`autoupdate`).
 //!
 //! Nothing is published; `docs/release.md` describes submitting them.
 
@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const PACKAGE_ID: &str = "HenrySchwerdt.Jetthing";
+const PACKAGE_ID: &str = "ArchipelDev.ArchipelIDE";
 const DESCRIPTION: &str = "Native Rust IDE platform";
 const WINGET_SCHEMA: &str = "1.6.0";
 
@@ -35,7 +35,7 @@ impl Options {
     pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Options> {
         let mut dir = None;
         let mut version = env!("CARGO_PKG_VERSION").to_owned();
-        let mut repository = "HenrySchwerdt/jetthing".to_owned();
+        let mut repository = "archipel-dev/ide".to_owned();
         let mut out = None;
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
@@ -118,19 +118,19 @@ pub fn collect_digests(dir: &Path) -> Result<BTreeMap<String, String>> {
 
 pub fn homebrew_cask(release: &Release) -> Result<String> {
     let version = &release.version;
-    let arm = release.digest(&format!("jetthing-{version}-macos-aarch64.dmg"))?;
-    let intel = release.digest(&format!("jetthing-{version}-macos-x86_64.dmg"))?;
+    let arm = release.digest(&format!("archipel-ide-{version}-macos-aarch64.dmg"))?;
+    let intel = release.digest(&format!("archipel-ide-{version}-macos-x86_64.dmg"))?;
     let repository = &release.repository;
     Ok(format!(
-        r##"cask "jetthing" do
+        r##"cask "archipel-ide" do
   arch arm: "aarch64", intel: "x86_64"
 
   version "{version}"
   sha256 arm:   "{arm}",
          intel: "{intel}"
 
-  url "https://github.com/{repository}/releases/download/v#{{version}}/jetthing-#{{version}}-macos-#{{arch}}.dmg"
-  name "Jetthing"
+  url "https://github.com/{repository}/releases/download/v#{{version}}/archipel-ide-#{{version}}-macos-#{{arch}}.dmg"
+  name "Archipel IDE"
   desc "{DESCRIPTION}"
   homepage "{homepage}"
 
@@ -141,11 +141,11 @@ pub fn homebrew_cask(release: &Release) -> Result<String> {
 
   depends_on macos: ">= :big_sur"
 
-  app "Jetthing.app"
-  binary "#{{appdir}}/Jetthing.app/Contents/MacOS/jetthing"
-  binary "#{{appdir}}/Jetthing.app/Contents/MacOS/jetthing-cli"
+  app "Archipel IDE.app"
+  binary "#{{appdir}}/Archipel IDE.app/Contents/MacOS/archipel-ide"
+  binary "#{{appdir}}/Archipel IDE.app/Contents/MacOS/archipel-cli"
 
-  zap trash: "~/Library/Logs/Jetthing"
+  zap trash: "~/Library/Logs/Archipel"
 end
 "##,
         homepage = release.homepage(),
@@ -155,7 +155,7 @@ end
 /// The three winget files (version, installer, default locale) by file name.
 pub fn winget(release: &Release) -> Result<Vec<(String, String)>> {
     let version = &release.version;
-    let msi = format!("jetthing-{version}-windows-x86_64.msi");
+    let msi = format!("archipel-ide-{version}-windows-x86_64.msi");
     let sha = release.digest(&msi)?.to_ascii_uppercase();
     let header = |kind: &str| {
         format!(
@@ -186,10 +186,10 @@ pub fn winget(release: &Release) -> Result<Vec<(String, String)>> {
     let homepage = release.homepage();
     let locale = format!(
         "{}PackageLocale: en-US\n\
-         Publisher: Jetthing contributors\n\
+         Publisher: Archipel IDE contributors\n\
          PublisherUrl: {homepage}\n\
          PublisherSupportUrl: {homepage}/issues\n\
-         PackageName: Jetthing\n\
+         PackageName: Archipel IDE\n\
          PackageUrl: {homepage}\n\
          License: Apache-2.0 OR MIT\n\
          ShortDescription: {DESCRIPTION}\n\
@@ -208,7 +208,7 @@ pub fn winget(release: &Release) -> Result<Vec<(String, String)>> {
 
 pub fn scoop(release: &Release) -> Result<String> {
     let version = &release.version;
-    let root = format!("jetthing-{version}-windows-x86_64");
+    let root = format!("archipel-ide-{version}-windows-x86_64");
     let zip = format!("{root}.zip");
     let manifest = json!({
         "version": version,
@@ -222,17 +222,17 @@ pub fn scoop(release: &Release) -> Result<String> {
                 "extract_dir": root,
             }
         },
-        "bin": ["jetthing.exe", "jetthing-cli.exe"],
-        "shortcuts": [["jetthing.exe", "Jetthing"]],
+        "bin": ["archipel-ide.exe", "archipel-cli.exe"],
+        "shortcuts": [["archipel-ide.exe", "Archipel IDE"]],
         "checkver": "github",
         "autoupdate": {
             "architecture": {
                 "64bit": {
                     "url": format!(
-                        "https://github.com/{}/releases/download/v$version/jetthing-$version-windows-x86_64.zip",
+                        "https://github.com/{}/releases/download/v$version/archipel-ide-$version-windows-x86_64.zip",
                         release.repository
                     ),
-                    "extract_dir": "jetthing-$version-windows-x86_64",
+                    "extract_dir": "archipel-ide-$version-windows-x86_64",
                     "hash": {"url": "$url.sha256"},
                 }
             }
@@ -257,14 +257,17 @@ pub fn run(options: Options) -> Result<()> {
         written.push(path);
         Ok(())
     };
-    write(out.join("homebrew/jetthing.rb"), homebrew_cask(&release)?)?;
+    write(
+        out.join("homebrew/archipel-ide.rb"),
+        homebrew_cask(&release)?,
+    )?;
     let winget_dir = out
-        .join("winget/manifests/h/HenrySchwerdt/Jetthing")
+        .join("winget/manifests/a/ArchipelDev/ArchipelIDE")
         .join(&release.version);
     for (name, text) in winget(&release)? {
         write(winget_dir.join(name), text)?;
     }
-    write(out.join("scoop/jetthing.json"), scoop(&release)?)?;
+    write(out.join("scoop/archipel-ide.json"), scoop(&release)?)?;
     for path in written {
         println!("{}", path.to_string_lossy().replace('\\', "/"));
     }
@@ -279,12 +282,12 @@ mod tests {
         let digest = |c: char| std::iter::repeat_n(c, 64).collect::<String>();
         Release {
             version: "1.2.3".into(),
-            repository: "HenrySchwerdt/jetthing".into(),
+            repository: "archipel-dev/ide".into(),
             digests: BTreeMap::from([
-                ("jetthing-1.2.3-macos-aarch64.dmg".into(), digest('a')),
-                ("jetthing-1.2.3-macos-x86_64.dmg".into(), digest('b')),
-                ("jetthing-1.2.3-windows-x86_64.msi".into(), digest('c')),
-                ("jetthing-1.2.3-windows-x86_64.zip".into(), digest('d')),
+                ("archipel-ide-1.2.3-macos-aarch64.dmg".into(), digest('a')),
+                ("archipel-ide-1.2.3-macos-x86_64.dmg".into(), digest('b')),
+                ("archipel-ide-1.2.3-windows-x86_64.msi".into(), digest('c')),
+                ("archipel-ide-1.2.3-windows-x86_64.zip".into(), digest('d')),
             ]),
         }
     }
@@ -292,15 +295,15 @@ mod tests {
     #[test]
     fn cask_pins_both_dmgs_and_links_the_cli() {
         let cask = homebrew_cask(&release()).unwrap();
-        assert!(cask.starts_with("cask \"jetthing\" do\n"));
+        assert!(cask.starts_with("cask \"archipel-ide\" do\n"));
         assert!(cask.contains("version \"1.2.3\""));
         assert!(cask.contains(&format!("sha256 arm:   \"{}\"", "a".repeat(64))));
         assert!(cask.contains(&format!("intel: \"{}\"", "b".repeat(64))));
         assert!(cask.contains(
-            "url \"https://github.com/HenrySchwerdt/jetthing/releases/download/v#{version}/jetthing-#{version}-macos-#{arch}.dmg\""
+            "url \"https://github.com/archipel-dev/ide/releases/download/v#{version}/archipel-ide-#{version}-macos-#{arch}.dmg\""
         ));
-        assert!(cask.contains("app \"Jetthing.app\""));
-        assert!(cask.contains("binary \"#{appdir}/Jetthing.app/Contents/MacOS/jetthing-cli\""));
+        assert!(cask.contains("app \"Archipel IDE.app\""));
+        assert!(cask.contains("binary \"#{appdir}/Archipel IDE.app/Contents/MacOS/archipel-cli\""));
         assert!(cask.trim_end().ends_with("end"));
     }
 
@@ -311,13 +314,13 @@ mod tests {
         assert_eq!(
             names,
             [
-                "HenrySchwerdt.Jetthing.yaml",
-                "HenrySchwerdt.Jetthing.installer.yaml",
-                "HenrySchwerdt.Jetthing.locale.en-US.yaml"
+                "ArchipelDev.ArchipelIDE.yaml",
+                "ArchipelDev.ArchipelIDE.installer.yaml",
+                "ArchipelDev.ArchipelIDE.locale.en-US.yaml"
             ]
         );
         for (_, text) in &files {
-            assert!(text.contains("PackageIdentifier: HenrySchwerdt.Jetthing\n"));
+            assert!(text.contains("PackageIdentifier: ArchipelDev.ArchipelIDE\n"));
             assert!(text.contains("PackageVersion: 1.2.3\n"));
             assert!(text.ends_with("ManifestVersion: 1.6.0\n"));
             assert!(!text.contains('\t'), "YAML must not contain tabs");
@@ -325,7 +328,7 @@ mod tests {
         let installer = &files[1].1;
         assert!(installer.contains("InstallerType: wix\n"));
         assert!(installer.contains(
-            "  InstallerUrl: https://github.com/HenrySchwerdt/jetthing/releases/download/v1.2.3/jetthing-1.2.3-windows-x86_64.msi\n"
+            "  InstallerUrl: https://github.com/archipel-dev/ide/releases/download/v1.2.3/archipel-ide-1.2.3-windows-x86_64.msi\n"
         ));
         assert!(installer.contains(&format!("  InstallerSha256: {}\n", "C".repeat(64))));
         assert!(files[2].1.contains("ManifestType: defaultLocale\n"));
@@ -338,14 +341,14 @@ mod tests {
         let x64 = &manifest["architecture"]["64bit"];
         assert_eq!(manifest["version"], "1.2.3");
         assert_eq!(x64["hash"], "d".repeat(64));
-        assert_eq!(x64["extract_dir"], "jetthing-1.2.3-windows-x86_64");
+        assert_eq!(x64["extract_dir"], "archipel-ide-1.2.3-windows-x86_64");
         assert!(
             x64["url"]
                 .as_str()
                 .unwrap()
-                .ends_with("/v1.2.3/jetthing-1.2.3-windows-x86_64.zip")
+                .ends_with("/v1.2.3/archipel-ide-1.2.3-windows-x86_64.zip")
         );
-        assert_eq!(manifest["bin"][1], "jetthing-cli.exe");
+        assert_eq!(manifest["bin"][1], "archipel-cli.exe");
         assert_eq!(
             manifest["autoupdate"]["architecture"]["64bit"]["hash"]["url"],
             "$url.sha256"
@@ -355,10 +358,12 @@ mod tests {
     #[test]
     fn missing_artifacts_and_bad_digests_are_reported() {
         let mut partial = release();
-        partial.digests.remove("jetthing-1.2.3-macos-x86_64.dmg");
+        partial
+            .digests
+            .remove("archipel-ide-1.2.3-macos-x86_64.dmg");
         let error = homebrew_cask(&partial).unwrap_err().to_string();
         assert!(
-            error.contains("jetthing-1.2.3-macos-x86_64.dmg.sha256"),
+            error.contains("archipel-ide-1.2.3-macos-x86_64.dmg.sha256"),
             "{error}"
         );
 

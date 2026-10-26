@@ -1,8 +1,8 @@
 # mongo-raabit
 
-A clean-room, Studio 3T Pro-class MongoDB GUI for Jetthing (issue #50). It is bundled into
-every Jetthing build as a Rust plugin: open it with Tools › MongoDB (mongo-raabit), or run it
-on its own with `jetthing --app dev.jetthing.mongo-raabit`.
+A clean-room, Studio 3T Pro-class MongoDB GUI for Archipel IDE (issue #50). It is bundled into
+every Archipel IDE build as a Rust plugin: open it with Tools › MongoDB (mongo-raabit), or run it
+on its own with `archipel-ide --app dev.archipel.mongo-raabit`.
 
 Three tool tabs per collection:
 
@@ -12,7 +12,7 @@ Three tool tabs per collection:
 
 | Crate | Path | Purpose |
 |---|---|---|
-| `mongo-raabit` | `.` | egui views and the Jetthing plugin (`src/plugin.rs`): Connection Manager, connection tree, Query / Aggregation / Structure tabs with Table/Tree/JSON results; `examples/standalone.rs` runs it in its own window for scripted screenshots |
+| `mongo-raabit` | `.` | egui views and the Archipel IDE plugin (`src/plugin.rs`): Connection Manager, connection tree, Query / Aggregation / Structure tabs with Table/Tree/JSON results; `examples/standalone.rs` runs it in its own window for scripted screenshots |
 | `mongo-raabit-core` | `core/` | headless: connection profiles, SSH tunnels, secrets, metadata, query/paging/CRUD, explain, index/user management, aggregation stages with preview, schema sampler, SQL → MQL, query code generation, import/export |
 
 The core is built on the official [`mongodb`](https://crates.io/crates/mongodb) driver.

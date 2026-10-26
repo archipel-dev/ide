@@ -18,7 +18,7 @@ What the shots show:
 - Commit: toolbar glyphs, `Amend` and the `Changes` header share the 12 px content inset.
 - Empty states use `icon_label`, centring the icon on the text's line box.
 
-Pixel checks are unit tests in `crates/jetthing-ui/src/widgets.rs`
+Pixel checks are unit tests in `crates/archipel-ide-ui/src/widgets.rs`
 (`icon_label_centres_the_icon_on_the_text_line_box`,
 `tree_rows_share_one_inset_and_icon_column`).
 

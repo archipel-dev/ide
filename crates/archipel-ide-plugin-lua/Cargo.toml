@@ -1,0 +1,15 @@
+[package]
+name = "archipel-ide-plugin-lua"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Lua 5.4 plugin runtime for Archipel IDE (mlua), exposing plugin API 1 to scripts."
+
+[dependencies]
+egui.workspace = true
+archipel-ide-plugin-api = { path = "../archipel-ide-plugin-api" }
+archipel-ide-plugin-ui = { path = "../archipel-ide-plugin-ui" }
+archipel-ide-plugins = { path = "../archipel-ide-plugins" }
+mlua = { version = "0.10", features = ["lua54", "vendored", "serialize"] }
+serde.workspace = true
+serde_json.workspace = true

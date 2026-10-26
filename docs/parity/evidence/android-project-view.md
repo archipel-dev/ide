@@ -10,14 +10,14 @@ density variants, `gradle.properties`, the wrapper properties and `proguard-rule
 
 | File | Shows |
 |---|---|
-| `jetthing/android/a01-android-project-view.png` | default view of an Android project: **Android ▾** header; app › manifests › AndroidManifest.xml, kotlin+java › `com.example.myapplication` › MainActivity and `com.example.myapplication (test)` › GreetingTest, res, Gradle Scripts |
-| `jetthing/android/a01-android-view-res-gradle.png` | res grouped by type with qualifier groups: `ic_launcher.webp (2)`, `ic_launcher.xml (anydpi-v26)`, `themes.xml (2)`; Gradle Scripts annotated (Project: …, Module :app, ProGuard Rules for ":app", Project Properties, Gradle Version, Version Catalog, Project Settings); double-click opens `strings.xml` |
-| `jetthing/android/a01-android-view-switcher.png` | view switcher popup (Project / Android) |
+| `archipel-ide/android/a01-android-project-view.png` | default view of an Android project: **Android ▾** header; app › manifests › AndroidManifest.xml, kotlin+java › `com.example.myapplication` › MainActivity and `com.example.myapplication (test)` › GreetingTest, res, Gradle Scripts |
+| `archipel-ide/android/a01-android-view-res-gradle.png` | res grouped by type with qualifier groups: `ic_launcher.webp (2)`, `ic_launcher.xml (anydpi-v26)`, `themes.xml (2)`; Gradle Scripts annotated (Project: …, Module :app, ProGuard Rules for ":app", Project Properties, Gradle Version, Version Catalog, Project Settings); double-click opens `strings.xml` |
+| `archipel-ide/android/a01-android-view-switcher.png` | view switcher popup (Project / Android) |
 
 ## Behaviour
 
 - The view is computed from the project tree's file index (no extra filesystem walk) by
-  `jetthing_android::view::android_view`. It refreshes when files are added, renamed or deleted.
+  `archipel_ide_android::view::android_view`. It refreshes when files are added, renamed or deleted.
 - Source sets: `src/<set>/java` and `src/<set>/kotlin` are merged into one `kotlin+java` group
   (`java` when there is no Kotlin). Packages are compacted to dotted names, non-main sets get a
   `(test)` / `(androidTest)` / `(debug)` suffix, and `.kt`/`.java` extensions are hidden.

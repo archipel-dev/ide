@@ -15,7 +15,7 @@
 //! one-line update here.
 
 use anyhow::{Context, Result, anyhow, bail};
-use jetthing_control::{ControlClient, Request, Response};
+use archipel_ide_control::{ControlClient, Request, Response};
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -35,7 +35,8 @@ mod layout {
     pub type Point = (i32, i32);
     // Welcome screen.
     pub const WELCOME_NEW_PROJECT: Point = (318, 204);
-    pub const FIRST_RUN_SKIP: Point = (672, 411);
+    /// Fallback only: scenes click the position the IDE reports in `/targets/firstRunSkip`.
+    pub const FIRST_RUN_SKIP: Point = (699, 411);
     // New Project dialog (1440×900).
     pub const NP_GENERATOR_RUST_APP: Point = (440, 587);
     pub const NP_NAME: Point = (850, 231);
@@ -238,13 +239,13 @@ impl Driver {
             .env("XDG_DATA_HOME", home.join(".local/share"))
             .env("XDG_CACHE_HOME", home.join(".cache"))
             .env("XDG_STATE_HOME", home.join(".local/state"))
-            .env(jetthing_control::SOCKET_ENV, &socket)
-            .env("JETTHING_NO_UPDATE_CHECK", "1")
+            .env(archipel_ide_control::SOCKET_ENV, &socket)
+            .env("ARCHIPEL_NO_UPDATE_CHECK", "1")
             .env("DISPLAY", &display_name)
             .stdout(log.try_clone()?)
             .stderr(log);
-        if std::env::var_os("JETTHING_RENDERER").is_none() {
-            command.env("JETTHING_RENDERER", "glow");
+        if archipel_ide_compat::env_var_os("ARCHIPEL_RENDERER").is_none() {
+            command.env("ARCHIPEL_RENDERER", "glow");
         }
         let mut process = AppProcess(
             command
@@ -276,7 +277,7 @@ impl Driver {
         loop {
             let output = Command::new("xdotool")
                 .env("DISPLAY", &self.display)
-                .args(["search", "--onlyvisible", "--class", "jetthing"])
+                .args(["search", "--onlyvisible", "--class", "archipel-ide"])
                 .output()
                 .context("run xdotool search")?;
             let text = String::from_utf8_lossy(&output.stdout);
@@ -317,6 +318,26 @@ impl Driver {
         self.xdotool(&["mousemove", &x, &y, "sleep", "0.12", "click", "1"])?;
         self.settle();
         Ok(())
+    }
+
+    /// Clicks the control the IDE reports at `/targets/<target>` (window pixels), so the
+    /// scene follows layout changes; `fallback` is used when the IDE reports nothing.
+    fn click_target(&mut self, target: &str, fallback: layout::Point, what: &str) -> Result<()> {
+        let state = self.state()?;
+        let reported = state
+            .pointer(&format!("/targets/{target}"))
+            .and_then(Value::as_array)
+            .and_then(|xy| Some((xy.first()?.as_f64()?, xy.get(1)?.as_f64()?)));
+        let point = match reported {
+            Some((x, y)) => (x.round() as i32, y.round() as i32),
+            None => {
+                self.note(format!(
+                    "no /targets/{target} reported; using the fallback position"
+                ));
+                fallback
+            }
+        };
+        self.click(point, what)
     }
 
     fn double_click(&mut self, (x, y): layout::Point, what: &str) -> Result<()> {
@@ -440,7 +461,11 @@ impl Driver {
 /// still fresh, so the modal first-run dialog has to be dismissed first.
 fn dismiss_first_run(d: &mut Driver) -> Result<()> {
     if d.state()?["popups"]["customize"] == Value::Bool(true) {
-        d.click(layout::FIRST_RUN_SKIP, "Skip (first-run dialog)")?;
+        d.click_target(
+            "firstRunSkip",
+            layout::FIRST_RUN_SKIP,
+            "Skip (first-run dialog)",
+        )?;
         d.expect(
             "/popups/customize",
             Value::Bool(false),
@@ -468,7 +493,7 @@ fn first_run_dialog_is_modal(d: &mut Driver) -> Result<()> {
         Value::Null,
         "no New Project dialog opened behind the modal first-run dialog",
     )?;
-    d.click(layout::FIRST_RUN_SKIP, "Skip")?;
+    d.click_target("firstRunSkip", layout::FIRST_RUN_SKIP, "Skip")?;
     d.expect(
         "/popups/customize",
         Value::Bool(false),

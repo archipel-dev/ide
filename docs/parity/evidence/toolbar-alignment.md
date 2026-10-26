@@ -11,7 +11,7 @@ This is a deliberate interim layout, not a claim of merged-title-bar parity.
 Reproduce on macOS:
 
 ```sh
-JETTHING_NO_UPDATE_CHECK=1 cargo run -p jetthing-app -- .
+ARCHIPEL_NO_UPDATE_CHECK=1 cargo run -p archipel-ide-app -- .
 ```
 
 Check the menu aligns with the left content edge, native close/minimize/zoom controls

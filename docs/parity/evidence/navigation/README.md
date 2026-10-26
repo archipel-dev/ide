@@ -26,7 +26,7 @@ As in `../problems/README.md` (rust-analyzer 1.97.0, jdtls 1.40.0, Xvfb 1600x100
 
 ## Still different from the reference
 
-- The reference colours the Ctrl+hover link text blue and shows a quick documentation tooltip; Jetthing
+- The reference colours the Ctrl+hover link text blue and shows a quick documentation tooltip; Archipel IDE
   only underlines.
 - The usages tab has no toolbar (rerun, group by, preview pane), no read/write usage split and no
   module/package grouping; only one usages tab is kept.
@@ -36,7 +36,7 @@ As in `../problems/README.md` (rust-analyzer 1.97.0, jdtls 1.40.0, Xvfb 1600x100
 ## Reproduce
 
 ```bash
-cargo test -p jetthing-lsp --test fake_server navigation
-cargo test -p jetthing-lsp locations
-cargo test -p jetthing-core navigation
+cargo test -p archipel-ide-lsp --test fake_server navigation
+cargo test -p archipel-ide-lsp locations
+cargo test -p archipel-ide-core navigation
 ```

@@ -1,29 +1,29 @@
-# Jetthing plugin API (version 1)
+# Archipel IDE plugin API (version 1)
 
 Plugins add commands, menu items, keybindings, settings pages, tool windows,
 editor tabs and status bar widgets to the workbench. A plugin can also run on its
-own as a standalone app (`jetthing --app <plugin-id>`). Plugin API 1 covers
+own as a standalone app (`archipel-ide --app <plugin-id>`). Plugin API 1 covers
 **compiled-in Rust plugins**, **Lua plugins** ([lua.md](lua.md)) and **WebAssembly component
 plugins** ([wasm.md](wasm.md)).
 
 | Crate | Layer | Purpose |
 |---|---|---|
-| `jetthing-plugin-api` | engine (no UI toolkit) | `Plugin` trait, `Contributions`, `PluginHost`, `PluginManifest`, `ViewFrame`, `testing::RecordingHost` |
-| `jetthing-plugin-ui` | UI | `ui(frame) -> Option<&mut egui::Ui>`, `EguiView`, and theme-aware widgets (`header`, `section`, `property`, `empty_state`) |
-| `jetthing-plugins` | engine | registry: discovery, enable/disable, settings store (`<config>/plugins.json`), activation order, `PluginLoader` for script runtimes, `.jtplugin` archives |
-| `jetthing-plugin-wasm` | UI (runtime) | `WasmLoader`: wasmtime component plugins (`wit/plugin.wit`), WASI sandbox with permission-gated project files and network, fuel and memory limits |
-| `jetthing-plugin-lua` | UI (runtime) | `LuaLoader`: sandboxed Lua 5.4 plugins with the same contributions, `ctx` services, immediate and declarative views |
-| `jetthing-core` (`plugin_host`) | engine | `PluginHost` implementation, command routing, plugin tool window/tab state, `plugin.*` commands |
-| `jetthing-ui` (`plugin_ui`, `plugin_manager`) | UI | renders contributions in the workbench, the Settings › Plugins page, standalone window |
+| `archipel-ide-plugin-api` | engine (no UI toolkit) | `Plugin` trait, `Contributions`, `PluginHost`, `PluginManifest`, `ViewFrame`, `testing::RecordingHost` |
+| `archipel-ide-plugin-ui` | UI | `ui(frame) -> Option<&mut egui::Ui>`, `EguiView`, and theme-aware widgets (`header`, `section`, `property`, `empty_state`) |
+| `archipel-ide-plugins` | engine | registry: discovery, enable/disable, settings store (`<config>/plugins.json`), activation order, `PluginLoader` for script runtimes, `.archipelplugin` archives |
+| `archipel-ide-plugin-wasm` | UI (runtime) | `WasmLoader`: wasmtime component plugins (`wit/plugin.wit`), WASI sandbox with permission-gated project files and network, fuel and memory limits |
+| `archipel-ide-plugin-lua` | UI (runtime) | `LuaLoader`: sandboxed Lua 5.4 plugins with the same contributions, `ctx` services, immediate and declarative views |
+| `archipel-ide-core` (`plugin_host`) | engine | `PluginHost` implementation, command routing, plugin tool window/tab state, `plugin.*` commands |
+| `archipel-ide-ui` (`plugin_ui`, `plugin_manager`) | UI | renders contributions in the workbench, the Settings › Plugins page, standalone window |
 
 The SDK ([`archipel-dev/sdk`](https://github.com/archipel-dev/sdk)) is the source of truth for
-these crates: `jetthing-command`, `jetthing-plugin-api` and `jetthing-plugin-ui` only re-export
+these crates: `archipel-ide-command`, `archipel-ide-plugin-api` and `archipel-ide-plugin-ui` only re-export
 `archipel-command`, `archipel-plugin-api` and `archipel-plugin-ui`. Plugin tests can use the SDK's
 `archipel-plugin-testing` (fake host, conformance and audit helpers). Manifests are named
-`archipel-plugin.toml`; `jetthing-plugin.toml` (and legacy `plugin.toml`) are still read.
+`archipel-plugin.toml`; `archipel-plugin.toml` (and legacy `plugin.toml`) are still read.
 
 Engine crates never see egui. A view is rendered into an opaque `ViewFrame`, and
-the egui host puts its `&mut egui::Ui` inside. `jetthing_plugin_ui::ui(frame)`
+the egui host puts its `&mut egui::Ui` inside. `archipel_ide_plugin_ui::ui(frame)`
 gives it back to the plugin.
 
 ## Minimal plugin
@@ -31,18 +31,18 @@ gives it back to the plugin.
 The complete example is [`plugins/hello`](../../plugins/hello/src/lib.rs). Its parts:
 
 ```toml
-# plugins/my-tool/jetthing-plugin.toml
+# plugins/my-tool/archipel-plugin.toml
 id = "com.example.mytool"        # reverse-domain, unique
 name = "My Tool"
 version = "0.1.0"
-api_version = 1                  # must equal jetthing_plugin_api::API_VERSION
+api_version = 1                  # must equal archipel_ide_plugin_api::API_VERSION
 kind = "rust"                    # rust | lua | wasm | declarative
 vendor = "Example"
 description = "Shown on the Plugins page."
 permissions = ["network"]        # network, process, fs.project, fs.user, clipboard, secrets
 dependencies = []                # other plugin ids that must be active first
 
-[app]                            # optional: enables `jetthing --app com.example.mytool`
+[app]                            # optional: enables `archipel-ide --app com.example.mytool`
 view = "mytool.main"
 title = "My Tool"
 ```
@@ -50,26 +50,26 @@ title = "My Tool"
 ```toml
 # plugins/my-tool/Cargo.toml
 [package]
-name = "jetthing-plugin-mytool"
+name = "archipel-ide-plugin-mytool"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-jetthing-plugin-api = { path = "../../crates/jetthing-plugin-api" }
-jetthing-plugin-ui = { path = "../../crates/jetthing-plugin-ui" }
+archipel-ide-plugin-api = { path = "../../crates/archipel-ide-plugin-api" }
+archipel-ide-plugin-ui = { path = "../../crates/archipel-ide-plugin-ui" }
 ```
 
 ```rust
-use jetthing_plugin_api::*;
-use jetthing_plugin_ui::egui;
+use archipel_ide_plugin_api::*;
+use archipel_ide_plugin_ui::egui;
 
 pub struct MyTool { manifest: PluginManifest, clicks: u32 }
 
 impl MyTool {
     pub fn new() -> Self {
         Self {
-            manifest: PluginManifest::parse(include_str!("../jetthing-plugin.toml"))
+            manifest: PluginManifest::parse(include_str!("../archipel-plugin.toml"))
                 .expect("bundled manifest is valid"),
             clicks: 0,
         }
@@ -99,7 +99,7 @@ impl Plugin for MyTool {
     }
 
     fn render_view(&mut self, _view: &ViewContext, frame: &mut ViewFrame<'_>, host: &mut dyn PluginHost) {
-        let Some(ui) = jetthing_plugin_ui::ui(frame) else { return };
+        let Some(ui) = archipel_ide_plugin_ui::ui(frame) else { return };
         if ui.button("Click").clicked() {
             host.dispatch("mytool.click", Value::Null); // or call your own method directly
         }
@@ -109,8 +109,8 @@ impl Plugin for MyTool {
 
 Register the crate in two places:
 
-1. `crates/jetthing-app/Cargo.toml`: add the dependency.
-2. `crates/jetthing-app/src/plugins.rs`: add
+1. `crates/archipel-ide-app/Cargo.toml`: add the dependency.
+2. `crates/archipel-ide-app/src/plugins.rs`: add
    `plugins.push(Rc::new(|| Box::new(my_tool::MyTool::new())));`.
 
 The workspace picks up `plugins/*` crates automatically.
@@ -118,9 +118,9 @@ The workspace picks up `plugins/*` crates automatically.
 ## Lifecycle
 
 1. **Discovery.** At startup the registry adds the bundled factories. It then reads
-   manifests from the per-user plugin directory (`<config>/plugins/*/jetthing-plugin.toml`)
-   and from the open project's `plugins/` directory. `<config>` is `$JETTHING_CONFIG_DIR`,
-   or `~/.config/jetthing`, `~/Library/Application Support/jetthing` or `%APPDATA%\jetthing`.
+   manifests from the per-user plugin directory (`<config>/plugins/*/archipel-plugin.toml`)
+   and from the open project's `plugins/` directory. `<config>` is `$ARCHIPEL_CONFIG_DIR`,
+   or `~/.config/archipel`, `~/Library/Application Support/archipel` or `%APPDATA%\archipel`.
    Invalid manifests are listed with their error in File ▸ Plugins….
 2. **Activation.** Enabled plugins activate in dependency order. `activate(host)` runs first;
    then `contributions()` is read and validated (`Contributions::problems()`). If activation
@@ -148,10 +148,10 @@ All plugin methods run on the UI thread. Never block in them: spawn a thread
 | Tool window | `ToolWindowContribution::new(id, title, view).icon_text("H")` | right tool window stripe and panel |
 | Editor view | `EditorContribution::new(view, title)`; open with `host.open_editor_tab(EditorTabRequest::new(view, title).key(..))` | editor tab bar; the same key focuses the existing tab |
 | Status widget | `StatusWidgetContribution::new(id).command(..)` | status bar; text from `Plugin::status_widget(id)` |
-| App view | `[app] view = …` in the manifest | `jetthing --app <id>` window |
+| App view | `[app] view = …` in the manifest | `archipel-ide --app <id>` window |
 
 Views can also return a declarative `ViewNode` tree (columns, rows, labels, buttons, inputs,
-lists, tables, trees) instead of drawing with egui. `jetthing_plugin_ui::render_node` renders it
+lists, tables, trees) instead of drawing with egui. `archipel_ide_plugin_ui::render_node` renders it
 and returns `ViewEvent`s. Lua and WASM plugins use this model.
 
 `ViewContext::placement` tells a view where it is rendered:
@@ -173,7 +173,7 @@ and returns `ViewEvent`s. Lua and WASM plugins use this model.
 
 ## Testing
 
-`jetthing_plugin_api::testing::RecordingHost` records statuses, notifications,
+`archipel_ide_plugin_api::testing::RecordingHost` records statuses, notifications,
 dispatched commands, opened views and settings. Views can be rendered headlessly
 with `egui::Context::default().run(...)`. See the tests in `plugins/hello`.
 
@@ -182,7 +182,7 @@ with `egui::Context::default().run(...)`. See the tests in `plugins/hello`.
 | Command | Params |
 |---|---|
 | `plugin.manager.open` | — open the Plugins page (File ▸ Plugins…) |
-| `plugin.install` | `{"path"}` — install a `.jtplugin` archive |
+| `plugin.install` | `{"path"}` — install a `.archipelplugin` archive |
 | `plugin.uninstall` | `{"id"}` — remove an installed plugin |
 | `plugin.refresh` | — rediscover manifests |
 | `plugin.list` | — JSON list with status and failure reason |
@@ -191,13 +191,14 @@ with `egui::Context::default().run(...)`. See the tests in `plugins/hello`.
 | `plugin.toolwindow.toggle` | `{"plugin","id"}` |
 | `plugin.tab.activate`, `plugin.tab.close` | `{"index"}` (close defaults to the active tab) |
 
-## Packaging and installing (`.jtplugin`)
+## Packaging and installing (`.archipelplugin`)
 
-A `.jtplugin` file is a zip archive. `jetthing-plugin.toml` sits at its root, or inside one
+A `.archipelplugin` file is a zip archive (archives from before the rename end in
+`.jtplugin`; they install and list like the new ones). `archipel-plugin.toml` sits at its root, or inside one
 top-level directory, next to the plugin's files.
 
 ```bash
-cargo run -p xtask -- pack-plugin path/to/plugin [out.jtplugin]   # default: dist/plugins/<id>-<version>.jtplugin
+cargo run -p xtask -- pack-plugin path/to/plugin [out.archipelplugin]   # default: dist/plugins/<id>-<version>.archipelplugin
 ```
 
 Hidden files and `target/` are skipped. Install from **File ▸ Plugins… ▸ ⚙ ▸ Install Plugin from
@@ -217,7 +218,7 @@ bundled plugin's id.
 
 ## Standalone app mode
 
-`jetthing --app <plugin-id>` (or `--app=<id>`) opens a window that contains only the
+`archipel-ide --app <plugin-id>` (or `--app=<id>`) opens a window that contains only the
 plugin's `[app]` view, with a title bar, window controls, status text, the plugin's
 status widgets and its notifications. An unknown, disabled or app-less plugin exits
 with code 2 and a message that lists the plugins that do have an app view.

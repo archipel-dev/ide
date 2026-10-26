@@ -1,0 +1,14 @@
+id = "dev.archipel.hello-lua"
+name = "Hello Lua"
+version = "0.1.0"
+api_version = 1
+kind = "lua"
+entry = "main.lua"
+vendor = "Archipel IDE"
+license = "Apache-2.0 OR MIT"
+description = "Example Lua plugin: a command, a tool window with an immediate-mode view, a declarative view, settings and a status widget."
+capabilities = ["example"]
+
+[app]
+view = "main"
+title = "Hello Lua"

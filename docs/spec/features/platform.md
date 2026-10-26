@@ -14,7 +14,7 @@ features are excluded unless they are the platform's generic framework (for exam
   next free number. Retired items stay in the table marked "(retired)".
 - **Action id**: where a public action id exists in the Apache-2.0 IntelliJ Community action
   descriptors (tag `idea/262.10968.63`), it is given in backticks. It is a cross-reference for
-  mapping onto `jetthing-command` command ids, not something to copy.
+  mapping onto `archipel-ide-command` command ids, not something to copy.
 - **Shortcuts**: "Win/Linux" is the default (`$default`) keymap; "macOS" is the
   "macOS" keymap (descriptor file `Mac OS X 10.5+`). Notation: `Ctrl`, `Alt`, `Shift`, `Cmd`,
   `Opt`; a comma separates the two strokes of a chord (e.g. `Alt+Shift+6, F`). `Double Shift`
@@ -316,7 +316,7 @@ features are excluded unless they are the platform's generic framework (for exam
 | PLATFORM-PROJ-005 | Project widget / multiple windows (`NextProjectWindow`, `PreviousProjectWindow`) | Toolbar project switcher; each project gets its own frame (or tab on macOS native tabs); cycling between open project windows. | Ctrl+Alt+] / [ | Cmd+Opt+` / Cmd+Opt+Shift+` | Window menu | P0 |
 | PLATFORM-PROJ-006 | Close project (`CloseProject`) | Saves state and closes the frame (returns to welcome screen if last). | — | — | File \| Close Project | P0 |
 | PLATFORM-PROJ-007 | Trusted projects / Safe mode | On first open of an untrusted location the IDE asks to trust; untrusted (preview/safe mode) disables build-tool import, run configs, plugins' auto-execution. Trusted locations list in settings. | — | — | Dialog; Settings \| Build, Execution, Deployment \| Trusted Locations | P0 |
-| PLATFORM-PROJ-008 | Project storage format | Directory-based `.idea/` with per-component XML files (workspace.xml local-only, shareable others); `.iml` module files; gitignore suggestions. Jetthing needs an equivalent split between shared and local state. | — | — | — | P0 |
+| PLATFORM-PROJ-008 | Project storage format | Directory-based `.idea/` with per-component XML files (workspace.xml local-only, shareable others); `.iml` module files; gitignore suggestions. Archipel IDE needs an equivalent split between shared and local state. | — | — | — | P0 |
 | PLATFORM-PROJ-009 | Project tool window (`ActivateProjectToolWindow`) | Tree of project files with views and per-view options; file operations (new, rename, copy/move by drag, delete to trash), external drops, compact display of single-child directories. | Alt+1 | Cmd+1 | View \| Tool Windows \| Project | P0 |
 | PLATFORM-PROJ-010 | Project view: views | Views selector: Project, Packages (JVM), Project Files (raw file system relative to roots), Open Files, Scratches and Consoles, Problems (files with errors), Changed Files (VCS), Production/Test (inferred), plus each named scope as a view. | — | — | Project tool window title dropdown | P0 (Project, Project Files), P1 (rest) |
 | PLATFORM-PROJ-011 | Project view: options | Toggle: Autoscroll to Source, Autoscroll from Source (Always Select Opened File), Flatten Packages, Compact Middle Packages, Show/Hide Empty Middle Packages, Show Members, Show Excluded Files, Show Ignored Files (inferred), Show Visibility Icons, File Nesting rules, Sort by Type, Folders Always on Top, Open Files with Single Click, Enable Preview Tab, Abbreviate Qualified Package Names. "Select Opened File" button. | — | — | Project tool window gear/options menu | P0 (autoscroll, select opened), P1 (rest) |
@@ -638,7 +638,7 @@ Mercurial, Subversion and Perforce plugins (P2).
 
 | ID | Feature | Behaviour | Win/Linux | macOS | Entry point | Pri |
 |---|---|---|---|---|---|---|
-| PLATFORM-AI-001 | AI Chat / AI Assistant (plugin, subscription) | Chat tool window with project context, code generation, explain/refactor actions, commit-message generation, name suggestions. Jetthing note: provide only an extension point. | — | — | AI Chat tool window | P2 |
+| PLATFORM-AI-001 | AI Chat / AI Assistant (plugin, subscription) | Chat tool window with project context, code generation, explain/refactor actions, commit-message generation, name suggestions. Archipel IDE note: provide only an extension point. | — | — | AI Chat tool window | P2 |
 | PLATFORM-AI-002 | Junie / coding agents & ACP | Agent tool window; 2026.1 adds ACP (Agent Client Protocol) registry to install third-party agents (Codex, Cursor, any ACP agent); 2026.2 adds "agent skills". The IC tree has a `platform/acp` module. | — | — | AI Chat / agent panel | P2 |
 | PLATFORM-AI-003 | Native GitHub Copilot integration (2026.2) | Copilot available without the third-party plugin (per release notes). | — | — | — | P2 |
 | PLATFORM-AI-004 | Inline/cloud completion providers | Cloud multi-line completion and third-party completion providers (2026.2); local full-line completion is separate (see PLATFORM-EDIT-131). | Tab | Tab | Settings \| Editor \| General \| Inline Completion | P2 |
@@ -712,7 +712,7 @@ Mercurial, Subversion and Perforce plugins (P2).
 | PLATFORM-PERF-005 | Low-memory notifications | Notification when free heap is low, offering to increase `-Xmx` via Change Memory Settings and restart; also warns on high GC load (inferred). | — | — | Notification | P1 |
 | PLATFORM-PERF-006 | Freeze detection & reporting | UI thread freeze detector collects thread dumps; reports attributed to plugins with suggestion to disable the plugin. | — | — | Notifications; internal errors indicator | P1 |
 | PLATFORM-PERF-007 | Plugin performance attribution | Detects slow plugins (startup, freezes, analysis time) and suggests disabling. | — | — | Notification; Help \| Diagnostic Tools (inferred) | P2 |
-| PLATFORM-PERF-008 | Cancellable read actions / responsiveness rules | Typing never blocked by background analysis; background tasks restart on document change. Implementation contract for jetthing: edits pre-empt analysis. | — | — | — | P0 |
+| PLATFORM-PERF-008 | Cancellable read actions / responsiveness rules | Typing never blocked by background analysis; background tasks restart on document change. Implementation contract for archipel-ide: edits pre-empt analysis. | — | — | — | P0 |
 | PLATFORM-PERF-009 | Power Save Mode | See PLATFORM-PROJ-026. | — | — | File \| Power Save Mode | P1 |
 | PLATFORM-PERF-010 | Antivirus/Defender exclusion prompt (Windows) | Detects Microsoft Defender scanning project/system dirs and offers to add exclusions. | — | — | Notification | P2 |
 | PLATFORM-PERF-011 | Activity monitor | Shows CPU usage per subsystem/plugin. | — | — | Help \| Diagnostic Tools \| Activity Monitor | P2 |
@@ -756,9 +756,9 @@ Mercurial, Subversion and Perforce plugins (P2).
 
 ---
 
-## Cross-cutting implementation notes for jetthing (inferred)
+## Cross-cutting implementation notes for archipel-ide (inferred)
 
-- Every row above that has an action id should map to one `jetthing-command` command; the action
+- Every row above that has an action id should map to one `archipel-ide-command` command; the action
   id is recorded only as a cross-reference for keymap import, never as a dependency.
 - Shortcut tables should be data (a keymap file), mirroring the parent/child keymap model and
   the macOS Ctrl/Cmd swap rule rather than duplicating every binding.

@@ -10,7 +10,7 @@ Read the kit docs first (`docs/README.md`, `getting-started.md`, `theming.md`, `
 
 ## Rules
 
-1. **No new ad-hoc egui painting in `jetthing-ui`.** No new `painter().rect_filled`, hand-made
+1. **No new ad-hoc egui painting in `archipel-ide-ui`.** No new `painter().rect_filled`, hand-made
    hover fills, hand-rolled icon buttons, popup frames or cursor code. Use a kit component. If the
    kit lacks something, add it to the kit (a PR there, with its tests, docs and gallery page) or
    build it from kit parts as described in the kit's `building-components.md` (`State`,
@@ -79,7 +79,7 @@ bug to patch: do not bring the global pass back.
 ## Design lint
 
 `cargo xtask design-lint` (run in CI) counts hand-rolled colors and shapes per file in
-`jetthing-ui`, `jetthing-app`, `jetthing-plugin-ui` and `plugins/`: `Color32::from_rgb*`,
+`archipel-ide-ui`, `archipel-ide`, `archipel-ide-plugin-ui` and `plugins/`: `Color32::from_rgb*`,
 `0xRRGGBB[AA]` / `from_hex` palettes, `rect_filled` with a non-zero radius and
 `CornerRadius::same`. Existing hits are grandfathered in `xtask/design-lint-baseline.txt`;
 any count above its baseline fails. An area migration should bring its files to zero and run
@@ -109,7 +109,7 @@ Before and after screenshots, taken with real mouse input only, are in
 
 ## Testing a migrated panel
 
-`archipel-kit` is a dev-dependency of `jetthing-ui` with the `testing` feature. The audit
+`archipel-kit` is a dev-dependency of `archipel-ide-ui` with the `testing` feature. The audit
 checks, in dark and light: every target has an accessible name, no target is smaller than
 16×16, no two targets partly overlap, and Tab reaches everything.
 
@@ -128,7 +128,7 @@ fn problems_tool_window_passes_the_audit() {
 }
 ```
 
-Put it in `crates/jetthing-ui/src/ui_audit.rs`, which has the `app_with_project` and `panel`
+Put it in `crates/archipel-ide-ui/src/ui_audit.rs`, which has the `app_with_project` and `panel`
 helpers. Tips:
 
 - Give the panel a fixed size (`panel` does); an unbounded panel makes virtualized lists
@@ -142,14 +142,14 @@ helpers. Tips:
 ### Screenshots under Xvfb
 
 `docs/ui-migration/capture.sh <binary> <prefix>` starts the IDE on a demo project under Xvfb
-(`:77`, 1440×900, `JETTHING_RENDERER=glow`) and drives it with xdotool mouse input only:
+(`:77`, 1440×900, `ARCHIPEL_RENDERER=glow`) and drives it with xdotool mouse input only:
 hover, right-click, expanding folders, opening a file, a drag and drop. Copy and extend it
 for your area; run it once with the binary built from `main` and once with yours.
 
 ```bash
 sudo apt-get install -y xvfb xdotool imagemagick libxkbcommon-x11-0 mesa-vulkan-drivers
-cargo build -p jetthing-app
-docs/ui-migration/capture.sh target/debug/jetthing-app /tmp/after
+cargo build -p archipel-ide-app
+docs/ui-migration/capture.sh target/debug/archipel-ide /tmp/after
 ```
 
 ## Kit gaps found by the foundation

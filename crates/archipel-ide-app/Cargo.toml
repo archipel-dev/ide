@@ -1,0 +1,28 @@
+[package]
+name = "archipel-ide-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "archipel-ide"
+path = "src/main.rs"
+
+[features]
+default = ["mongo-raabit", "nexus-http"]
+# Bundle the mongo-raabit MongoDB plugin under plugins/mongo-raabit.
+mongo-raabit = ["dep:mongo-raabit"]
+# Bundle the nexus-http API client plugin under plugins/nexus-http.
+nexus-http = ["dep:nexus-http"]
+# Bundle the example plugin under plugins/hello (development and docs).
+example-plugins = ["dep:archipel-ide-plugin-hello"]
+
+[dependencies]
+archipel-ide-compat = { path = "../archipel-ide-compat" }
+eframe.workspace = true
+archipel-ide-plugin-hello = { path = "../../plugins/hello", optional = true }
+archipel-ide-plugin-lua = { path = "../archipel-ide-plugin-lua" }
+archipel-ide-plugin-wasm = { path = "../archipel-ide-plugin-wasm" }
+archipel-ide-ui = { path = "../archipel-ide-ui" }
+mongo-raabit = { path = "../../plugins/mongo-raabit", optional = true }
+nexus-http = { path = "../../plugins/nexus-http", optional = true }

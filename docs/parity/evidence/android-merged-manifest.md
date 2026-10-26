@@ -13,8 +13,8 @@ that report. It does not re-implement the manifest merger.
 
 | File | Shows |
 |---|---|
-| `jetthing/android/a07-merged-manifest.png` | Find Action › "Show Merged Manifest": merged manifest of `:app (debug)`, lines tinted by source; legend with build.gradle injection (package, versionCode, uses-sdk, debuggable), `core:1.13.0 manifest` (permission, appComponentFactory), `app/src/main/AndroidManifest.xml manifest`, `profileinstaller:1.3.0 manifest` (provider) |
-| `jetthing/android/a07-merged-manifest-jump.png` | clicking the merged `<activity` line opens `app/src/main/AndroidManifest.xml` at line 4 |
+| `archipel-ide/android/a07-merged-manifest.png` | Find Action › "Show Merged Manifest": merged manifest of `:app (debug)`, lines tinted by source; legend with build.gradle injection (package, versionCode, uses-sdk, debuggable), `core:1.13.0 manifest` (permission, appComponentFactory), `app/src/main/AndroidManifest.xml manifest`, `profileinstaller:1.3.0 manifest` (provider) |
+| `archipel-ide/android/a07-merged-manifest-jump.png` | clicking the merged `<activity` line opens `app/src/main/AndroidManifest.xml` at line 4 |
 
 ## Behaviour
 

@@ -1,6 +1,6 @@
 # IntelliJ IDEA reference specification
 
-This directory is the source of truth for what "1:1 with IntelliJ IDEA" means in jetthing.
+This directory is the source of truth for what "1:1 with IntelliJ IDEA" means in archipel-ide.
 Engineers implement against these files instead of guessing, and the parity catalog in
 [`docs/parity/`](../parity/) links back here for the expected behaviour of each feature.
 

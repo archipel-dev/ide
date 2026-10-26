@@ -6,7 +6,7 @@
 //! (via the `state` request), never pixels; the PNGs are evidence for review.
 
 use anyhow::{Context, Result, anyhow, bail};
-use jetthing_control::{ControlClient, Request, Response};
+use archipel_ide_control::{ControlClient, Request, Response};
 use serde::Deserialize;
 use serde_json::Value;
 use std::fs;
@@ -15,7 +15,7 @@ use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 const SCENES_DIR: &str = "docs/parity/scenes";
-const DEFAULT_OUT: &str = "docs/parity/evidence/jetthing/scenes";
+const DEFAULT_OUT: &str = "docs/parity/evidence/archipel-ide/scenes";
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Deserialize)]
@@ -214,12 +214,12 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
 pub(crate) fn build_app(release: bool) -> Result<PathBuf> {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
     let mut command = Command::new(cargo);
-    command.args(["build", "-p", "jetthing-app"]);
+    command.args(["build", "-p", "archipel-ide-app"]);
     if release {
         command.arg("--release");
     }
     if !command.status().context("run cargo build")?.success() {
-        bail!("building jetthing-app failed");
+        bail!("building archipel-ide-app failed");
     }
     let profile = if release { "release" } else { "debug" };
     let target = std::env::var_os("CARGO_TARGET_DIR")
@@ -227,7 +227,7 @@ pub(crate) fn build_app(release: bool) -> Result<PathBuf> {
         .unwrap_or_else(|| PathBuf::from("target"));
     let exe = target
         .join(profile)
-        .join(format!("jetthing-app{}", std::env::consts::EXE_SUFFIX));
+        .join(format!("archipel-ide{}", std::env::consts::EXE_SUFFIX));
     std::path::absolute(&exe).context("resolve app path")
 }
 
@@ -332,12 +332,12 @@ fn run_scene(
         command.args(&scene.open);
     }
     command
-        .env(jetthing_control::SOCKET_ENV, &socket)
-        .env("JETTHING_NO_UPDATE_CHECK", "1")
+        .env(archipel_ide_control::SOCKET_ENV, &socket)
+        .env("ARCHIPEL_NO_UPDATE_CHECK", "1")
         .stdout(log.try_clone()?)
         .stderr(log);
-    if std::env::var_os("JETTHING_RENDERER").is_none() && cfg!(target_os = "linux") {
-        command.env("JETTHING_RENDERER", "glow");
+    if archipel_ide_compat::env_var_os("ARCHIPEL_RENDERER").is_none() && cfg!(target_os = "linux") {
+        command.env("ARCHIPEL_RENDERER", "glow");
     }
     if let Some(display) = &display.name {
         command.env("DISPLAY", display);
@@ -480,10 +480,10 @@ pub fn fixture_files(name: &str) -> Result<Vec<(&'static str, &'static str)>> {
                 "src/test/java/com/example/AppTest.java",
                 "package com.example;\n\nimport static org.junit.jupiter.api.Assertions.assertEquals;\n\nimport org.junit.jupiter.api.Test;\n\nclass AppTest {\n    @Test\n    void greets() {\n        assertEquals(\"Hello, Java!\", App.greeting(\"Java\"));\n    }\n}\n",
             ),
-            (".gitignore", ".gradle/\nbuild/\n.jetthing/\n"),
+            (".gitignore", ".gradle/\nbuild/\n.archipel/\n"),
             (
                 "README.md",
-                "# java-gradle\n\nSample project for Jetthing parity scenes.\n",
+                "# java-gradle\n\nSample project for Archipel IDE parity scenes.\n",
             ),
         ]),
         "rust-cargo" => Ok(vec![
@@ -498,7 +498,7 @@ pub fn fixture_files(name: &str) -> Result<Vec<(&'static str, &'static str)>> {
             // Not part of the crate (no `mod`), so builds stay green; it carries a
             // syntax error for the Problems scene.
             ("src/broken.rs", "fn broken( {\n    let x = ;\n}\n"),
-            (".gitignore", "target/\n.jetthing/\n"),
+            (".gitignore", "target/\n.archipel/\n"),
         ]),
         other => bail!("unknown fixture {other:?} (known: java-gradle, rust-cargo)"),
     }
@@ -517,9 +517,9 @@ pub(crate) fn create_fixture(name: &str, dir: &Path) -> Result<PathBuf> {
         let status = Command::new("git")
             .args([
                 "-c",
-                "user.name=Jetthing Scenes",
+                "user.name=Archipel IDE Scenes",
                 "-c",
-                "user.email=scenes@jetthing.invalid",
+                "user.email=scenes@archipel-ide.invalid",
                 "-c",
                 "commit.gpgsign=false",
             ])

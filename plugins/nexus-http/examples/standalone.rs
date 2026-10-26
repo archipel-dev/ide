@@ -1,5 +1,5 @@
-//! Development host: runs nexus-http in its own window with the Jetthing theme.
-//! Once the plugin API lands this is replaced by `jetthing --app nexus-http`.
+//! Development host: runs nexus-http in its own window with the Archipel IDE theme.
+//! Once the plugin API lands this is replaced by `archipel-ide --app nexus-http`.
 //!
 //! ```bash
 //! cargo run -p nexus-http --example standalone -- [DIR]       # open DIR/.nexus
@@ -46,7 +46,7 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default()
             .with_title("nexus-http")
             .with_inner_size([1440.0, 900.0]),
-        renderer: if std::env::var("JETTHING_RENDERER").as_deref() == Ok("glow") {
+        renderer: if archipel_ide_compat::env_var("ARCHIPEL_RENDERER").as_deref() == Ok("glow") {
             eframe::Renderer::Glow
         } else {
             eframe::Renderer::default()
@@ -162,7 +162,7 @@ fn apply_demo_env(app: &mut NexusApp) {
     }
 }
 
-/// The workbench fonts (Inter, JetBrains Mono; SIL OFL) bundled with jetthing-ui.
+/// The workbench fonts (Inter, JetBrains Mono; SIL OFL) bundled with archipel-ide-ui.
 fn install_fonts(ctx: &egui::Context) {
     use egui::{FontData, FontDefinitions, FontFamily};
     use std::sync::Arc;
@@ -170,19 +170,19 @@ fn install_fonts(ctx: &egui::Context) {
     fonts.font_data.insert(
         "inter".into(),
         Arc::new(FontData::from_static(include_bytes!(
-            "../../../crates/jetthing-ui/assets/fonts/Inter-Regular.ttf"
+            "../../../crates/archipel-ide-ui/assets/fonts/Inter-Regular.ttf"
         ))),
     );
     fonts.font_data.insert(
         "inter-semibold".into(),
         Arc::new(FontData::from_static(include_bytes!(
-            "../../../crates/jetthing-ui/assets/fonts/Inter-SemiBold.ttf"
+            "../../../crates/archipel-ide-ui/assets/fonts/Inter-SemiBold.ttf"
         ))),
     );
     fonts.font_data.insert(
         "mono".into(),
         Arc::new(FontData::from_static(include_bytes!(
-            "../../../crates/jetthing-ui/assets/fonts/JetBrainsMono-Regular.ttf"
+            "../../../crates/archipel-ide-ui/assets/fonts/JetBrainsMono-Regular.ttf"
         ))),
     );
     let fallbacks = fonts
@@ -208,7 +208,7 @@ fn install_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
-/// Islands Dark colors (facts from the IntelliJ Community theme, as used by jetthing-ui).
+/// Islands Dark colors (facts from the IntelliJ Community theme, as used by archipel-ide-ui).
 fn islands_dark(style: &mut egui::Style) {
     let c = |rgb: u32| egui::Color32::from_rgb((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8);
     style.spacing.item_spacing = egui::vec2(6.0, 4.0);

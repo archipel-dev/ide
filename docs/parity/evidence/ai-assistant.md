@@ -7,9 +7,9 @@ screenshot of the chat window itself exists yet, so layout parity is **not** cla
 the behaviour below is what is implemented and tested.
 
 ```sh
-cargo test -p jetthing-ai          # SSE parsing, providers, service, chat, markdown, diff
-cargo test -p jetthing-core ai_    # commands: configure, chat, stop, errors, apply, policy
-JETTHING_AI_MOCK=1 cargo run -p jetthing-app -- <project>   # offline demo provider
+cargo test -p archipel-ide-ai          # SSE parsing, providers, service, chat, markdown, diff
+cargo test -p archipel-ide-core ai_    # commands: configure, chat, stop, errors, apply, policy
+ARCHIPEL_AI_MOCK=1 cargo run -p archipel-ide-app -- <project>   # offline demo provider
 ```
 
 ## Behaviour
@@ -17,7 +17,7 @@ JETTHING_AI_MOCK=1 cargo run -p jetthing-app -- <project>   # offline demo provi
 - **Off until configured.** `AiSettings::enabled` defaults to `false`; a key in the
   environment never enables AI. `ai.configure` validates provider, model and key
   *before* persisting, so a missing key leaves AI off (`01-ai-off-setup.png`).
-- **Providers** (`crates/jetthing-ai`): Anthropic Messages API over SSE (default
+- **Providers** (`crates/archipel-ide-ai`): Anthropic Messages API over SSE (default
   `claude-opus-5-5` for chat, `claude-haiku-5-5` for inline completion, both
   configurable; automatic prompt caching; `output_config.effort`; client tools with
   `eager_input_streaming` and strict JSON validation of streamed inputs; refusals
@@ -27,15 +27,15 @@ JETTHING_AI_MOCK=1 cargo run -p jetthing-app -- <project>   # offline demo provi
   Ollama `/api/chat` (NDJSON). All share one `Provider` trait and are tested with
   canned streams; no test performs network I/O.
 - **Keys**: stored key in `<config>/secrets.toml` (mode `0600`) wins over
-  `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`. `<config>` is `JETTHING_CONFIG_DIR` or the
+  `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`. `<config>` is `ARCHIPEL_CONFIG_DIR` or the
   platform config directory. OS keychain storage is not implemented yet.
-- **Project data sharing**: `.jetthing/ai.toml` (`allow_ai`, `share_file_contents`);
+- **Project data sharing**: `.archipel/ai.toml` (`allow_ai`, `share_file_contents`);
   an unreadable policy fails closed.
 - **AI Chat tool window** (right stripe, `toolwindow.activate.aiChat`): streaming
   Markdown (headings, lists, inline code, fenced code with editor syntax colors),
   "Thinking…/Generating…" with Stop (`02-chat-streaming.png`), context chips for the
   current file or selection, slash commands `/explain /tests /docs /fix /refactor`
-  with suggestions, per-project history in `.jetthing/ai-chat.json`
+  with suggestions, per-project history in `.archipel/ai-chat.json`
   (`03-chat-answer.png`).
 - **Code blocks**: Copy, Insert at caret, and Apply… which previews a line diff
   against the attached selection/file (or current selection) and applies it as one
@@ -47,8 +47,8 @@ JETTHING_AI_MOCK=1 cargo run -p jetthing-app -- <project>   # offline demo provi
 ## Inline completion (slice 2)
 
 ```sh
-cargo test -p jetthing-ai completion
-cargo test -p jetthing-core ai_inline
+cargo test -p archipel-ide-ai completion
+cargo test -p archipel-ide-core ai_inline
 ```
 
 - After a 350 ms typing pause (edits only, not caret moves or file switches) a request
@@ -71,8 +71,8 @@ cargo test -p jetthing-core ai_inline
 ## AI actions and Fix with AI (slice 3)
 
 ```sh
-cargo test -p jetthing-ai actions
-cargo test -p jetthing-core ai_actions
+cargo test -p archipel-ide-ai actions
+cargo test -p archipel-ide-core ai_actions
 ```
 
 - Editor context menu → **AI Actions**: Explain Code, Suggest Refactoring, Find
@@ -93,9 +93,9 @@ cargo test -p jetthing-core ai_actions
 ## Commit message generation (slice 4)
 
 ```sh
-cargo test -p jetthing-git diffs_selected_paths
-cargo test -p jetthing-ai commit
-cargo test -p jetthing-core ai_vcs
+cargo test -p archipel-ide-git diffs_selected_paths
+cargo test -p archipel-ide-ai commit
+cargo test -p archipel-ide-core ai_vcs
 ```
 
 - The Commit window's action row has an AI button (reference scene 12 shows an
@@ -110,8 +110,8 @@ cargo test -p jetthing-core ai_vcs
 ## Terminal: natural language → command (slice 6)
 
 ```sh
-cargo test -p jetthing-ai shell
-cargo test -p jetthing-core ai_terminal
+cargo test -p archipel-ide-ai shell
+cargo test -p archipel-ide-core ai_terminal
 ```
 
 - The Terminal header has an AI toggle that opens a "Describe a command" bar. Enter asks
@@ -131,8 +131,8 @@ cargo test -p jetthing-core ai_terminal
 ## Agent mode (slice 5)
 
 ```sh
-cargo test -p jetthing-ai agent
-cargo test -p jetthing-core ai_agent demo_agent
+cargo test -p archipel-ide-ai agent
+cargo test -p archipel-ide-core ai_agent demo_agent
 ```
 
 - **Agent** tab in AI Chat: describe a task; the agent replies with a numbered plan and
@@ -154,8 +154,8 @@ cargo test -p jetthing-core ai_agent demo_agent
 
 ## Evidence
 
-Linux, Xvfb 1600×1000, `JETTHING_RENDERER=glow`, 2026-10-10. Answers come from the
-offline demo provider (`JETTHING_AI_MOCK=1`, labelled "mock-chat (demo)"); no
+Linux, Xvfb 1600×1000, `ARCHIPEL_RENDERER=glow`, 2026-10-10. Answers come from the
+offline demo provider (`ARCHIPEL_AI_MOCK=1`, labelled "mock-chat (demo)"); no
 `ANTHROPIC_API_KEY` was available, so no real-provider walkthrough was recorded.
 
 | Screenshot | Shows |

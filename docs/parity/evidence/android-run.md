@@ -5,7 +5,7 @@ Reference: Android Studio's Run 'app' (device selector + ▶ next to the run con
 
 ## Setup
 
-Linux under Xvfb (1600x1000x24), `JETTHING_RENDERER=glow`, `JETTHING_NO_UPDATE_CHECK=1`.
+Linux under Xvfb (1600x1000x24), `ARCHIPEL_RENDERER=glow`, `ARCHIPEL_NO_UPDATE_CHECK=1`.
 
 `HelloAndroid` is a minimal real Android app: AGP 8.13.0, `compileSdk = 35`, build-tools 35.0.0,
 and a Java `MainActivity` declared as the launcher in the manifest. Its `local.properties` points
@@ -22,9 +22,9 @@ Google's mirror (`maven-central.storage-download.googleapis.com`).
 
 | File | Shows |
 |---|---|
-| `jetthing/android/run-device-selector.png` | device selector with **Run 'app' on Pixel 8 API 35**; Build Variants stripe button for the Android project |
-| `jetthing/android/run-app-deployed.png` | Build window: real `Gradle :app:assembleDebug` output (`BUILD SUCCESSFUL`); **Run 'app'** balloon: `Launched com.example.hello/.MainActivity on Pixel 8 API 35`, with the adb install (`Performing Streamed Install` / `Success`) and `am start` lines |
-| `jetthing/android/build-variants.png` | Build Variants tool window: module `app`, active variant `debug` |
+| `archipel-ide/android/run-device-selector.png` | device selector with **Run 'app' on Pixel 8 API 35**; Build Variants stripe button for the Android project |
+| `archipel-ide/android/run-app-deployed.png` | Build window: real `Gradle :app:assembleDebug` output (`BUILD SUCCESSFUL`); **Run 'app'** balloon: `Launched com.example.hello/.MainActivity on Pixel 8 API 35`, with the adb install (`Performing Streamed Install` / `Success`) and `am start` lines |
+| `archipel-ide/android/build-variants.png` | Build Variants tool window: module `app`, active variant `debug` |
 
 ## Behaviour
 

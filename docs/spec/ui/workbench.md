@@ -23,7 +23,7 @@ claims still require reproducible evidence in `docs/parity/`.
   "macOS"). Where a source only gave one platform, the other is marked (inferred).
 - Clean-room: no screenshots, icons or artwork are embedded. Where a screenshot helps, we
   link the public page that shows it and describe what is visible.
-- Implementation mapping hints for jetthing are given in "Impl notes" blocks. These are
+- Implementation mapping hints for archipel-ide are given in "Impl notes" blocks. These are
   suggestions; the architecture docs win on conflict.
 
 ### Global terminology
@@ -1139,7 +1139,7 @@ current theme is marked in the Scheme list.
   normal mode and 16×16 in compact mode, 12×12 for gutter and status bar (classic guideline
   value), 32×32 in dialogs. Stroke 2 px (classic guideline; the New UI set uses a thinner
   ~1 px stroke, inferred).
-- jetthing must draw its own icon set (clean-room). Copy only sizes and semantics.
+- archipel-ide must draw its own icon set (clean-room). Copy only sizes and semantics.
 
 Sources:
 - https://www.jetbrains.com/help/idea/user-interface-themes.html
@@ -1208,7 +1208,7 @@ Sources:
 | Popup sizes (Search Everywhere, Find in Files) | Application |
 | Settings dialog last selected page | Application |
 
-Impl notes: map application scope to `jetthing-core` settings and project scope to the
+Impl notes: map application scope to `archipel-ide-core` settings and project scope to the
 project workspace file. UI only reads and writes through typed commands (AGENTS.md).
 
 Sources:

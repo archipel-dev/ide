@@ -1,14 +1,18 @@
 # Lua plugins
 
 Lua plugins use the same contract as Rust plugins (see [api.md](api.md)) through an
-embedded Lua 5.4 runtime (`jetthing-plugin-lua`, built on [mlua](https://github.com/mlua-rs/mlua)
+embedded Lua 5.4 runtime (`archipel-ide-plugin-lua`, built on [mlua](https://github.com/mlua-rs/mlua)
 with a vendored Lua). A complete example is [`plugins/hello-lua`](../../plugins/hello-lua/main.lua).
+
+The sandbox exposes a global table `archipel` (currently `archipel.api_version`). Plugins
+written for the Jetthing versions use the old global `jetthing`; it is kept as an alias of the
+same table.
 
 ## Layout
 
 ```
 my-plugin/
-  jetthing-plugin.toml   # kind = "lua", entry = "main.lua"
+  archipel-plugin.toml   # kind = "lua", entry = "main.lua"
   main.lua               # returns the plugin table
   lib/util.lua           # optional modules: require("lib.util")
 ```
@@ -21,11 +25,11 @@ api_version = 1
 kind = "lua"
 entry = "main.lua"
 
-[app]                    # optional: jetthing --app com.example.todo
+[app]                    # optional: archipel-ide --app com.example.todo
 view = "main"
 ```
 
-Pack it with `cargo run -p xtask -- pack-plugin my-plugin` and install the `.jtplugin` from
+Pack it with `cargo run -p xtask -- pack-plugin my-plugin` and install the `.archipelplugin` from
 **File ▸ Plugins… ▸ ⚙ ▸ Install Plugin from Disk…**. A project's own `plugins/` directory is also
 scanned, which is handy while developing. Edit, then run **Refresh Plugins** or reinstall to reload.
 
@@ -123,7 +127,7 @@ Node types: `column`, `row`, `heading`, `label{muted}`, `section`, `property{key
 `button{id,label}`, `text_input{id,value,hint,multiline}`, `checkbox{id,label,checked}`,
 `choice{id,options,selected}`, `list{id,items={id,label,detail},selected}`,
 `table{id,columns,rows,selected}`, `tree{id,nodes={id,label,children},selected}`, `code{text}`,
-`empty{title,hint}`. WASM plugins use the same model (`jetthing_plugin_api::ViewNode`).
+`empty{title,hint}`. WASM plugins use the same model (`archipel_ide_plugin_api::ViewNode`).
 
 ## Sandbox
 

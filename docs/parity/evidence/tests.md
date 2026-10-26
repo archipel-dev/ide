@@ -1,6 +1,6 @@
 # Test runner tree
 
-Captured 2026-10-10 under Xvfb (1600x1000, `JETTHING_RENDERER=glow`), Gradle 8.14.3,
+Captured 2026-10-10 under Xvfb (1600x1000, `ARCHIPEL_RENDERER=glow`), Gradle 8.14.3,
 JDK 21 and Rust 1.97 on PATH. Reference: `reference/intellij-community/java-gradle/18-test-results.png`
 (PR #40).
 

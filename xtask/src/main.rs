@@ -83,34 +83,34 @@ fn build_wasm_example() -> Result<()> {
         );
     }
     fs::copy(
-        dir.join("target/wasm32-wasip2/release/jetthing_plugin_hello_wasm.wasm"),
+        dir.join("target/wasm32-wasip2/release/archipel_ide_plugin_hello_wasm.wasm"),
         dir.join("hello_wasm.wasm"),
     )?;
     println!("{}", dir.join("hello_wasm.wasm").display());
     Ok(())
 }
 
-/// Packs a plugin directory into `dist/plugins/<id>-<version>.jtplugin`.
+/// Packs a plugin directory into `dist/plugins/<id>-<version>.archipelplugin`.
 fn pack_plugin(dir: &Path, output: Option<&Path>) -> Result<()> {
-    let manifest_text = fs::read_to_string(dir.join(jetthing_plugins::MANIFEST_FILE))
+    let manifest_text = fs::read_to_string(dir.join(archipel_ide_plugins::MANIFEST_FILE))
         .with_context(|| {
             format!(
                 "{} has no {}",
                 dir.display(),
-                jetthing_plugins::MANIFEST_FILE
+                archipel_ide_plugins::MANIFEST_FILE
             )
         })?;
-    let manifest = jetthing_plugins::PluginManifest::parse(&manifest_text)?;
+    let manifest = archipel_ide_plugins::PluginManifest::parse(&manifest_text)?;
     let default = Path::new("dist/plugins").join(format!(
         "{}-{}.{}",
         manifest.id,
         manifest.version,
-        jetthing_plugins::archive::ARCHIVE_EXTENSION
+        archipel_ide_plugins::archive::ARCHIVE_EXTENSION
     ));
     let output = output.unwrap_or(&default);
-    jetthing_plugins::archive::pack(dir, output)?;
+    archipel_ide_plugins::archive::pack(dir, output)?;
     // Installing validates the archive the same way the IDE will.
-    jetthing_plugins::archive::read_manifest(output)?;
+    archipel_ide_plugins::archive::read_manifest(output)?;
     println!("{}", output.display());
     Ok(())
 }

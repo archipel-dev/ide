@@ -117,7 +117,7 @@ pub fn mono(size: f32) -> FontId {
     FontId::new(size, FontFamily::Monospace)
 }
 
-/// Semibold UI font when the host installed one (Jetthing does), else regular.
+/// Semibold UI font when the host installed one (Archipel IDE does), else regular.
 pub fn semibold(ui: &Ui, size: f32) -> FontId {
     let family = FontFamily::Name("semibold".into());
     let installed = ui.fonts(|f| f.families().contains(&family));

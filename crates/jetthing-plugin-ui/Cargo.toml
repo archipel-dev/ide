@@ -1,9 +1,0 @@
-[package]
-name = "jetthing-plugin-ui"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-description = "Compatibility shim re-exporting archipel-plugin-ui."
-
-[dependencies]
-archipel-plugin-ui.workspace = true

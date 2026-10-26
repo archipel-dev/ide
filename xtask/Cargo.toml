@@ -10,7 +10,8 @@ flate2 = "1"
 sha2 = "0.10"
 tar = "0.4"
 zip = { version = "2", default-features = false, features = ["deflate"] }
-jetthing-control = { path = "../crates/jetthing-control" }
+archipel-ide-compat = { path = "../crates/archipel-ide-compat" }
+archipel-ide-control = { path = "../crates/archipel-ide-control" }
 serde.workspace = true
 serde_json.workspace = true
-jetthing-plugins = { path = "../crates/jetthing-plugins" }
+archipel-ide-plugins = { path = "../crates/archipel-ide-plugins" }

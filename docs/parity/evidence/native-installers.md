@@ -7,34 +7,34 @@ How to reproduce: `cargo run -p xtask -- dist --installer` on each OS (see
 
 ```text
 $ cargo run -p xtask -- dist --installer
-dist/jetthing-0.0.1-linux-x86_64.tar.gz
-dist/jetthing_0.0.1_amd64.deb
+dist/archipel-ide-0.0.1-linux-x86_64.tar.gz
+dist/archipel-ide_0.0.1_amd64.deb
 $ sha256sum -c dist/*.sha256
-jetthing-0.0.1-linux-x86_64.tar.gz: OK
-jetthing_0.0.1_amd64.deb: OK
-$ sudo dpkg -i dist/jetthing_0.0.1_amd64.deb
-Setting up jetthing (0.0.1) ...
+archipel-ide-0.0.1-linux-x86_64.tar.gz: OK
+archipel-ide_0.0.1_amd64.deb: OK
+$ sudo dpkg -i dist/archipel-ide_0.0.1_amd64.deb
+Setting up archipel-ide (0.0.1) ...
 Processing triggers for hicolor-icon-theme (0.17-2) ...
-$ readlink -f /usr/bin/jetthing
-/usr/lib/jetthing/jetthing
-$ jetthing-cli commands | head -1
+$ readlink -f /usr/bin/archipel-ide
+/usr/lib/archipel-ide/archipel-ide
+$ archipel-cli commands | head -1
 [
-$ sudo dpkg -r jetthing && ls /usr/lib/jetthing /usr/bin/jetthing
-ls: cannot access '/usr/lib/jetthing': No such file or directory
-ls: cannot access '/usr/bin/jetthing': No such file or directory
+$ sudo dpkg -r archipel-ide && ls /usr/lib/archipel-ide /usr/bin/archipel-ide
+ls: cannot access '/usr/lib/archipel-ide': No such file or directory
+ls: cannot access '/usr/bin/archipel-ide': No such file or directory
 ```
 
 ## Linux AppImage (local, Ubuntu container, x86_64)
 
 ```text
 $ APPIMAGETOOL=…/appimagetool-1.9.0 cargo run -p xtask -- dist --installer
-dist/jetthing-0.0.2-linux-x86_64.tar.gz
-dist/jetthing_0.0.2_amd64.deb
-dist/jetthing-0.0.2-linux-x86_64.AppImage
-$ APPIMAGE_EXTRACT_AND_RUN=1 ./dist/jetthing-0.0.2-linux-x86_64.AppImage --version
-jetthing 0.0.2 (ab6c5034e2d2 2026-10-10, x86_64-unknown-linux-gnu, release)
-$ ./dist/jetthing-0.0.2-linux-x86_64.AppImage --appimage-extract && ls -A squashfs-root
-.DirIcon  AppRun  jetthing.desktop  jetthing.png  usr
+dist/archipel-ide-0.0.2-linux-x86_64.tar.gz
+dist/archipel-ide_0.0.2_amd64.deb
+dist/archipel-ide-0.0.2-linux-x86_64.AppImage
+$ APPIMAGE_EXTRACT_AND_RUN=1 ./dist/archipel-ide-0.0.2-linux-x86_64.AppImage --version
+archipel-ide 0.0.2 (ab6c5034e2d2 2026-10-10, x86_64-unknown-linux-gnu, release)
+$ ./dist/archipel-ide-0.0.2-linux-x86_64.AppImage --appimage-extract && ls -A squashfs-root
+.DirIcon  AppRun  archipel-ide.desktop  archipel.png  usr
 ```
 
 ## Package-manager manifests
@@ -57,7 +57,7 @@ smoke-tests each installer:
   Applications link, `plutil -lint`, `codesign --verify --deep --strict`, `lipo`
   architectures and a CLI run on the native architecture.
 
-First green run: [Release #12](https://github.com/HenrySchwerdt/jetthing/actions/runs/38059816135)
+First green run: [Release #12](https://github.com/archipel-dev/ide/actions/runs/38059816135)
 (workflow_dispatch on `feat/native-installers`, commit `bfd2745`, version 0.0.2;
 `release` job skipped as intended off `main`). Every job passed: `checks`,
 `package linux-x86_64`, `package windows-x86_64`, `package macos-aarch64` and
@@ -65,7 +65,7 @@ First green run: [Release #12](https://github.com/HenrySchwerdt/jetthing/actions
 
 | Artifact | Contents |
 |---|---|
-| `jetthing-0.0.2-linux-x86_64` | `jetthing-0.0.2-linux-x86_64.tar.gz`, `jetthing_0.0.2_amd64.deb`, `.sha256` each |
-| `jetthing-0.0.2-windows-x86_64` | `jetthing-0.0.2-windows-x86_64.zip`, `jetthing-0.0.2-windows-x86_64.msi`, `.sha256` each |
-| `jetthing-0.0.2-macos-aarch64` | `jetthing-0.0.2-macos-aarch64.tar.gz`, `jetthing-0.0.2-macos-aarch64.dmg`, `.sha256` each |
-| `jetthing-0.0.2-macos-x86_64` | `jetthing-0.0.2-macos-x86_64.tar.gz`, `jetthing-0.0.2-macos-x86_64.dmg`, `.sha256` each |
+| `archipel-ide-0.0.2-linux-x86_64` | `archipel-ide-0.0.2-linux-x86_64.tar.gz`, `archipel-ide_0.0.2_amd64.deb`, `.sha256` each |
+| `archipel-ide-0.0.2-windows-x86_64` | `archipel-ide-0.0.2-windows-x86_64.zip`, `archipel-ide-0.0.2-windows-x86_64.msi`, `.sha256` each |
+| `archipel-ide-0.0.2-macos-aarch64` | `archipel-ide-0.0.2-macos-aarch64.tar.gz`, `archipel-ide-0.0.2-macos-aarch64.dmg`, `.sha256` each |
+| `archipel-ide-0.0.2-macos-x86_64` | `archipel-ide-0.0.2-macos-x86_64.tar.gz`, `archipel-ide-0.0.2-macos-x86_64.dmg`, `.sha256` each |

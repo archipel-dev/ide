@@ -1,7 +1,7 @@
 # nexus-http
 
-A clean-room, Insomnia-class API client that ships as a first-party Jetthing plugin
-bundled by default (Tools › HTTP Client, command `nexus.open`) and also runs standalone (`jetthing --app dev.jetthing.nexus-http`); `.http`/`.rest` files open in its editor. Tracking issue: #49.
+A clean-room, Insomnia-class API client that ships as a first-party Archipel IDE plugin
+bundled by default (Tools › HTTP Client, command `nexus.open`) and also runs standalone (`archipel-ide --app dev.archipel.nexus-http`); `.http`/`.rest` files open in its editor. Tracking issue: #49.
 
 | Crate | Purpose |
 |---|---|

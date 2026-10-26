@@ -1,6 +1,6 @@
 # Performance check, v0.0.7 release candidate
 
-Release build (`cargo build --release`), Xvfb 1440×900, `JETTHING_RENDERER=glow`, 4 vCPU
+Release build (`cargo build --release`), Xvfb 1440×900, `ARCHIPEL_RENDERER=glow`, 4 vCPU
 container, measured over the control socket on 2026-10-11. "Before" is `main` at
 `1725ba7`; "after" is the same tree with the fixes in this PR. The container was also
 compiling the test suite during the "before" run and idle during the "after" run, so the
@@ -44,9 +44,9 @@ trip and three settled frames, roughly 20 ms of overhead.
    path and are *not* fixed in this PR because they need a cache with an invalidation
    key, which is more than a night-before-release change:
    - the Project tree is rebuilt from the full file list on every frame
-     (`jetthing-core/src/project_view.rs` `tree_rows`), and
+     (`archipel-ide-core/src/project_view.rs` `tree_rows`), and
    - the active file's problems, blame annotations, code vision and context-menu model
-     are recomputed every frame (`jetthing-ui/src/editor.rs:184-188`).
+     are recomputed every frame (`archipel-ide-ui/src/editor.rs:184-188`).
    Both run at the caret-blink rate (2 Hz) when the editor has focus, at 10 Hz while a
    language server is busy, and at the display rate while the terminal timer runs.
    The cheap parts of this loop are fixed here: the HEAD-diff no longer copies the
@@ -72,12 +72,12 @@ trip and three settled frames, roughly 20 ms of overhead.
 
 ```bash
 Xvfb :99 -screen 0 1440x900x24 &
-cargo build --release -p jetthing-app -p jetthing-cli
-export DISPLAY=:99 JETTHING_RENDERER=glow JETTHING_NO_UPDATE_CHECK=1 JETTHING_CONTROL_SOCKET=/tmp/jt.sock
-cli() { target/release/jetthing-cli ui --socket /tmp/jt.sock "$@"; }
-t0=$(date +%s%N); target/release/jetthing-app & until cli state >/dev/null 2>&1; do sleep 0.02; done
+cargo build --release -p archipel-ide-app -p archipel-ide-cli
+export DISPLAY=:99 ARCHIPEL_RENDERER=glow ARCHIPEL_NO_UPDATE_CHECK=1 ARCHIPEL_CONTROL_SOCKET=/tmp/jt.sock
+cli() { target/release/archipel-cli ui --socket /tmp/jt.sock "$@"; }
+t0=$(date +%s%N); target/release/archipel-ide & until cli state >/dev/null 2>&1; do sleep 0.02; done
 echo "startup $(( ($(date +%s%N) - t0) / 1000000 )) ms"
-PID=$(pgrep -n -x jetthing-app); cli wait idle
+PID=$(pgrep -n -x archipel-ide); cli wait idle
 ticks() { awk '{print $14+$15}' /proc/$PID/stat; }      # 100 ticks = 1 s of CPU
 c0=$(ticks); sleep 5; echo "idle cpu $(( ($(ticks) - c0) * 100 / 500 )) %"
 cli execute project.open '{"path":"/path/to/project"}' && cli wait idle
@@ -90,14 +90,14 @@ awk '/VmRSS/ {print "rss", $2/1024, "MB"}' /proc/$PID/status
 
 ## Idle CPU follow-up (`perf: cache project tree rows and editor overlays`)
 
-Same method as above (release build, Xvfb 1440×900, `JETTHING_RENDERER=glow`, app
+Same method as above (release build, Xvfb 1440×900, `ARCHIPEL_RENDERER=glow`, app
 `utime+stime` from `/proc`, 4 vCPU container), measured 45–55 s after opening the project
 and the file, so rust-analyzer's initial burst is over. "Before" is `origin/main` at
 `e116747`, "after" is this branch. Per-thread CPU is read from `/proc/<pid>/task/*/stat`
 over a 10 s window. The container has no GPU: GL runs on Mesa `llvmpipe`, whose four
 rasteriser threads are counted in the app process, so every repaint is far more
 expensive here than on real hardware. The thread split below separates app logic (the
-`jetthing-app` main thread) from software rasterisation.
+`archipel-ide` main thread) from software rasterisation.
 
 | Scenario | Total before | Total after | Main thread before | Main thread after |
 |---|---:|---:|---:|---:|

@@ -1,8 +1,8 @@
 # Project tree parity (#150, #164)
 
 Reference: the Project tool window of the reference IDE (scenes 04 and 19 of
-[audit-v0.0.5](audit-v0.0.5/)). Screenshots below are Jetthing on Xvfb against a
-java-gradle sample with a cached Gradle model (`.jetthing/gradle/model.json`).
+[audit-v0.0.5](audit-v0.0.5/)). Screenshots below are Archipel IDE on Xvfb against a
+java-gradle sample with a cached Gradle model (`.archipel/gradle/model.json`).
 
 ## Behavior
 
@@ -17,7 +17,7 @@ java-gradle sample with a cached Gradle model (`.jetthing/gradle/model.json`).
   Unmark; saved in the workspace). Test roots and their packages get a green row tint.
 - **External Libraries** (only after a Gradle sync): the JDK that ran Gradle and the
   resolved runtime jars of every module (`libraries` in the model, written by the init script).
-- **Scratches and Consoles**: scratch files live in `.jetthing/scratches`; the *Scratches*
+- **Scratches and Consoles**: scratch files live in `.archipel/scratches`; the *Scratches*
   node offers *New Scratch File* (`project.newScratch`). No database consoles.
 - **Context menu** (file and directory): New, Cut/Copy/Copy Path/Paste, Edit Source, Find in
   Files (scoped to the clicked path: `search.project {scope}`, shown as an `In src ×` chip),
@@ -40,9 +40,9 @@ java-gradle sample with a cached Gradle model (`.jetthing/gradle/model.json`).
 
 ```bash
 Xvfb :99 -screen 0 1600x1000x24 &
-export JETTHING_CONTROL_SOCKET=/tmp/jt.sock DISPLAY=:99 JETTHING_RENDERER=glow JETTHING_NO_UPDATE_CHECK=1
-cargo run -p jetthing-app -- /path/to/java-gradle &
-cli() { cargo run -q -p jetthing-cli -- ui "$@"; }
+export ARCHIPEL_CONTROL_SOCKET=/tmp/jt.sock DISPLAY=:99 ARCHIPEL_RENDERER=glow ARCHIPEL_NO_UPDATE_CHECK=1
+cargo run -p archipel-ide-app -- /path/to/java-gradle &
+cli() { cargo run -q -p archipel-ide-cli -- ui "$@"; }
 cli execute project.toggleGroup '{"id":"external-libraries"}'
 cli click 208 257 --button secondary; cli screenshot context-menu-file.png
 ```

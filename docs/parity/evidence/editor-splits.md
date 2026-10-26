@@ -1,7 +1,7 @@
 # Editor splits and the preview tab
 
-Captured 2026-10-11 on Linux under Xvfb (1600x1000, `JETTHING_RENDERER=glow`, debug build),
-driven through the control socket (`jetthing-cli ui`). Sample project: `src/App.java`,
+Captured 2026-10-11 on Linux under Xvfb (1600x1000, `ARCHIPEL_RENDERER=glow`, debug build),
+driven through the control socket (`archipel-cli ui`). Sample project: `src/App.java`,
 `src/Util.java`, `README.md`, `build.gradle.kts`.
 
 | File | Shows |
@@ -22,9 +22,9 @@ Behavior notes:
   creates a split to the right when the editor is not split.
 - Dragging a tab onto the outer quarter of an editor group splits at that edge; dropping on
   another group moves the tab. The control socket has no drag primitive, so this path is
-  covered by `editor.splitAt` / `editor.moveToGroup` tests in `jetthing-core` and the pure
-  `jetthing_split::drop_edge` test.
-- Splits are stored in `.jetthing/workspace.json` (`splits`) and restored with the tabs.
+  covered by `editor.splitAt` / `editor.moveToGroup` tests in `archipel-ide-core` and the pure
+  `archipel_ide_split::drop_edge` test.
+- Splits are stored in `.archipel/workspace.json` (`splits`) and restored with the tabs.
 
 ## Real mouse and keyboard run (1280x800)
 

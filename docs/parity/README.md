@@ -36,7 +36,7 @@ IntelliJ IDEA Ultimate-only feature; the dashboard reports these separately.
 
 ## Status meanings
 
-- **Missing**: nothing exists in Jetthing yet.
+- **Missing**: nothing exists in Archipel IDE yet.
 - **Planned**: a design or command name exists, no working behavior.
 - **Partial**: some of the listed scope works; `Limitations / evidence` says what is missing.
 - **Implemented**: the listed scope works and the `Tests` column names the evidence.

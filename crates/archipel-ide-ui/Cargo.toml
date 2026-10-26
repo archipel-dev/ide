@@ -1,0 +1,47 @@
+[package]
+name = "archipel-ide-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+archipel-ide-compat = { path = "../archipel-ide-compat" }
+archipel-icons.workspace = true
+archipel-kit.workspace = true
+eframe.workspace = true
+egui.workspace = true
+egui_extras = { version = "0.33", default-features = false, features = ["file", "image"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
+archipel-ide-android = { path = "../archipel-ide-android" }
+archipel-ide-actions = { path = "../archipel-ide-actions" }
+pulldown-cmark.workspace = true
+archipel-ide-ai = { path = "../archipel-ide-ai" }
+archipel-ide-bazel = { path = "../archipel-ide-bazel" }
+archipel-ide-command = { path = "../archipel-ide-command" }
+archipel-ide-control = { path = "../archipel-ide-control" }
+archipel-ide-core = { path = "../archipel-ide-core" }
+archipel-ide-dap = { path = "../archipel-ide-dap" }
+archipel-ide-git = { path = "../archipel-ide-git" }
+archipel-ide-keymap = { path = "../archipel-ide-keymap" }
+archipel-ide-gradle = { path = "../archipel-ide-gradle" }
+archipel-ide-language = { path = "../archipel-ide-language" }
+archipel-ide-lsp = { path = "../archipel-ide-lsp" }
+archipel-ide-markdown = { path = "../archipel-ide-markdown" }
+archipel-ide-plugins = { path = "../archipel-ide-plugins" }
+archipel-ide-runner = { path = "../archipel-ide-runner" }
+archipel-ide-settings = { path = "../archipel-ide-settings" }
+archipel-ide-split = { path = "../archipel-ide-split" }
+archipel-ide-templates = { path = "../archipel-ide-templates" }
+archipel-ide-text = { path = "../archipel-ide-text" }
+archipel-ide-terminal = { path = "../archipel-ide-terminal" }
+pollster = "0.4"
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
+serde.workspace = true
+serde_json.workspace = true
+
+[[bench]]
+name = "typing"
+harness = false
+
+[dev-dependencies]
+archipel-kit = { workspace = true, features = ["testing"] }

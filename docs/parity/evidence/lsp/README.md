@@ -1,13 +1,13 @@
 # Language servers and completion: evidence
 
 Reference scene: `09-completion.png` (IntelliJ IDEA Community 2025.2.6.3, java-gradle sample, and
-Android Studio 2026.2.1) from `docs/parity/evidence/reference/`. Before this work Jetthing showed
+Android Studio 2026.2.1) from `docs/parity/evidence/reference/`. Before this work Archipel IDE showed
 "command is disabled: language.complete" for Java and Kotlin files
-(`jetthing/java-gradle/09-completion-absent.png`).
+(`archipel-ide/java-gradle/09-completion-absent.png`).
 
 ## Environment
 
-- Linux, Xvfb 1600x1000, `JETTHING_RENDERER=glow JETTHING_NO_UPDATE_CHECK=1`.
+- Linux, Xvfb 1600x1000, `ARCHIPEL_RENDERER=glow ARCHIPEL_NO_UPDATE_CHECK=1`.
 - rust-analyzer 1.97.0 (rustup component), Eclipse JDT LS 1.40.0 (`jdtls` on PATH), OpenJDK 21,
   JetBrains kotlin-lsp server 263.6379.0 (from the Open VSX `JetBrains.kotlin-server` bundle).
 - `/home/user/samples/java-gradle`: `settings.gradle.kts`, `build.gradle.kts` (application plugin,
@@ -38,7 +38,7 @@ Android Studio 2026.2.1) from `docs/parity/evidence/reference/`. Before this wor
 | `09e-rust-camel-hump-ps.png` | Type `ps` | `push_str` via the `p`…`_s` humps. |
 
 Accepting with Enter inserts the label at the caret. Tab replaces the identifier after the caret
-(covered by `jetthing-core` completion tests, including `additionalTextEdits` as one undo step).
+(covered by `archipel-ide-core` completion tests, including `additionalTextEdits` as one undo step).
 
 ### Snippets (slice 3)
 
@@ -56,7 +56,7 @@ Accepting with Enter inserts the label at the caret. Tab replaces the identifier
 
 Accepting an item that was never resolved resolves it afterwards and applies its auto-import
 `additionalTextEdits` (jdtls only computes imports during resolve). This is covered end to end by
-`crates/jetthing-core/tests/fake_lsp_flow.rs`.
+`crates/archipel-ide-core/tests/fake_lsp_flow.rs`.
 
 ### Parameter info (slice 5)
 
@@ -78,6 +78,6 @@ Accepting an item that was never resolved resolves it afterwards and applies its
 ## Reproduce
 
 ```bash
-cargo test -p jetthing-lsp                                         # fake-server integration tests
-cargo test -p jetthing-lsp --test real_servers -- --ignored        # rust-analyzer + jdtls, if installed
+cargo test -p archipel-ide-lsp                                         # fake-server integration tests
+cargo test -p archipel-ide-lsp --test real_servers -- --ignored        # rust-analyzer + jdtls, if installed
 ```

@@ -3,7 +3,7 @@
 Reference: the Find in Files popup has Match Case (Alt+C), Words (Alt+O) and Regex
 (Alt+X) toggles and a File mask filter. Changing an option re-runs the search.
 
-Jetthing (captured 2026-10-10 on Xvfb/glow; query `greet` in a sample with `Greeter.java`
+Archipel IDE (captured 2026-10-10 on Xvfb/glow; query `greet` in a sample with `Greeter.java`
 and `GreeterTest.java`):
 
 ![Plain search, Words on, then the file mask !*Test.java](workbench-bugs/find-in-files-options.png)

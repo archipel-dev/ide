@@ -209,7 +209,7 @@ pub fn run(options: Options) -> Result<()> {
         .version
         .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_owned());
     let date = git(&["log", "-1", "--format=%cs", to])?;
-    let title = format!("Jetthing {version} ({})", date.trim());
+    let title = format!("Archipel IDE {version} ({})", date.trim());
     let mut notes = render(&title, &parse_log(&log));
     if let Some(from) = &from {
         let _ = write!(notes, "\nChanges since `{from}`.\n");
@@ -266,10 +266,10 @@ mod tests {
             commit("5555555e", "Tweak things", ""),
             commit("6666666f", "feat: terminal grid", ""),
         ];
-        let notes = render("Jetthing 0.0.3 (2026-10-10)", &commits);
+        let notes = render("Archipel IDE 0.0.3 (2026-10-10)", &commits);
         assert_eq!(
             notes,
-            "## Jetthing 0.0.3 (2026-10-10)\n\
+            "## Archipel IDE 0.0.3 (2026-10-10)\n\
              \n### Breaking changes\n\n\
              - **ui:** new toolbar (3333333)\n\
              \n### Features\n\n\

@@ -36,4 +36,4 @@ Environment variables pick the scene (see the example's doc comment), e.g.
 - GraphQL argument and enum completion and query validation are not
   implemented, and there is no gRPC support yet (planned).
 - These screenshots come from the development host. They will be retaken in
-  `jetthing --app nexus-http` once the plugin API (#48 / #65) is merged.
+  `archipel-ide --app nexus-http` once the plugin API (#48 / #65) is merged.

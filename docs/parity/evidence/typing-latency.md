@@ -3,7 +3,7 @@
 Target (editor P0 workstream): a keystroke frame takes < 16 ms on a 50k-line file, matching the
 reference IDE's rule that typing is never blocked by background analysis (`PLATFORM-PERF-008`).
 
-Reproduce: `cargo bench -p jetthing-ui --bench typing` (release). The bench opens a generated
+Reproduce: `cargo bench -p archipel-ide-ui --bench typing` (release). The bench opens a generated
 50,000-line Java class as a project file, drives `IdeApp::frame` on a headless `egui::Context`
 (input handling, editing, analysis refresh, LSP sync attempt, layout of visible lines; no GPU
 painting) and types 200 characters below the first screen. It asserts that the keystrokes reached

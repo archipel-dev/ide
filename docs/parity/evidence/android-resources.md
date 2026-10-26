@@ -8,8 +8,8 @@ Captured on Linux under Xvfb with the `MyApplication` sample (see `android-proje
 
 | File | Shows |
 |---|---|
-| `jetthing/android/a10-goto-layout.png` | caret on `R.layout.activity_main` in `MainActivity.kt`, Ctrl+B: `res/layout/activity_main.xml` opens, status `R.layout.activity_main` |
-| `jetthing/android/a10-goto-style-qualifiers.png` | caret on `@style/Theme.MyApplication` in `AndroidManifest.xml`, Ctrl+B: `values/themes.xml` opens, status `R.style.Theme_MyApplication: 2 declarations` (`values` and `values-night`) |
+| `archipel-ide/android/a10-goto-layout.png` | caret on `R.layout.activity_main` in `MainActivity.kt`, Ctrl+B: `res/layout/activity_main.xml` opens, status `R.layout.activity_main` |
+| `archipel-ide/android/a10-goto-style-qualifiers.png` | caret on `@style/Theme.MyApplication` in `AndroidManifest.xml`, Ctrl+B: `values/themes.xml` opens, status `R.style.Theme_MyApplication: 2 declarations` (`values` and `values-night`) |
 
 ## Behaviour
 

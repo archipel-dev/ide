@@ -1,0 +1,47 @@
+// Compatibility copy of ../wit/plugin.wit under the package name before the rename to Archipel IDE
+// (jetthing:plugin). The host binds this world too, so components built for it still load.
+// Do not edit; change ../wit/plugin.wit and mirror the change here.
+//
+// Jetthing plugin API 1 for WebAssembly components.
+//
+// Structured values cross the boundary as JSON strings with the same shapes
+// as the Rust API (`Contributions`, `ViewNode`, `ViewEvent`, command params
+// and results), so the WIT surface stays small and stable.
+package jetthing:plugin@1.0.0;
+
+interface host {
+  /// Status bar message.
+  status: func(message: string);
+  /// Notification balloon; level is "info", "warning" or "error".
+  notify: func(level: string, title: string, body: string);
+  /// Queues a command (built-in or contributed) after the current call.
+  dispatch: func(command: string, params-json: string);
+  open-tool-window: func(id: string);
+  open-tab: func(view: string, title: string, key: string);
+  /// JSON value of a setting declared on one of the plugin's settings pages.
+  setting: func(key: string) -> option<string>;
+  set-setting: func(key: string, value-json: string) -> result<_, string>;
+  /// Host path of the open project, if any. With the "fs.project"
+  /// permission the project is also mounted at /project.
+  project-root: func() -> option<string>;
+  has-permission: func(name: string) -> bool;
+  request-repaint: func();
+}
+
+world plugin {
+  import host;
+
+  /// JSON `Contributions`.
+  export contributions: func() -> string;
+  export activate: func() -> result<_, string>;
+  export deactivate: func();
+  /// Runs a contributed command; returns the JSON result.
+  export execute: func(command: string, params-json: string) -> result<string, string>;
+  /// JSON `ViewNode` for `view`; `placement-json` describes where it shows.
+  export render-view: func(view: string, placement-json: string) -> string;
+  /// JSON `ViewEvent` from the declarative view `view`.
+  export on-view-event: func(view: string, event-json: string);
+  export status-widget: func(id: string) -> option<string>;
+  /// Called every frame while active.
+  export poll: func();
+}

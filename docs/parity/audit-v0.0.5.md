@@ -1,23 +1,23 @@
-# Visual diff audit v0.0.5 — Jetthing vs IntelliJ IDEA Community / Android Studio
+# Visual diff audit v0.0.5 — Archipel IDE vs IntelliJ IDEA Community / Android Studio
 
-Scene-by-scene comparison of Jetthing `23270f7` (origin/main after v0.0.5, debug build) against the
+Scene-by-scene comparison of Archipel IDE `23270f7` (origin/main after v0.0.5, debug build) against the
 reference captures in `evidence/reference/intellij-community/java-gradle/` (IntelliJ IDEA
 Community 2025.2.6.3) and `evidence/reference/android-studio/` (Android Studio 2026.2.1). Each
-side-by-side image under `evidence/audit-v0.0.5/` has the **reference on the left and Jetthing on
+side-by-side image under `evidence/audit-v0.0.5/` has the **reference on the left and Archipel IDE on
 the right** (`convert +append`, 256 colours, < 300 KB).
 
-Capture setup: Xvfb `:96` 1600x1000x24 + openbox, `JETTHING_RENDERER=glow`,
-`JETTHING_NO_UPDATE_CHECK=1`, window resized to 1600x980 with `xdotool`, driven over the control
+Capture setup: Xvfb `:96` 1600x1000x24 + openbox, `ARCHIPEL_RENDERER=glow`,
+`ARCHIPEL_NO_UPDATE_CHECK=1`, window resized to 1600x980 with `xdotool`, driven over the control
 socket (`docs/parity/evidence/ui-control-socket.md`), `import -window root`. Scratch copies of
 `/home/user/samples/java-gradle` and `/home/user/samples/MyApplication` (build dirs removed, Git
 history kept). `toolchain.install jdtls` was run first so Java diagnostics and completion are
 real; the Kotlin language server is not a toolchain component, so Kotlin scenes run without it.
-Disk was below the 9 GB threshold after the Jetthing build, so the IDEs were **not** reinstalled;
+Disk was below the 9 GB threshold after the Archipel IDE build, so the IDEs were **not** reinstalled;
 the existing reference captures were used and scenes without a reference (branches popup, Markdown
-split, extra Settings pages) are recorded with the Jetthing capture only.
+split, extra Settings pages) are recorded with the Archipel IDE capture only.
 
 Classification: **BUG** = exists but looks/behaves differently, **FEATURE** = missing. Weight 1–10
-= user impact x visibility, size S/M/L. Jetthing-side observations that are environment artefacts
+= user impact x visibility, size S/M/L. Archipel IDE-side observations that are environment artefacts
 (language-server balloons, proxy 429s) are noted but not scored.
 
 ## Scenes — IntelliJ IDEA Community (java-gradle)
@@ -26,7 +26,7 @@ Classification: **BUG** = exists but looks/behaves differently, **FEATURE** = mi
 
 | # | Type | Difference | W | Size | Row | Resolution |
 |---|---|---|---:|---|---|---|
-| AUD-032 | FEATURE | No left navigation (Projects / Customize / Plugins / Learn), no product version, no recent-project list, no square icon buttons for New Project / Open / Clone Repository, no onboarding card. Jetthing shows a centred title, two plain buttons and the "Open Project: Ctrl+O" hint. | 8 | L | IJ-MENU-100 | Fixed in #185 |
+| AUD-032 | FEATURE | No left navigation (Projects / Customize / Plugins / Learn), no product version, no recent-project list, no square icon buttons for New Project / Open / Clone Repository, no onboarding card. Archipel IDE shows a centred title, two plain buttons and the "Open Project: Ctrl+O" hint. | 8 | L | IJ-MENU-100 | Fixed in #185 |
 | AUD-023 | BUG | The main toolbar keeps the project widget ("NP No project"), greyed run icons and the status bar reads "No project"; the reference welcome window has no IDE chrome. | 3 | S | IJ-MENU-100 | Fixed in #185 |
 | AUD-005 | BUG | Find Action on the welcome screen returns "Nothing found" for `New Project`, although the button exists. | 5 | S | IJ-MENU-111 | Partial (#199) |
 
@@ -34,13 +34,13 @@ Classification: **BUG** = exists but looks/behaves differently, **FEATURE** = mi
 
 | # | Type | Difference | W | Size | Row | Resolution |
 |---|---|---|---:|---|---|---|
-| AUD-033 | FEATURE | Reference is a two-pane dialog: generator list with search (Java, Kotlin, Groovy, Empty, Maven Archetype, JavaFX, …), Name, Location + browse, "Project will be created in" hint, Create Git repository, Build system segmented control (IntelliJ / Maven / Gradle / Bazel), JDK combo, Add sample code, Advanced Settings (Gradle DSL, GroupId/ArtifactId), `?` help. Jetthing: a ~560x270 dialog with Name, Location + Browse, Template combo, Group / package, a two-line hint, Create / Cancel. No window title, no JDK, no Git, no build-system choice, no Android templates. | 8 | L | IJ-JAVA-001 | Fixed in #185 |
+| AUD-033 | FEATURE | Reference is a two-pane dialog: generator list with search (Java, Kotlin, Groovy, Empty, Maven Archetype, JavaFX, …), Name, Location + browse, "Project will be created in" hint, Create Git repository, Build system segmented control (IntelliJ / Maven / Gradle / Bazel), JDK combo, Add sample code, Advanced Settings (Gradle DSL, GroupId/ArtifactId), `?` help. Archipel IDE: a ~560x270 dialog with Name, Location + Browse, Template combo, Group / package, a two-line hint, Create / Cancel. No window title, no JDK, no Git, no build-system choice, no Android templates. | 8 | L | IJ-JAVA-001 | Fixed in #185 |
 
 ### 04 Editor + project tree — `evidence/audit-v0.0.5/04-editor-project-tree.png`
 
 | # | Type | Difference | W | Size | Row | Resolution |
 |---|---|---|---:|---|---|---|
-| AUD-001 | BUG | After `toolchain.install jdtls` the project root gains `.classpath`, `.project`, `.settings/`, `bin/` (compiled `.class` files) plus `.jetthing/*.toml`, `jetthing-model.json`, `model.json`; they appear as ordinary tree rows and as 10 unversioned files in Commit (scene 12). The reference writes only `.idea/` and marks it. | 8 | M | IJ-VCS-004, IJ-VCS-005 | Fixed in #183 |
+| AUD-001 | BUG | After `toolchain.install jdtls` the project root gains `.classpath`, `.project`, `.settings/`, `bin/` (compiled `.class` files) plus `.archipel/*.toml`, `archipel-model.json`, `model.json`; they appear as ordinary tree rows and as 10 unversioned files in Commit (scene 12). The reference writes only `.idea/` and marks it. | 8 | M | IJ-VCS-004, IJ-VCS-005 | Fixed in #183 |
 | AUD-008 | BUG | Packages are not compacted (`com` > `example` vs `com.example`); the test root has no green tint and `main`/`test` are not bold; `build`, `.gradle`, `bin` are not shown excluded (orange); no `External Libraries` / `Scratches and Consoles`; the root row's path is truncated without ellipsis; the header has no `Project ▾` view switcher. | 5 | M | IJ-TW-014, IJ-TW-011 | Fixed in #186 |
 | AUD-036 | FEATURE | No code vision (`2 usages`, author) above declarations, no `name:` parameter inlays, one-line method body not folded with boxed braces. | 7 | M | IJ-ED-104 | Fixed in #202 |
 | AUD-011 | BUG | Gutter run icon only on `main`, not on the class line; gutter popup has no "Run with Coverage" and a disabled Debug. | 4 | S | IJ-RUN-011 | Fixed in #190 |
@@ -52,7 +52,7 @@ Classification: **BUG** = exists but looks/behaves differently, **FEATURE** = mi
 
 | # | Type | Difference | W | Size | Row | Resolution |
 |---|---|---|---:|---|---|---|
-| AUD-006 | BUG | For `main` the reference lists the `main(String[])` symbol, `java-gradle.main` module, text hits and actions/settings with inline ON/OFF toggles; Jetthing lists one text hit (`App.java:10`) and three `Markdown: Insert …` actions matched by scattered letters. Popup is ~680x220 vs ~700x700; no `Text` tab, no "Include non-project items", no preview/filter icons, no "Type / to see commands", no footer path / "Open In Right Split". | 6 | M | IJ-NAV-001, IJ-NAV-006 | Partial (#201) |
+| AUD-006 | BUG | For `main` the reference lists the `main(String[])` symbol, `java-gradle.main` module, text hits and actions/settings with inline ON/OFF toggles; Archipel IDE lists one text hit (`App.java:10`) and three `Markdown: Insert …` actions matched by scattered letters. Popup is ~680x220 vs ~700x700; no `Text` tab, no "Include non-project items", no preview/filter icons, no "Type / to see commands", no footer path / "Open In Right Split". | 6 | M | IJ-NAV-001, IJ-NAV-006 | Partial (#201) |
 
 ### 06 Find Action — `evidence/audit-v0.0.5/06-find-action.png`
 
@@ -70,7 +70,7 @@ Classification: **BUG** = exists but looks/behaves differently, **FEATURE** = mi
 
 | # | Type | Difference | W | Size | Row | Resolution |
 |---|---|---|---:|---|---|---|
-| AUD-042 | FEATURE | Many tree pages are stubs ("This page has no options in Jetthing yet"): Build Tools > Gradle (reference: Gradle user home, Build and run using, Run tests using, Distribution, Gradle JVM), Editor > Code Editing, File and Code Templates; Version Control and Editor show link lists only. | 6 | M | IJ-SET-001, IJ-BLD-005 | Fixed in #189 |
+| AUD-042 | FEATURE | Many tree pages are stubs ("This page has no options in Archipel IDE yet"): Build Tools > Gradle (reference: Gradle user home, Build and run using, Run tests using, Distribution, Gradle JVM), Editor > Code Editing, File and Code Templates; Version Control and Editor show link lists only. | 6 | M | IJ-SET-001, IJ-BLD-005 | Fixed in #189 |
 | AUD-058 | BUG | Keymap page lists actions flat and alphabetically; reference groups them in a tree (Editor Actions, Main Menu, …) with icons. Appearance page lacks the scheme gear, "red-green deficiency" option, "Main menu: Hide under Hamburger" combo and the `?` footer button; Editor > Font lacks the preview and fallback font rows. | 3 | S | IJ-SET-032, IJ-SET-001 | Fixed in #194 |
 
 ### 09 Completion — `evidence/audit-v0.0.5/09-completion.png`
@@ -83,7 +83,7 @@ Classification: **BUG** = exists but looks/behaves differently, **FEATURE** = mi
 
 | # | Type | Difference | W | Size | Row | Resolution |
 |---|---|---|---:|---|---|---|
-| AUD-043 | FEATURE | Reference is a floating popup with `In Project \| Module \| Directory \| Scope` tabs, result rows with file:line, a live preview editor, "Open results in new tab" and "Open in Find Window". Jetthing is a bottom tool window with query, Cc/W/.*, file mask and a flat result list; no scopes, no preview. | 5 | M | IJ-NAV-065, IJ-NAV-066 | Fixed in #201 |
+| AUD-043 | FEATURE | Reference is a floating popup with `In Project \| Module \| Directory \| Scope` tabs, result rows with file:line, a live preview editor, "Open results in new tab" and "Open in Find Window". Archipel IDE is a bottom tool window with query, Cc/W/.*, file mask and a flat result list; no scopes, no preview. | 5 | M | IJ-NAV-065, IJ-NAV-066 | Fixed in #201 |
 | AUD-009 | BUG | Re-opening with Ctrl+Shift+F keeps the previous query without selecting it, so typing appends (`greetinggreeting`); results need Enter instead of updating while typing. | 4 | S | IJ-NAV-064 | Fixed in #201 |
 
 ### 11 Terminal — `evidence/audit-v0.0.5/11-terminal.png`
@@ -146,7 +146,7 @@ Classification: **BUG** = exists but looks/behaves differently, **FEATURE** = mi
 
 | # | Type | Difference | W | Size | Row | Resolution |
 |---|---|---|---:|---|---|---|
-| AUD-034 | FEATURE | Jetthing: New ▸, Copy Path/Reference ▸, Edit Source F4, Find in Files, Rename..., Delete.... Reference adds Cut / Copy / Paste, Find Usages, Analyze ▸, Refactor ▸, Bookmarks ▸, Reformat Code, Optimize Imports, Override File Type, Run / Debug 'App.main()', More Run/Debug ▸, Open in Right Split, Open In ▸, Local History ▸, Git ▸, Repair IDE on File, Reload from Disk, Compare With..., Convert Java File to Kotlin File, with separators and icons. | 8 | M | IJ-MENU-109 | Fixed in #186 |
+| AUD-034 | FEATURE | Archipel IDE: New ▸, Copy Path/Reference ▸, Edit Source F4, Find in Files, Rename..., Delete.... Reference adds Cut / Copy / Paste, Find Usages, Analyze ▸, Refactor ▸, Bookmarks ▸, Reformat Code, Optimize Imports, Override File Type, Run / Debug 'App.main()', More Run/Debug ▸, Open in Right Split, Open In ▸, Local History ▸, Git ▸, Repair IDE on File, Reload from Disk, Compare With..., Convert Java File to Kotlin File, with separators and icons. | 8 | M | IJ-MENU-109 | Fixed in #186 |
 
 ### 20 Problems — `evidence/audit-v0.0.5/20-problems.png`
 
@@ -226,7 +226,7 @@ Classification: **BUG** = exists but looks/behaves differently, **FEATURE** = mi
 
 | # | Type | Difference | W | Size | Row | Resolution |
 |---|---|---|---:|---|---|---|
-| AUD-028 | BUG | Sync window has a `Sync` title and `:jetthingModel UP-TO-DATE` tree. Reference: `Sync \| Build Output \| Build Analyzer` tabs, phases (`Download info`), per-dependency error nodes with "Show in Project Structure dialog" / "Fix with AI" links, cancel in the status bar. | 3 | S | AND-002, IJ-JAVA-033 | Partial (#202) |
+| AUD-028 | BUG | Sync window has a `Sync` title and `:archipelModel UP-TO-DATE` tree. Reference: `Sync \| Build Output \| Build Analyzer` tabs, phases (`Download info`), per-dependency error nodes with "Show in Project Structure dialog" / "Fix with AI" links, cancel in the status bar. | 3 | S | AND-002, IJ-JAVA-033 | Partial (#202) |
 
 ### a07 Merged manifest — `evidence/audit-v0.0.5/a07-manifest.png`
 
@@ -261,7 +261,7 @@ Matches the reference (Module / Active Build Variant table, `debug` combo, hint 
 | ID | Type | W | Size | Scene | Summary | IJ row | Issue | Resolution |
 |---|---|---:|---|---|---|---|---|---|
 | AUD-031 | FEATURE | 10 | L | 23 | Java debugger: Shift+F9, breakpoints, Debug tool window, frames/variables, inline values | IJ-RUN-030/032/038/040/041 | #146 | Fixed in #187 |
-| AUD-001 | BUG | 8 | M | 04, 12 | jdtls/Jetthing artefacts (`.classpath`, `.project`, `.settings`, `bin/`, `.jetthing`) land in the project tree and Commit | IJ-VCS-004/005 | #147 | Fixed in #183 |
+| AUD-001 | BUG | 8 | M | 04, 12 | jdtls/Archipel IDE artefacts (`.classpath`, `.project`, `.settings`, `bin/`, `.archipel`) land in the project tree and Commit | IJ-VCS-004/005 | #147 | Fixed in #183 |
 | AUD-032 | FEATURE | 8 | L | 01 | Welcome screen: nav column, recent projects, Open / Clone buttons, version | IJ-MENU-100 | #148 | Fixed in #185 |
 | AUD-033 | FEATURE | 8 | L | 02 | New Project wizard: generators, build system, JDK, Git, sample code, advanced settings | IJ-JAVA-001 | #149 | Fixed in #185 |
 | AUD-034 | FEATURE | 8 | M | 19 | Project tree context menu: clipboard, Find Usages, Refactor, Reformat, Run/Debug, Open In, Git, Compare | IJ-MENU-109 | #150 | Fixed in #186 |

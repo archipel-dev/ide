@@ -4,7 +4,7 @@ Each `NN-name.json` scripts one scene of the reference walkthrough
 (`docs/parity/evidence/reference/*/NOTES.md`, same numbering). `cargo run -p xtask -- scenes`
 starts a fresh IDE per scene on a generated fixture project, replays the steps over the
 control socket (`docs/parity/evidence/ui-control-socket.md`), asserts workbench state and
-writes PNGs to `docs/parity/evidence/jetthing/scenes/` (or `--out DIR`). Scenes assert state,
+writes PNGs to `docs/parity/evidence/archipel-ide/scenes/` (or `--out DIR`). Scenes assert state,
 never pixels; the screenshots are evidence to compare with the reference by eye.
 
 ```bash
@@ -13,7 +13,7 @@ cargo run -p xtask -- scenes --only 05,06       # a subset
 cargo run -p xtask -- scenes --out /tmp/shots   # somewhere else
 ```
 
-CI runs every scene headless (Xvfb + `JETTHING_RENDERER=glow`) in the `parity scenes` job
+CI runs every scene headless (Xvfb + `ARCHIPEL_RENDERER=glow`) in the `parity scenes` job
 and uploads the PNGs and app logs as the `parity-scenes` artifact.
 
 ## Format

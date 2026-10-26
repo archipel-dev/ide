@@ -6,18 +6,18 @@ Reference: Android Studio scene `a02-logcat.png` (Logcat docked at the bottom wi
 
 ## Setup
 
-Linux under Xvfb (1600x1000x24), `JETTHING_RENDERER=glow`, `JETTHING_NO_UPDATE_CHECK=1`, the
+Linux under Xvfb (1600x1000x24), `ARCHIPEL_RENDERER=glow`, `ARCHIPEL_NO_UPDATE_CHECK=1`, the
 `MyApplication` sample (`applicationId = "com.example.myapplication"`). No device can run in this
 container (no KVM), so these captures use the **simulated** SDK from `android-devices.md`. Its
 `adb` script answers `-s <serial> logcat -v threadtime` with a fixed threadtime log, including an
 ActivityManager `Start proc 4321:com.example.myapplication/…` line and a crash, and answers
 `shell ps -A -o PID,NAME`. The same protocol drives the automated tests in
-`jetthing-android/src/logcat.rs` and `jetthing-core/src/android_logcat.rs`.
+`archipel-ide-android/src/logcat.rs` and `archipel-ide-core/src/android_logcat.rs`.
 
 | File | Shows |
 |---|---|
-| `jetthing/android/a02-logcat-package-mine.png` | Logcat from the left stripe; device chooser "Pixel 8 API 35 (emulator-5554) API 35"; default `package:mine` shows only `com.example.myapplication` lines; columns time, pid-tid, coloured tag, package, level badge (D/I/W/E colours) and message, sticking to the end |
-| `jetthing/android/a02-logcat-filter-softwrap.png` | `package:mine level:warn -tag:OpenGL` with soft wrap on |
+| `archipel-ide/android/a02-logcat-package-mine.png` | Logcat from the left stripe; device chooser "Pixel 8 API 35 (emulator-5554) API 35"; default `package:mine` shows only `com.example.myapplication` lines; columns time, pid-tid, coloured tag, package, level badge (D/I/W/E colours) and message, sticking to the end |
+| `archipel-ide/android/a02-logcat-filter-softwrap.png` | `package:mine level:warn -tag:OpenGL` with soft wrap on |
 
 ## Filter language
 

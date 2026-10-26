@@ -1,8 +1,8 @@
-//! Jetthing plugin entry point: the whole mongo-raabit view as an editor tab
-//! (Tools › MongoDB) or as the standalone app (`jetthing --app dev.jetthing.mongo-raabit`).
+//! Archipel IDE plugin entry point: the whole mongo-raabit view as an editor tab
+//! (Tools › MongoDB) or as the standalone app (`archipel-ide --app dev.archipel.mongo-raabit`).
 
 use crate::MongoRaabit;
-use jetthing_plugin_api::{
+use archipel_ide_plugin_api::{
     CommandContribution, CommandError, CommandResult, Contributions, EditorTabRequest,
     MenuLocation, Plugin, PluginHost, PluginManifest, Value, ViewContext, ViewFrame,
 };
@@ -26,7 +26,7 @@ impl Default for MongoRaabitPlugin {
 impl MongoRaabitPlugin {
     pub fn new() -> Self {
         Self {
-            manifest: PluginManifest::parse(include_str!("../jetthing-plugin.toml"))
+            manifest: PluginManifest::parse(include_str!("../archipel-plugin.toml"))
                 .expect("bundled manifest is valid"),
             app: None,
         }
@@ -73,7 +73,7 @@ impl Plugin for MongoRaabitPlugin {
         frame: &mut ViewFrame<'_>,
         host: &mut dyn PluginHost,
     ) {
-        let Some(ui) = jetthing_plugin_ui::ui(frame) else {
+        let Some(ui) = archipel_ide_plugin_ui::ui(frame) else {
             return;
         };
         if view.view == VIEW {
@@ -96,7 +96,7 @@ impl Plugin for MongoRaabitPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jetthing_plugin_api::testing::RecordingHost;
+    use archipel_ide_plugin_api::testing::RecordingHost;
 
     #[test]
     fn open_command_opens_the_editor_tab() {

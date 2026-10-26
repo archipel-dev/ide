@@ -1,7 +1,7 @@
 # Build / Run tool window and build-system detection
 
-Captured 2026-10-10 on Linux under Xvfb (1600x1000, `JETTHING_RENDERER=glow`,
-`JETTHING_NO_UPDATE_CHECK=1`, debug build), driven with `xdotool`
+Captured 2026-10-10 on Linux under Xvfb (1600x1000, `ARCHIPEL_RENDERER=glow`,
+`ARCHIPEL_NO_UPDATE_CHECK=1`, debug build), driven with `xdotool`
 (`Ctrl+F9` Build, `Shift+F10` Run). Gradle 8.14.3 and OpenJDK 21 were on PATH; Bazel
 was deliberately **not** installed. Reference scenes:
 `reference/intellij-community/java-gradle/16-build-output.png` and `17-run-output.png`
@@ -33,7 +33,7 @@ removed, and runs of blank lines collapse to one. Covered by `console::tests`.
 
 - The tool window has no tabs ("Sync", "Build Output", multiple run tabs); one task at a
   time, title switches between Build/Run/Test.
-- Gradle task timings are measured by Jetthing from console arrival (poll granularity), not
+- Gradle task timings are measured by Archipel IDE from console arrival (poll granularity), not
   from Gradle Tooling API events, and there is no per-task console filter.
 - No Gradle sync, Gradle tool window or run configurations yet (next slices).
 - No "Run" stripe button separate from Build; the run widget popup offers Run, Build

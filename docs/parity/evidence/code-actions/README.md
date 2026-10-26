@@ -21,10 +21,10 @@ As in `../problems/README.md` (rust-analyzer 1.97.0, jdtls 1.40.0, Xvfb, samples
 | `quick-fix-applied-jdtls.png` | Enter | The call becomes `app.greeting("typo")`; jdtls re-publishes diagnostics, the inspection widget turns into the green check, the red waves on the tab and tree disappear, and the bulb refreshes to yellow (only intentions left). |
 
 Mechanics covered by tests: code actions with context diagnostics (as published), `codeAction/resolve`,
-`workspace/executeCommand` and server-initiated `workspace/applyEdit` (`cargo test -p jetthing-lsp --test
+`workspace/executeCommand` and server-initiated `workspace/applyEdit` (`cargo test -p archipel-ide-lsp --test
 fake_server code_actions`); atomic, validated multi-file `WorkspaceEdit` application with UTF-16 ranges,
-caret tracking, version checks and one undo step per file (`cargo test -p jetthing-core workspace_edit`);
-action parsing, disabled actions and staleness (`cargo test -p jetthing-core code_actions`).
+caret tracking, version checks and one undo step per file (`cargo test -p archipel-ide-core workspace_edit`);
+action parsing, disabled actions and staleness (`cargo test -p archipel-ide-core code_actions`).
 
 ## Still different from the reference
 

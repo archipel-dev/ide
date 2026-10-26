@@ -172,11 +172,19 @@ fn parse_args() -> Result<Mode, String> {
 
 fn build_app(mode: &Mode) -> Result<archipel_ide_ui::IdeApp, String> {
     match mode {
-        Mode::Ide { project, files } => Ok(archipel_ide_ui::IdeApp::with_plugin_set(
-            project.clone(),
-            files.clone(),
-            plugins::plugin_set(),
-        )),
+        Mode::Ide { project, files } => {
+            let mut app = archipel_ide_ui::IdeApp::with_plugin_set(
+                project.clone(),
+                files.clone(),
+                plugins::plugin_set(),
+            );
+            // Install the JDK, build tools and language servers a project needs
+            // as soon as it opens, unless turned off for scripted runs.
+            if archipel_ide_compat::env_var_os("ARCHIPEL_NO_TOOLCHAIN_SETUP").is_none() {
+                app.enable_toolchain_auto_setup();
+            }
+            Ok(app)
+        }
         Mode::App(id) => archipel_ide_ui::IdeApp::standalone(id, plugins::plugin_set()),
     }
 }
@@ -188,7 +196,7 @@ Opens PROJECT_DIR (or the welcome screen) and FILEs relative to it.
   --app ID        run only the plugin's app view
   -V, --version   print version and build information
   -h, --help      print this help
-Environment: ARCHIPEL_RENDERER=glow, ARCHIPEL_NO_UPDATE_CHECK,
+Environment: ARCHIPEL_RENDERER=glow, ARCHIPEL_NO_UPDATE_CHECK, ARCHIPEL_NO_TOOLCHAIN_SETUP,
 ARCHIPEL_CONTROL_SOCKET. See README.md.";
 
 /// Release builds on Windows have no console of their own; print `--version`

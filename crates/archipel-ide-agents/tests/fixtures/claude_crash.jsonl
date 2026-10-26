@@ -1,0 +1,5 @@
+#read
+#init
+{"type":"assistant","message":{"content":[{"type":"text","text":"Working..."}]}}
+#stderr fatal: the agent crashed
+#exit 2

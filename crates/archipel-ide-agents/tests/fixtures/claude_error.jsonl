@@ -1,0 +1,5 @@
+#read
+#init
+{"type":"assistant","message":{"content":[{"type":"text","text":"Starting."}]}}
+{"type":"result","subtype":"error_during_execution","is_error":true,"errors":["API Error: 401 invalid credentials"],"duration_ms":40,"usage":{"input_tokens":1,"output_tokens":0}}
+#serve

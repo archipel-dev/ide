@@ -287,6 +287,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "archipel-ide-agents"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-git",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "archipel-ide-ai"
 version = "0.0.9"
 dependencies = [

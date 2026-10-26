@@ -1,0 +1,10 @@
+{"type":"thread.started","thread_id":"0199-thread-1"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"reasoning","text":"Plan the change."}}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"ls","aggregated_output":"","status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"ls","aggregated_output":"README.md\n","exit_code":0,"status":"completed"}}
+#write codex.txt|written by codex\n
+{"type":"item.completed","item":{"id":"item_2","type":"file_change","changes":[{"path":"codex.txt","kind":"add"}],"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_3","type":"hologram","payload":1}}
+{"type":"item.completed","item":{"id":"item_4","type":"agent_message","text":"Added codex.txt."}}
+{"type":"turn.completed","usage":{"input_tokens":120,"cached_input_tokens":0,"output_tokens":30}}

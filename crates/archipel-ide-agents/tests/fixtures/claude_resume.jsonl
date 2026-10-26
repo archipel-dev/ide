@@ -1,0 +1,6 @@
+#read
+#init
+#args
+{"type":"assistant","message":{"content":[{"type":"text","text":"Resumed and continuing."}]}}
+{"type":"result","subtype":"success","is_error":false,"duration_ms":30,"usage":{"input_tokens":2,"output_tokens":2}}
+#serve

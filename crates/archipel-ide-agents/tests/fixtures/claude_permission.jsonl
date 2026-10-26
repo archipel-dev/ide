@@ -1,0 +1,10 @@
+#read
+#init
+{"type":"assistant","message":{"content":[{"type":"text","text":"I need to write a file."},{"type":"tool_use","id":"toolu_1","name":"Write","input":{"file_path":"@CWD@/notes.txt","content":"approved\n"}}]}}
+{"type":"control_request","request_id":"req-1","request":{"subtype":"can_use_tool","tool_name":"Write","input":{"file_path":"@CWD@/notes.txt","content":"approved\n"},"tool_use_id":"toolu_1"}}
+#echo
+#write notes.txt|approved\n
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"File created successfully"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Written."}]}}
+{"type":"result","subtype":"success","is_error":false,"duration_ms":900,"total_cost_usd":0.002,"usage":{"input_tokens":20,"output_tokens":10}}
+#serve

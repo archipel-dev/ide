@@ -298,8 +298,13 @@ pub fn managed_base(data_dir: &Path, repo_root: &Path) -> PathBuf {
 /// Pick a free directory for `slug` under the managed base, appending `-2`, `-3`, ...
 /// The slug is sanitized again, so a hostile name cannot escape the base.
 pub fn plan_path(data_dir: &Path, repo_root: &Path, slug: &str) -> Result<PathBuf> {
+    plan_path_in(&managed_base(data_dir, repo_root), repo_root, slug)
+}
+
+/// Like [`plan_path`] with an explicit base directory (a user-chosen worktree location).
+pub fn plan_path_in(base: &Path, repo_root: &Path, slug: &str) -> Result<PathBuf> {
     let slug = sanitize_name(slug)?;
-    let base = managed_base(data_dir, repo_root);
+    let base = base.to_path_buf();
     if contains_path(repo_root, &base) {
         return Err(WorktreeError::InvalidPath(
             "the worktree directory must be outside the repository".into(),

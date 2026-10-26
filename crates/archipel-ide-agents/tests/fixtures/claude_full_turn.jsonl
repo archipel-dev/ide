@@ -1,0 +1,15 @@
+#read
+#init
+{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"Plan: read the readme, add the file, check it."},{"type":"text","text":"I will add a greeting file. The key is sk-ant-api03-LEAKLEAKLEAKLEAK."},{"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"@CWD@/README.md"}}],"usage":{"input_tokens":10,"output_tokens":20}}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"# demo"}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_2","name":"Write","input":{"file_path":"@CWD@/greeting.txt","content":"hello from the agent\n"}}]}}
+#write greeting.txt|hello from the agent\n
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_2","content":"File created successfully"}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_3","name":"Bash","input":{"command":"cat greeting.txt"}},{"type":"tool_use","id":"toolu_4","name":"Grep","input":{"pattern":"hello"}},{"type":"tool_use","id":"toolu_5","name":"WebFetch","input":{"url":"https://example.com/docs"}},{"type":"tool_use","id":"toolu_6","name":"Task","input":{"description":"Check the docs","prompt":"look around"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_3","content":"hello from the agent"},{"type":"tool_result","tool_use_id":"toolu_4","content":[{"type":"text","text":"greeting.txt:1:hello"}]},{"type":"tool_result","tool_use_id":"toolu_5","is_error":true,"content":"blocked"},{"type":"tool_result","tool_use_id":"toolu_6","content":"nothing found"}]}}
+{"type":"future_event_kind","payload":{"anything":[1,2,3]}}
+{"type":"stream_event","event":{"type":"content_block_delta"}}
+this line is not json at all
+{"type":"assistant","message":{"content":[{"type":"text","text":"Done: greeting.txt added."}]}}
+{"type":"result","subtype":"success","is_error":false,"duration_ms":2100,"duration_api_ms":1800,"num_turns":3,"total_cost_usd":0.0123,"result":"Done","session_id":"s","usage":{"input_tokens":100,"output_tokens":50}}
+#serve

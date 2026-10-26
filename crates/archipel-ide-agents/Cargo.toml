@@ -1,0 +1,23 @@
+[package]
+name = "archipel-ide-agents"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Agents mode engine: Claude Code and Codex protocol adapters, process management, worktree sessions, persistence. No UI."
+
+[dependencies]
+archipel-ide-git = { path = "../archipel-ide-git" }
+regex = "1"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+
+# Test support: replays a fixture JSONL like an agent CLI would (see tests/support).
+[[bin]]
+name = "fake-agent"
+path = "tests/support/fake_agent.rs"
+test = false
+doctest = false

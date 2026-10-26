@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"0199-thread-1"}
+{"type":"turn.started"}
+#args-codex
+{"type":"item.completed","item":{"id":"item_9","type":"agent_message","text":"Follow-up handled."}}
+{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}

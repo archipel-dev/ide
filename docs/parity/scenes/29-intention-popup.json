@@ -1,0 +1,18 @@
+{
+  "id": "29",
+  "title": "Alt+Enter popup with a native quick fix and inspection options",
+  "reference": null,
+  "fixture": "rust-cargo",
+  "open": ["src/broken.rs"],
+  "steps": [
+    {"op": "wait", "until": "idle"},
+    {"op": "execute", "command": "editor.insertText", "args": {"position": 0, "text": "fn z(a: i32) { a = a; }\n"}},
+    {"op": "sleep", "ms": 1500},
+    {"op": "execute", "command": "editor.gotoLine", "args": {"line": 1}},
+    {"op": "sleep", "ms": 500},
+    {"op": "key", "chord": "Alt+Enter"},
+    {"op": "wait", "until": "idle"},
+    {"op": "assert", "pointer": "/activeTab", "equals": "src/broken.rs"},
+    {"op": "screenshot", "name": "29-intention-popup.png"}
+  ]
+}

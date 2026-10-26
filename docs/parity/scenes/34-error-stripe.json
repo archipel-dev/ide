@@ -1,0 +1,15 @@
+{
+  "id": "34",
+  "title": "Error stripe and highlights from the daemon",
+  "reference": null,
+  "fixture": "rust-cargo",
+  "open": ["src/broken.rs"],
+  "steps": [
+    {"op": "wait", "until": "idle"},
+    {"op": "execute", "command": "editor.insertText", "args": {"position": 0, "text": "fn z(a: i32) { a = a; }\n// TODO later\n"}},
+    {"op": "sleep", "ms": 1500},
+    {"op": "key", "chord": "Alt+6"},
+    {"op": "wait", "until": "idle"},
+    {"op": "screenshot", "name": "34-error-stripe.png"}
+  ]
+}

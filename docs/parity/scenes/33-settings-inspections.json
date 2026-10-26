@@ -1,0 +1,14 @@
+{
+  "id": "33",
+  "title": "Settings > Editor > Inspections",
+  "reference": null,
+  "fixture": "rust-cargo",
+  "open": ["src/broken.rs"],
+  "steps": [
+    {"op": "wait", "until": "idle"},
+    {"op": "execute", "command": "settings.open", "args": {"page": "Errors"}},
+    {"op": "wait", "until": "idle"},
+    {"op": "sleep", "ms": 500},
+    {"op": "screenshot", "name": "33-settings-inspections.png"}
+  ]
+}

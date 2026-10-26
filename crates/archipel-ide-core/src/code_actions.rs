@@ -6,11 +6,21 @@
 //! runs its command; edits the server pushes back with `workspace/applyEdit`
 //! are applied by [`IdeState::poll_code_actions`].
 use crate::{IdeState, spec, usize_param};
+use archipel_ide_analysis::intention::IntentionGroup;
+use archipel_ide_analysis::modcommand::NavigateTo;
+use archipel_ide_analysis::{CancelToken, FileId, FileRev, ModCommand};
 use archipel_ide_command::{Command, CommandError, CommandRegistry};
+use archipel_ide_daemon::inspection::catalog;
+use archipel_ide_daemon::intention::{
+    AlertAction, AlertCache, AlertInput, AlertSet, Applied, ApplyInput, Source, apply,
+};
 use archipel_ide_lsp::{Feature, RequestHandle};
+use archipel_ide_text::{Selection, TextChange};
 use serde::Serialize;
 use serde_json::{Value, json};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// One entry of the intention popup.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -94,9 +104,288 @@ pub struct CodeActionState {
     pub list: Option<CodeActionList>,
     /// Whether the intention popup is open.
     pub popup: bool,
+    /// Native (daemon) fixes and intentions, cached per caret and revision.
+    pub(crate) alerts: AlertCache,
+    /// Intention ids the user switched off.
+    pub disabled_intentions: HashSet<String>,
 }
 
 impl IdeState {
+    /// The LSP code actions of the current list as popup rows.
+    fn lsp_alert_rows(&self) -> Vec<AlertAction> {
+        let Some(list) = self.current_code_actions() else {
+            return Vec::new();
+        };
+        list.items
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| item.disabled.is_none())
+            .map(|(index, item)| {
+                let error = item
+                    .raw
+                    .get("diagnostics")
+                    .and_then(Value::as_array)
+                    .is_some_and(|d| {
+                        d.iter()
+                            .any(|d| d.get("severity").and_then(Value::as_u64) == Some(1))
+                    });
+                let group = match (item.quick_fix, error) {
+                    (true, true) => IntentionGroup::Error,
+                    (true, false) => IntentionGroup::Inspection,
+                    _ => IntentionGroup::Other,
+                };
+                let priority = if item.preferred {
+                    archipel_ide_analysis::intention::Priority::High
+                } else {
+                    archipel_ide_analysis::intention::Priority::Normal
+                };
+                AlertAction::external(
+                    item.title.clone(),
+                    group,
+                    priority,
+                    Source::Lsp,
+                    format!("lsp:{index}"),
+                )
+            })
+            .collect()
+    }
+
+    /// Caret byte offset and selection (bytes) of the active document.
+    fn active_caret_bytes(&self) -> Option<(FileId, u32, Option<std::ops::Range<u32>>)> {
+        let document = self.documents.get(self.active_document?)?;
+        let file = self.analysis.host.lookup(&document.path)?;
+        let selection = document.selections.primary();
+        let byte = |c: usize| document.text.char_to_byte(c.min(document.text.len_chars())) as u32;
+        let range = (!selection.is_caret()).then(|| byte(selection.start())..byte(selection.end()));
+        Some((file, byte(selection.head), range))
+    }
+
+    /// The Alt+Enter rows at the caret: native quick fixes and intentions from
+    /// the daemon plus the language server's code actions, deduplicated and
+    /// ordered (group priority + priority weight, then text). `None` while the
+    /// analysis host has not caught up with the editor text.
+    pub fn current_alerts(&mut self) -> Option<Arc<AlertSet>> {
+        let service = self.daemon_service()?;
+        let (file, caret, selection) = self.active_caret_bytes()?;
+        let document = self.documents.get(self.active_document?)?;
+        let snap = self.analysis.host.snapshot();
+        if snap.file_rev(file) != Some(FileRev(document.text.revision())) {
+            return None;
+        }
+        let syntax = snap.syntax(file)?;
+        let extra = self.lsp_alert_rows();
+        let names: HashMap<String, String> = catalog::inspections(snap.registry())
+            .into_iter()
+            .map(|t| (t.id.to_owned(), t.name.to_owned()))
+            .collect();
+        let daemon = service.lock();
+        let markup = daemon.markup(file)?;
+        let cancel = CancelToken::new();
+        let input = AlertInput {
+            snap: &snap,
+            file,
+            syntax: &syntax,
+            markup,
+            caret,
+            selection,
+            cancel: &cancel,
+            extra,
+            disabled: &self.code_actions.disabled_intentions,
+            tool_names: &names,
+        };
+        let version = daemon.store().version();
+        let mut cache = std::mem::take(&mut self.code_actions.alerts);
+        let set = cache.get_or_compute(&input, version).ok();
+        drop(daemon);
+        self.code_actions.alerts = cache;
+        set
+    }
+
+    /// Chooses row `index` of [`IdeState::current_alerts`].
+    pub fn apply_alert(&mut self, index: usize) -> Result<(), String> {
+        let set = self
+            .current_alerts()
+            .ok_or("the actions are out of date; press Alt+Enter again")?;
+        let action = set.actions.get(index).ok_or("no such action")?.clone();
+        let (file, caret, selection) = self.active_caret_bytes().ok_or("no active document")?;
+        let service = self
+            .daemon_service()
+            .ok_or("the analysis daemon is not available")?;
+        let applied = {
+            let snap = self.analysis.host.snapshot();
+            let syntax = snap.syntax(file).ok_or("the file has no syntax tree")?;
+            let daemon = service.lock();
+            let markup = daemon.markup(file).ok_or("no highlights for this file")?;
+            let cancel = CancelToken::new();
+            apply(
+                &action,
+                &ApplyInput {
+                    snap: &snap,
+                    file,
+                    syntax: &syntax,
+                    markup,
+                    caret,
+                    selection,
+                    cancel: &cancel,
+                },
+            )
+            .map_err(|_| "cancelled".to_owned())?
+        };
+        match applied {
+            Applied::External { token } => {
+                let index = token
+                    .strip_prefix("lsp:")
+                    .and_then(|n| n.parse().ok())
+                    .ok_or("unknown action owner")?;
+                self.apply_code_action(index)
+            }
+            other => {
+                self.code_actions.popup = false;
+                self.code_actions.list = None;
+                match other {
+                    Applied::Command(command) => {
+                        let message = self.execute_mod_command(&command)?;
+                        self.status = if message.is_empty() {
+                            format!("Applied: {}", action.text)
+                        } else {
+                            message
+                        };
+                        Ok(())
+                    }
+                    Applied::DisableInspection { tool } => {
+                        let root = self.project.as_ref().map(|p| p.root().to_owned());
+                        service
+                            .edit_profile(
+                                root.as_deref(),
+                                crate::inspection_commands::config_dir_for_actions(),
+                                |file| file.set_enabled(&tool, Some(false)),
+                            )
+                            .map_err(|e| e.to_string())?;
+                        self.analysis
+                            .host
+                            .apply(archipel_ide_analysis::Change::SettingsChanged);
+                        self.status = format!("Inspection '{tool}' disabled in the active profile");
+                        Ok(())
+                    }
+                    Applied::EditProfile { .. } => {
+                        self.settings_request = Some(crate::INSPECTIONS_PAGE.to_owned());
+                        Ok(())
+                    }
+                    Applied::External { .. } => Ok(()),
+                }
+            }
+        }
+    }
+
+    /// Executes a [`ModCommand`] against the open documents: every document
+    /// edit is one undo step; commands the editor cannot run yet are refused.
+    /// Returns a message to show (empty = the default).
+    pub fn execute_mod_command(&mut self, command: &ModCommand) -> Result<String, String> {
+        match command {
+            ModCommand::Nothing => Ok(String::new()),
+            ModCommand::Composite(parts) => {
+                let mut message = String::new();
+                for part in parts {
+                    let next = self.execute_mod_command(part)?;
+                    if !next.is_empty() {
+                        message = next;
+                    }
+                }
+                Ok(message)
+            }
+            ModCommand::UpdateFile {
+                file,
+                edits,
+                expected_rev,
+            } => {
+                let snap = self.analysis.host.snapshot();
+                let path = snap.path(*file).ok_or("unknown file")?.to_owned();
+                let index = self
+                    .documents
+                    .iter()
+                    .position(|d| d.path == path)
+                    .ok_or_else(|| format!("{} is not open", path.display()))?;
+                let document = &mut self.documents[index];
+                if FileRev(document.text.revision()) != *expected_rev {
+                    return Err(format!(
+                        "{} changed since the fix was computed; try again",
+                        path.display()
+                    ));
+                }
+                let mut changes = Vec::with_capacity(edits.len());
+                let text = document.text.text();
+                for edit in edits {
+                    let (start, end) = (edit.range.start as usize, edit.range.end as usize);
+                    if start > end
+                        || end > text.len()
+                        || !text.is_char_boundary(start)
+                        || !text.is_char_boundary(end)
+                    {
+                        return Err(format!("{}: invalid edit range", path.display()));
+                    }
+                    changes.push(TextChange {
+                        start_char: document.text.byte_to_char(start),
+                        end_char: document.text.byte_to_char(end),
+                        inserted: edit.new_text.replace("\r\n", "\n"),
+                    });
+                }
+                let caret = document.selections.primary().head;
+                let shift: isize = changes
+                    .iter()
+                    .filter(|c| c.end_char <= caret)
+                    .map(|c| {
+                        c.inserted.chars().count() as isize - (c.end_char - c.start_char) as isize
+                    })
+                    .sum();
+                let revision = document.text.revision();
+                document
+                    .text
+                    .edit_many(changes)
+                    .map_err(|e| format!("{}: {e}", path.display()))?;
+                if document.text.revision() != revision {
+                    let caret = caret
+                        .saturating_add_signed(shift)
+                        .min(document.text.len_chars());
+                    document.selections.set_single(Selection::caret(caret));
+                    let source = document.text.text();
+                    document.refresh_analysis(&source);
+                    let version = document.text.revision().min(i32::MAX as u64) as i32;
+                    self.sync_document_lsp(&path, &source, version);
+                    self.close_completion();
+                }
+                Ok(String::new())
+            }
+            ModCommand::Navigate {
+                to: NavigateTo::Range { file, range },
+                select,
+            } => {
+                let snap = self.analysis.host.snapshot();
+                let path = snap.path(*file).ok_or("unknown file")?.to_owned();
+                let index = self
+                    .documents
+                    .iter()
+                    .position(|d| d.path == path)
+                    .ok_or("file is not open")?;
+                let document = &mut self.documents[index];
+                let target = select.clone().unwrap_or(range.clone());
+                let (a, b) = (
+                    document.text.byte_to_char(target.start as usize),
+                    document.text.byte_to_char(target.end as usize),
+                );
+                document
+                    .selections
+                    .set_single(Selection { anchor: a, head: b });
+                self.active_document = Some(index);
+                Ok(String::new())
+            }
+            ModCommand::DisplayMessage { message, .. } => Ok(message.clone()),
+            other => Err(format!(
+                "{} is not supported by the editor yet",
+                command_kind(other)
+            )),
+        }
+    }
+
     /// The actions for the current caret and revision, if known.
     pub fn current_code_actions(&self) -> Option<&CodeActionList> {
         let list = self.code_actions.list.as_ref()?;
@@ -117,6 +406,20 @@ impl IdeState {
     /// Requests code actions at the caret; `popup` opens the intention popup
     /// when they arrive (Alt+Enter), otherwise only the lightbulb updates.
     pub fn request_code_actions(&mut self, popup: bool) -> Result<(), String> {
+        if !self.active_supports_code_actions() {
+            // Native fixes and intentions only.
+            let native = self
+                .current_alerts()
+                .is_some_and(|set| !set.actions.is_empty());
+            if popup {
+                if native {
+                    self.code_actions.popup = true;
+                } else {
+                    self.status = "No quick fixes or intentions here".into();
+                }
+            }
+            return Ok(());
+        }
         if popup && self.current_code_actions().is_some() {
             self.code_actions.popup = true;
             return Ok(());
@@ -273,10 +576,13 @@ impl IdeState {
                         .flatten()
                         .filter_map(CodeActionItem::parse)
                         .collect();
-                    if pending.popup && items.is_empty() {
+                    let native = self
+                        .current_alerts()
+                        .is_some_and(|set| !set.actions.is_empty());
+                    if pending.popup && items.is_empty() && !native {
                         self.status = "No quick fixes or intentions here".into();
                     }
-                    self.code_actions.popup = pending.popup && !items.is_empty();
+                    self.code_actions.popup = pending.popup && (!items.is_empty() || native);
                     self.code_actions.list = Some(CodeActionList {
                         path: pending.path,
                         offset: pending.offset,
@@ -332,6 +638,24 @@ impl IdeState {
     }
 }
 
+fn command_kind(command: &ModCommand) -> &'static str {
+    match command {
+        ModCommand::CreateFile { .. } => "creating files",
+        ModCommand::DeleteFile { .. } => "deleting files",
+        ModCommand::MoveFile { .. } => "moving files",
+        ModCommand::StartRename { .. } => "in-place rename",
+        ModCommand::StartTemplate(_) => "live templates from fixes",
+        ModCommand::ShowConflicts(_) => "conflict dialogs",
+        ModCommand::Choose(_) => "choice menus",
+        ModCommand::OpenUrl(_) => "opening URLs",
+        ModCommand::CopyToClipboard(_) => "clipboard commands",
+        ModCommand::Highlight { .. } => "highlight commands",
+        ModCommand::RegisterTabOut { .. } => "tab-out",
+        ModCommand::Navigate { .. } => "navigation to targets",
+        _ => "this command",
+    }
+}
+
 pub(crate) fn file_uri(path: &std::path::Path) -> Result<String, String> {
     let absolute = path.canonicalize().unwrap_or_else(|_| path.to_owned());
     url::Url::from_file_path(&absolute)
@@ -349,7 +673,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 Some("⌥↩"),
                 "{}",
             ),
-            |state: &IdeState| state.active_has_language_server(),
+            |state: &IdeState| state.active_document.is_some(),
             |state: &mut IdeState, _| {
                 state
                     .request_code_actions(true)
@@ -367,7 +691,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.active_supports_code_actions(),
+            |state: &IdeState| state.active_document.is_some(),
             |state: &mut IdeState, _| {
                 state
                     .request_code_actions(false)
@@ -392,6 +716,46 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     .apply_code_action(index)
                     .map_err(CommandError::Failed)?;
                 Ok(Value::Null)
+            },
+        ))
+        .expect("unique built-in id");
+    registry
+        .register(Command::new(
+            spec(
+                "code.applyAlert",
+                "Apply Context Action (merged list)",
+                "Code",
+                None,
+                r#"{"index":0}"#,
+            ),
+            |state: &IdeState| state.active_document.is_some(),
+            |state: &mut IdeState, params| {
+                let index = usize_param(&params, "index")?;
+                state.apply_alert(index).map_err(CommandError::Failed)?;
+                Ok(Value::Null)
+            },
+        ))
+        .expect("unique built-in id");
+    registry
+        .register(Command::new(
+            spec(
+                "code.alerts",
+                "List Quick Fixes and Intentions",
+                "Code",
+                None,
+                "{}",
+            ),
+            |_| true,
+            |state: &mut IdeState, _| {
+                state.poll_analysis();
+                let set = state.current_alerts();
+                Ok(json!({
+                    "actions": set.as_ref().map(|s| s.actions.iter().map(|a| json!({
+                        "text": a.text, "group": format!("{:?}", a.group), "weight": a.weight(),
+                        "submenu": a.submenu, "source": format!("{:?}", a.source),
+                    })).collect::<Vec<_>>()),
+                    "bulb": set.as_ref().map(|s| format!("{:?}", s.bulb())),
+                }))
             },
         ))
         .expect("unique built-in id");

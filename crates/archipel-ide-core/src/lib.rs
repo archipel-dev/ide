@@ -19,6 +19,16 @@ mod history_commands;
 mod indexing_commands;
 mod todo_commands;
 pub use analysis_host::AnalysisServices;
+mod inspection_commands;
+/// Alt+Enter model types for the UI.
+pub mod intentions {
+    pub use archipel_ide_analysis::inspect::Level;
+    pub use archipel_ide_analysis::intention::IntentionGroup;
+    pub use archipel_ide_daemon::intention::{AlertAction, AlertSet, Bulb};
+}
+pub use inspection_commands::{
+    INSPECTIONS_PAGE, InspectionRow, SETTING_DELAY, SETTING_ENABLED, SETTING_PROFILE, level_id,
+};
 mod ai_agent;
 mod ai_commands;
 mod ai_inline;

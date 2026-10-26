@@ -1,0 +1,23 @@
+[package]
+name = "archipel-ide-daemon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Highlighting daemon: pass scheduler, highlight markup, inspections and profiles, quick fixes, intentions and the Alt+Enter model"
+
+[dependencies]
+archipel-ide-analysis = { path = "../archipel-ide-analysis" }
+archipel-ide-language = { path = "../archipel-ide-language" }
+parking_lot.workspace = true
+serde.workspace = true
+smallvec = "1.13"
+thiserror.workspace = true
+toml.workspace = true
+similar.workspace = true
+
+[dev-dependencies]
+proptest = "1.7"
+
+[[bench]]
+name = "daemon"
+harness = false

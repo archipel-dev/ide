@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.0](https://github.com/archipel-dev/ide/compare/v0.1.0...v0.2.0) (2026-10-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* move the IDE onto the Archipel Kit IntelliJ Platform names ([#45](https://github.com/archipel-dev/ide/issues/45))
+
+### Features
+
+* **toolchains:** set up missing tools on project open, fix the welcome search and New Project layout ([#46](https://github.com/archipel-dev/ide/issues/46)) ([c02fd20](https://github.com/archipel-dev/ide/commit/c02fd20d290e74207896ea5140444117513eff12))
+
+
+### Code Refactoring
+
+* move the IDE onto the Archipel Kit IntelliJ Platform names ([#45](https://github.com/archipel-dev/ide/issues/45)) ([2bcd76e](https://github.com/archipel-dev/ide/commit/2bcd76e5e054bc39e0867f03044ec7d8cf1f24a4))
+
 ## [0.1.0](https://github.com/archipel-dev/ide/compare/v0.0.9...v0.1.0) (2026-10-26)
 
 

@@ -1,6 +1,6 @@
 //! Thread tabs, the native transcript and the inspector.
 //!
-//! One tab per open agent thread (the kit's editor-style `TabBar`); the active tab shows
+//! One tab per open agent thread (the kit's editor-style `JBTabs`); the active tab shows
 //! the transcript at a comfortable reading width with a reply field at the bottom. The
 //! inspector on the right always reflects the active tab.
 
@@ -9,9 +9,10 @@ use super::*;
 use archipel_ide_core::agent_events::{
     AgentEvent, DiffLine, PERMISSION_OPTIONS, ToolKind, ToolStatus,
 };
-use archipel_kit::components::{PropertyGrid, SectionHeader, Spinner, Tab, TabBar};
 use archipel_kit::parts::Surface;
 use archipel_kit::tokens::radius;
+use archipel_kit::ui::tabs::{JBTabs, TabInfo};
+use archipel_kit::ui::{AsyncProcessIcon, PropertyGrid, TitledSeparator};
 
 const READING_WIDTH: f32 = 760.0;
 /// Lines of tool output shown before the rest is folded.
@@ -96,7 +97,7 @@ pub(super) fn threads(app: &mut IdeApp, ui: &mut egui::Ui) {
     let draft = app.state.agents.new_thread;
     let draft_active = draft && app.state.agents.draft_active;
     if open.is_empty() && !draft {
-        let shown = EmptyState::new("No thread open")
+        let shown = StatusText::new("No thread open")
             .hint("Pick an agent in the list, or start a new thread.")
             .icon(glyph(Concept::Agent))
             .action("New thread")
@@ -115,22 +116,22 @@ pub(super) fn threads(app: &mut IdeApp, ui: &mut egui::Ui) {
             .and_then(|id| open.iter().position(|s| s.id == id))
             .unwrap_or(0)
     };
-    let mut tabs: Vec<Tab> = open
+    let mut tabs: Vec<TabInfo> = open
         .iter()
         .map(|s| {
-            Tab::new(s.name.clone())
+            TabInfo::new(s.name.clone())
                 .icon(look(s.state).0)
                 .closable(true)
                 .modified(s.unread)
         })
         .collect();
     if draft {
-        tabs.push(Tab::new("New thread").icon(Glyph::Plus).closable(true));
+        tabs.push(TabInfo::new("New thread").icon(Glyph::Plus).closable(true));
     }
     let mut actions = Vec::new();
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        let out = TabBar::new(&tabs, active).show(ui);
+        let out = JBTabs::new(&tabs, active).show(ui);
         if let Some(index) = out.closed {
             actions.push(match open.get(index) {
                 Some(s) => Action::CloseThread(s.id),
@@ -143,7 +144,7 @@ pub(super) fn threads(app: &mut IdeApp, ui: &mut egui::Ui) {
             });
         }
         if ui
-            .add(IconButton::new(Glyph::Plus, "New agent thread"))
+            .add(ActionButton::new(Glyph::Plus, "New agent thread"))
             .clicked()
         {
             actions.push(Action::NewThread);
@@ -334,7 +335,7 @@ fn transcript(
                 crate::ai_chat::render_markdown(ui, id as usize * 10_000 + index, text);
             }
             AgentEvent::Thinking(text) => {
-                let row = ListRow::new("Thinking")
+                let row = ColoredListCellRenderer::new("Thinking")
                     .icon(glyph(Concept::Thinking))
                     .label_tone(Tone::Muted)
                     .expanded(Some(open))
@@ -390,7 +391,7 @@ fn transcript(
                     let deny = choice == PERMISSION_OPTIONS[2];
                     let width = ui.available_width();
                     let text = elide(ui, &format!("{choice}: {question}"), width - 60.0);
-                    ListRow::new(text)
+                    ColoredListCellRenderer::new(text)
                         .icon(if deny {
                             glyph(Concept::Failed)
                         } else {
@@ -402,7 +403,7 @@ fn transcript(
                 }
             },
             AgentEvent::SubagentSpawned { child, name } => {
-                let row = ListRow::new(format!("Started agent {name}"))
+                let row = ColoredListCellRenderer::new(format!("Started agent {name}"))
                     .icon(glyph(Concept::Subagent))
                     .icon_tone(Tone::Accent)
                     .trailing(Slot::text_tone("Open thread", Tone::Link))
@@ -437,13 +438,13 @@ fn transcript(
                 });
             }
             AgentEvent::Error(message) => {
-                Banner::new(Severity::Error, message.as_str()).show(ui);
+                InlineBanner::new(Status::Error, message.as_str()).show(ui);
             }
         }
     }
     if info.state == AgentState::Working {
         ui.horizontal(|ui| {
-            ui.add(Spinner::new().size(14.0).label("Working"));
+            ui.add(AsyncProcessIcon::new().size(14.0).label("Working"));
             ui.label(egui::RichText::new("Working").color(colors.text_secondary));
         });
     }
@@ -480,7 +481,7 @@ fn tool_row(
     let room = width - 76.0 - trailing;
     let label = elide(ui, title, room);
     let left = room - text_width(ui, &label) - 14.0;
-    let mut row = ListRow::new(label)
+    let mut row = ColoredListCellRenderer::new(label)
         .icon(glyph(tool_concept(kind)))
         .icon_tone(tone)
         .expanded(output.map(|_| open));
@@ -489,7 +490,7 @@ fn tool_row(
     }
     row = match (status, result) {
         (ToolStatus::Running, _) => row.trailing(Slot::ui_width(24.0, |ui| {
-            ui.add(Spinner::new().size(12.0).label("Running"));
+            ui.add(AsyncProcessIcon::new().size(12.0).label("Running"));
         })),
         (_, Some(text)) => row.trailing(Slot::text_tone(text, result_tone)),
         _ => row,
@@ -633,7 +634,7 @@ fn permission_card(
 pub(super) fn inspector(app: &mut IdeApp, ui: &mut egui::Ui) {
     panel_header(ui, "Inspector", |_| {});
     if app.state.agents.new_thread && app.state.agents.draft_active {
-        EmptyState::new("New thread")
+        StatusText::new("New thread")
             .hint("Choose the agents and describe the task. The inspector follows the thread once it starts.")
             .show(ui);
         return;
@@ -644,7 +645,7 @@ pub(super) fn inspector(app: &mut IdeApp, ui: &mut egui::Ui) {
         .selected
         .and_then(|id| app.state.agents.session(id))
     else {
-        EmptyState::new("No thread selected")
+        StatusText::new("No thread selected")
             .hint("The inspector shows the active thread.")
             .show(ui);
         return;
@@ -762,7 +763,7 @@ pub(super) fn inspector(app: &mut IdeApp, ui: &mut egui::Ui) {
                             .color(colors.text_placeholder),
                     );
                     if let Some(question) = &question {
-                        ui.add(SectionHeader::new("Waiting for your answer"));
+                        ui.add(TitledSeparator::new("Waiting for your answer"));
                         ui.add(
                             egui::Label::new(
                                 egui::RichText::new(question).color(Tone::Warning.color(&colors)),
@@ -770,7 +771,7 @@ pub(super) fn inspector(app: &mut IdeApp, ui: &mut egui::Ui) {
                             .wrap(),
                         );
                     }
-                    ui.add(SectionHeader::new(format!(
+                    ui.add(TitledSeparator::new(format!(
                         "Changed files ({})",
                         changes.len()
                     )));
@@ -797,13 +798,13 @@ pub(super) fn inspector(app: &mut IdeApp, ui: &mut egui::Ui) {
                     drop(make);
                     actions.extend(queued.into_inner());
                     if !children.is_empty() {
-                        ui.add(SectionHeader::new(format!(
+                        ui.add(TitledSeparator::new(format!(
                             "Sub-threads ({})",
                             children.len()
                         )));
                         for child in &children {
                             let (glyph_, tone) = look(child.state);
-                            let row = ListRow::new(child.name.clone())
+                            let row = ColoredListCellRenderer::new(child.name.clone())
                                 .flat(true)
                                 .icon(glyph_)
                                 .icon_tone(tone)

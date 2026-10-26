@@ -6,7 +6,7 @@ use crate::native_dialog::Purpose;
 use crate::popups::{popup_frame, title};
 use crate::{IdeApp, theme, widgets};
 use archipel_ide_core::JdkChoice;
-use archipel_kit::components::Button;
+use archipel_kit::ui::Button;
 use eframe::egui::{self, RichText, vec2};
 use serde_json::json;
 use spring::{Page, SpringForm};

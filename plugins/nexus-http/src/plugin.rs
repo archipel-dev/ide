@@ -178,10 +178,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("api.http");
         std::fs::write(&file, "### Ping\nGET https://example.test/ping\n").unwrap();
-        let mut host = RecordingHost {
-            project: Some(dir.path().to_path_buf()),
-            ..RecordingHost::default()
-        };
+        let mut host = RecordingHost::default();
+        host.project = Some(dir.path().to_path_buf());
         let mut plugin = NexusHttpPlugin::new();
         plugin.import_file(&file, &mut host);
         plugin.import_file(&file, &mut host);

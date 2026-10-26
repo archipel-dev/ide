@@ -6,7 +6,7 @@
 use archipel_ide_core::IdeState;
 use archipel_ide_core::intentions::Level;
 use archipel_ide_core::{InspectionRow, level_id};
-use archipel_kit::components::{Checkbox, SectionHeader, SegmentedControl, TextField};
+use archipel_kit::ui::{JBCheckBox, JBTextField, SegmentedButton, TitledSeparator};
 use eframe::egui;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -42,7 +42,7 @@ pub fn show(
     let rows = state.inspection_rows();
     ui.horizontal(|ui| {
         ui.add(
-            TextField::search(&mut page.query)
+            JBTextField::search(&mut page.query)
                 .placeholder("Search inspections")
                 .width(260.0),
         );
@@ -69,7 +69,7 @@ pub fn show(
                     continue;
                 }
                 let open = !page.collapsed.contains(group);
-                let header = ui.add(SectionHeader::new(format!(
+                let header = ui.add(TitledSeparator::new(format!(
                     "{} {group} ({})",
                     if open { "v" } else { ">" },
                     members.len()
@@ -98,7 +98,7 @@ fn tool_row(
 ) {
     let mut enabled = row.enabled;
     ui.horizontal(|ui| {
-        if ui.add(Checkbox::new(&mut enabled, row.name)).changed() {
+        if ui.add(JBCheckBox::new(&mut enabled, row.name)).changed() {
             requests.push((
                 "inspection.profile.edit".into(),
                 json!({"tool": row.id, "enabled": enabled}),
@@ -116,7 +116,7 @@ fn tool_row(
         ui.label(format!("Languages: {}", row.languages.join(", ")));
         let mut level = row.level;
         let options: Vec<(Level, &str)> = LEVELS.to_vec();
-        if ui.add(SegmentedControl::new(&mut level, options)).changed() {
+        if ui.add(SegmentedButton::new(&mut level, options)).changed() {
             requests.push((
                 "inspection.profile.edit".into(),
                 json!({"tool": row.id, "level": level_id(level)}),
@@ -126,7 +126,7 @@ fn tool_row(
             match value {
                 Value::Bool(current) => {
                     let mut flag = *current;
-                    if ui.add(Checkbox::new(&mut flag, *label)).changed() {
+                    if ui.add(JBCheckBox::new(&mut flag, *label)).changed() {
                         requests.push((
                             "inspection.profile.edit".into(),
                             json!({"tool": row.id, "option": id, "value": flag}),
@@ -138,7 +138,7 @@ fn tool_row(
                     let mut text = current.to_string();
                     ui.horizontal(|ui| {
                         ui.label(*label);
-                        let response = ui.add(TextField::new(&mut text).width(80.0));
+                        let response = ui.add(JBTextField::new(&mut text).width(80.0));
                         if response.lost_focus()
                             && let Ok(value) = text.trim().parse::<i64>()
                             && value != current

@@ -7,10 +7,12 @@ use crate::{IdeApp, theme};
 use archipel_ide_core::spring_commands::RefreshStatus;
 use archipel_ide_project::spring::{SpringBuild, SpringSpec, unsupported_combination};
 use archipel_ide_project::spring_catalog::{Catalog, Dependency};
-use archipel_kit::components::{
-    Button, Checkbox, Dropdown, IconButton, ListRow, SectionHeader, SegmentedControl, TextField,
-};
+use archipel_kit::action_system::ActionButton;
 use archipel_kit::icons::Glyph;
+use archipel_kit::openapi::ui::ComboBox;
+use archipel_kit::ui::{
+    Button, ColoredListCellRenderer, JBCheckBox, JBTextField, SegmentedButton, TitledSeparator,
+};
 use eframe::egui::{self, RichText, vec2};
 use serde_json::{Value, json};
 
@@ -143,7 +145,7 @@ const BUILDS: [(&str, &str); 4] = [
 ];
 
 fn segmented(ui: &mut egui::Ui, value: &mut String, options: &[(&str, &str)]) {
-    ui.add(SegmentedControl::new(
+    ui.add(SegmentedButton::new(
         value,
         options.iter().map(|(id, label)| ((*id).to_owned(), *label)),
     ));
@@ -208,7 +210,7 @@ pub(super) fn settings_page(
         .spacing([16.0, 10.0])
         .show(ui, |ui| {
             field_label(ui, "Name");
-            let response = ui.add(TextField::new(&mut form.name).width(380.0));
+            let response = ui.add(JBTextField::new(&mut form.name).width(380.0));
             submit |= response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             if focus {
                 response.request_focus();
@@ -216,7 +218,7 @@ pub(super) fn settings_page(
             ui.end_row();
             field_label(ui, "Location");
             ui.horizontal(|ui| {
-                ui.add(TextField::new(&mut form.location).width(300.0));
+                ui.add(JBTextField::new(&mut form.location).width(300.0));
                 if ui.add(Button::secondary("Browse…")).clicked() {
                     *browse = Some(Purpose::NewProjectLocation);
                 }
@@ -236,7 +238,7 @@ pub(super) fn settings_page(
             );
             ui.end_row();
             ui.label("");
-            ui.add(Checkbox::new(&mut form.git, "Create Git repository"));
+            ui.add(JBCheckBox::new(&mut form.git, "Create Git repository"));
             ui.end_row();
             field_label(ui, "Language");
             segmented(ui, &mut form.spring.language, &LANGUAGES);
@@ -245,11 +247,11 @@ pub(super) fn settings_page(
             segmented(ui, &mut form.spring.build, &BUILDS);
             ui.end_row();
             field_label(ui, "Group");
-            ui.add(TextField::new(&mut form.spring.group).width(380.0));
+            ui.add(JBTextField::new(&mut form.spring.group).width(380.0));
             ui.end_row();
             field_label(ui, "Artifact");
             if ui
-                .add(TextField::new(&mut form.spring.artifact).width(380.0))
+                .add(JBTextField::new(&mut form.spring.artifact).width(380.0))
                 .changed()
             {
                 form.spring.artifact_edited = form.spring.artifact.trim() != form.name.trim();
@@ -257,7 +259,7 @@ pub(super) fn settings_page(
             ui.end_row();
             field_label(ui, "Package name");
             if ui
-                .add(TextField::new(&mut form.spring.package).width(380.0))
+                .add(JBTextField::new(&mut form.spring.package).width(380.0))
                 .changed()
             {
                 form.spring.package_edited = form.spring.package
@@ -288,7 +290,7 @@ pub(super) fn settings_page(
             labels.extend(downloads.iter().cloned());
             let before = selected.clone();
             ui.add(
-                Dropdown::new("new_project_spring_jdk", &mut selected, labels)
+                ComboBox::new("new_project_spring_jdk", &mut selected, labels)
                     .width(300.0)
                     .label("JDK"),
             );
@@ -313,7 +315,7 @@ pub(super) fn settings_page(
                 ui.end_row();
             }
             field_label(ui, "Java version");
-            ui.add(SegmentedControl::new(
+            ui.add(SegmentedButton::new(
                 &mut form.spring.java_version,
                 java_versions
                     .iter()
@@ -323,7 +325,7 @@ pub(super) fn settings_page(
             field_label(ui, "Spring Boot");
             let mut boot = form.spring.boot_version.clone();
             ui.add(
-                Dropdown::new("new_project_spring_boot", &mut boot, catalog_versions)
+                ComboBox::new("new_project_spring_boot", &mut boot, catalog_versions)
                     .width(160.0)
                     .label("Spring Boot version"),
             );
@@ -363,7 +365,7 @@ pub(super) fn dependencies_page(ui: &mut egui::Ui, form: &mut Form, app: &mut Id
     let catalog = app.state.spring.catalog.clone();
     ui.horizontal(|ui| {
         ui.add(
-            TextField::search(&mut form.spring.query)
+            JBTextField::search(&mut form.spring.query)
                 .placeholder("Search dependencies")
                 .width(300.0),
         );
@@ -379,13 +381,13 @@ pub(super) fn dependencies_page(ui: &mut egui::Ui, form: &mut Form, app: &mut Id
             egui::Layout::top_down(egui::Align::Min),
             |ui| {
                 ui.set_width(150.0);
-                ui.add(SectionHeader::new("Categories"));
+                ui.add(TitledSeparator::new("Categories"));
                 egui::ScrollArea::vertical()
                     .id_salt("new_project_spring_categories")
                     .max_height(body - 30.0)
                     .show(ui, |ui| {
                         let all = form.spring.category.is_none();
-                        if ListRow::new("All")
+                        if ColoredListCellRenderer::new("All")
                             .selected(all)
                             .show(ui)
                             .response
@@ -396,7 +398,7 @@ pub(super) fn dependencies_page(ui: &mut egui::Ui, form: &mut Form, app: &mut Id
                         for category in &catalog.categories {
                             let selected =
                                 form.spring.category.as_deref() == Some(category.id.as_str());
-                            if ListRow::new(&category.name)
+                            if ColoredListCellRenderer::new(&category.name)
                                 .selected(selected)
                                 .show(ui)
                                 .response
@@ -415,7 +417,7 @@ pub(super) fn dependencies_page(ui: &mut egui::Ui, form: &mut Form, app: &mut Id
             egui::Layout::top_down(egui::Align::Min),
             |ui| {
                 ui.set_width(350.0);
-                ui.add(SectionHeader::new("Dependencies"));
+                ui.add(TitledSeparator::new("Dependencies"));
                 let visible = form.spring.visible(&catalog);
                 egui::ScrollArea::vertical()
                     .id_salt("new_project_spring_dependencies")
@@ -439,7 +441,7 @@ pub(super) fn dependencies_page(ui: &mut egui::Ui, form: &mut Form, app: &mut Id
                                 );
                             }
                             let mut on = form.spring.is_selected(&dependency.id);
-                            if ui.add(Checkbox::new(&mut on, &dependency.name)).changed() {
+                            if ui.add(JBCheckBox::new(&mut on, &dependency.name)).changed() {
                                 form.spring.set_selected(&dependency.id, on);
                             }
                             ui.horizontal(|ui| {
@@ -464,7 +466,7 @@ pub(super) fn dependencies_page(ui: &mut egui::Ui, form: &mut Form, app: &mut Id
             egui::Layout::top_down(egui::Align::Min),
             |ui| {
                 ui.set_width(200.0);
-                ui.add(SectionHeader::new(format!(
+                ui.add(TitledSeparator::new(format!(
                     "Selected dependencies ({})",
                     form.spring.selected.len()
                 )));
@@ -486,7 +488,7 @@ pub(super) fn dependencies_page(ui: &mut egui::Ui, form: &mut Form, app: &mut Id
                             ui.horizontal(|ui| {
                                 if ui
                                     .add(
-                                        IconButton::new(Glyph::Close, format!("Remove {name}"))
+                                        ActionButton::new(Glyph::Close, format!("Remove {name}"))
                                             .small(true),
                                     )
                                     .clicked()

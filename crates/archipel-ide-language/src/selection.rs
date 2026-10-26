@@ -113,6 +113,9 @@ pub fn expand_snapshot(
     let mut candidates: Vec<Range<usize>> = Vec::new();
     candidates.extend(expand(snap.tree(), text, range.clone()));
     candidates.extend(crate::textobjects::group_candidates(snap, &range));
+    // Broken code can leave the tree's root short of the file: the whole text
+    // is always the last step.
+    candidates.push(0..text.len());
     if let Ok(start) = u32::try_from(range.start)
         && let Some(fragment) = snap.fragment_at(start)
         && fragment.snapshot.text().len() == text.len()

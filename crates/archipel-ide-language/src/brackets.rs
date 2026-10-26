@@ -45,7 +45,7 @@ impl Pair {
 }
 
 fn bracket_token(node: Node<'_>) -> Option<(&'static str, &'static str, bool)> {
-    if node.is_named() || node.child_count() > 0 {
+    if node.is_named() || node.child_count() > 0 || node.is_missing() {
         return None;
     }
     let kind = node.kind();
@@ -75,7 +75,7 @@ fn sibling_partner(node: Node<'_>, open: &str, close: &str, forward: bool) -> Op
         Box::new(siblings[..index].iter().rev())
     };
     for sibling in ordered {
-        if sibling.is_named() {
+        if sibling.is_named() || sibling.is_missing() {
             continue;
         }
         let kind = sibling.kind();
@@ -176,6 +176,15 @@ fn token_pair(snap: &SyntaxSnapshot, node: Node<'_>) -> Option<Pair> {
     };
     let other = sibling_partner(node, open, close, forward)?;
     let here = node.start_byte();
+    // Unbalanced siblings (broken code) can pair one-sided: require the
+    // partner to point back, so pairs are always symmetric.
+    let partner = node
+        .parent()?
+        .children(&mut node.parent()?.walk())
+        .find(|sibling| sibling.start_byte() == other && !sibling.is_named())?;
+    if sibling_partner(partner, open, close, !forward) != Some(here) {
+        return None;
+    }
     Some(if forward {
         Pair {
             open: here,
@@ -230,15 +239,17 @@ fn tag_pair(snap: &SyntaxSnapshot, leaf: Node<'_>) -> Option<Pair> {
 /// whose start or end tag contains `offset`. Brackets inside strings and
 /// comments never pair.
 pub fn pair_at(snap: &SyntaxSnapshot, offset: usize) -> Option<Pair> {
-    let root = snap.root();
-    let leaf = root.find_leaf_at(u32::try_from(offset).ok()?)?;
-    if leaf.byte_range().start == offset
-        && let Some(pair) = token_pair(snap, leaf.raw())
+    let token = snap
+        .tree()
+        .root_node()
+        .descendant_for_byte_range(offset, offset.saturating_add(1))?;
+    if token.start_byte() == offset
+        && let Some(pair) = token_pair(snap, token)
     {
         return Some(pair);
     }
     if snap.lang().queries().extra.brackets.is_some() {
-        return tag_pair(snap, leaf.raw());
+        return tag_pair(snap, token);
     }
     None
 }

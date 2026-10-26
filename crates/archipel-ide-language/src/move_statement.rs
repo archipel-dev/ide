@@ -156,15 +156,24 @@ pub fn move_statement(snap: &SyntaxSnapshot, range: Range<usize>, up: bool) -> O
         } else {
             (&block, &other)
         };
-        // Whole lines of both pieces and the gap between them.
+        // The pieces start at their line start and end after the element (a
+        // trailing `,` stays in place; a trailing comment moves along).
+        let piece_end = |end: usize| {
+            let line_end = lines
+                .line_range(lines.line_of(end.saturating_sub(1)), text)
+                .end;
+            let tail = &text[end..line_end];
+            let after_comma = tail.trim_start().strip_prefix(',').unwrap_or(tail);
+            if after_comma.trim().is_empty() {
+                end
+            } else {
+                line_end
+            }
+        };
         let first_text_start = lines.line_start(lines.line_of(first.start));
-        let first_text_end = lines
-            .line_range(lines.line_of(first.end.saturating_sub(1)), text)
-            .end;
+        let first_text_end = piece_end(first.end);
         let second_text_start = lines.line_start(lines.line_of(second.start));
-        let second_text_end = lines
-            .line_range(lines.line_of(second.end.saturating_sub(1)), text)
-            .end;
+        let second_text_end = piece_end(second.end);
         if first_text_end > second_text_start {
             continue;
         }

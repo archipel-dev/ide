@@ -17,6 +17,7 @@ pub mod indent;
 mod injection;
 pub mod lines;
 pub mod locals;
+pub mod matrix;
 pub mod move_statement;
 pub mod node;
 pub mod queryset;

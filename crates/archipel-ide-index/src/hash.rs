@@ -12,13 +12,10 @@ fn mix(h: u64, word: u64) -> u64 {
 /// Not cryptographic: it only decides whether a file needs reindexing.
 pub fn content_hash(bytes: &[u8]) -> u64 {
     let mut h = (bytes.len() as u64).wrapping_mul(K) ^ 0x243f_6a88_85a3_08d3;
-    let mut chunks = bytes.chunks_exact(8);
-    for chunk in &mut chunks {
-        let mut word = [0u8; 8];
-        word.copy_from_slice(chunk);
-        h = mix(h, u64::from_le_bytes(word));
+    let (chunks, rest) = bytes.as_chunks::<8>();
+    for chunk in chunks {
+        h = mix(h, u64::from_le_bytes(*chunk));
     }
-    let rest = chunks.remainder();
     if !rest.is_empty() {
         let mut word = [0u8; 8];
         word[..rest.len()].copy_from_slice(rest);

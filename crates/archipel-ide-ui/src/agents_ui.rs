@@ -15,6 +15,7 @@ use crate::{IdeApp, theme};
 use archipel_ide_core::DiffTab;
 use archipel_ide_core::agent_events::permission_input;
 
+mod composer;
 mod thread;
 use archipel_ide_core::DiffViewer;
 use archipel_ide_core::agents::{
@@ -23,9 +24,8 @@ use archipel_ide_core::agents::{
 };
 use archipel_kit::behaviour::ContextMenu;
 use archipel_kit::components::{
-    Banner, Button, Checkbox, Counter, Dialog, DialogAction, EmptyState, IconButton, ListRow,
-    MenuItem, MenuSeparator, Radio, SegmentedControl, Severity, Tag, TextField, Toast, Tooltip,
-    VirtualList,
+    Banner, Button, Counter, Dialog, DialogAction, EmptyState, IconButton, ListRow, MenuItem,
+    MenuSeparator, Radio, SegmentedControl, Severity, Tag, TextField, Toast, Tooltip, VirtualList,
 };
 use archipel_kit::parts::Slot;
 use archipel_kit::{Glyph, Theme, Tone};
@@ -37,8 +37,6 @@ use std::path::PathBuf;
 
 const SIDEBAR_WIDTH: f32 = 290.0;
 const INSPECTOR_WIDTH: f32 = 300.0;
-/// Mock issues the `# Issue` chip cycles through.
-const ISSUES: [&str; 3] = ["#128", "#131", "#142"];
 
 /// Rows of the agents tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -67,6 +65,11 @@ enum Action {
     Select(SessionId),
     Show(SessionId),
     CloseThread(SessionId),
+    CloseDraft,
+    /// Opens the empty new-thread tab.
+    NewThread,
+    /// Starts agents (by profile id) on a prompt.
+    Launch(String, Vec<&'static str>),
     /// Answers a permission card with the option at the index.
     Permission(SessionId, usize),
     /// A follow-up message to an agent.
@@ -92,54 +95,44 @@ struct ReviewCache {
 }
 
 pub struct State {
-    prompt: String,
-    chips: Vec<String>,
-    profiles: [bool; 4],
     collapsed: HashSet<Key>,
-    /// The file picked in the Changes panel.
+    /// The file picked in the inspector.
     changes_selected: Option<usize>,
     merge: Option<MergeDialog>,
     review: Option<ReviewCache>,
     viewer: DiffViewer,
-    focus_prompt: bool,
-    /// Reply field that should take keyboard focus (the "Reply" balloon action).
-    focus_reply: Option<SessionId>,
+    /// The composer takes keyboard focus on the next frame.
+    focus_composer: bool,
+    /// The new-thread tab was active last frame (focus the composer when it opens).
+    was_draft: bool,
     /// Expanded transcript rows (thinking, tool output): (thread, event index).
     expanded: HashSet<(SessionId, usize)>,
-    /// Unsent follow-up text per thread.
-    replies: std::collections::HashMap<SessionId, String>,
-    issue: usize,
+    /// One composer per thread (`None`: the new-thread tab); drafts survive tab switches.
+    composers: std::collections::HashMap<Option<SessionId>, composer::Composer>,
+    /// Prompts sent so far, for Up in an empty composer.
+    history: Vec<String>,
 }
 
 impl Default for State {
     fn default() -> Self {
         Self {
-            prompt: String::new(),
-            chips: Vec::new(),
-            profiles: [true, false, false, false],
             collapsed: HashSet::new(),
             changes_selected: None,
             merge: None,
             review: None,
             viewer: DiffViewer::SideBySide,
-            focus_prompt: false,
-            focus_reply: None,
+            focus_composer: false,
+            was_draft: false,
             expanded: HashSet::new(),
-            replies: Default::default(),
-            issue: 0,
+            composers: Default::default(),
+            history: Vec::new(),
         }
     }
 }
 
-impl State {
-    fn chosen_profiles(&self) -> Vec<&'static str> {
-        AgentProfile::ALL
-            .iter()
-            .zip(self.profiles)
-            .filter(|(_, on)| *on)
-            .map(|(profile, _)| profile.id())
-            .collect()
-    }
+/// Whether the composer has keyboard focus (shell chords stay out of its way).
+pub(crate) fn composer_focused(ctx: &egui::Context) -> bool {
+    composer::focused(ctx)
 }
 
 /// Every concept the Agents UI draws an icon for. Each one maps to a glyph in [`glyph`], the
@@ -168,6 +161,7 @@ pub(crate) enum Concept {
     Send,
     Review,
     Merge,
+    Attach,
 }
 
 pub(crate) fn glyph(concept: Concept) -> Glyph {
@@ -193,6 +187,7 @@ pub(crate) fn glyph(concept: Concept) -> Glyph {
         Concept::Send => Glyph::Send,
         Concept::Review => Glyph::Diff,
         Concept::Merge => Glyph::Merge,
+        Concept::Attach => Glyph::Link,
     }
 }
 
@@ -420,7 +415,7 @@ pub(crate) fn notices(app: &mut IdeApp, ctx: &egui::Context) {
                         _ => ("agents.show", session),
                     });
                     if actions[index] == "Reply" {
-                        app.agents_ui.focus_reply = Some(notice.session);
+                        app.agents_ui.focus_composer = true;
                     }
                 }
                 if out.dismissed {
@@ -661,7 +656,7 @@ fn session_row<'a>(
             if ui.add(MenuItem::new("Stop").enabled(running)).clicked() {
                 queue(Action::Stop(id));
             }
-            if ui.add(MenuItem::new("Open Terminal")).clicked() {
+            if ui.add(MenuItem::new("Open Thread")).clicked() {
                 queue(Action::Show(id));
             }
             ui.add(MenuSeparator);
@@ -702,10 +697,6 @@ pub(crate) fn show(app: &mut IdeApp, ctx: &egui::Context) {
                 .show_separator_line(false)
                 .frame(island_frame(ctx))
                 .show(ctx, |ui| thread::inspector(app, ui));
-            egui::TopBottomPanel::bottom("agents_prompt")
-                .show_separator_line(false)
-                .frame(island_frame(ctx))
-                .show(ctx, |ui| prompt_bar(app, ui));
             egui::CentralPanel::default()
                 .frame(island_frame(ctx))
                 .show(ctx, |ui| thread::threads(app, ui));
@@ -720,157 +711,17 @@ pub(crate) fn show(app: &mut IdeApp, ctx: &egui::Context) {
 }
 
 fn sidebar(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let mut new_task = false;
+    let mut new_thread = false;
     panel_header(ui, "Agents", |ui| {
-        new_task = ui.add(IconButton::new(Glyph::Plus, "New task")).clicked();
+        new_thread = ui
+            .add(IconButton::new(Glyph::Plus, "New agent thread"))
+            .clicked();
     });
-    if new_task {
-        app.agents_ui.focus_prompt = true;
-        if app.state.agents.screen == AgentsScreen::Review {
-            app.dispatch("agents.closeReview", Value::Null);
-        }
+    if new_thread {
+        app.dispatch("agents.newThread", Value::Null);
     }
     tree(app, ui, false);
 }
-
-// --- Prompt bar ---------------------------------------------------------------
-
-fn prompt_bar(app: &mut IdeApp, ui: &mut egui::Ui) {
-    egui::Frame::new()
-        .inner_margin(egui::Margin::symmetric(12, 10))
-        .show(ui, |ui| prompt_bar_rows(app, ui));
-}
-
-fn prompt_bar_rows(app: &mut IdeApp, ui: &mut egui::Ui) {
-    ui.spacing_mut().item_spacing.y = 8.0;
-    let mut launch = false;
-    let mut add_file = false;
-    let mut add_issue = false;
-    let mut remove_chip = None;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 8.0;
-        let width = (ui.available_width() - 96.0).max(120.0);
-        let response = ui.add(
-            TextField::new(&mut app.agents_ui.prompt)
-                .placeholder("Describe a task for the agents (@file, #issue), Enter to launch")
-                .width(width),
-        );
-        if app.agents_ui.focus_prompt {
-            app.agents_ui.focus_prompt = false;
-            response.request_focus();
-        }
-        if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            launch = true;
-        }
-        if ui
-            .add(
-                // The kit's disabled primary button has no readable label: fall back to secondary.
-                if app.agents_ui.prompt.trim().is_empty() {
-                    Button::secondary("Launch").enabled(false)
-                } else {
-                    Button::primary("Launch")
-                }
-                .icon(glyph(Concept::Send)),
-            )
-            .clicked()
-        {
-            launch = true;
-        }
-    });
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        add_file = ui
-            .add(Button::ghost("@ File").small(true).min_width(0.0))
-            .clicked();
-        add_issue = ui
-            .add(Button::ghost("# Issue").small(true).min_width(0.0))
-            .clicked();
-        for (index, chip) in app.agents_ui.chips.iter().enumerate() {
-            ui.add(Tag::new(chip.as_str()).tone(Tone::Link));
-            if ui
-                .add(IconButton::new(Glyph::Close, format!("Remove {chip}")).small(true))
-                .clicked()
-            {
-                remove_chip = Some(index);
-            }
-        }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.spacing_mut().item_spacing.x = 10.0;
-            for (index, profile) in AgentProfile::ALL.iter().enumerate().rev() {
-                ui.add(Checkbox::new(
-                    &mut app.agents_ui.profiles[index],
-                    profile.id(),
-                ))
-                .on_hover_text(format!(
-                    "{} ({})",
-                    profile.id(),
-                    profile.protocol()
-                ));
-            }
-            ui.label(egui::RichText::new("Agents").color(Theme::colors(ui.ctx()).text_secondary));
-        });
-    });
-    if add_file {
-        let name = app
-            .state
-            .active_document
-            .and_then(|index| app.state.documents.get(index))
-            .map(|document| IdeApp::file_name(&document.path))
-            .or_else(|| {
-                app.state
-                    .files
-                    .iter()
-                    .find(|entry| !entry.is_dir)
-                    .map(|entry| IdeApp::file_name(&entry.relative_path))
-            });
-        if let Some(name) = name {
-            let chip = format!("@{name}");
-            if !app.agents_ui.chips.contains(&chip) {
-                app.agents_ui.chips.push(chip);
-            }
-        }
-    }
-    if add_issue {
-        let chip = ISSUES[app.agents_ui.issue % ISSUES.len()].to_owned();
-        app.agents_ui.issue += 1;
-        if !app.agents_ui.chips.contains(&chip) {
-            app.agents_ui.chips.push(chip);
-        }
-    }
-    if let Some(index) = remove_chip {
-        app.agents_ui.chips.remove(index);
-    }
-    if launch {
-        launch_prompt(app);
-    }
-}
-
-/// Launches the typed task on the chosen agents (one agent per checked profile).
-fn launch_prompt(app: &mut IdeApp) {
-    let text = app.agents_ui.prompt.trim().to_owned();
-    if text.is_empty() {
-        app.state.status = "Describe the task for the agents first".into();
-        return;
-    }
-    let mut prompt = text;
-    for chip in &app.agents_ui.chips {
-        prompt.push(' ');
-        prompt.push_str(chip);
-    }
-    let profiles = app.agents_ui.chosen_profiles();
-    if profiles.is_empty() {
-        app.state.status = "Choose at least one agent to launch".into();
-        return;
-    }
-    app.dispatch(
-        "agents.launch",
-        json!({"prompt": prompt, "profiles": profiles}),
-    );
-    app.agents_ui.prompt.clear();
-    app.agents_ui.chips.clear();
-}
-
-// --- Changes panel --------------------------------------------------------------
 
 /// File names fitted to a list `width` wide (rows do not clip their label).
 fn change_labels(ui: &egui::Ui, changes: &[ChangedFile], width: f32) -> Vec<String> {
@@ -1158,6 +1009,12 @@ fn apply(app: &mut IdeApp, actions: Vec<Action>) {
             Action::Select(id) => app.dispatch("agents.select", json!({"session": id})),
             Action::Show(id) => app.dispatch("agents.show", json!({"session": id})),
             Action::CloseThread(id) => app.dispatch("agents.closeThread", json!({"session": id})),
+            Action::CloseDraft => app.dispatch("agents.closeDraft", Value::Null),
+            Action::NewThread => app.dispatch("agents.newThread", Value::Null),
+            Action::Launch(prompt, profiles) => app.dispatch(
+                "agents.launch",
+                json!({"prompt": prompt, "profiles": profiles}),
+            ),
             Action::Permission(id, option) => app.dispatch(
                 "agents.send",
                 json!({"session": id, "input": permission_input(option)}),
@@ -1205,6 +1062,7 @@ fn apply(app: &mut IdeApp, actions: Vec<Action>) {
 mod tests {
     use super::*;
     use crate::tests::{frame_input, headless_app};
+    use archipel_ide_core::agent_events::AgentEvent;
     use archipel_kit::testing::{self, Queryable};
     use std::time::Duration;
 
@@ -1332,8 +1190,180 @@ mod tests {
             harness.get_by_label("fix-tab").click();
             harness.run_steps(4);
             assert_eq!(harness.state().state.agents.selected, Some(1));
-            harness.get_by_label("Needs your answer");
+            harness.get_by_label("Waiting for your answer");
             testing::audit(&mut harness).assert_clean();
         }
+    }
+
+    fn thread_harness(
+        name: &str,
+        session: SessionId,
+        draft: bool,
+    ) -> testing::Harness<'static, IdeApp> {
+        let (mut app, _ctx) = headless_app(name, "a.txt", "x\n");
+        app.dispatch("agents.demo", Value::Null);
+        app.dispatch("workbench.setMode", json!({"mode": "agents"}));
+        app.dispatch("agents.select", json!({"session": session}));
+        if draft {
+            app.dispatch("agents.newThread", Value::Null);
+        }
+        testing::harness_state(Theme::dark(), app, |ui, app| {
+            ui.allocate_ui(egui::vec2(900.0, 700.0), |ui| {
+                ui.set_min_size(egui::vec2(900.0, 700.0));
+                thread::threads(app, ui);
+            });
+        })
+    }
+
+    fn type_into_composer(harness: &mut testing::Harness<'static, IdeApp>, text: &str) {
+        harness.run_steps(3);
+        let input = harness.get_by_role(testing::Role::MultilineTextInput);
+        input.click();
+        harness.run_steps(2);
+        harness
+            .get_by_role(testing::Role::MultilineTextInput)
+            .type_text(text);
+        harness.run_steps(3);
+    }
+
+    #[test]
+    fn enter_sends_shift_enter_adds_a_line_and_up_recalls() {
+        let mut harness = thread_harness("agents-composer-keys", 2, false);
+        type_into_composer(&mut harness, "first line");
+        harness.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Enter);
+        harness.run_steps(3);
+        let draft = harness.state().agents_ui.composers[&Some(2)].text.clone();
+        assert_eq!(draft, "first line\n", "Shift+Enter inserts a newline");
+        assert!(
+            !harness
+                .state()
+                .state
+                .agents
+                .backend
+                .events(2)
+                .iter()
+                .any(|e| matches!(e, AgentEvent::UserPrompt(t) if t.contains("first line"))),
+            "nothing was sent yet"
+        );
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(4);
+        let state = harness.state();
+        assert!(
+            state
+                .state
+                .agents
+                .backend
+                .events(2)
+                .iter()
+                .any(|e| matches!(e, AgentEvent::UserPrompt(t) if t == "first line")),
+            "Enter sends the trimmed text"
+        );
+        assert_eq!(state.agents_ui.composers[&Some(2)].text, "");
+        // Up on the empty composer recalls the last prompt.
+        harness.key_press(egui::Key::ArrowUp);
+        harness.run_steps(3);
+        assert_eq!(
+            harness.state().agents_ui.composers[&Some(2)].text,
+            "first line"
+        );
+    }
+
+    #[test]
+    fn the_send_button_turns_into_stop_while_the_agent_works() {
+        let mut harness = thread_harness("agents-composer-stop", 2, false);
+        harness.run_steps(3);
+        // codex is working and the box is empty: Stop.
+        harness.get_by_label("Stop agent");
+        assert!(harness.query_by_label("Send message").is_none());
+        harness.get_by_label("Stop agent").click();
+        harness.run_steps(3);
+        assert_eq!(
+            harness.state().state.agents.session(2).unwrap().state,
+            AgentState::Stopped
+        );
+        // Stopped agents take follow-ups: typing turns it into Send.
+        type_into_composer(&mut harness, "continue");
+        harness.get_by_label("Send message");
+        assert!(harness.query_by_label("Stop agent").is_none());
+    }
+
+    #[test]
+    fn a_new_thread_tab_launches_one_tab_per_selected_agent() {
+        let mut harness = thread_harness("agents-new-thread", 1, true);
+        harness.run_steps(3);
+        harness.get_by_label("New thread");
+        harness.get_by_label("What should the agents work on?");
+        let before = harness.state().state.agents.threads.len();
+        harness
+            .state_mut()
+            .agents_ui
+            .composers
+            .entry(None)
+            .or_default()
+            .selected = [true, false, true, true, false];
+        type_into_composer(&mut harness, "Add retries");
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(4);
+        let state = harness.state();
+        assert_eq!(state.state.agents.threads.len(), before + 3);
+        assert!(!state.state.agents.new_thread, "the draft tab is gone");
+        let names: Vec<String> = state
+            .state
+            .agents
+            .sessions()
+            .into_iter()
+            .filter(|s| s.name.starts_with("add-retries"))
+            .map(|s| s.name)
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "add-retries-claude",
+                "add-retries-codex",
+                "add-retries-gemini"
+            ]
+        );
+    }
+
+    #[test]
+    fn typing_at_opens_the_file_popup_and_enter_attaches_the_file() {
+        let mut harness = thread_harness("agents-at-popup", 1, true);
+        type_into_composer(&mut harness, "look at @a");
+        harness.run_steps(2);
+        harness.get_by_label("a.txt");
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
+        let composer = &harness.state().agents_ui.composers[&None];
+        assert_eq!(composer.chips, ["@a.txt"]);
+        assert_eq!(composer.text.trim(), "look at");
+        // Slash commands complete at the start of the message.
+        harness
+            .state_mut()
+            .agents_ui
+            .composers
+            .get_mut(&None)
+            .unwrap()
+            .text
+            .clear();
+        type_into_composer(&mut harness, "/re");
+        harness.get_by_label_contains("/review");
+    }
+
+    #[test]
+    fn the_new_agent_thread_chord_opens_the_draft_tab() {
+        let (mut app, ctx) = headless_app("agents-new-chord", "a.txt", "hello\n");
+        for _ in 0..2 {
+            let _ = ctx.run(frame_input(Vec::new()), |ctx| app.frame(ctx));
+        }
+        let chord = egui::Event::Key {
+            key: egui::Key::Y,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND | egui::Modifiers::ALT | egui::Modifiers::SHIFT,
+        };
+        let _ = ctx.run(frame_input(vec![chord]), |ctx| app.frame(ctx));
+        assert_eq!(app.state.workbench_mode, WorkbenchMode::Agents);
+        assert!(app.state.agents.new_thread && app.state.agents.draft_active);
     }
 }

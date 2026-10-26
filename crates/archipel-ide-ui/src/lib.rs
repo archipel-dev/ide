@@ -675,8 +675,9 @@ impl IdeApp {
             // The dialog is modal and handles its own keys (Escape closes it).
             return;
         }
-        let terminal_focused = ctx
+        let terminal_focused = (ctx
             .memory(|memory| memory.has_focus(toolwindows::terminal_input_id()))
+            || agents_ui::composer_focused(ctx))
             && self.dialog.is_none()
             && !self.palette.open
             && !self.find_popup.open;
@@ -697,6 +698,13 @@ impl IdeApp {
             Key::X,
         ) {
             self.dispatch("workbench.toggleMode", Value::Null);
+        }
+        // Archipel.NewAgentThread: Ctrl+Alt+Shift+Y (also unbound in all bundled keymaps).
+        if consume(
+            Modifiers::COMMAND | Modifiers::ALT | Modifiers::SHIFT,
+            Key::Y,
+        ) {
+            self.dispatch("agents.newThread", Value::Null);
         }
         self.detect_double_shift(ctx);
         // The Run/Debug Configurations modal closes itself on Escape.

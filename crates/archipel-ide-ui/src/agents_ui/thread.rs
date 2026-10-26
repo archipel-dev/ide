@@ -4,6 +4,7 @@
 //! the transcript at a comfortable reading width with a reply field at the bottom. The
 //! inspector on the right always reflects the active tab.
 
+use super::composer;
 use super::*;
 use archipel_ide_core::agent_events::{
     AgentEvent, DiffLine, PERMISSION_OPTIONS, ToolKind, ToolStatus,
@@ -92,20 +93,29 @@ pub(super) fn threads(app: &mut IdeApp, ui: &mut egui::Ui) {
         .iter()
         .filter_map(|id| sessions.iter().find(|s| s.id == *id))
         .collect();
-    if open.is_empty() {
-        EmptyState::new("No thread open")
-            .hint("Pick an agent in the list, or describe a task below and press Enter.")
+    let draft = app.state.agents.new_thread;
+    let draft_active = draft && app.state.agents.draft_active;
+    if open.is_empty() && !draft {
+        let shown = EmptyState::new("No thread open")
+            .hint("Pick an agent in the list, or start a new thread.")
             .icon(glyph(Concept::Agent))
+            .action("New thread")
             .show(ui);
+        if shown.clicked() {
+            app.dispatch("agents.newThread", Value::Null);
+        }
         return;
     }
-    let active = app
-        .state
-        .agents
-        .selected
-        .and_then(|id| open.iter().position(|s| s.id == id))
-        .unwrap_or(0);
-    let tabs: Vec<Tab> = open
+    let active = if draft_active {
+        open.len()
+    } else {
+        app.state
+            .agents
+            .selected
+            .and_then(|id| open.iter().position(|s| s.id == id))
+            .unwrap_or(0)
+    };
+    let mut tabs: Vec<Tab> = open
         .iter()
         .map(|s| {
             Tab::new(s.name.clone())
@@ -114,20 +124,47 @@ pub(super) fn threads(app: &mut IdeApp, ui: &mut egui::Ui) {
                 .modified(s.unread)
         })
         .collect();
-    let out = TabBar::new(&tabs, active).show(ui);
-    let mut actions = Vec::new();
-    if let Some(index) = out.closed {
-        actions.push(Action::CloseThread(open[index].id));
-    } else if let Some(index) = out.selected {
-        actions.push(Action::Select(open[index].id));
+    if draft {
+        tabs.push(Tab::new("New thread").icon(Glyph::Plus).closable(true));
     }
-    let info = open[active].clone();
-    thread_view(app, ui, &info, &mut actions);
+    let mut actions = Vec::new();
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        let out = TabBar::new(&tabs, active).show(ui);
+        if let Some(index) = out.closed {
+            actions.push(match open.get(index) {
+                Some(s) => Action::CloseThread(s.id),
+                None => Action::CloseDraft,
+            });
+        } else if let Some(index) = out.selected {
+            actions.push(match open.get(index) {
+                Some(s) => Action::Select(s.id),
+                None => Action::NewThread,
+            });
+        }
+        if ui
+            .add(IconButton::new(Glyph::Plus, "New agent thread"))
+            .clicked()
+        {
+            actions.push(Action::NewThread);
+        }
+    });
+    // The composer of a tab that just opened takes the keyboard.
+    if draft_active && !app.agents_ui.was_draft {
+        app.agents_ui.focus_composer = true;
+    }
+    app.agents_ui.was_draft = draft_active;
+    if draft_active {
+        draft_view(app, ui, &mut actions);
+    } else {
+        let info = open[active].clone();
+        thread_view(app, ui, &info, &mut actions);
+    }
     apply(app, actions);
 }
 
-fn thread_view(app: &mut IdeApp, ui: &mut egui::Ui, info: &SessionInfo, actions: &mut Vec<Action>) {
-    let id = info.id;
+/// The transcript column: centered, at reading width.
+fn column(ui: &mut egui::Ui, id: impl std::hash::Hash) -> egui::Ui {
     let area = ui.available_rect_before_wrap();
     ui.allocate_rect(area, Sense::hover());
     let width = area.width().min(READING_WIDTH);
@@ -137,45 +174,32 @@ fn thread_view(app: &mut IdeApp, ui: &mut egui::Ui, info: &SessionInfo, actions:
     );
     let mut child = ui.new_child(
         egui::UiBuilder::new()
-            .id_salt(("agents_thread", id))
+            .id_salt(id)
             .max_rect(column)
             .layout(egui::Layout::top_down(egui::Align::Min)),
     );
     child.set_clip_rect(column.intersect(ui.clip_rect()));
-    let events: Vec<AgentEvent> = app.state.agents.backend.events(id).to_vec();
-    let mut reply = app.agents_ui.replies.remove(&id).unwrap_or_default();
-    let focus = app.agents_ui.focus_reply == Some(id);
-    if focus {
-        app.agents_ui.focus_reply = None;
-    }
-    egui::TopBottomPanel::bottom(egui::Id::new(("agents_reply", id)))
+    child
+}
+
+fn composer_panel(
+    app: &mut IdeApp,
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash,
+    target: Option<&SessionInfo>,
+    actions: &mut Vec<Action>,
+) {
+    egui::TopBottomPanel::bottom(egui::Id::new(("agents_composer_panel", id)))
         .show_separator_line(false)
         .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(12, 10)))
-        .show_inside(&mut child, |ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 6.0;
-                let field = ui.add(
-                    TextField::new(&mut reply)
-                        .placeholder(format!("Reply to {}", info.name))
-                        .width((ui.available_width() - 38.0).max(80.0)),
-                );
-                if focus {
-                    field.request_focus();
-                }
-                let send = ui
-                    .add(
-                        IconButton::new(glyph(Concept::Send), "Send reply")
-                            .enabled(!reply.trim().is_empty()),
-                    )
-                    .clicked();
-                let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                if (send || enter) && !reply.trim().is_empty() {
-                    actions.push(Action::Reply(id, reply.trim().to_owned()));
-                    reply.clear();
-                    field.request_focus();
-                }
-            });
-        });
+        .show_inside(ui, |ui| composer::composer(app, ui, target, actions));
+}
+
+fn thread_view(app: &mut IdeApp, ui: &mut egui::Ui, info: &SessionInfo, actions: &mut Vec<Action>) {
+    let id = info.id;
+    let mut child = column(ui, ("agents_thread", id));
+    let events: Vec<AgentEvent> = app.state.agents.backend.events(id).to_vec();
+    composer_panel(app, &mut child, id, Some(info), actions);
     let expanded = app.agents_ui.expanded.clone();
     egui::ScrollArea::vertical()
         .id_salt(("agents_transcript", id))
@@ -190,9 +214,88 @@ fn thread_view(app: &mut IdeApp, ui: &mut egui::Ui, info: &SessionInfo, actions:
                     transcript(ui, info, &events, &expanded, actions);
                 });
         });
-    if !reply.is_empty() {
-        app.agents_ui.replies.insert(id, reply);
+}
+
+/// Suggestions drawn from the project: a verb and a file.
+pub(super) fn suggestions(app: &IdeApp) -> Vec<String> {
+    let names: Vec<String> = app
+        .state
+        .files
+        .iter()
+        .filter(|entry| !entry.is_dir)
+        .map(|entry| IdeApp::file_name(&entry.relative_path))
+        .filter(|name| {
+            [".java", ".kt", ".rs", ".ts", ".py", ".go", ".js"]
+                .iter()
+                .any(|ext| name.ends_with(ext))
+        })
+        .take(2)
+        .collect();
+    match names.as_slice() {
+        [first, second] => vec![
+            format!("Explain how {first} works"),
+            format!("Add tests for {second}"),
+            "Find and fix bugs".to_owned(),
+        ],
+        [first] => vec![
+            format!("Explain how {first} works"),
+            format!("Add tests for {first}"),
+        ],
+        _ => vec![
+            "Explain the project structure".to_owned(),
+            "Find and fix bugs".to_owned(),
+        ],
     }
+}
+
+/// The empty new-thread tab: a heading, suggestion chips and the composer.
+fn draft_view(app: &mut IdeApp, ui: &mut egui::Ui, actions: &mut Vec<Action>) {
+    let mut child = column(ui, "agents_draft");
+    composer_panel(app, &mut child, "draft", None, actions);
+    let suggestions = suggestions(app);
+    let space = (child.available_height() * 0.3 - 40.0).max(20.0);
+    child.add_space(space);
+    let mut picked = None;
+    child.vertical_centered(|ui| {
+        let colors = Theme::colors(ui.ctx());
+        icons::show(
+            ui,
+            Icon::Kit(glyph(Concept::Agent).into()),
+            28.0,
+            colors.text_secondary,
+        );
+        ui.add_space(6.0);
+        ui.label(
+            egui::RichText::new("What should the agents work on?")
+                .font(theme::semibold(theme::UI_FONT_SIZE + 5.0))
+                .color(colors.text_strong),
+        );
+        ui.label(
+            egui::RichText::new(
+                "Describe a task below. Pick several agents to compare their results.",
+            )
+            .color(colors.text_secondary),
+        );
+        ui.add_space(14.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
+            for text in &suggestions {
+                if ui
+                    .add(Button::secondary(text.as_str()).small(true).min_width(0.0))
+                    .clicked()
+                {
+                    picked = Some(text.clone());
+                }
+            }
+        });
+    });
+    if let Some(text) = picked {
+        let composer = app.agents_ui.composers.entry(None).or_default();
+        composer.cursor = text.chars().count();
+        composer.text = text;
+        app.agents_ui.focus_composer = true;
+    }
+    let _ = actions;
 }
 
 fn transcript(
@@ -529,6 +632,12 @@ fn permission_card(
 /// open questions, actions).
 pub(super) fn inspector(app: &mut IdeApp, ui: &mut egui::Ui) {
     panel_header(ui, "Inspector", |_| {});
+    if app.state.agents.new_thread && app.state.agents.draft_active {
+        EmptyState::new("New thread")
+            .hint("Choose the agents and describe the task. The inspector follows the thread once it starts.")
+            .show(ui);
+        return;
+    }
     let Some(info) = app
         .state
         .agents
@@ -618,9 +727,6 @@ pub(super) fn inspector(app: &mut IdeApp, ui: &mut egui::Ui) {
                     actions.push(Action::Merge(info.id, MergeStrategy::Squash));
                 }
             });
-            if info.state.is_active() && ui.add(Button::danger("Stop").min_width(width)).clicked() {
-                actions.push(Action::Stop(info.id));
-            }
         });
 
     egui::ScrollArea::vertical()
@@ -656,26 +762,13 @@ pub(super) fn inspector(app: &mut IdeApp, ui: &mut egui::Ui) {
                             .color(colors.text_placeholder),
                     );
                     if let Some(question) = &question {
-                        ui.add(SectionHeader::new("Needs your answer"));
+                        ui.add(SectionHeader::new("Waiting for your answer"));
                         ui.add(
                             egui::Label::new(
                                 egui::RichText::new(question).color(Tone::Warning.color(&colors)),
                             )
                             .wrap(),
                         );
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 6.0;
-                            for (index, option) in PERMISSION_OPTIONS.iter().enumerate() {
-                                let button = if index == 0 {
-                                    Button::primary(*option)
-                                } else {
-                                    Button::secondary(*option)
-                                };
-                                if ui.add(button.small(true).min_width(0.0)).clicked() {
-                                    actions.push(Action::Permission(info.id, index));
-                                }
-                            }
-                        });
                     }
                     ui.add(SectionHeader::new(format!(
                         "Changed files ({})",

@@ -17,6 +17,8 @@ use std::time::{Duration, Instant};
 
 /// Action id of the mode toggle (see `keymap_commands::ARCHIPEL_ACTIONS`).
 pub const TOGGLE_MODE_ACTION: &str = "Archipel.ToggleAgentsMode";
+/// Action id of "New Agent Thread".
+pub const NEW_THREAD_ACTION: &str = "Archipel.NewAgentThread";
 
 pub type SessionId = u32;
 pub type TaskId = u32;
@@ -92,6 +94,16 @@ impl AgentProfile {
             AgentProfile::Claude => "claude",
             AgentProfile::Codex => "codex",
             AgentProfile::Gemini => "gemini",
+            AgentProfile::Opencode => "opencode",
+        }
+    }
+
+    /// Product name, e.g. `Claude Code`.
+    pub fn product_name(self) -> &'static str {
+        match self {
+            AgentProfile::Claude => "Claude Code",
+            AgentProfile::Codex => "Codex",
+            AgentProfile::Gemini => "Gemini CLI",
             AgentProfile::Opencode => "opencode",
         }
     }
@@ -355,6 +367,10 @@ pub struct AgentsState {
     pub review_file: Option<PathBuf>,
     /// Open thread tabs, in tab order. `selected` is the active one.
     pub threads: Vec<SessionId>,
+    /// An empty "new thread" tab is open (after the agent tabs) ...
+    pub new_thread: bool,
+    /// ... and it is the active tab.
+    pub draft_active: bool,
     pub notices: Vec<AgentNotice>,
     /// Set by "Open in Code mode": the agent the "Back to agent" banner returns to.
     pub return_to: Option<SessionId>,
@@ -378,6 +394,8 @@ impl AgentsState {
             selected: None,
             review_file: None,
             threads: Vec::new(),
+            new_thread: false,
+            draft_active: false,
             notices: Vec::new(),
             return_to: None,
             clock_ms: 0,
@@ -405,6 +423,22 @@ impl AgentsState {
             self.threads.push(id);
         }
         self.selected = Some(id);
+        self.draft_active = false;
+    }
+
+    /// Opens the empty "new thread" tab and activates it.
+    pub fn open_draft(&mut self) {
+        self.new_thread = true;
+        self.draft_active = true;
+    }
+
+    /// Closes the "new thread" tab; the last agent tab becomes active again.
+    pub fn close_draft(&mut self) {
+        self.new_thread = false;
+        if self.draft_active {
+            self.draft_active = false;
+            self.selected = self.selected.or_else(|| self.threads.last().copied());
+        }
     }
 
     /// Closes the tab; the neighbour becomes active. The agent keeps running.
@@ -450,6 +484,8 @@ impl AgentsState {
     /// Starts a task and opens a thread tab for every top-level agent of it.
     pub fn launch(&mut self, prompt: &str, profiles: &[AgentProfile]) -> TaskId {
         let task = self.backend.launch(prompt, profiles);
+        self.new_thread = false;
+        self.draft_active = false;
         let sessions = self.backend.sessions();
         let mut first = None;
         for session in sessions
@@ -982,6 +1018,40 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
     registry
         .register(Command::new(
             spec(
+                "agents.newThread",
+                "New Agent Thread",
+                "Agents",
+                Some("\u{2325}\u{21e7}\u{2318}Y"),
+                "{}",
+            ),
+            |s: &IdeState| s.project.is_some(),
+            |state: &mut IdeState, _| {
+                state.set_workbench_mode(WorkbenchMode::Agents);
+                state.agents.screen = AgentsScreen::Main;
+                state.agents.open_draft();
+                Ok(Value::Null)
+            },
+        ))
+        .expect("unique built-in id");
+    registry
+        .register(Command::new(
+            spec(
+                "agents.closeDraft",
+                "Close New Agent Thread",
+                "Agents",
+                None,
+                "{}",
+            ),
+            |s: &IdeState| s.agents.new_thread,
+            |state: &mut IdeState, _| {
+                state.agents.close_draft();
+                Ok(Value::Null)
+            },
+        ))
+        .expect("unique built-in id");
+    registry
+        .register(Command::new(
+            spec(
                 "agents.closeThread",
                 "Close Agent Thread",
                 "Agents",
@@ -1111,6 +1181,27 @@ mod tests {
         assert_eq!(WorkbenchMode::parse("agents"), Some(WorkbenchMode::Agents));
         assert_eq!(WorkbenchMode::parse("x"), None);
         assert_eq!(WorkbenchMode::Code.other(), WorkbenchMode::Agents);
+    }
+
+    #[test]
+    fn the_draft_tab_opens_once_and_launching_replaces_it_with_agent_tabs() {
+        let mut agents = AgentsState::default();
+        agents.open_draft();
+        agents.open_draft();
+        assert!(agents.new_thread && agents.draft_active);
+        agents.open_thread(1);
+        assert!(
+            agents.new_thread && !agents.draft_active,
+            "the tab stays, inactive"
+        );
+        agents.open_draft();
+        let task = agents.launch("Add retries", &[AgentProfile::Claude, AgentProfile::Codex]);
+        assert!(task > 0);
+        assert!(!agents.new_thread && !agents.draft_active);
+        assert_eq!(agents.threads, [1, 2], "one tab per launched agent");
+        agents.open_draft();
+        agents.close_draft();
+        assert!(!agents.new_thread && agents.selected.is_some());
     }
 
     #[test]

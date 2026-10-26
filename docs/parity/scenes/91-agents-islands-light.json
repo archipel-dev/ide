@@ -144,11 +144,44 @@
     },
     {
       "op": "screenshot",
-      "name": "91-agents-thread-codex.png"
+      "name": "91-agents-thread-working-stop.png"
+    },
+    {
+      "op": "click",
+      "x": 700,
+      "y": 803
+    },
+    {
+      "op": "type",
+      "text": "Also cover the null case @AppT"
     },
     {
       "op": "sleep",
-      "ms": 4500
+      "ms": 300
+    },
+    {
+      "op": "screenshot",
+      "name": "91-agents-at-popup.png"
+    },
+    {
+      "op": "key",
+      "chord": "Enter"
+    },
+    {
+      "op": "type",
+      "text": " and see #"
+    },
+    {
+      "op": "sleep",
+      "ms": 300
+    },
+    {
+      "op": "screenshot",
+      "name": "91-agents-thread-attachments.png"
+    },
+    {
+      "op": "sleep",
+      "ms": 3200
     },
     {
       "op": "execute",
@@ -164,6 +197,40 @@
     {
       "op": "screenshot",
       "name": "91-agents-thread-done.png"
+    },
+    {
+      "op": "execute",
+      "command": "agents.newThread"
+    },
+    {
+      "op": "sleep",
+      "ms": 500
+    },
+    {
+      "op": "assert",
+      "pointer": "/agents/newThread",
+      "equals": true
+    },
+    {
+      "op": "click",
+      "x": 415,
+      "y": 832
+    },
+    {
+      "op": "sleep",
+      "ms": 400
+    },
+    {
+      "op": "screenshot",
+      "name": "91-agents-new-thread-selector.png"
+    },
+    {
+      "op": "key",
+      "chord": "Escape"
+    },
+    {
+      "op": "execute",
+      "command": "agents.closeDraft"
     },
     {
       "op": "execute",

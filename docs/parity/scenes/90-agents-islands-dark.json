@@ -1,6 +1,6 @@
 {
   "id": "90",
-  "title": "Agents mode prototype, Islands Dark (code mode widget and balloon, thread tabs with inspector, review, back banner)",
+  "title": "Agents mode prototype, Islands Dark (thread tabs, composer, inspector, review)",
   "fixture": "java-gradle",
   "open": [
     "src/main/java/com/example/App.java"
@@ -144,11 +144,44 @@
     },
     {
       "op": "screenshot",
-      "name": "90-agents-thread-codex.png"
+      "name": "90-agents-thread-working-stop.png"
+    },
+    {
+      "op": "click",
+      "x": 700,
+      "y": 803
+    },
+    {
+      "op": "type",
+      "text": "Also cover the null case @AppT"
     },
     {
       "op": "sleep",
-      "ms": 4500
+      "ms": 300
+    },
+    {
+      "op": "screenshot",
+      "name": "90-agents-at-popup.png"
+    },
+    {
+      "op": "key",
+      "chord": "Enter"
+    },
+    {
+      "op": "type",
+      "text": " and see #"
+    },
+    {
+      "op": "sleep",
+      "ms": 300
+    },
+    {
+      "op": "screenshot",
+      "name": "90-agents-thread-attachments.png"
+    },
+    {
+      "op": "sleep",
+      "ms": 3200
     },
     {
       "op": "execute",
@@ -164,6 +197,40 @@
     {
       "op": "screenshot",
       "name": "90-agents-thread-done.png"
+    },
+    {
+      "op": "execute",
+      "command": "agents.newThread"
+    },
+    {
+      "op": "sleep",
+      "ms": 500
+    },
+    {
+      "op": "assert",
+      "pointer": "/agents/newThread",
+      "equals": true
+    },
+    {
+      "op": "click",
+      "x": 415,
+      "y": 832
+    },
+    {
+      "op": "sleep",
+      "ms": 400
+    },
+    {
+      "op": "screenshot",
+      "name": "90-agents-new-thread-selector.png"
+    },
+    {
+      "op": "key",
+      "chord": "Escape"
+    },
+    {
+      "op": "execute",
+      "command": "agents.closeDraft"
     },
     {
       "op": "execute",

@@ -395,6 +395,7 @@ impl IdeApp {
                     "unread": s.unread,
                 })).collect::<Vec<_>>(),
                 "threads": self.state.agents.threads,
+                "newThread": self.state.agents.new_thread,
                 "notices": self.state.agents.notices.len(),
             },
             "projectTree": {

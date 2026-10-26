@@ -746,6 +746,7 @@ dependencies = [
  "archipel-ide-lsp",
  "archipel-ide-markdown",
  "archipel-ide-plugins",
+ "archipel-ide-project",
  "archipel-ide-runner",
  "archipel-ide-settings",
  "archipel-ide-split",

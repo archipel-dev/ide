@@ -128,6 +128,31 @@ const APPLICATION_FIELDS: &[Field] = &[
     field("main_class", "Main class", "com.example.App", false, false),
     PROGRAM_ARGS,
 ];
+const SPRINGBOOT_FIELDS: &[Field] = &[
+    field(
+        "build",
+        "Build tool",
+        "gradle, maven or bazel",
+        false,
+        false,
+    ),
+    field(
+        "target",
+        "Module / target",
+        "Gradle :app, Maven module directory or Bazel //:app (empty: root)",
+        false,
+        true,
+    ),
+    field("main_class", "Main class", "com.example.App", false, true),
+    field(
+        "profiles",
+        "Active profiles",
+        "dev,local (--spring.profiles.active)",
+        false,
+        true,
+    ),
+    PROGRAM_ARGS,
+];
 const SHELL_FIELDS: &[Field] = &[
     field(
         "program",
@@ -148,6 +173,7 @@ const SHELL_FIELDS: &[Field] = &[
 fn fields(type_id: &str) -> &'static [Field] {
     match type_id {
         "application" => APPLICATION_FIELDS,
+        "springboot" => SPRINGBOOT_FIELDS,
         "gradle" => GRADLE_FIELDS,
         "cargo" => CARGO_FIELDS,
         "bazel" => BAZEL_FIELDS,

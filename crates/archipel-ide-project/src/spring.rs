@@ -374,8 +374,10 @@ impl SpringSpec {
             ),
             ("oracle", "jdbc:oracle:thin:@//localhost:1521/FREEPDB1"),
         ];
-        if self.selected("jdbc") || self.selected("data-jpa") || self.selected("data-jdbc") {
-            if let Some((_, url)) = hints.iter().find(|(id, _)| self.selected(id)) {
+        if (self.selected("jdbc") || self.selected("data-jpa") || self.selected("data-jdbc"))
+            && let Some((_, url)) = hints.iter().find(|(id, _)| self.selected(id))
+        {
+            {
                 text.push_str(&format!(
                     "\n# Point the application at your database before starting it.\n# spring.datasource.url={url}\n# spring.datasource.username=\n# spring.datasource.password=\n"
                 ));

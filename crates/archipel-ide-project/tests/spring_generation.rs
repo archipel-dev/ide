@@ -436,9 +436,8 @@ fn parse_xml(text: &str) {
     let mut reader = quick_xml::Reader::from_str(text);
     reader.config_mut().check_end_names = true;
     loop {
-        match reader.read_event().unwrap() {
-            quick_xml::events::Event::Eof => break,
-            _ => {}
+        if matches!(reader.read_event().unwrap(), quick_xml::events::Event::Eof) {
+            break;
         }
     }
 }
@@ -468,9 +467,8 @@ fn everything_that_is_emitted_parses() {
                     let label = format!("{language:?} {build:?} {path}");
                     if path.ends_with("pom.xml") {
                         parse_xml(&text);
-                    } else if path.ends_with(".properties") {
-                        parse_with_grammar(&path, &text);
-                    } else if path.ends_with(".java")
+                    } else if path.ends_with(".properties")
+                        || path.ends_with(".java")
                         || path.ends_with(".kt")
                         || path.ends_with(".kts")
                         || path.ends_with(".bazel")

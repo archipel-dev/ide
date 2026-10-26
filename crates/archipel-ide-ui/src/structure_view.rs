@@ -7,8 +7,9 @@ use crate::widgets;
 use crate::{IdeApp, theme};
 use archipel_ide_core::Document;
 use archipel_ide_language::{StructureItem, SymbolKind, structure};
-use archipel_kit::behaviour::ContextMenu;
-use archipel_kit::components::{ListRow, MenuItem, VirtualList};
+use archipel_kit::behaviour::PopupHandler;
+use archipel_kit::action_system::ActionMenuItem;
+use archipel_kit::ui::{ColoredListCellRenderer, JBList};
 use archipel_kit::icons::{Glyph, Symbol, SymbolKind as Kind};
 use eframe::egui;
 use serde_json::json;
@@ -250,25 +251,25 @@ pub fn tool_window(app: &mut IdeApp, ui: &mut egui::Ui) {
         .iter()
         .position(|(_, item)| current.as_ref() == Some(&item.name_range));
     let chosen = std::cell::Cell::new(None::<(usize, Choice)>);
-    let out = VirtualList::new(("structure", &document.path), visible.len(), &mut selected)
+    let out = JBList::new(("structure", &document.path), visible.len(), &mut selected)
         .name("Structure")
         .height(ui.available_height())
         .show(ui, |index| {
             let (depth, item) = visible[index];
-            let mut row = ListRow::new(&item.name)
+            let mut row = ColoredListCellRenderer::new(&item.name)
                 .icon(icon(item.kind))
                 .depth(depth)
                 .expanded((!item.children.is_empty()).then(|| !collapsed.contains(&key(item))));
             if let Some(detail) = &item.detail {
                 row = row.secondary(detail);
             }
-            row.with(ContextMenu::new({
+            row.with(PopupHandler::new({
                 let chosen = &chosen;
                 move |ui| {
-                    if ui.add(MenuItem::new("Navigate to Source")).clicked() {
+                    if ui.add(ActionMenuItem::new("Navigate to Source")).clicked() {
                         chosen.set(Some((index, Choice::Navigate)));
                     }
-                    if ui.add(MenuItem::new("Copy Name")).clicked() {
+                    if ui.add(ActionMenuItem::new("Copy Name")).clicked() {
                         chosen.set(Some((index, Choice::CopyName)));
                     }
                 }

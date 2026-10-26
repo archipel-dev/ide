@@ -8,8 +8,8 @@ use archipel_ide_core::project_view::{RowKind, TreeRow};
 use archipel_ide_core::{Anchor, ToolWindow};
 use archipel_ide_git::ChangeKind;
 use archipel_kit::Tone;
-use archipel_kit::behaviour::{ContextMenu, DragSource, DropTarget};
-use archipel_kit::components::MenuItem;
+use archipel_kit::action_system::ActionMenuItem;
+use archipel_kit::behaviour::{DragSource, DropTarget, PopupHandler};
 use eframe::egui::{self, Color32, Rect, RichText, vec2};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -486,13 +486,13 @@ fn paint_virtual_row(
     };
     if let (RowKind::Group, Some(group)) = (row.kind, row.group) {
         if group == archipel_ide_core::project_view::GROUP_SCRATCHES {
-            tree_row = tree_row.with(ContextMenu::new(|ui| {
-                new_scratch = ui.add(MenuItem::new("New Scratch File")).clicked();
+            tree_row = tree_row.with(PopupHandler::new(|ui| {
+                new_scratch = ui.add(ActionMenuItem::new("New Scratch File")).clicked();
             }));
         }
     } else if row.path.is_some() {
-        tree_row = tree_row.with(ContextMenu::new(|ui| {
-            copy_path = ui.add(MenuItem::new("Copy Path")).clicked();
+        tree_row = tree_row.with(PopupHandler::new(|ui| {
+            copy_path = ui.add(ActionMenuItem::new("Copy Path")).clicked();
         }));
     }
     let out = widgets::tree_row(ui, tree_row);
@@ -539,8 +539,8 @@ fn tree_menu<'a>(
     path: &'a Path,
     is_dir: bool,
     chosen: &'a mut Option<(String, crate::context_menus::Target)>,
-) -> ContextMenu<'a> {
-    ContextMenu::new(move |ui| {
+) -> PopupHandler<'a> {
+    PopupHandler::new(move |ui| {
         let target = crate::context_menus::Target::Tree {
             path: path.to_owned(),
             is_dir,

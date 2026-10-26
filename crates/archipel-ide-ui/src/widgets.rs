@@ -3,7 +3,8 @@
 use crate::icons::{self, Icon};
 use crate::theme;
 use archipel_kit::behaviour::{Behaviour, Behaviours};
-use archipel_kit::components::{ListRow, MenuItem};
+use archipel_kit::action_system::ActionMenuItem;
+use archipel_kit::ui::ColoredListCellRenderer;
 use archipel_kit::parts::{State, Surface, Tone, row_pill};
 use archipel_kit::tokens::size;
 use archipel_kit::{Theme, cursor};
@@ -418,7 +419,7 @@ pub fn tree_row(ui: &mut egui::Ui, spec: TreeRow<'_>) -> TreeRowOut {
         let _ = rect;
         behaviours.attach(ui, response)
     } else {
-        let mut row = ListRow::new(spec.text)
+        let mut row = ColoredListCellRenderer::new(spec.text)
             .depth(spec.depth)
             .expanded(spec.expanded.filter(|_| spec.kit_expander))
             .selected(spec.selected)
@@ -559,8 +560,8 @@ pub fn busy_spinner(ui: &mut egui::Ui, size: f32, color: Color32) {
 
 /// A menu or popup entry: the kit's `MenuItem` (selection-colored hover, arrow cursor,
 /// icon column). Add it with `ui.add(menu_item("Open"))`.
-pub fn menu_item(label: impl Into<String>) -> MenuItem {
-    MenuItem::new(label)
+pub fn menu_item(label: impl Into<String>) -> ActionMenuItem<'static> {
+    ActionMenuItem::new(label)
 }
 
 #[cfg(test)]

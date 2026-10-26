@@ -183,7 +183,14 @@ pub fn commit_all(worktree: &Path, message: &str) -> Result<bool, String> {
         return Ok(false);
     }
     let mut args: Vec<&str> = identity_args(worktree);
-    args.extend(["-c", "commit.gpgsign=false", "commit", "--no-verify", "-m", message]);
+    args.extend([
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "--no-verify",
+        "-m",
+        message,
+    ]);
     git(worktree, args)?;
     Ok(true)
 }

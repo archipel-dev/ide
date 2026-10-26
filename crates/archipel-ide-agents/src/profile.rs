@@ -363,7 +363,9 @@ mod tests {
     use super::*;
 
     fn strings(args: &[OsString]) -> Vec<String> {
-        args.iter().map(|a| a.to_string_lossy().into_owned()).collect()
+        args.iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect()
     }
 
     #[test]
@@ -376,33 +378,86 @@ mod tests {
             None,
         );
         let args = strings(&plan.args);
-        assert_eq!(&args[..8], [
-            "-p", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose",
-            "--permission-mode", "acceptEdits"
-        ]);
-        assert!(args.windows(2).any(|w| w == ["--session-id", "11111111-2222-4333-8444-555555555555"]));
+        assert_eq!(
+            &args[..8],
+            [
+                "-p",
+                "--output-format",
+                "stream-json",
+                "--input-format",
+                "stream-json",
+                "--verbose",
+                "--permission-mode",
+                "acceptEdits"
+            ]
+        );
+        assert!(
+            args.windows(2)
+                .any(|w| w == ["--session-id", "11111111-2222-4333-8444-555555555555"])
+        );
         assert!(!args.contains(&"--permission-prompt-tool".to_string()));
-        assert!(!args.iter().any(|a| a == "fix it"), "the prompt goes to stdin, not argv");
+        assert!(
+            !args.iter().any(|a| a == "fix it"),
+            "the prompt goes to stdin, not argv"
+        );
         assert!(plan.first_input.unwrap().contains("fix it"));
 
-        let ask = build_command(AgentKind::Claude, PermissionMode::Ask, &SessionArg::Resume("abc".into()), "x", Some("opus"));
+        let ask = build_command(
+            AgentKind::Claude,
+            PermissionMode::Ask,
+            &SessionArg::Resume("abc".into()),
+            "x",
+            Some("opus"),
+        );
         let args = strings(&ask.args);
-        assert!(args.windows(2).any(|w| w == ["--permission-prompt-tool", "stdio"]));
+        assert!(
+            args.windows(2)
+                .any(|w| w == ["--permission-prompt-tool", "stdio"])
+        );
         assert!(args.windows(2).any(|w| w == ["--resume", "abc"]));
         assert!(args.windows(2).any(|w| w == ["--model", "opus"]));
-        let plan = build_command(AgentKind::Claude, PermissionMode::Plan, &SessionArg::Fresh, "x", None);
-        assert!(strings(&plan.args).windows(2).any(|w| w == ["--permission-mode", "plan"]));
+        let plan = build_command(
+            AgentKind::Claude,
+            PermissionMode::Plan,
+            &SessionArg::Fresh,
+            "x",
+            None,
+        );
+        assert!(
+            strings(&plan.args)
+                .windows(2)
+                .any(|w| w == ["--permission-mode", "plan"])
+        );
     }
 
     #[test]
     fn codex_arguments_use_exec_json_and_resume() {
-        let plan = build_command(AgentKind::Codex, PermissionMode::Plan, &SessionArg::Fresh, "-rm -rf", None);
+        let plan = build_command(
+            AgentKind::Codex,
+            PermissionMode::Plan,
+            &SessionArg::Fresh,
+            "-rm -rf",
+            None,
+        );
         let args = strings(&plan.args);
-        assert!(args.windows(2).any(|w| w == ["-c", "sandbox_mode=\"read-only\""]));
+        assert!(
+            args.windows(2)
+                .any(|w| w == ["-c", "sandbox_mode=\"read-only\""])
+        );
         let exec = args.iter().position(|a| a == "exec").unwrap();
         assert_eq!(args[exec + 1], "--json");
-        assert_eq!(&args[args.len() - 2..], ["--", "-rm -rf"], "a prompt can never be an option");
-        let resumed = build_command(AgentKind::Codex, PermissionMode::Ask, &SessionArg::Resume("th".into()), "go", None);
+        assert_eq!(
+            &args[args.len() - 2..],
+            ["--", "-rm -rf"],
+            "a prompt can never be an option"
+        );
+        let resumed = build_command(
+            AgentKind::Codex,
+            PermissionMode::Ask,
+            &SessionArg::Resume("th".into()),
+            "go",
+            None,
+        );
         let args = strings(&resumed.args);
         assert!(args.windows(3).any(|w| w == ["--json", "resume", "th"]));
         assert!(plan.first_input.is_none());
@@ -410,7 +465,11 @@ mod tests {
 
     #[test]
     fn modes_round_trip() {
-        for mode in [PermissionMode::Ask, PermissionMode::AutoEdit, PermissionMode::Plan] {
+        for mode in [
+            PermissionMode::Ask,
+            PermissionMode::AutoEdit,
+            PermissionMode::Plan,
+        ] {
             assert_eq!(PermissionMode::parse(mode.id()), Some(mode));
         }
         assert_eq!(PermissionMode::parse("yolo"), None);
@@ -465,13 +524,35 @@ mod tests {
         std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
         let path = std::env::join_paths([dir.path()]).unwrap();
         let home = dir.path().join("nohome");
-        assert_eq!(find_cli(AgentKind::Claude, None, Some(&path), Some(&home)), Some(bin.clone()));
-        assert_eq!(find_cli(AgentKind::Codex, None, Some(&path), Some(&home)).filter(|p| p.starts_with(dir.path())), None);
-        assert_eq!(find_cli(AgentKind::Claude, Some(&bin), None, None), Some(bin));
-        assert_eq!(find_cli(AgentKind::Claude, Some(&dir.path().join("missing")), Some(&path), None), None);
+        assert_eq!(
+            find_cli(AgentKind::Claude, None, Some(&path), Some(&home)),
+            Some(bin.clone())
+        );
+        assert_eq!(
+            find_cli(AgentKind::Codex, None, Some(&path), Some(&home))
+                .filter(|p| p.starts_with(dir.path())),
+            None
+        );
+        assert_eq!(
+            find_cli(AgentKind::Claude, Some(&bin), None, None),
+            Some(bin)
+        );
+        assert_eq!(
+            find_cli(
+                AgentKind::Claude,
+                Some(&dir.path().join("missing")),
+                Some(&path),
+                None
+            ),
+            None
+        );
         let plain = dir.path().join("plain");
         std::fs::write(&plain, "x").unwrap();
-        assert_eq!(find_cli(AgentKind::Claude, Some(&plain), None, None), None, "not executable");
+        assert_eq!(
+            find_cli(AgentKind::Claude, Some(&plain), None, None),
+            None,
+            "not executable"
+        );
     }
 
     #[test]

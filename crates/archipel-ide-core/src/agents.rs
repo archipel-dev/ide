@@ -20,6 +20,9 @@ pub const TOGGLE_MODE_ACTION: &str = "Archipel.ToggleAgentsMode";
 /// Action id of "New Agent Thread".
 pub const NEW_THREAD_ACTION: &str = "Archipel.NewAgentThread";
 
+/// Shown when an agent cannot be launched because its CLI is missing.
+pub const NO_AGENTS_HINT: &str = "Set up agents: install the Claude Code or Codex CLI, or set its path under Settings > Tools > Agents.";
+
 pub type SessionId = u32;
 pub type TaskId = u32;
 
@@ -253,6 +256,31 @@ pub enum AgentNews {
     Spawned { parent: SessionId, child: SessionId },
 }
 
+/// Tools | Agents settings, as the backend needs them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentsSettings {
+    /// Agents working at the same time (spawned agents included).
+    pub max_parallel: usize,
+    /// `ask`, `auto-edit` or `plan`.
+    pub permission_mode: String,
+    /// Where worktrees go; `None` uses the data directory.
+    pub worktree_base: Option<PathBuf>,
+    pub claude_path: Option<PathBuf>,
+    pub codex_path: Option<PathBuf>,
+}
+
+impl Default for AgentsSettings {
+    fn default() -> Self {
+        Self {
+            max_parallel: 4,
+            permission_mode: "ask".into(),
+            worktree_base: None,
+            claude_path: None,
+            codex_path: None,
+        }
+    }
+}
+
 /// The contract between the Agents mode UI and whatever runs the agents.
 ///
 /// The prototype implements it with scripted sessions
@@ -279,6 +307,24 @@ pub trait AgentsBackend {
     fn mark_read(&mut self, session: SessionId);
     /// Lets `dt` of wall-clock time pass and reports what happened.
     fn advance(&mut self, dt: Duration) -> Vec<AgentNews>;
+    /// The agents that can be launched. The real backend offers only those whose CLI is
+    /// installed; the picker hides the rest.
+    fn available_profiles(&self) -> Vec<AgentProfile> {
+        AgentProfile::ALL.to_vec()
+    }
+    /// Applies Tools | Agents settings.
+    fn configure(&mut self, _settings: &AgentsSettings) {}
+    /// Background work (changes, a launching worktree) is still in flight, so the UI keeps
+    /// polling although no agent is "working".
+    fn busy(&self) -> bool {
+        false
+    }
+    /// The IDE is closing: stop agents, keep their sessions resumable.
+    fn shutdown(&mut self) {}
+    /// Runs real agent processes (false for the scripted demo backend).
+    fn is_real(&self) -> bool {
+        false
+    }
 }
 
 /// How many agents are in each state (status bar widget, toolbar badge).
@@ -374,6 +420,8 @@ pub struct AgentsState {
     pub notices: Vec<AgentNotice>,
     /// Set by "Open in Code mode": the agent the "Back to agent" banner returns to.
     pub return_to: Option<SessionId>,
+    /// Settings last handed to the backend.
+    configured: Option<AgentsSettings>,
     clock_ms: u64,
     last_poll: Option<Instant>,
     next_notice: u64,
@@ -398,6 +446,7 @@ impl AgentsState {
             draft_active: false,
             notices: Vec::new(),
             return_to: None,
+            configured: None,
             clock_ms: 0,
             last_poll: None,
             next_notice: 1,
@@ -530,7 +579,15 @@ impl AgentsState {
         let now = self.clock_ms;
         self.notices
             .retain(|notice| notice.expires_ms.is_none_or(|end| end > now));
-        sessions.iter().any(|s| s.state == AgentState::Working)
+        self.backend.busy() || sessions.iter().any(|s| s.state == AgentState::Working)
+    }
+
+    /// Hands changed settings to the backend (a no-op when nothing changed).
+    pub fn configure(&mut self, settings: AgentsSettings) {
+        if self.configured.as_ref() != Some(&settings) {
+            self.backend.configure(&settings);
+            self.configured = Some(settings);
+        }
     }
 
     fn on_event(&mut self, event: &AgentNews, sessions: &[SessionInfo], mode: WorkbenchMode) {
@@ -631,7 +688,54 @@ impl IdeState {
 
     pub fn poll_agents(&mut self) -> bool {
         let mode = self.workbench_mode;
+        let settings = self.agents_settings();
+        self.agents.configure(settings);
         self.agents.poll(Instant::now(), mode)
+    }
+
+    /// Tools | Agents as stored.
+    pub fn agents_settings(&self) -> AgentsSettings {
+        use archipel_ide_settings::ids;
+        let path = |id: &str| {
+            self.settings
+                .text(id)
+                .map(|p| p.trim().to_owned())
+                .filter(|p| !p.is_empty())
+                .map(PathBuf::from)
+        };
+        let defaults = AgentsSettings::default();
+        AgentsSettings {
+            max_parallel: self
+                .settings
+                .int(ids::AGENTS_MAX_PARALLEL)
+                .map_or(defaults.max_parallel, |n| n.clamp(1, 16) as usize),
+            permission_mode: self
+                .settings
+                .text(ids::AGENTS_PERMISSION_MODE)
+                .unwrap_or(defaults.permission_mode),
+            worktree_base: path(ids::AGENTS_WORKTREE_DIR),
+            claude_path: path(ids::AGENTS_CLAUDE_PATH),
+            codex_path: path(ids::AGENTS_CODEX_PATH),
+        }
+    }
+
+    /// Replaces the scripted backend by the real one (Claude Code and Codex in worktrees).
+    /// The session list starts from what is stored for the project.
+    pub fn enable_real_agents(&mut self) {
+        let data_dir = archipel_ide_compat::env_var_os("ARCHIPEL_DATA_DIR")
+            .filter(|dir| !dir.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(archipel_ide_agents::engine::default_data_dir);
+        let mut backend = crate::agents_real::RealAgentsBackend::new(data_dir);
+        backend.configure(&self.agents_settings());
+        self.agents.backend = Box::new(backend);
+        self.agents.configured = None;
+        self.sync_agents_project();
+    }
+
+    /// Stops running agents (the IDE is closing); their sessions stay resumable.
+    pub fn shutdown_agents(&mut self) {
+        self.agents.backend.shutdown();
     }
 
     /// Project changes must reach the backend (worktrees start from the project).
@@ -685,6 +789,14 @@ impl IdeState {
     /// Seeds three realistic tasks and a failed spike, as if the user had started them a
     /// few seconds ago (`ARCHIPEL_AGENTS_DEMO=1`).
     pub fn seed_agents_demo(&mut self) {
+        // The demo is scripted: never start real agents for it, and never drop real ones.
+        if self.agents.backend.is_real() {
+            if !self.agents.backend.sessions().is_empty() {
+                self.status = "The agents demo is off while real agents exist".into();
+                return;
+            }
+            self.agents = AgentsState::default();
+        }
         self.sync_agents_project();
         self.agents.seed_demo();
     }
@@ -802,16 +914,32 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 if prompt.trim().is_empty() {
                     return Err(CommandError::InvalidParams("the prompt is empty".into()));
                 }
+                let available = state.agents.backend.available_profiles();
                 let names = if params.get("profiles").is_some() {
                     string_array_param(&params, "profiles")?
                 } else {
-                    vec!["claude".into()]
+                    // The default agent is Claude Code, or the first one that is installed.
+                    let first = if available.contains(&AgentProfile::Claude) {
+                        Some(AgentProfile::Claude)
+                    } else {
+                        available.first().copied()
+                    };
+                    first.map(|p| vec![p.id().to_owned()]).unwrap_or_default()
                 };
+                if available.is_empty() {
+                    return Err(CommandError::Failed(NO_AGENTS_HINT.into()));
+                }
                 let mut profiles = Vec::new();
                 for name in &names {
                     let profile = AgentProfile::parse(name).ok_or_else(|| {
                         CommandError::InvalidParams(format!("unknown agent `{name}`"))
                     })?;
+                    if !available.contains(&profile) {
+                        return Err(CommandError::Failed(format!(
+                            "{} is not installed. {NO_AGENTS_HINT}",
+                            profile.product_name()
+                        )));
+                    }
                     if !profiles.contains(&profile) {
                         profiles.push(profile);
                     }

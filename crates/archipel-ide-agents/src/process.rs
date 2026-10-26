@@ -214,9 +214,9 @@ impl Proc {
             .lock()
             .map_err(|_| io::Error::other("stdin lock poisoned"))?;
         match guard.as_ref() {
-            Some(tx) => tx
-                .send(line.to_owned())
-                .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "the agent closed its input")),
+            Some(tx) => tx.send(line.to_owned()).map_err(|_| {
+                io::Error::new(io::ErrorKind::BrokenPipe, "the agent closed its input")
+            }),
             None => Err(io::Error::new(io::ErrorKind::BrokenPipe, "stdin is closed")),
         }
     }
@@ -329,7 +329,10 @@ mod tests {
         };
         let spec = SpawnSpec {
             program: "sh".into(),
-            args: vec!["-c".into(), "read a; echo got:$a; echo err >&2; exit 3".into()],
+            args: vec![
+                "-c".into(),
+                "read a; echo got:$a; echo err >&2; exit 3".into(),
+            ],
             cwd: std::env::temp_dir(),
             env: vec![("PATH".into(), std::env::var_os("PATH").unwrap_or_default())],
         };

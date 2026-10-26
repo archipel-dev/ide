@@ -43,7 +43,6 @@ impl CodexAdapter {
         }
     }
 
-
     pub fn parse_line(&mut self, line: &str) -> Parsed {
         let Ok(value) = serde_json::from_str::<Value>(line.trim()) else {
             return Parsed::none();
@@ -71,8 +70,8 @@ impl CodexAdapter {
                         .and_then(Value::as_u64)
                         .unwrap_or(0)
                 };
-                let total = (count("input_tokens") + count("output_tokens")).min(u64::from(u32::MAX))
-                    as u32;
+                let total = (count("input_tokens") + count("output_tokens"))
+                    .min(u64::from(u32::MAX)) as u32;
                 let mut out = Parsed::none();
                 if total > 0 {
                     out.updates.push(Update::Tokens { add: total });
@@ -100,7 +99,8 @@ impl CodexAdapter {
             }),
             "error" => Parsed::one(Update::Push {
                 event: AgentEvent::Error(
-                    str_field(&value, "message").unwrap_or_else(|| "Codex reported an error".into()),
+                    str_field(&value, "message")
+                        .unwrap_or_else(|| "Codex reported an error".into()),
                 ),
             }),
             other => Parsed::one(Update::Push {
@@ -195,7 +195,11 @@ impl CodexAdapter {
                     &item_id,
                     started || !completed,
                     completed,
-                    if all_new { ToolKind::Write } else { ToolKind::Edit },
+                    if all_new {
+                        ToolKind::Write
+                    } else {
+                        ToolKind::Edit
+                    },
                     title,
                     changes
                         .iter()
@@ -226,7 +230,9 @@ impl CodexAdapter {
                     None,
                     status == "failed" || item.get("error").is_some_and(|e| !e.is_null()),
                     None,
-                    item.get("result").filter(|r| !r.is_null()).map(|r| truncate(&r.to_string(), MAX_OUTPUT)),
+                    item.get("result")
+                        .filter(|r| !r.is_null())
+                        .map(|r| truncate(&r.to_string(), MAX_OUTPUT)),
                 )
             }
             "web_search" => {
@@ -327,7 +333,6 @@ impl CodexAdapter {
             edit: None,
         }
     }
-
 }
 
 fn plural_files(n: usize) -> String {
@@ -370,11 +375,26 @@ mod tests {
             r#"{"type":"item.completed","item":{"id":"i3","type":"agent_message","text":"Done."}}"#,
             r#"{"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":50,"output_tokens":20}}"#,
         ]);
-        assert_eq!(updates[0], Update::Session { id: "th-1".into(), model: None });
-        assert!(matches!(&updates[1], Update::Push { event: AgentEvent::Thinking(t) } if t == "plan"));
+        assert_eq!(
+            updates[0],
+            Update::Session {
+                id: "th-1".into(),
+                model: None
+            }
+        );
+        assert!(
+            matches!(&updates[1], Update::Push { event: AgentEvent::Thinking(t) } if t == "plan")
+        );
         assert!(matches!(
             &updates[2],
-            Update::Push { event: AgentEvent::ToolCall { id: 1, kind: ToolKind::Bash, status: ToolStatus::Running, .. } }
+            Update::Push {
+                event: AgentEvent::ToolCall {
+                    id: 1,
+                    kind: ToolKind::Bash,
+                    status: ToolStatus::Running,
+                    ..
+                }
+            }
         ));
         assert!(matches!(
             &updates[3],
@@ -384,8 +404,17 @@ mod tests {
             &updates[4],
             Update::Push { event: AgentEvent::ToolCall { id: 2, kind: ToolKind::Edit, title, .. } } if title == "Edit a.rs (+1 more)"
         ));
-        assert!(matches!(&updates[5], Update::ToolResult { call: 2, status: ToolStatus::Ok, .. }));
-        assert!(matches!(&updates[6], Update::Push { event: AgentEvent::AssistantText(t) } if t == "Done."));
+        assert!(matches!(
+            &updates[5],
+            Update::ToolResult {
+                call: 2,
+                status: ToolStatus::Ok,
+                ..
+            }
+        ));
+        assert!(
+            matches!(&updates[6], Update::Push { event: AgentEvent::AssistantText(t) } if t == "Done.")
+        );
         assert_eq!(updates[7], Update::Tokens { add: 120 });
         assert!(matches!(&updates[8], Update::Turn { ok: true, .. }));
     }
@@ -397,9 +426,18 @@ mod tests {
             r#"{"type":"error","message":"stream disconnected"}"#,
             r#"{"type":"turn.failed","error":{"message":"stream disconnected"}}"#,
         ]);
-        assert!(matches!(&updates[1], Update::ToolResult { status: ToolStatus::Error, result: Some(r), .. } if r == "exit 1"));
-        assert!(matches!(&updates[2], Update::Push { event: AgentEvent::Error(_) }));
-        assert!(matches!(&updates[3], Update::Turn { ok: false, message: Some(m), .. } if m == "stream disconnected"));
+        assert!(
+            matches!(&updates[1], Update::ToolResult { status: ToolStatus::Error, result: Some(r), .. } if r == "exit 1")
+        );
+        assert!(matches!(
+            &updates[2],
+            Update::Push {
+                event: AgentEvent::Error(_)
+            }
+        ));
+        assert!(
+            matches!(&updates[3], Update::Turn { ok: false, message: Some(m), .. } if m == "stream disconnected")
+        );
     }
 
     #[test]
@@ -416,7 +454,15 @@ mod tests {
         ]);
         assert_eq!(updates.len(), 2);
         for u in updates {
-            assert!(matches!(u, Update::Push { event: AgentEvent::ToolCall { kind: ToolKind::Other, .. } }));
+            assert!(matches!(
+                u,
+                Update::Push {
+                    event: AgentEvent::ToolCall {
+                        kind: ToolKind::Other,
+                        ..
+                    }
+                }
+            ));
         }
     }
 
@@ -426,7 +472,17 @@ mod tests {
             r#"{"type":"item.completed","item":{"id":"w","type":"web_search","query":"egui docs"}}"#,
             r#"{"type":"item.completed","item":{"id":"m","type":"mcp_tool_call","server":"git","tool":"log","arguments":{"n":3},"status":"completed","result":{"ok":true}}}"#,
         ]);
-        assert!(matches!(&updates[0], Update::Push { event: AgentEvent::ToolCall { kind: ToolKind::Search, .. } }));
-        assert!(matches!(&updates[2], Update::Push { event: AgentEvent::ToolCall { title, .. } } if title == "git.log"));
+        assert!(matches!(
+            &updates[0],
+            Update::Push {
+                event: AgentEvent::ToolCall {
+                    kind: ToolKind::Search,
+                    ..
+                }
+            }
+        ));
+        assert!(
+            matches!(&updates[2], Update::Push { event: AgentEvent::ToolCall { title, .. } } if title == "git.log")
+        );
     }
 }

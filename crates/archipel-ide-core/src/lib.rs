@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 pub mod agent_events;
 pub mod agents;
 pub mod agents_mock;
+pub mod agents_real;
 mod ai_actions;
 mod analysis_host;
 mod analysis_modules;

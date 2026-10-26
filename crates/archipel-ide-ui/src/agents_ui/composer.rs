@@ -109,6 +109,21 @@ impl Composer {
             .collect()
     }
 
+    /// [`Self::profiles`] limited to the installed agents; when none of the selected ones is
+    /// installed, the first installed one.
+    pub fn profiles_in(&self, available: &[AgentProfile]) -> Vec<AgentProfile> {
+        let chosen: Vec<AgentProfile> = self
+            .profiles()
+            .into_iter()
+            .filter(|p| available.contains(p))
+            .collect();
+        if chosen.is_empty() {
+            available.first().copied().into_iter().collect()
+        } else {
+            chosen
+        }
+    }
+
     /// Text plus attachments, as the prompt sent to the agent.
     pub fn prompt(&self) -> String {
         let mut prompt = self.text.trim().to_owned();
@@ -290,6 +305,7 @@ pub(super) fn composer(
     let colors = Theme::colors(&ctx);
     let key = target.map(|t| t.id);
     let mut c = app.agents_ui.composers.remove(&key).unwrap_or_default();
+    let available = app.state.agents.backend.available_profiles();
     let working = target.is_some_and(|t| t.state.is_active());
     let asking = target.is_some_and(|t| t.state == AgentState::NeedsInput);
     let focus = std::mem::take(&mut app.agents_ui.focus_composer);
@@ -370,7 +386,8 @@ pub(super) fn composer(
     let placeholder = match target {
         _ if asking => "Answer above or type a reply".to_owned(),
         Some(t) => format!("Reply to {}\u{2026}", t.name),
-        None => match c.profiles().as_slice() {
+        None if available.is_empty() => "Set up an agent to start a thread".to_owned(),
+        None => match c.profiles_in(&available).as_slice() {
             [one] => format!("Ask {} to\u{2026}", one.id()),
             _ => "Ask the selected agents to\u{2026}".to_owned(),
         },
@@ -384,6 +401,18 @@ pub(super) fn composer(
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.spacing_mut().item_spacing.y = 6.0;
+            // No agent CLI installed: say how to set one up.
+            if target.is_none() && available.is_empty() {
+                let banner = Banner::new(
+                    Severity::Info,
+                    "No agent found. Install the Claude Code or Codex CLI, or set its path.",
+                )
+                .action("Set up agents")
+                .show(ui);
+                if banner.action == Some(0) {
+                    actions.push(Action::SetUpAgents);
+                }
+            }
             // Attachments.
             if !c.chips.is_empty() {
                 ui.horizontal_wrapped(|ui| {
@@ -435,7 +464,9 @@ pub(super) fn composer(
             // Bottom toolbar: selectors on the left, send / stop on the right.
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
-                toolbar = toolbar_row(app, ui, &mut c, target, &files, working, &colors);
+                toolbar = toolbar_row(
+                    app, ui, &mut c, target, &files, working, &colors, &available,
+                );
             });
         });
 
@@ -503,8 +534,11 @@ pub(super) fn composer(
         let prompt = c.prompt();
         match target {
             None => {
-                let profiles: Vec<&'static str> = c.profiles().iter().map(|p| p.id()).collect();
-                if profiles.is_empty() {
+                let profiles: Vec<&'static str> =
+                    c.profiles_in(&available).iter().map(|p| p.id()).collect();
+                if available.is_empty() {
+                    app.state.status = archipel_ide_core::agents::NO_AGENTS_HINT.into();
+                } else if profiles.is_empty() {
                     app.state.status = "Choose at least one agent".into();
                 } else {
                     actions.push(Action::Launch(prompt.clone(), profiles));
@@ -550,6 +584,7 @@ fn toolbar_row(
     files: &[PathBuf],
     working: bool,
     colors: &archipel_kit::theme::Colors,
+    available: &[AgentProfile],
 ) -> Toolbar {
     let mut out = Toolbar::default();
     // Agent / model selector.
@@ -566,7 +601,8 @@ fn toolbar_row(
             );
             format!("{} \u{b7} {model}", t.profile.id())
         }
-        None => match c.profiles().as_slice() {
+        None if available.is_empty() => "no agents".to_owned(),
+        None => match c.profiles_in(available).as_slice() {
             [one] => {
                 let model = ENTRIES
                     .iter()
@@ -594,6 +630,10 @@ fn toolbar_row(
         .show(|ui| {
             ui.set_width(250.0);
             for (index, (profile, model)) in ENTRIES.iter().enumerate() {
+                // A new thread only offers installed agents.
+                if target.is_none() && !available.contains(profile) {
+                    continue;
+                }
                 let checked = match target {
                     None => c.selected[index],
                     Some(t) => {
@@ -614,7 +654,11 @@ fn toolbar_row(
                     match target {
                         None => {
                             c.selected[index] = !c.selected[index];
-                            if !c.selected.iter().any(|on| *on) {
+                            let any_installed = ENTRIES
+                                .iter()
+                                .zip(c.selected)
+                                .any(|((p, _), on)| on && available.contains(p));
+                            if !any_installed {
                                 c.selected[index] = true;
                             }
                         }

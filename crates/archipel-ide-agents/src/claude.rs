@@ -15,9 +15,7 @@
 //! unknown tools become a generic tool row and unknown message types a generic `Other` row.
 
 use crate::adapter::{Choice, Parsed};
-use crate::events::{
-    AgentEvent, DiffLine, EditSummary, PERMISSION_OPTIONS, ToolKind, ToolStatus,
-};
+use crate::events::{AgentEvent, DiffLine, EditSummary, PERMISSION_OPTIONS, ToolKind, ToolStatus};
 use crate::update::{Update, first_line, truncate};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -167,7 +165,8 @@ impl ClaudeAdapter {
             for block in blocks {
                 match block.get("type").and_then(Value::as_str) {
                     Some("text") => {
-                        if let Some(text) = str_field(block, "text").filter(|t| !t.trim().is_empty())
+                        if let Some(text) =
+                            str_field(block, "text").filter(|t| !t.trim().is_empty())
                         {
                             out.updates.push(Update::Push {
                                 event: AgentEvent::AssistantText(text),
@@ -250,7 +249,8 @@ impl ClaudeAdapter {
             if block.get("type").and_then(Value::as_str) != Some("tool_result") {
                 continue;
             }
-            let Some(call) = str_field(block, "tool_use_id").and_then(|id| self.calls.get(&id).copied())
+            let Some(call) =
+                str_field(block, "tool_use_id").and_then(|id| self.calls.get(&id).copied())
             else {
                 continue;
             };
@@ -289,7 +289,8 @@ impl ClaudeAdapter {
                 .and_then(Value::as_u64)
                 .unwrap_or(0)
         };
-        let total = count("input_tokens") + count("output_tokens") + count("cache_creation_input_tokens");
+        let total =
+            count("input_tokens") + count("output_tokens") + count("cache_creation_input_tokens");
         let total = total.min(u64::from(u32::MAX)) as u32;
         let mut out = Parsed::none();
         let extra = total.saturating_sub(self.running_tokens);
@@ -368,7 +369,10 @@ impl ClaudeAdapter {
                 request_id,
                 tool,
                 input,
-                suggestions: request.get("permission_suggestions").cloned().filter(Value::is_array),
+                suggestions: request
+                    .get("permission_suggestions")
+                    .cloned()
+                    .filter(Value::is_array),
             },
         );
         Parsed::one(Update::Push {
@@ -436,7 +440,11 @@ impl ClaudeAdapter {
         match name {
             "Read" => {
                 let path = file().unwrap_or_default();
-                Described::new(ToolKind::Read, format!("Read {}", file_name(&path)), path.display().to_string())
+                Described::new(
+                    ToolKind::Read,
+                    format!("Read {}", file_name(&path)),
+                    path.display().to_string(),
+                )
             }
             "Edit" | "MultiEdit" | "NotebookEdit" => {
                 let path = file().unwrap_or_default();
@@ -528,15 +536,27 @@ impl ClaudeAdapter {
                     .iter()
                     .find_map(|key| str_field(input, key))
                     .unwrap_or_default();
-                Described::new(ToolKind::Search, format!("{name} {}", truncate(&query, 80)), query)
+                Described::new(
+                    ToolKind::Search,
+                    format!("{name} {}", truncate(&query, 80)),
+                    query,
+                )
             }
             "WebFetch" | "WebSearch" => {
                 let target = ["url", "query"]
                     .iter()
                     .find_map(|key| str_field(input, key))
                     .unwrap_or_default();
-                let verb = if name == "WebFetch" { "Fetch" } else { "Search the web:" };
-                Described::new(ToolKind::Other, format!("{verb} {}", truncate(&target, 80)), target)
+                let verb = if name == "WebFetch" {
+                    "Fetch"
+                } else {
+                    "Search the web:"
+                };
+                Described::new(
+                    ToolKind::Other,
+                    format!("{verb} {}", truncate(&target, 80)),
+                    target,
+                )
             }
             "Task" | "Agent" => {
                 let description = str_field(input, "description")
@@ -593,7 +613,11 @@ fn str_field(value: &Value, key: &str) -> Option<String> {
 }
 
 fn count_lines(text: &str) -> usize {
-    if text.is_empty() { 0 } else { text.lines().count() }
+    if text.is_empty() {
+        0
+    } else {
+        text.lines().count()
+    }
 }
 
 /// Tool result content: a string or an array of `{type: "text", text}` blocks.
@@ -676,7 +700,11 @@ mod tests {
                 ToolKind::Other
             ]
         );
-        assert!(events.iter().any(|e| matches!(e, AgentEvent::SubagentSpawned { name, .. } if name == "Find uses")));
+        assert!(
+            events.iter().any(
+                |e| matches!(e, AgentEvent::SubagentSpawned { name, .. } if name == "Find uses")
+            )
+        );
         let AgentEvent::ToolCall { title, edit, .. } = events[3] else {
             panic!("edit row");
         };
@@ -692,14 +720,24 @@ mod tests {
                {"type":"tool_result","tool_use_id":"t4","is_error":true,"content":"bad regex"}]}}"#,
         );
         assert_eq!(done.updates.len(), 2);
-        assert!(matches!(&done.updates[0], Update::ToolResult { call: 1, status: ToolStatus::Ok, result: Some(r), .. } if r == "fn main() {}"));
-        assert!(matches!(&done.updates[1], Update::ToolResult { status: ToolStatus::Error, .. }));
+        assert!(
+            matches!(&done.updates[0], Update::ToolResult { call: 1, status: ToolStatus::Ok, result: Some(r), .. } if r == "fn main() {}")
+        );
+        assert!(matches!(
+            &done.updates[1],
+            Update::ToolResult {
+                status: ToolStatus::Error,
+                ..
+            }
+        ));
     }
 
     #[test]
     fn result_carries_cost_usage_duration_and_errors() {
         let mut a = adapter();
-        a.parse_line(r#"{"type":"assistant","message":{"content":[],"usage":{"output_tokens":10}}}"#);
+        a.parse_line(
+            r#"{"type":"assistant","message":{"content":[],"usage":{"output_tokens":10}}}"#,
+        );
         let ok = a.parse_line(
             r#"{"type":"result","subtype":"success","is_error":false,"duration_ms":4200,"total_cost_usd":0.05,"result":"done","usage":{"input_tokens":100,"output_tokens":30}}"#,
         );
@@ -713,7 +751,9 @@ mod tests {
         let bad = a.parse_line(
             r#"{"type":"result","subtype":"error_during_execution","is_error":true,"errors":["no key"]}"#,
         );
-        assert!(bad.updates.iter().any(|u| matches!(u, Update::Turn { ok: false, message: Some(m), .. } if m == "no key")));
+        assert!(bad.updates.iter().any(
+            |u| matches!(u, Update::Turn { ok: false, message: Some(m), .. } if m == "no key")
+        ));
     }
 
     #[test]
@@ -722,7 +762,13 @@ mod tests {
         let p = a.parse_line(
             r#"{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"cargo test"}}}"#,
         );
-        let AgentEvent::PermissionRequest { id, question, options, answer } = pushed(&p)[0].clone() else {
+        let AgentEvent::PermissionRequest {
+            id,
+            question,
+            options,
+            answer,
+        } = pushed(&p)[0].clone()
+        else {
             panic!("permission row");
         };
         assert_eq!(question, "Run cargo test?");
@@ -733,8 +779,17 @@ mod tests {
         assert_eq!(v["type"], "control_response");
         assert_eq!(v["response"]["request_id"], "r1");
         assert_eq!(v["response"]["response"]["behavior"], "allow");
-        assert_eq!(v["response"]["response"]["updatedInput"]["command"], "cargo test");
-        assert_eq!(update, Update::Answered { id, answer: "Allow once".into() });
+        assert_eq!(
+            v["response"]["response"]["updatedInput"]["command"],
+            "cargo test"
+        );
+        assert_eq!(
+            update,
+            Update::Answered {
+                id,
+                answer: "Allow once".into()
+            }
+        );
         assert!(a.answer(id, Choice::Deny).is_none(), "answered once");
 
         let p = a.parse_line(
@@ -745,7 +800,10 @@ mod tests {
         };
         let (line, _) = a.answer(id, Choice::AlwaysAllow).unwrap();
         let v: Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(v["response"]["response"]["updatedPermissions"][0]["rules"][0]["toolName"], "Edit");
+        assert_eq!(
+            v["response"]["response"]["updatedPermissions"][0]["rules"][0]["toolName"],
+            "Edit"
+        );
         let p = a.parse_line(r#"{"type":"control_request","request_id":"r3","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{}}}"#);
         let AgentEvent::PermissionRequest { id, .. } = pushed(&p)[0].clone() else {
             panic!();
@@ -757,7 +815,9 @@ mod tests {
     #[test]
     fn unsupported_control_requests_get_an_error_reply_and_cancels_close_cards() {
         let mut a = adapter();
-        let p = a.parse_line(r#"{"type":"control_request","request_id":"h1","request":{"subtype":"hook_callback"}}"#);
+        let p = a.parse_line(
+            r#"{"type":"control_request","request_id":"h1","request":{"subtype":"hook_callback"}}"#,
+        );
         assert_eq!(p.replies.len(), 1);
         assert!(p.replies[0].contains("\"error\""));
         a.parse_line(r#"{"type":"control_request","request_id":"r9","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{}}}"#);
@@ -789,7 +849,11 @@ mod tests {
             pushed(&p)[0],
             AgentEvent::ToolCall { kind: ToolKind::Other, title, .. } if title == "Event brand_new_thing"
         ));
-        assert!(a.parse_line(r#"{"type":"rate_limit_event"}"#).updates.is_empty());
+        assert!(
+            a.parse_line(r#"{"type":"rate_limit_event"}"#)
+                .updates
+                .is_empty()
+        );
     }
 
     #[test]

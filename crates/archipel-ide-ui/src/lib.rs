@@ -298,6 +298,9 @@ impl IdeApp {
                 state.status = error.to_string();
             }
         }
+        if !cfg!(test) && !agents_demo_enabled() {
+            state.enable_real_agents();
+        }
         state.sync_agents_project();
         if state.project.is_some() && agents_demo_enabled() {
             state.seed_agents_demo();
@@ -932,6 +935,7 @@ impl eframe::App for IdeApp {
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.state.shutdown_agents();
         self.state.shutdown_plugins();
         if self.state.project.is_some() {
             self.autosave();

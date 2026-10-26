@@ -80,6 +80,8 @@ enum Action {
     OpenInCode(SessionId, Option<PathBuf>),
     Toggle(Key),
     Merge(SessionId, MergeStrategy),
+    /// Opens Settings > Tools > Agents (no agent CLI found).
+    SetUpAgents,
 }
 
 /// The merge / discard dialog (mock).
@@ -502,8 +504,13 @@ pub(crate) fn tree(app: &mut IdeApp, ui: &mut egui::Ui, compact: bool) {
     let tasks = app.state.agents.backend.tasks();
     let sessions = app.state.agents.sessions();
     if sessions.is_empty() {
+        let hint = if app.state.agents.backend.available_profiles().is_empty() {
+            "No agent CLI found. Install Claude Code or Codex, or set its path under Settings > Tools > Agents."
+        } else {
+            "Describe a task in Agents mode and press Enter."
+        };
         EmptyState::new("No agents yet")
-            .hint("Describe a task in Agents mode and press Enter.")
+            .hint(hint)
             .icon(glyph(Concept::Agent))
             .show(ui);
         return;
@@ -1010,6 +1017,10 @@ fn apply(app: &mut IdeApp, actions: Vec<Action>) {
             Action::Show(id) => app.dispatch("agents.show", json!({"session": id})),
             Action::CloseThread(id) => app.dispatch("agents.closeThread", json!({"session": id})),
             Action::CloseDraft => app.dispatch("agents.closeDraft", Value::Null),
+            Action::SetUpAgents => app.dispatch(
+                "settings.open",
+                json!({"page": archipel_ide_settings::AGENTS_PAGE}),
+            ),
             Action::NewThread => app.dispatch("agents.newThread", Value::Null),
             Action::Launch(prompt, profiles) => app.dispatch(
                 "agents.launch",

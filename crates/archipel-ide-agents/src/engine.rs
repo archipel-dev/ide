@@ -346,8 +346,8 @@ impl Engine {
             AgentKind::Claude => self.config.claude_path.as_deref(),
             AgentKind::Codex => self.config.codex_path.as_deref(),
         };
-        let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
-            .map(PathBuf::from);
+        let home =
+            std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from);
         find_cli(
             kind,
             override_path,
@@ -563,8 +563,7 @@ impl Engine {
     }
 
     pub fn events(&self, id: SessionId) -> &[AgentEvent] {
-        self.session(id)
-            .map_or(&[][..], |s| &s.transcript.events)
+        self.session(id).map_or(&[][..], |s| &s.transcript.events)
     }
 
     pub fn changes(&self, id: SessionId) -> &[Change] {
@@ -583,13 +582,7 @@ impl Engine {
     /// Process ids of the agent (and of one being stopped), for diagnostics and tests.
     pub fn process_ids(&self, id: SessionId) -> Vec<u32> {
         self.session(id)
-            .map(|s| {
-                s.proc
-                    .iter()
-                    .chain(s.dying.iter())
-                    .map(Proc::pid)
-                    .collect()
-            })
+            .map(|s| s.proc.iter().chain(s.dying.iter()).map(Proc::pid).collect())
             .unwrap_or_default()
     }
 
@@ -600,6 +593,13 @@ impl Engine {
             self.sessions[idx].unread = false;
             self.save(idx);
         }
+    }
+
+    /// Something is still in flight that the caller should keep polling for.
+    pub fn busy(&self) -> bool {
+        self.sessions
+            .iter()
+            .any(|s| s.state.is_active() || s.stats_in_flight || s.dying.is_some())
     }
 
     fn active_count(&self, except: Option<usize>) -> usize {
@@ -852,7 +852,13 @@ impl Engine {
         };
         let plan = {
             let s = &self.sessions[idx];
-            build_command(s.kind, s.mode, &session_arg, &prompt, s.transcript.model.as_deref())
+            build_command(
+                s.kind,
+                s.mode,
+                &session_arg,
+                &prompt,
+                s.transcript.model.as_deref(),
+            )
         };
         let env = agent_env(kind, std::env::vars_os(), &self.config.extra_env);
         let s = &mut self.sessions[idx];
@@ -990,11 +996,8 @@ impl Engine {
         s.idle_since = Some(Instant::now());
         s.patch_turn = ok;
         let id = s.id;
-        self.news.push(if ok {
-            News::Done(id)
-        } else {
-            News::Failed(id)
-        });
+        self.news
+            .push(if ok { News::Done(id) } else { News::Failed(id) });
         self.request_stats(idx);
         self.save(idx);
     }
@@ -1567,7 +1570,11 @@ pub fn slug_of(prompt: &str) -> String {
 }
 
 fn truncate_chars(text: &str, max: usize) -> String {
-    text.chars().take(max).collect::<String>().trim_matches('-').to_owned()
+    text.chars()
+        .take(max)
+        .collect::<String>()
+        .trim_matches('-')
+        .to_owned()
 }
 
 #[cfg(test)]
@@ -1576,7 +1583,10 @@ mod tests {
 
     #[test]
     fn slugs_are_short_and_safe() {
-        assert_eq!(slug_of("Fix tab ordering when the active tab is closed"), "fix-tab-ordering-when-the-active");
+        assert_eq!(
+            slug_of("Fix tab ordering when the active tab is closed"),
+            "fix-tab-ordering-when-the-active"
+        );
         assert_eq!(slug_of("  !!! "), "agent");
         assert_eq!(slug_of("../../etc/passwd now"), "etcpasswd-now");
         assert!(slug_of(&"word ".repeat(40)).len() <= 40);
@@ -1584,7 +1594,13 @@ mod tests {
 
     #[test]
     fn states_round_trip() {
-        for s in [State::Working, State::NeedsInput, State::Done, State::Failed, State::Stopped] {
+        for s in [
+            State::Working,
+            State::NeedsInput,
+            State::Done,
+            State::Failed,
+            State::Stopped,
+        ] {
             assert_eq!(State::parse(s.id()), Some(s));
         }
         assert!(State::Working.is_active() && !State::Stopped.is_active());

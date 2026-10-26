@@ -10,6 +10,9 @@ use serde::Deserialize;
 
 const SETTINGS_JSON: &str = include_str!("../../../docs/spec/data/settings.json");
 
+/// Page id of Tools | Agents (not part of the reference tree).
+pub const AGENTS_PAGE: &str = "tools.agents";
+
 /// Page id of the generated Advanced Settings page.
 pub const ADVANCED_SETTINGS_PAGE: &str = "advanced.settings";
 
@@ -76,6 +79,12 @@ pub mod ids {
     pub const GRADLE_OFFLINE: &str = "gradle.offline";
     pub const GRADLE_USER_HOME: &str = "gradle.userHome";
     pub const GRADLE_JVM: &str = "gradle.jvm";
+    /// Tools | Agents.
+    pub const AGENTS_MAX_PARALLEL: &str = "agents.maxParallel";
+    pub const AGENTS_PERMISSION_MODE: &str = "agents.defaultPermissionMode";
+    pub const AGENTS_WORKTREE_DIR: &str = "agents.worktreeBaseDir";
+    pub const AGENTS_CLAUDE_PATH: &str = "agents.claudePath";
+    pub const AGENTS_CODEX_PATH: &str = "agents.codexPath";
     pub const CHECK_UPDATES: &str = "updates.checkOnStartup";
     pub const TERMINAL_SHELL: &str = "terminal.shellPath";
     pub const AUTOSAVE_FOCUS: &str = "system.saveOnFrameDeactivation";
@@ -128,7 +137,71 @@ pub(crate) fn registry() -> SettingsRegistry {
     add_configurables(&mut registry, &data.configurables);
     add_advanced_settings(&mut registry, &data.advanced_settings);
     add_definitions(&mut registry);
+    add_agents_settings(&mut registry);
     registry
+}
+
+/// Tools | Agents: limits and CLI locations of Agents mode.
+fn add_agents_settings(registry: &mut SettingsRegistry) {
+    use SettingKind::Path;
+    use SettingValue::Int as I;
+    let _ = registry.register_page(PageDef::new(AGENTS_PAGE, Some("tools"), "Agents"));
+    let definitions = vec![
+        SettingDef::new(
+            ids::AGENTS_MAX_PARALLEL,
+            AGENTS_PAGE,
+            "Max parallel agents",
+            SettingKind::Int { min: 1, max: 16 },
+            I(4),
+        )
+        .description("Agents working at the same time, agents started by other agents included"),
+        SettingDef::new(
+            ids::AGENTS_PERMISSION_MODE,
+            AGENTS_PAGE,
+            "Default permission mode",
+            options(&[
+                ("ask", "Ask before edits and commands"),
+                ("auto-edit", "Auto-edit (ask before commands)"),
+                ("plan", "Plan (read-only)"),
+            ]),
+            text("ask"),
+        )
+        .description(
+            "Codex runs non-interactively and cannot ask: Ask and Auto-edit both use its \
+             workspace-write sandbox",
+        ),
+        SettingDef::new(
+            ids::AGENTS_WORKTREE_DIR,
+            AGENTS_PAGE,
+            "Worktree base directory",
+            Path,
+            text(""),
+        )
+        .description(
+            "Where agents' git worktrees are created; empty uses the IDE's data directory",
+        ),
+        SettingDef::new(
+            ids::AGENTS_CLAUDE_PATH,
+            AGENTS_PAGE,
+            "Claude Code executable",
+            Path,
+            text(""),
+        )
+        .group("Agent executables")
+        .description("Empty finds `claude` on PATH"),
+        SettingDef::new(
+            ids::AGENTS_CODEX_PATH,
+            AGENTS_PAGE,
+            "Codex executable",
+            Path,
+            text(""),
+        )
+        .group("Agent executables")
+        .description("Empty finds `codex` on PATH"),
+    ];
+    for definition in definitions {
+        let _ = registry.register_setting(definition);
+    }
 }
 
 fn add_configurables(registry: &mut SettingsRegistry, configurables: &[Configurable]) {

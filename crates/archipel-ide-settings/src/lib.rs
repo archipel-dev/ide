@@ -18,7 +18,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 
 pub use draft::SettingsDraft;
-pub use intellij::{ADVANCED_SETTINGS_PAGE, TOP_LEVEL_ORDER, ids};
+pub use intellij::{ADVANCED_SETTINGS_PAGE, AGENTS_PAGE, TOP_LEVEL_ORDER, ids};
 pub use store::{SettingsStore, default_config_dir};
 
 /// Where a setting (or page) is stored.

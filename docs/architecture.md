@@ -91,6 +91,12 @@ show the old product name.
   bounded results and binary/large-file exclusion.
 - `archipel-ide-git`: repository/branch/status modeling and argument-safe Git operations;
   it delegates repository semantics to the installed Git executable.
+- `archipel-ide-agents`: the Agents mode engine (no UI): Claude Code (`stream-json`) and Codex
+  (`exec --json`) protocol adapters that turn agent output into `AgentEvent`s, process
+  supervision (argument vectors, env allowlist, reader threads, graceful stop then kill), a git
+  worktree per session with changes against the merge base and squash/merge/discard, JSONL
+  persistence with secret redaction and resume after a restart. Core wraps it as
+  `RealAgentsBackend`; see [agents/backend.md](agents/backend.md).
 - `archipel-ide-runner`: the `BuildSystem` provider trait and registry (Cargo, Maven, Bazel,
   npm, Go built in), cancellable child-process execution, a line-oriented console model
   (`\r` progress, ANSI stripping) and a build-event parser (steps with durations, compiler

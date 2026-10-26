@@ -108,7 +108,10 @@ mod tests {
         let line = serde_json::json!({"text": "the pa\"ss\\word-123456 and short"}).to_string();
         let out = r.redact(&line);
         assert!(!out.contains("word-123456"), "{out}");
-        assert!(out.contains("short"), "values under 8 chars are not treated as secrets");
+        assert!(
+            out.contains("short"),
+            "values under 8 chars are not treated as secrets"
+        );
         assert!(serde_json::from_str::<serde_json::Value>(&out).is_ok());
     }
 

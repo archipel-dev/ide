@@ -163,7 +163,13 @@ mod tests {
         store.save_meta(&meta(1)).unwrap();
         for text in ["hello", "the key hunter2-hunter2 leaked"] {
             store
-                .append(1, &Update::Push { event: AgentEvent::AssistantText(text.into()) }, &redactor)
+                .append(
+                    1,
+                    &Update::Push {
+                        event: AgentEvent::AssistantText(text.into()),
+                    },
+                    &redactor,
+                )
                 .unwrap();
         }
         let loaded = store.load_all();
@@ -180,7 +186,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::new(dir.path());
         store.save_meta(&meta(1)).unwrap();
-        fs::write(dir.path().join("sessions/1/transcript.jsonl"), "{broken\n\n{\"kind\":\"nope\"}\n").unwrap();
+        fs::write(
+            dir.path().join("sessions/1/transcript.jsonl"),
+            "{broken\n\n{\"kind\":\"nope\"}\n",
+        )
+        .unwrap();
         fs::create_dir_all(dir.path().join("sessions/9")).unwrap();
         fs::write(dir.path().join("sessions/9/meta.json"), "not json").unwrap();
         let loaded = store.load_all();

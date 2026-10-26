@@ -115,10 +115,9 @@ impl Transcript {
                 message,
             } => {
                 self.cost_usd += cost_usd.unwrap_or(0.0);
-                if !ok
-                    && let Some(text) = message.as_ref().filter(|m| !m.trim().is_empty())
-                {
-                    let same = matches!(self.events.last(), Some(AgentEvent::Error(last)) if last == text);
+                if !ok && let Some(text) = message.as_ref().filter(|m| !m.trim().is_empty()) {
+                    let same =
+                        matches!(self.events.last(), Some(AgentEvent::Error(last)) if last == text);
                     if !same {
                         self.events.push(AgentEvent::Error(text.clone()));
                     }
@@ -182,7 +181,10 @@ pub fn truncate(text: &str, max: usize) -> String {
 /// The first non-empty line of `text`, truncated.
 pub fn first_line(text: &str, max: usize) -> String {
     truncate(
-        text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or(""),
+        text.lines()
+            .map(str::trim)
+            .find(|l| !l.is_empty())
+            .unwrap_or(""),
         max,
     )
 }

@@ -21,7 +21,8 @@ use std::time::Duration;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if std::env::var_os("FAKE_AGENT_DEAF").is_some() && std::env::var_os("FAKE_AGENT_REEXEC").is_none()
+    if std::env::var_os("FAKE_AGENT_DEAF").is_some()
+        && std::env::var_os("FAKE_AGENT_REEXEC").is_none()
     {
         reexec_deaf(&args);
     }

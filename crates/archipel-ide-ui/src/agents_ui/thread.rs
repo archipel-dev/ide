@@ -402,12 +402,15 @@ fn transcript(
                 }
             },
             AgentEvent::SubagentSpawned { child, name } => {
-                let row = ListRow::new(format!("Started agent {name}"))
+                // A subagent inside the same session (child 0) has no thread of its own.
+                let mut row = ListRow::new(format!("Started agent {name}"))
                     .icon(glyph(Concept::Subagent))
-                    .icon_tone(Tone::Accent)
-                    .trailing(Slot::text_tone("Open thread", Tone::Link))
-                    .show(ui);
-                if row.response.clicked() {
+                    .icon_tone(Tone::Accent);
+                if *child != 0 {
+                    row = row.trailing(Slot::text_tone("Open thread", Tone::Link));
+                }
+                let row = row.show(ui);
+                if *child != 0 && row.response.clicked() {
                     actions.push(Action::Show(*child));
                 }
             }

@@ -19,7 +19,7 @@
 
 use crate::theme;
 use archipel_ide_core::project_view::DirRole;
-use archipel_kit::components::IconButton;
+use archipel_kit::action_system::ActionButton;
 use archipel_kit::parts::Tone;
 use archipel_kit::{Glyph, Theme};
 use eframe::egui::{self, Color32, Rect};
@@ -228,9 +228,9 @@ pub fn show(ui: &mut egui::Ui, icon: Icon, size: f32, color: impl Into<Color32>)
     archipel_kit::icons::show(ui, icon, size, color)
 }
 
-/// Toolbar-style icon button (the kit's `IconButton`).
+/// Toolbar-style icon button (the kit's `ActionButton`).
 pub fn button(ui: &mut egui::Ui, icon: Icon, tooltip: &str) -> egui::Response {
-    ui.add(IconButton::new(icon, tooltip))
+    ui.add(ActionButton::new(icon, tooltip))
 }
 
 /// Icon button tinted with `color`, filled with the accent when `selected`. The kit
@@ -250,7 +250,7 @@ pub fn button_colored(
         .into_iter()
         .find(|tone| tone.color(&colors) == color)
         .unwrap_or(Tone::Icon);
-    let button = IconButton::new(icon, tooltip).tone(tone);
+    let button = ActionButton::new(icon, tooltip).tone(tone);
     ui.add(if selected {
         button.selected(true)
     } else {

@@ -264,7 +264,10 @@ fn item_row(ui: &egui::Ui, rect: Rect, item: &NavigationItem, with_file: bool) {
 /// a `Usages of x` tab. Returns `true` when the usages tab is selected.
 pub fn find_header(app: &mut IdeApp, ui: &mut egui::Ui) -> bool {
     let (header, _) = ui.allocate_exact_size(
-        vec2(ui.available_width(), widgets::TOOL_WINDOW_HEADER_HEIGHT),
+        vec2(
+            ui.available_width(),
+            widgets::tool_window_header_height(ui.ctx()),
+        ),
         Sense::hover(),
     );
     let font = egui::FontId::proportional(theme::UI_FONT_SIZE);

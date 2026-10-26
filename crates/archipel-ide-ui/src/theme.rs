@@ -68,8 +68,6 @@ pub mod layout {
     pub const ICON_SIZE: f32 = size::ICON;
     /// Gap between an icon and its text.
     pub const ICON_TEXT_GAP: f32 = size::ICON_TEXT_GAP;
-    /// Tool-window title bar height.
-    pub const TOOLBAR_HEIGHT: f32 = size::HEADER_HEIGHT;
     /// Square icon-button size in toolbars and headers.
     pub const ICON_BUTTON: f32 = size::ICON_BUTTON;
     /// Space before the first toolbar button so its glyph lines up with the content inset.
@@ -157,12 +155,13 @@ pub fn apply_settings(ctx: &egui::Context, settings: &archipel_ide_core::Setting
     use archipel_ide_settings::ids;
     let theme = settings
         .text(ids::THEME)
-        .unwrap_or_else(|| crate::theme_engine::THEMES[0].into());
+        .unwrap_or_else(|| crate::theme_engine::DEFAULT_THEME.into());
     let scheme = settings.text(ids::EDITOR_SCHEME).filter(|s| !s.is_empty());
     // Settings validate the names; an error leaves the previous theme active.
     if let Ok(true) = crate::theme_engine::set_active(&theme, scheme.as_deref()) {
         apply_kit_theme(ctx);
     }
+    apply_look(ctx, settings);
     sync_window_theme(ctx);
     let line_height = settings
         .float(archipel_ide_settings::ids::EDITOR_LINE_HEIGHT)
@@ -196,10 +195,50 @@ pub fn apply_settings(ctx: &egui::Context, settings: &archipel_ide_core::Setting
     }
 }
 
-/// Installs the kit (fonts, spacing, egui visuals) with the active theme. Call once at
-/// startup; the kit's cursor rules and components then work everywhere in the IDE.
+/// Installs the kit (fonts, spacing, egui visuals) with the active theme in the default
+/// look (Islands). Call once at startup; the kit's cursor rules and components then work
+/// everywhere in the IDE. [`apply_settings`] switches the look to the user's choice.
 pub fn install(ctx: &egui::Context) {
-    archipel_kit::install(ctx, crate::theme_engine::kit_theme());
+    archipel_kit::install_with_look(
+        ctx,
+        crate::theme_engine::kit_theme(),
+        archipel_kit::LookSettings::new(archipel_kit::UiLook::Islands),
+    );
+}
+
+/// The UI look chosen in Settings | Appearance (Islands when unset or unknown).
+pub fn ui_look(settings: &archipel_ide_core::Settings) -> archipel_kit::UiLook {
+    let id = settings.text(archipel_ide_settings::ids::UI_LOOK);
+    archipel_kit::UiLook::ALL
+        .into_iter()
+        .find(|look| Some(look.id()) == id.as_deref())
+        .unwrap_or_default()
+}
+
+/// Switches the kit's look and density to the settings. Does nothing when they did not
+/// change, so it is cheap to call on every settings change.
+fn apply_look(ctx: &egui::Context, settings: &archipel_ide_core::Settings) {
+    let look = ui_look(settings);
+    let compact = settings
+        .bool(archipel_ide_settings::ids::COMPACT_MODE)
+        .unwrap_or(false);
+    let current = archipel_kit::look::settings(ctx);
+    if current.look != look {
+        archipel_kit::look::set_look(ctx, look);
+    }
+    if current.compact != compact {
+        archipel_kit::look::set_compact(ctx, compact);
+        if current.look == look {
+            // The kit re-applies egui's look-dependent spacing only when the look itself
+            // changes; going through another look and back does it for a density change.
+            let other = archipel_kit::UiLook::ALL
+                .into_iter()
+                .find(|other| *other != look)
+                .unwrap_or(look);
+            archipel_kit::look::set_look(ctx, other);
+            archipel_kit::look::set_look(ctx, look);
+        }
+    }
 }
 
 /// Applies the active palette's kit theme: components read it with

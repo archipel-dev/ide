@@ -2,21 +2,32 @@
 
 use crate::icons::{self, Icon};
 use crate::theme;
+use archipel_kit::action_system::ActionMenuItem;
 use archipel_kit::behaviour::{Behaviour, Behaviours};
-use archipel_kit::components::{ListRow, MenuItem};
 use archipel_kit::parts::{State, Surface, Tone, row_pill};
 use archipel_kit::tokens::size;
+use archipel_kit::ui::ColoredListCellRenderer;
 use archipel_kit::{Theme, cursor};
 use eframe::egui::{self, Color32, Rect, Sense, vec2};
 
-/// Rounded "island" container used for the editor and docked tool windows: the kit's
-/// island surface without its inner padding (rows inset themselves), with the gap between
-/// islands as outer margin.
+/// "Island" container used for the editor and docked tool windows: the kit's island
+/// surface without its inner padding (rows inset themselves), with the gap between islands
+/// as outer margin. It follows the UI look: rounded islands with a gap in Islands, flush
+/// panels separated by 1 px lines in New UI and Classic.
 pub fn island_frame(ctx: &egui::Context) -> egui::Frame {
-    Surface::Island
+    let metrics = archipel_kit::tokens::metrics(ctx);
+    let frame = Surface::Island
         .frame(ctx)
         .inner_margin(egui::Margin::ZERO)
-        .outer_margin(egui::Margin::same(theme::ISLAND_GAP as i8))
+        .outer_margin(egui::Margin::same((metrics.island_gap / 2.0) as i8));
+    if metrics.panel_line > 0.0 {
+        frame.stroke(egui::Stroke::new(
+            metrics.panel_line,
+            Theme::colors(ctx).divider,
+        ))
+    } else {
+        frame
+    }
 }
 
 /// Flat frame for chrome areas (toolbar, stripes, status bar): the window frame color.
@@ -30,7 +41,10 @@ pub fn glow_through_frame() -> egui::Frame {
     egui::Frame::new()
 }
 
-pub const TOOL_WINDOW_HEADER_HEIGHT: f32 = theme::layout::TOOLBAR_HEIGHT;
+/// Tool window title bar height of the current look and density.
+pub fn tool_window_header_height(ctx: &egui::Context) -> f32 {
+    archipel_kit::tokens::metrics(ctx).header_height
+}
 pub const ROW_HEIGHT: f32 = theme::layout::ROW_HEIGHT;
 
 /// Tool window title bar. `actions` adds right-aligned icon buttons; returns
@@ -54,7 +68,7 @@ pub fn tool_window_header(
 /// the title on the left, `actions` right-aligned (laid out right to left).
 pub fn panel_header(ui: &mut egui::Ui, title: &str, actions: impl FnOnce(&mut egui::Ui)) {
     let (rect, _) = ui.allocate_exact_size(
-        vec2(ui.available_width(), TOOL_WINDOW_HEADER_HEIGHT),
+        vec2(ui.available_width(), tool_window_header_height(ui.ctx())),
         Sense::hover(),
     );
     let mut child = ui.new_child(
@@ -426,7 +440,7 @@ pub fn tree_row(ui: &mut egui::Ui, spec: TreeRow<'_>) -> TreeRowOut {
         let _ = rect;
         behaviours.attach(ui, response)
     } else {
-        let mut row = ListRow::new(spec.text)
+        let mut row = ColoredListCellRenderer::new(spec.text)
             .depth(spec.depth)
             .expanded(spec.expanded.filter(|_| spec.kit_expander))
             .selected(spec.selected)
@@ -567,8 +581,8 @@ pub fn busy_spinner(ui: &mut egui::Ui, size: f32, color: Color32) {
 
 /// A menu or popup entry: the kit's `MenuItem` (selection-colored hover, arrow cursor,
 /// icon column). Add it with `ui.add(menu_item("Open"))`.
-pub fn menu_item(label: impl Into<String>) -> MenuItem {
-    MenuItem::new(label)
+pub fn menu_item(label: impl Into<String>) -> ActionMenuItem<'static> {
+    ActionMenuItem::new(label)
 }
 
 #[cfg(test)]
@@ -739,6 +753,8 @@ mod tests {
     fn tree_rows_pick_the_kit_tone_of_their_color() {
         let ctx = egui::Context::default();
         crate::theme::install(&ctx);
+        // The active palette is process-global; pin the measured dark theme.
+        Theme::dark().apply(&ctx);
         let colors = Theme::colors(&ctx);
         // Tones that share a color (modified files and links) are interchangeable: the
         // tone found draws the same color.

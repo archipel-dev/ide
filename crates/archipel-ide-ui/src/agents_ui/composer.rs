@@ -393,7 +393,8 @@ pub(super) fn composer(
                         ui.add(Tag::new(chip.as_str()).tone(Tone::Link));
                         if ui
                             .add(
-                                IconButton::new(Glyph::Close, format!("Remove {chip}")).small(true),
+                                ActionButton::new(Glyph::Close, format!("Remove {chip}"))
+                                    .small(true),
                             )
                             .clicked()
                         {
@@ -456,7 +457,7 @@ pub(super) fn composer(
                 Surface::Popup.frame(&ctx).show(ui, |ui| {
                     ui.set_width(rect.width().min(440.0));
                     for (index, (label, detail)) in items.iter().enumerate() {
-                        let mut row = ListRow::new(label.as_str())
+                        let mut row = ColoredListCellRenderer::new(label.as_str())
                             .flat(true)
                             .selected(index == c.completion);
                         row = match kind {
@@ -607,9 +608,10 @@ fn toolbar_row(
                             )
                     }
                 };
-                let item = MenuItem::new(format!("{} \u{b7} {model}", profile.product_name()))
-                    .checked(checked)
-                    .enabled(target.is_none_or(|t| t.profile == *profile));
+                let item =
+                    ActionMenuItem::new(format!("{} \u{b7} {model}", profile.product_name()))
+                        .checked(checked)
+                        .enabled(target.is_none_or(|t| t.profile == *profile));
                 if ui.add(item).clicked() {
                     match target {
                         None => {
@@ -633,7 +635,7 @@ fn toolbar_row(
             ui.set_width(140.0);
             for option in PermMode::ALL {
                 if ui
-                    .add(MenuItem::new(option.label()).checked(c.mode == option))
+                    .add(ActionMenuItem::new(option.label()).checked(c.mode == option))
                     .clicked()
                 {
                     c.mode = option;
@@ -641,14 +643,14 @@ fn toolbar_row(
             }
         });
     // Attach a file.
-    let attach = ui.add(IconButton::new(glyph(Concept::Attach), "Attach file"));
+    let attach = ui.add(ActionButton::new(glyph(Concept::Attach), "Attach file"));
     egui::Popup::menu(&attach)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .frame(Surface::Popup.frame(ui.ctx()))
         .show(|ui| {
             ui.set_width(300.0);
             ui.add(
-                TextField::search(&mut c.attach_filter)
+                JBTextField::search(&mut c.attach_filter)
                     .placeholder("Find a file")
                     .width(280.0),
             );
@@ -680,7 +682,7 @@ fn toolbar_row(
         .show(|ui| {
             ui.set_width(320.0);
             for (number, title) in ISSUES {
-                let row = ListRow::new(number)
+                let row = ColoredListCellRenderer::new(number)
                     .flat(true)
                     .secondary(title)
                     .show(ui)

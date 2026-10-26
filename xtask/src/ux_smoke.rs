@@ -55,7 +55,7 @@ mod layout {
     pub const PROJECT_STRIPE_BUTTON: Point = (19, 62);
     pub const FIRST_TAB_CLOSE: Point = (419, 61);
     pub const TOOLBAR_SEARCH: Point = (1287, 20);
-    pub const TOOLBAR_RUN: Point = (1197, 20);
+    pub const TOOLBAR_RUN: Point = (1210, 20);
     pub const HAMBURGER: Point = (19, 20);
     pub const MENU_FILE: Point = (18, 20);
     pub const MENU_FILE_SETTINGS: Point = (46, 174);

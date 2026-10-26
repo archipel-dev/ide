@@ -535,7 +535,7 @@ fn render(ui: &mut egui::Ui, items: &[MenuItem], model: &Model, chosen: &mut Opt
     for item in items {
         match item {
             MenuItem::Action { id, label } => {
-                let mut item = archipel_kit::components::MenuItem::new(label)
+                let mut item = archipel_kit::action_system::ActionMenuItem::new(label)
                     .enabled(model.enabled.contains(id));
                 if let Some(shortcut) = model.shortcuts.get(id).filter(|s| !s.is_empty()) {
                     item = item.shortcut(shortcut);
@@ -548,14 +548,15 @@ fn render(ui: &mut egui::Ui, items: &[MenuItem], model: &Model, chosen: &mut Opt
             MenuItem::Submenu { label, items, .. } => {
                 // The kit has no submenu item yet: a kit `MenuItem` with an arrow, opened
                 // by egui's submenu logic, so it lines up with the actions around it.
-                let entry = ui.add(archipel_kit::components::MenuItem::new(label).shortcut("›"));
+                let entry =
+                    ui.add(archipel_kit::action_system::ActionMenuItem::new(label).shortcut("›"));
                 egui::containers::menu::SubMenu::new().show(ui, &entry, |ui| {
                     ui.set_min_width(200.0);
                     render(ui, items, model, chosen);
                 });
             }
             MenuItem::Separator(_) => {
-                ui.add(archipel_kit::components::MenuSeparator);
+                ui.add(archipel_kit::ui::popup::ListSeparator::new());
             }
         }
     }

@@ -28,7 +28,10 @@ pub fn active(app: &IdeApp) -> bool {
 pub fn header(app: &mut IdeApp, ui: &mut egui::Ui) -> bool {
     let mut hide = false;
     let (rect, _) = ui.allocate_exact_size(
-        vec2(ui.available_width(), widgets::TOOL_WINDOW_HEADER_HEIGHT),
+        vec2(
+            ui.available_width(),
+            widgets::tool_window_header_height(ui.ctx()),
+        ),
         egui::Sense::hover(),
     );
     let mut child = ui.new_child(

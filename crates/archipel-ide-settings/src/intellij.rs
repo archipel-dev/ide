@@ -44,6 +44,8 @@ pub mod ids {
     pub const CUSTOM_FONT_SIZE: &str = "appearance.customFontSize";
     pub const SMOOTH_SCROLLING: &str = "appearance.smoothScrolling";
     pub const COMPACT_MODE: &str = "appearance.compactMode";
+    /// The UI look: `islands`, `new_ui` or `classic` (the kit's `UiLook` ids).
+    pub const UI_LOOK: &str = "appearance.uiLook";
     pub const PROJECT_COLORS: &str = "appearance.projectColors";
     pub const KEYMAP: &str = "keymap.active";
     /// User shortcut changes, one `keymap<TAB>action<TAB>shortcut…` line per action.
@@ -229,6 +231,51 @@ fn add_advanced_settings(registry: &mut SettingsRegistry, settings: &[AdvancedSe
     }
 }
 
+/// UI themes offered in Settings | Appearance: the IntelliJ themes of the UI kit, in its
+/// order. A test in `archipel-ide-ui` checks the list against the kit.
+pub const THEMES: [&str; 12] = [
+    "Islands Dark",
+    "Islands Light",
+    "Islands Darcula",
+    "High Contrast",
+    "New UI Dark",
+    "New UI Light",
+    "Light with Light Header",
+    "Darcula",
+    "IntelliJ Light",
+    "High Contrast (Classic)",
+    "macOS Light",
+    "Windows 10 Light",
+];
+
+/// Editor color schemes of the UI kit; the first option is the theme's own.
+pub const SCHEMES: [&str; 18] = [
+    "Default",
+    "Darcula",
+    "Islands Dark",
+    "New UI Dark",
+    "New UI Light",
+    "Darcula Contrast",
+    "IntelliJ Light",
+    "High Contrast",
+    "High Contrast (Classic)",
+    "Monokai",
+    "Twilight",
+    "Blackboard",
+    "Cobalt",
+    "All Hallows Eve",
+    "Warm Neon",
+    "GitHub",
+    "Vibrant Ink",
+    "Rails Casts",
+];
+
+fn scheme_options() -> Vec<(&'static str, &'static str)> {
+    std::iter::once(("", "Theme default"))
+        .chain(SCHEMES.iter().map(|name| (*name, *name)))
+        .collect()
+}
+
 fn options(pairs: &[(&str, &str)]) -> SettingKind {
     SettingKind::Enum {
         options: pairs
@@ -292,25 +339,26 @@ fn add_definitions(registry: &mut SettingsRegistry) {
             ids::THEME,
             look,
             "Theme",
-            options(&[
-                ("Islands Dark", "Islands Dark"),
-                ("Islands Light", "Islands Light"),
-            ]),
+            options(&THEMES.map(|name| (name, name))),
             text("Islands Dark"),
         ),
+        SettingDef::new(
+            ids::UI_LOOK,
+            look,
+            "UI look",
+            options(&[
+                ("islands", "Islands"),
+                ("new_ui", "New UI"),
+                ("classic", "Classic"),
+            ]),
+            text("islands"),
+        )
+        .description("Islands, New UI (no islands) or the classic pre-2022 look"),
         SettingDef::new(
             ids::EDITOR_SCHEME,
             look,
             "Editor color scheme",
-            options(&[
-                ("", "Theme default"),
-                ("Islands Dark", "Islands Dark"),
-                ("Light", "Light"),
-                ("Darcula", "Darcula"),
-                ("IntelliJ Light", "IntelliJ Light"),
-                ("Dark", "Dark"),
-                ("High contrast", "High contrast"),
-            ]),
+            options(&scheme_options()),
             text(""),
         ),
         SettingDef::new(ids::ZOOM, look, "Zoom", options(&zoom), text("100%"))

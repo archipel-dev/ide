@@ -22,12 +22,17 @@ use archipel_ide_core::agents::{
     AgentNotice, AgentProfile, AgentState, AgentsScreen, ChangeKind, ChangedFile, MergeStrategy,
     NoticeKind, SessionId, SessionInfo, TaskId, TaskInfo, WorkbenchMode,
 };
-use archipel_kit::behaviour::ContextMenu;
-use archipel_kit::components::{
-    Banner, Button, Counter, Dialog, DialogAction, EmptyState, IconButton, ListRow, MenuItem,
-    MenuSeparator, Radio, SegmentedControl, Severity, Tag, TextField, Toast, Tooltip, VirtualList,
-};
+use archipel_kit::action_system::{ActionButton, ActionMenuItem};
+use archipel_kit::behaviour::PopupHandler;
+use archipel_kit::ide::HelpTooltip;
+use archipel_kit::notification::Notification;
+use archipel_kit::openapi::ui::{DialogWrapper, ExitCode};
 use archipel_kit::parts::Slot;
+use archipel_kit::ui::popup::ListSeparator;
+use archipel_kit::ui::{
+    Button, ColoredListCellRenderer, Counter, InlineBanner, JBList, JBRadioButton, JBTextField,
+    SegmentedButton, Status, StatusText, Tag,
+};
 use archipel_kit::{Glyph, Theme, Tone};
 use eframe::egui::{self, Rect, Sense, Stroke, vec2};
 use serde_json::{Value, json};
@@ -267,7 +272,7 @@ fn stats_text(added: usize, removed: usize) -> String {
 pub(crate) fn mode_switch(app: &mut IdeApp, ui: &mut egui::Ui) {
     let current = app.state.workbench_mode;
     let mut mode = current;
-    ui.add(SegmentedControl::new(
+    ui.add(SegmentedButton::new(
         &mut mode,
         [
             (WorkbenchMode::Code, WorkbenchMode::Code.label()),
@@ -331,7 +336,7 @@ fn popup_list(app: &mut IdeApp, ui: &mut egui::Ui) {
     let mut shown = None;
     for info in &sessions {
         let (glyph, tone) = look(info.state);
-        let row = ListRow::new(info.name.as_str())
+        let row = ColoredListCellRenderer::new(info.name.as_str())
             .flat(true)
             .icon(glyph)
             .icon_tone(tone)
@@ -350,9 +355,9 @@ fn popup_list(app: &mut IdeApp, ui: &mut egui::Ui) {
             shown = Some(info.id);
         }
     }
-    ui.add(MenuSeparator);
+    ui.add(ListSeparator::new());
     if ui
-        .add(MenuItem::new("Open Agents Mode").shortcut(shortcut_label(app)))
+        .add(ActionMenuItem::new("Open Agents Mode").shortcut(shortcut_label(app)))
         .clicked()
     {
         app.dispatch("workbench.setMode", json!({"mode": "agents"}));
@@ -394,13 +399,13 @@ pub(crate) fn notices(app: &mut IdeApp, ctx: &egui::Context) {
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 8.0;
             for notice in &notices {
-                let (severity, actions): (Severity, &[&str]) = match notice.kind {
-                    NoticeKind::NeedsInput => (Severity::Warning, &["Reply", "Review"]),
-                    NoticeKind::Done => (Severity::Success, &["Review"]),
-                    NoticeKind::Failed => (Severity::Error, &["Show"]),
-                    NoticeKind::Spawned => (Severity::Info, &["Show"]),
+                let (severity, actions): (Status, &[&str]) = match notice.kind {
+                    NoticeKind::NeedsInput => (Status::Warning, &["Reply", "Review"]),
+                    NoticeKind::Done => (Status::Success, &["Review"]),
+                    NoticeKind::Failed => (Status::Error, &["Show"]),
+                    NoticeKind::Spawned => (Status::Info, &["Show"]),
                 };
-                let mut toast = Toast::new(severity, notice.title.as_str());
+                let mut toast = Notification::new(severity, notice.title.as_str());
                 if !notice.body.is_empty() {
                     toast = toast.body(notice.body.as_str());
                 }
@@ -439,8 +444,8 @@ pub(crate) fn back_banner(app: &mut IdeApp, ui: &mut egui::Ui) {
     let out = egui::Frame::new()
         .outer_margin(egui::Margin::symmetric(6, 4))
         .show(ui, |ui| {
-            Banner::new(
-                Severity::Info,
+            InlineBanner::new(
+                Status::Info,
                 format!(
                     "Viewing {}'s change in the editor. The agent is {}.",
                     info.name,
@@ -502,7 +507,7 @@ pub(crate) fn tree(app: &mut IdeApp, ui: &mut egui::Ui, compact: bool) {
     let tasks = app.state.agents.backend.tasks();
     let sessions = app.state.agents.sessions();
     if sessions.is_empty() {
-        EmptyState::new("No agents yet")
+        StatusText::new("No agents yet")
             .hint("Describe a task in Agents mode and press Enter.")
             .icon(glyph(Concept::Agent))
             .show(ui);
@@ -567,7 +572,7 @@ pub(crate) fn tree(app: &mut IdeApp, ui: &mut egui::Ui, compact: bool) {
     let actions: RefCell<Vec<Action>> = RefCell::new(Vec::new());
     let collapsed = app.agents_ui.collapsed.clone();
     let height = ui.available_height();
-    let out = VirtualList::new(("agents_tree", compact), entries.len(), &mut selected)
+    let out = JBList::new(("agents_tree", compact), entries.len(), &mut selected)
         .name("Agents")
         .height(height)
         .show(ui, |index| {
@@ -576,7 +581,7 @@ pub(crate) fn tree(app: &mut IdeApp, ui: &mut egui::Ui, compact: bool) {
             let expanded = entry.parent.then(|| !collapsed.contains(&entry.key));
             match entry.key {
                 Key::Task(_) => {
-                    let mut row = ListRow::new(text.label.clone())
+                    let mut row = ColoredListCellRenderer::new(text.label.clone())
                         .icon(glyph(Concept::Task))
                         .depth(0)
                         .expanded(expanded)
@@ -595,7 +600,7 @@ pub(crate) fn tree(app: &mut IdeApp, ui: &mut egui::Ui, compact: bool) {
                 }
                 Key::Session(id) => {
                     let Some(info) = sessions.iter().find(|s| s.id == id) else {
-                        return ListRow::new("");
+                        return ColoredListCellRenderer::new("");
                     };
                     session_row(info, entry, expanded, text, &actions)
                 }
@@ -627,12 +632,12 @@ fn session_row<'a>(
     expanded: Option<bool>,
     text: &RowText,
     actions: &'a RefCell<Vec<Action>>,
-) -> ListRow<'a> {
+) -> ColoredListCellRenderer<'a> {
     let (glyph, tone) = look(info.state);
     let id = info.id;
     let running = info.state.is_active();
     let has_changes = info.files > 0;
-    let mut row = ListRow::new(text.label.clone())
+    let mut row = ColoredListCellRenderer::new(text.label.clone())
         .icon(glyph)
         .icon_tone(tone)
         .depth(entry.depth)
@@ -650,24 +655,27 @@ fn session_row<'a>(
     } else if text.show_stats {
         row = row.trailing(Slot::text(stats_text(info.added, info.removed)));
     }
-    row.with(Tooltip::new(info.name.clone()))
-        .with(ContextMenu::new(move |ui| {
+    row.with(HelpTooltip::new(info.name.clone()))
+        .with(PopupHandler::new(move |ui| {
             let queue = |action| actions.borrow_mut().push(action);
-            if ui.add(MenuItem::new("Stop").enabled(running)).clicked() {
+            if ui
+                .add(ActionMenuItem::new("Stop").enabled(running))
+                .clicked()
+            {
                 queue(Action::Stop(id));
             }
-            if ui.add(MenuItem::new("Open Thread")).clicked() {
+            if ui.add(ActionMenuItem::new("Open Thread")).clicked() {
                 queue(Action::Show(id));
             }
-            ui.add(MenuSeparator);
+            ui.add(ListSeparator::new());
             if ui
-                .add(MenuItem::new("Review Changes").enabled(has_changes))
+                .add(ActionMenuItem::new("Review Changes").enabled(has_changes))
                 .clicked()
             {
                 queue(Action::Review(id, None));
             }
             if ui
-                .add(MenuItem::new("Open in Code Mode").enabled(has_changes))
+                .add(ActionMenuItem::new("Open in Code Mode").enabled(has_changes))
                 .clicked()
             {
                 queue(Action::OpenInCode(id, None));
@@ -714,7 +722,7 @@ fn sidebar(app: &mut IdeApp, ui: &mut egui::Ui) {
     let mut new_thread = false;
     panel_header(ui, "Agents", |ui| {
         new_thread = ui
-            .add(IconButton::new(Glyph::Plus, "New agent thread"))
+            .add(ActionButton::new(Glyph::Plus, "New agent thread"))
             .clicked();
     });
     if new_thread {
@@ -740,7 +748,7 @@ fn change_rows<'a>(
     labels: &'a [String],
     actions: &'a RefCell<Vec<Action>>,
     session: SessionId,
-) -> impl FnMut(usize) -> ListRow<'a> {
+) -> impl FnMut(usize) -> ColoredListCellRenderer<'a> {
     move |index| {
         let change = &changes[index];
         let name = IdeApp::file_name(&change.path);
@@ -749,18 +757,18 @@ fn change_rows<'a>(
             ChangeKind::Modified => Tone::Modified,
             ChangeKind::Added => Tone::Added,
         };
-        ListRow::new(labels[index].clone())
+        ColoredListCellRenderer::new(labels[index].clone())
             .flat(true)
             .icon(Icon::for_file(&name))
             .label_tone(tone)
             .trailing(Slot::text(stats_text(change.added, change.removed)))
-            .with(ContextMenu::new(move |ui| {
-                if ui.add(MenuItem::new("Review Changes")).clicked() {
+            .with(PopupHandler::new(move |ui| {
+                if ui.add(ActionMenuItem::new("Review Changes")).clicked() {
                     actions
                         .borrow_mut()
                         .push(Action::Review(session, Some(path.clone())));
                 }
-                if ui.add(MenuItem::new("Open in Code Mode")).clicked() {
+                if ui.add(ActionMenuItem::new("Open in Code Mode")).clicked() {
                     actions
                         .borrow_mut()
                         .push(Action::OpenInCode(session, Some(path.clone())));
@@ -787,7 +795,7 @@ fn review(app: &mut IdeApp, ui: &mut egui::Ui) {
     let mut close = false;
     panel_header(ui, &format!("Review: {}", info.name), |ui| {
         close = ui
-            .add(IconButton::new(Glyph::Close, "Back to agents"))
+            .add(ActionButton::new(Glyph::Close, "Back to agents"))
             .clicked();
     });
     ui.horizontal(|ui| {
@@ -834,7 +842,7 @@ fn review(app: &mut IdeApp, ui: &mut egui::Ui) {
                 actions.push(Action::OpenInCode(info.id, selected_path));
             }
             let mut viewer = app.agents_ui.viewer;
-            ui.add(SegmentedControl::new(
+            ui.add(SegmentedButton::new(
                 &mut viewer,
                 [
                     (DiffViewer::SideBySide, "Side-by-side"),
@@ -846,7 +854,7 @@ fn review(app: &mut IdeApp, ui: &mut egui::Ui) {
     });
     ui.add_space(4.0);
     if changes.is_empty() {
-        EmptyState::new("Nothing to review")
+        StatusText::new("Nothing to review")
             .hint("This agent has not changed any file yet.")
             .show(ui);
         if close {
@@ -875,7 +883,7 @@ fn review(app: &mut IdeApp, ui: &mut egui::Ui) {
             let queued: RefCell<Vec<Action>> = RefCell::new(Vec::new());
             let height = ui.available_height();
             let labels = change_labels(ui, &changes, ui.available_width());
-            let out = VirtualList::new(
+            let out = JBList::new(
                 ("agents_review_files", info.id),
                 changes.len(),
                 &mut selected,
@@ -921,7 +929,7 @@ fn review(app: &mut IdeApp, ui: &mut egui::Ui) {
                     }
                 }
                 None => {
-                    EmptyState::new("No diff available").show(ui);
+                    StatusText::new("No diff available").show(ui);
                 }
             }
         });
@@ -952,7 +960,7 @@ fn merge_dialog(app: &mut IdeApp, ctx: &egui::Context) {
         MergeStrategy::Merge => "Merge",
         MergeStrategy::Discard => "Discard Changes",
     };
-    let action = Dialog::new(if discard {
+    let action = DialogWrapper::new(if discard {
         "Discard agent work"
     } else {
         "Merge agent work"
@@ -967,17 +975,17 @@ fn merge_dialog(app: &mut IdeApp, ctx: &egui::Context) {
     .danger(discard)
     .secondary("Cancel")
     .content(|ui| {
-        ui.add(Radio::new(
+        ui.add(JBRadioButton::new(
             &mut strategy,
             MergeStrategy::Squash,
             "Squash into main as one commit",
         ));
-        ui.add(Radio::new(
+        ui.add(JBRadioButton::new(
             &mut strategy,
             MergeStrategy::Merge,
             "Merge with a merge commit",
         ));
-        ui.add(Radio::new(
+        ui.add(JBRadioButton::new(
             &mut strategy,
             MergeStrategy::Discard,
             "Discard the changes and the worktree",
@@ -988,7 +996,7 @@ fn merge_dialog(app: &mut IdeApp, ctx: &egui::Context) {
         dialog.strategy = strategy;
     }
     match action {
-        Some(DialogAction::Primary) => {
+        Some(ExitCode::Primary) => {
             let session = info.id;
             app.agents_ui.merge = None;
             app.dispatch(
@@ -1177,8 +1185,13 @@ mod tests {
                 ui.allocate_ui(egui::vec2(1100.0, 700.0), |ui| {
                     ui.set_min_size(egui::vec2(1100.0, 700.0));
                     ui.horizontal_top(|ui| {
-                        ui.allocate_ui(egui::vec2(760.0, 700.0), |ui| thread::threads(app, ui));
-                        ui.allocate_ui(egui::vec2(300.0, 700.0), |ui| thread::inspector(app, ui));
+                        let down = egui::Layout::top_down(egui::Align::Min);
+                        ui.allocate_ui_with_layout(egui::vec2(760.0, 700.0), down, |ui| {
+                            thread::threads(app, ui)
+                        });
+                        ui.allocate_ui_with_layout(egui::vec2(300.0, 700.0), down, |ui| {
+                            thread::inspector(app, ui)
+                        });
                     });
                 });
             });

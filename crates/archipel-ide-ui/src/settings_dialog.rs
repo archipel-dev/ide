@@ -552,15 +552,18 @@ fn page(
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let forward = ui.add(
-                archipel_kit::components::IconButton::new(
+                archipel_kit::action_system::ActionButton::new(
                     archipel_kit::Glyph::ArrowRight,
                     "Forward",
                 )
                 .enabled(!dialog.forward.is_empty()),
             );
             let back = ui.add(
-                archipel_kit::components::IconButton::new(archipel_kit::Glyph::ArrowLeft, "Back")
-                    .enabled(!dialog.back.is_empty()),
+                archipel_kit::action_system::ActionButton::new(
+                    archipel_kit::Glyph::ArrowLeft,
+                    "Back",
+                )
+                .enabled(!dialog.back.is_empty()),
             );
             if forward.clicked() {
                 dialog.navigate(false);

@@ -245,8 +245,10 @@ pub fn search_field(
         .frame(&ctx)
         .stroke(Surface::field_stroke(&ctx, focused, false))
         .show(ui, |ui| {
-            ui.set_min_height(size::CONTROL_HEIGHT - 2.0);
-            ui.horizontal_centered(|ui| {
+            // `horizontal`, not `horizontal_centered`: the latter takes all the height left
+            // in the parent, which made the field swallow the list below it.
+            ui.horizontal(|ui| {
+                ui.set_min_height(size::CONTROL_HEIGHT - 2.0);
                 icons::show(ui, Icon::Search, size::ICON, colors.text_placeholder);
                 ui.add(
                     egui::TextEdit::singleline(text)

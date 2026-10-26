@@ -65,6 +65,7 @@ pub const ACTION_COMMANDS: &[ActionCommand] = &[
     global("ShowSettings", "settings.open", "{}"),
     menu("ShowPlugins", "plugin.manager.open"),
     menu("CloseProject", "project.close"),
+    menu("InvalidateCaches", "index.rebuild"),
     global("SearchEverywhere", "navigate.searchEverywhere", "{}"),
     global("GotoAction", "navigate.findAction", "{}"),
     global("GotoClass", "navigate.gotoClass", "{}"),

@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 mod ai_actions;
 mod analysis_host;
 mod analysis_modules;
+mod indexing_commands;
 pub use analysis_host::AnalysisServices;
 mod ai_agent;
 mod ai_commands;

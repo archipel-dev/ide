@@ -58,6 +58,11 @@ type Subscriber = Box<dyn FnMut(&AnalysisEvent) + Send>;
 /// The analysis host plus its synchronization with `IdeState::documents`.
 pub struct AnalysisServices {
     pub host: AnalysisHost,
+    /// Indexes, dumb mode and the TODO index (WP2); driven by `poll_analysis`.
+    pub index: archipel_ide_index::IndexService,
+    /// Directory the persistent indexes live in (`None`: memory only); set by
+    /// the app at startup through `IdeState::enable_index_persistence`.
+    pub(crate) index_cache_dir: Option<std::path::PathBuf>,
     synced: HashMap<FileId, Synced>,
     subscribers: Vec<Subscriber>,
     /// Events dispatched by the last poll (diagnostics).
@@ -79,6 +84,8 @@ impl AnalysisServices {
                 crate::analysis_modules::service_registry(),
             ),
             synced: HashMap::new(),
+            index: archipel_ide_index::IndexService::new(archipel_ide_index::IndexConfig::default()),
+            index_cache_dir: None,
             subscribers: Vec::new(),
             last_events: 0,
         }
@@ -101,6 +108,7 @@ impl IdeState {
     /// changed. Cheap when nothing was typed.
     pub fn poll_analysis(&mut self) -> bool {
         let now = Instant::now();
+        self.sync_index_project();
         let services = &mut self.analysis;
         let mut open: HashSet<FileId> = HashSet::with_capacity(self.documents.len());
         let mut changed = false;
@@ -187,6 +195,12 @@ impl IdeState {
         }
         changed |= services.host.poll();
         let events = services.host.take_events();
+        services.index.on_events(&mut services.host, &events);
+        changed |= services.index.poll(&mut services.host);
+        let events: Vec<_> = events
+            .into_iter()
+            .chain(services.host.take_events())
+            .collect();
         services.last_events = events.len();
         for event in &events {
             for subscriber in &mut services.subscribers {

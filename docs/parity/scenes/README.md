@@ -39,6 +39,9 @@ and uploads the PNGs and app logs as the `parity-scenes` artifact.
   `master`. Known fixtures: `java-gradle`, `rust-cargo` (builds with Cargo; `src/broken.rs`
   is outside the crate and has syntax errors). Without a fixture the welcome screen shows.
 - `open` lists project-relative files passed on the command line.
+- `env` (optional) adds environment variables to the IDE process (scene 30 slows indexing
+  down with `ARCHIPEL_INDEX_THROTTLE_MS`). Every scene gets its own `ARCHIPEL_INDEX_DIR`, so
+  indexes and Local History never touch the user's cache.
 - Steps are control requests (`execute`, `state`, `key`, `type`, `click`, `move`, `wait`)
   or runner steps:
   - `screenshot {name}` writes `<out>/<name>`;
@@ -63,5 +66,6 @@ Chords use the Linux keymap (`Alt+0`, `Alt+F12`); `Primary` means ⌘ on macOS a
 | 17 Run output | `17-run-output.json` | Shift+F10 runs `cargo run` and finishes successfully |
 | 19 Project context menu | `19-project-context-menu.json` | right-click on a tree row opens the context menu with New ▸ |
 | 20 Problems | `20-problems.json` | Alt+6 lists the 2 syntax errors of `src/broken.rs` |
+| 30 Indexing | `30-indexing.json` | while the content indexes build the IDE is in dumb mode with `FileName` ready and `Words` building; afterwards every index is ready |
 
 Coordinates in `click`/`move` are logical points in the default 1440×900 window.

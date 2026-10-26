@@ -89,6 +89,7 @@ impl IdeState {
         }
         self.vcs_stale = true;
         self.request_git_refresh();
+        self.index_paths_changed(&changes.paths);
         if self.is_gradle_project()
             && changes
                 .paths

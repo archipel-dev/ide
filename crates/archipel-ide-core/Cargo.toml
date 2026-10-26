@@ -40,4 +40,5 @@ url.workspace = true
 [dev-dependencies]
 flate2 = "1"
 tar = "0.4"
+tempfile = "3"
 archipel-ide-actions = { path = "../archipel-ide-actions" }

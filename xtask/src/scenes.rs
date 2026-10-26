@@ -33,6 +33,9 @@ pub struct Scene {
     /// Project-relative files passed on the command line.
     #[serde(default)]
     pub open: Vec<String>,
+    /// Extra environment variables of the IDE process (e.g. to slow indexing down).
+    #[serde(default)]
+    pub env: std::collections::BTreeMap<String, String>,
     pub steps: Vec<Value>,
 }
 
@@ -334,6 +337,9 @@ fn run_scene(
     command
         .env(archipel_ide_control::SOCKET_ENV, &socket)
         .env("ARCHIPEL_NO_UPDATE_CHECK", "1")
+        // Indexes and history of a scene never touch the user's cache.
+        .env("ARCHIPEL_INDEX_DIR", scene_dir.join("cache"))
+        .envs(&scene.env)
         .stdout(log.try_clone()?)
         .stderr(log);
     if archipel_ide_compat::env_var_os("ARCHIPEL_RENDERER").is_none() && cfg!(target_os = "linux") {

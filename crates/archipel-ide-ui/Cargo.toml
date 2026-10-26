@@ -14,6 +14,7 @@ egui_extras = { version = "0.33", default-features = false, features = ["file", 
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 archipel-ide-android = { path = "../archipel-ide-android" }
 archipel-ide-actions = { path = "../archipel-ide-actions" }
+archipel-ide-analysis = { path = "../archipel-ide-analysis" }
 pulldown-cmark.workspace = true
 archipel-ide-ai = { path = "../archipel-ide-ai" }
 archipel-ide-bazel = { path = "../archipel-ide-bazel" }
@@ -22,6 +23,7 @@ archipel-ide-control = { path = "../archipel-ide-control" }
 archipel-ide-core = { path = "../archipel-ide-core" }
 archipel-ide-dap = { path = "../archipel-ide-dap" }
 archipel-ide-git = { path = "../archipel-ide-git" }
+archipel-ide-index = { path = "../archipel-ide-index" }
 archipel-ide-keymap = { path = "../archipel-ide-keymap" }
 archipel-ide-gradle = { path = "../archipel-ide-gradle" }
 archipel-ide-language = { path = "../archipel-ide-language" }

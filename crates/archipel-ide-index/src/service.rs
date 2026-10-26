@@ -66,6 +66,9 @@ pub struct IndexConfig {
     /// Quiet time after typing before an open buffer is reindexed.
     pub overlay_debounce: Duration,
     pub exclude_dirs: Vec<String>,
+    /// Pause after every batch (zero in the app; scenes and demos slow
+    /// indexing down to show its progress).
+    pub throttle: Duration,
     pub todo: TodoSettings,
     pub vfs: Arc<dyn Vfs>,
     pub lister: Arc<dyn FileLister>,
@@ -81,6 +84,7 @@ impl Default for IndexConfig {
             batch_time: Duration::from_millis(50),
             overlay_debounce: Duration::from_millis(300),
             exclude_dirs: DEFAULT_EXCLUDES.iter().map(|s| (*s).to_string()).collect(),
+            throttle: Duration::ZERO,
             todo: TodoSettings::default(),
             vfs: Arc::new(DiskVfs),
             lister: Arc::new(DiskLister),
@@ -586,8 +590,19 @@ impl IndexService {
         }
     }
 
+    /// Sets the TODO settings without rebuilding (before the next attach).
+    pub fn set_todo_settings_quiet(&mut self, settings: TodoSettings) {
+        self.cfg.todo = settings;
+        self.set.set_todo(&self.cfg.todo);
+    }
+
     pub fn todo_settings(&self) -> &TodoSettings {
         &self.cfg.todo
+    }
+
+    /// Pause after every batch (diagnostics, scenes).
+    pub fn set_throttle(&mut self, pause: Duration) {
+        self.cfg.throttle = pause;
     }
 
     /// Where the persistent index lives (`None`: memory only). Applies to the
@@ -1036,6 +1051,7 @@ impl Attached {
             overlay: self.overlay.clone(),
             vfs: self.vfs.clone(),
             batch_time: cfg.batch_time,
+            throttle: cfg.throttle,
         }
     }
 
@@ -1539,6 +1555,7 @@ struct JobCtx {
     overlay: Arc<OverlayStore>,
     vfs: Arc<RootedVfs>,
     batch_time: Duration,
+    throttle: Duration,
 }
 
 impl JobCtx {
@@ -1590,6 +1607,9 @@ fn run_content_batch(
         .into_iter()
         .map(|id| (id, ctx.overlay.commit(id)))
         .collect();
+    if !ctx.throttle.is_zero() {
+        std::thread::sleep(ctx.throttle);
+    }
     ContentResult {
         items: done,
         stamps,

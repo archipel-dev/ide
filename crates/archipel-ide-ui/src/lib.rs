@@ -47,6 +47,7 @@ mod gradle_window;
 mod gutter_popup;
 mod hierarchy_ui;
 mod icons;
+mod index_status;
 mod intentions_ui;
 mod keybindings;
 mod keys;
@@ -228,6 +229,11 @@ impl IdeApp {
         if let Some(dir) = archipel_ide_settings::default_config_dir() {
             app.state.detect_first_run(&dir);
         }
+        // Indexes persist across restarts (tests keep them in memory).
+        let index_dir = archipel_ide_compat::env_var_os("ARCHIPEL_INDEX_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(archipel_ide_lsp::registry::cache_dir);
+        app.state.enable_index_persistence(Some(index_dir));
         app
     }
 
@@ -912,6 +918,10 @@ impl IdeApp {
         }
         self.state.poll_lsp();
         self.state.poll_analysis();
+        if !self.state.analysis.index.is_idle() {
+            // Indexing progress changes the status bar without user input.
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
         self.state.poll_updates();
         if self.state.poll_android() {
             ctx.request_repaint();

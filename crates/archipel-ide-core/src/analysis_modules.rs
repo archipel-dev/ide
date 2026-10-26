@@ -32,8 +32,8 @@ pub(crate) const MODULES: &[AnalysisModule] = &[
     // WP2 index, dumb mode, TODO, local history (`archipel-ide-index`).
     AnalysisModule {
         id: "index",
-        services: none,
-        commands: no_commands,
+        services: crate::indexing_commands::register_services,
+        commands: crate::indexing_commands::register_all,
     },
     // WP3 daemon, inspections, intentions (`archipel-ide-daemon`).
     AnalysisModule {

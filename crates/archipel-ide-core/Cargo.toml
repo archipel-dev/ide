@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 archipel-ide-compat = { path = "../archipel-ide-compat" }
+archipel-ide-analysis = { path = "../archipel-ide-analysis" }
 archipel-ide-android = { path = "../archipel-ide-android" }
 archipel-ide-ai = { path = "../archipel-ide-ai" }
 archipel-ide-bazel = { path = "../archipel-ide-bazel" }

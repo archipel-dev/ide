@@ -2,60 +2,13 @@
 //! queries that crate ships. There is no per-language Rust code here, only data.
 
 use std::path::Path;
-use tree_sitter_language::LanguageFn;
 
-/// A registered language: grammar plus the upstream queries bundled with it.
-pub struct LanguageSpec {
-    /// Stable identifier (also used as the injection language name).
-    pub id: &'static str,
-    /// Display name shown in the status bar and menus.
-    pub name: &'static str,
-    /// File extensions without the leading dot, matched case-insensitively.
-    pub extensions: &'static [&'static str],
-    /// Exact file names (e.g. `BUILD.bazel`).
-    pub file_names: &'static [&'static str],
-    /// Interpreter names matched against a `#!` first line.
-    pub shebangs: &'static [&'static str],
-    pub(crate) grammar: LanguageFn,
-    /// Highlight queries, concatenated in order. Base-language queries come first
-    /// (C before C++, JavaScript before TypeScript), as upstream configures them.
-    pub(crate) highlights: &'static [&'static str],
-    pub(crate) injections: Option<&'static str>,
-    pub(crate) locals: Option<&'static str>,
-    /// Folding query (`folds.scm`) when the grammar ships one.
-    pub(crate) folds: Option<&'static str>,
-    /// Tags queries (definitions for Structure/breadcrumbs), concatenated.
-    pub(crate) tags: &'static [&'static str],
-    /// Capture-name overrides for languages whose IntelliJ keys differ from
-    /// the defaults (e.g. `tag` → `HTML_TAG_NAME`). Data, not code.
-    pub(crate) capture_keys: &'static [(&'static str, &'static str)],
-}
+pub use crate::def::LanguageDef;
+use crate::def::{CompletenessTier, ExtraQueries, LanguageTables, no_services};
+use crate::element::TokenSetSpec;
 
-impl LanguageSpec {
-    pub fn grammar(&self) -> tree_sitter::Language {
-        self.grammar.into()
-    }
-
-    pub fn has_tags(&self) -> bool {
-        !self.tags.is_empty()
-    }
-
-    pub fn has_injections(&self) -> bool {
-        self.injections.is_some()
-    }
-
-    pub fn has_locals(&self) -> bool {
-        self.locals.is_some()
-    }
-}
-
-impl std::fmt::Debug for LanguageSpec {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LanguageSpec")
-            .field("id", &self.id)
-            .finish()
-    }
-}
+/// Migration alias: the registry entry type is now [`LanguageDef`].
+pub type LanguageSpec = LanguageDef;
 
 const NO_OVERRIDES: &[(&str, &str)] = &[];
 const XML_KEYS: &[(&str, &str)] = &[
@@ -71,9 +24,257 @@ const HTML_KEYS: &[(&str, &str)] = &[
 ];
 const PROPERTIES_KEYS: &[(&str, &str)] = &[("property", "PROPERTIES.KEY")];
 
+// Token sets by grammar kind name (`LanguageDef::token_sets`); a registry test
+// checks every name exists in its grammar.
+const PARENS: &[&str] = &["(", ")", "{", "}", "[", "]"];
+const T_EMPTY: TokenSetSpec = TokenSetSpec::EMPTY;
+const TOKENS_RUST: TokenSetSpec = TokenSetSpec {
+    comments: &["line_comment", "block_comment"],
+    string_literals: &["string_literal", "raw_string_literal", "char_literal"],
+    identifiers: &[
+        "identifier",
+        "field_identifier",
+        "type_identifier",
+        "shorthand_field_identifier",
+    ],
+    brackets: PARENS,
+    statement_like: &["expression_statement", "let_declaration"],
+    declaration_like: &[
+        "function_item",
+        "struct_item",
+        "enum_item",
+        "trait_item",
+        "impl_item",
+        "mod_item",
+        "const_item",
+        "static_item",
+        "type_item",
+        "macro_definition",
+    ],
+    code_block_like: &["block", "declaration_list", "field_declaration_list"],
+    ..T_EMPTY
+};
+const TOKENS_JAVA: TokenSetSpec = TokenSetSpec {
+    comments: &["line_comment", "block_comment"],
+    string_literals: &["string_literal", "character_literal"],
+    identifiers: &["identifier", "type_identifier"],
+    brackets: PARENS,
+    statement_like: &[
+        "expression_statement",
+        "local_variable_declaration",
+        "return_statement",
+        "if_statement",
+        "for_statement",
+        "while_statement",
+    ],
+    declaration_like: &[
+        "class_declaration",
+        "interface_declaration",
+        "enum_declaration",
+        "record_declaration",
+        "method_declaration",
+        "constructor_declaration",
+        "field_declaration",
+    ],
+    code_block_like: &[
+        "block",
+        "class_body",
+        "interface_body",
+        "enum_body",
+        "constructor_body",
+        "switch_block",
+    ],
+    ..T_EMPTY
+};
+const TOKENS_KOTLIN: TokenSetSpec = TokenSetSpec {
+    comments: &["line_comment", "multiline_comment"],
+    string_literals: &["string_literal"],
+    identifiers: &["simple_identifier", "type_identifier"],
+    brackets: PARENS,
+    declaration_like: &[
+        "class_declaration",
+        "object_declaration",
+        "function_declaration",
+        "property_declaration",
+    ],
+    code_block_like: &["class_body", "function_body"],
+    ..T_EMPTY
+};
+const TOKENS_GROOVY: TokenSetSpec = TokenSetSpec {
+    comments: &["line_comment", "block_comment", "groovydoc_comment"],
+    string_literals: &["string_literal"],
+    identifiers: &["identifier", "type_identifier"],
+    brackets: PARENS,
+    code_block_like: &["block"],
+    ..T_EMPTY
+};
+const TOKENS_XML: TokenSetSpec = TokenSetSpec::EMPTY;
+const TOKENS_JSON: TokenSetSpec = TokenSetSpec {
+    comments: &["comment"],
+    string_literals: &["string"],
+    brackets: &["{", "}", "[", "]"],
+    declaration_like: &["pair"],
+    code_block_like: &["object", "array"],
+    ..T_EMPTY
+};
+const TOKENS_TOML: TokenSetSpec = TokenSetSpec {
+    comments: &["comment"],
+    string_literals: &["string"],
+    identifiers: &["bare_key"],
+    brackets: &["[", "]", "{", "}"],
+    declaration_like: &["pair", "table"],
+    ..T_EMPTY
+};
+const TOKENS_YAML: TokenSetSpec = TokenSetSpec {
+    comments: &["comment"],
+    string_literals: &[
+        "string_scalar",
+        "double_quote_scalar",
+        "single_quote_scalar",
+    ],
+    declaration_like: &["block_mapping_pair"],
+    ..T_EMPTY
+};
+const TOKENS_MARKDOWN: TokenSetSpec = TokenSetSpec {
+    code_block_like: &["fenced_code_block", "indented_code_block"],
+    ..T_EMPTY
+};
+const TOKENS_MARKDOWN_INLINE: TokenSetSpec = TokenSetSpec::EMPTY;
+const TOKENS_STARLARK: TokenSetSpec = TokenSetSpec {
+    comments: &["comment"],
+    string_literals: &["string"],
+    identifiers: &["identifier"],
+    brackets: &["(", ")", "{", "}", "[", "]"],
+    declaration_like: &["function_definition"],
+    code_block_like: &["block"],
+    ..T_EMPTY
+};
+const TOKENS_PYTHON: TokenSetSpec = TokenSetSpec {
+    comments: &["comment"],
+    string_literals: &["string"],
+    identifiers: &["identifier"],
+    brackets: PARENS,
+    statement_like: &["expression_statement", "return_statement", "if_statement"],
+    declaration_like: &["function_definition", "class_definition"],
+    code_block_like: &["block"],
+    ..T_EMPTY
+};
+const TOKENS_JAVASCRIPT: TokenSetSpec = TokenSetSpec {
+    comments: &["comment"],
+    string_literals: &["string", "template_string"],
+    identifiers: &[
+        "identifier",
+        "property_identifier",
+        "shorthand_property_identifier",
+    ],
+    brackets: PARENS,
+    statement_like: &[
+        "expression_statement",
+        "lexical_declaration",
+        "return_statement",
+        "if_statement",
+    ],
+    declaration_like: &[
+        "function_declaration",
+        "class_declaration",
+        "method_definition",
+    ],
+    code_block_like: &["statement_block", "class_body"],
+    ..T_EMPTY
+};
+const TOKENS_TYPESCRIPT: TokenSetSpec = TokenSetSpec {
+    identifiers: &[
+        "identifier",
+        "property_identifier",
+        "shorthand_property_identifier",
+        "type_identifier",
+    ],
+    declaration_like: &[
+        "function_declaration",
+        "class_declaration",
+        "method_definition",
+        "interface_declaration",
+        "type_alias_declaration",
+        "enum_declaration",
+    ],
+    ..TOKENS_JAVASCRIPT
+};
+const TOKENS_TSX: TokenSetSpec = TOKENS_TYPESCRIPT;
+const TOKENS_GO: TokenSetSpec = TokenSetSpec {
+    comments: &["comment"],
+    string_literals: &["interpreted_string_literal", "raw_string_literal"],
+    identifiers: &[
+        "identifier",
+        "field_identifier",
+        "type_identifier",
+        "package_identifier",
+    ],
+    brackets: PARENS,
+    declaration_like: &[
+        "function_declaration",
+        "method_declaration",
+        "type_declaration",
+    ],
+    code_block_like: &["block"],
+    ..T_EMPTY
+};
+const TOKENS_C: TokenSetSpec = TokenSetSpec {
+    comments: &["comment"],
+    string_literals: &["string_literal", "char_literal"],
+    identifiers: &["identifier", "field_identifier", "type_identifier"],
+    brackets: PARENS,
+    declaration_like: &["function_definition", "struct_specifier", "enum_specifier"],
+    code_block_like: &["compound_statement", "field_declaration_list"],
+    ..T_EMPTY
+};
+const TOKENS_CPP: TokenSetSpec = TokenSetSpec {
+    string_literals: &["string_literal", "char_literal", "raw_string_literal"],
+    identifiers: &[
+        "identifier",
+        "field_identifier",
+        "type_identifier",
+        "namespace_identifier",
+    ],
+    declaration_like: &[
+        "function_definition",
+        "struct_specifier",
+        "enum_specifier",
+        "class_specifier",
+        "namespace_definition",
+    ],
+    ..TOKENS_C
+};
+const TOKENS_BASH: TokenSetSpec = TokenSetSpec {
+    comments: &["comment"],
+    string_literals: &["string", "raw_string", "ansi_c_string"],
+    declaration_like: &["function_definition"],
+    code_block_like: &["compound_statement"],
+    ..T_EMPTY
+};
+const TOKENS_HTML: TokenSetSpec = TokenSetSpec {
+    comments: &["comment"],
+    declaration_like: &["element"],
+    ..T_EMPTY
+};
+const TOKENS_CSS: TokenSetSpec = TokenSetSpec {
+    comments: &["comment"],
+    string_literals: &["string_value"],
+    brackets: &["(", ")", "{", "}"],
+    declaration_like: &["rule_set"],
+    code_block_like: &["block"],
+    ..T_EMPTY
+};
+const TOKENS_PROPERTIES: TokenSetSpec = TokenSetSpec {
+    comments: &["comment"],
+    declaration_like: &["property"],
+    ..T_EMPTY
+};
+
 /// All registered languages, in detection priority order.
-pub static LANGUAGES: &[LanguageSpec] = &[
-    LanguageSpec {
+pub static LANGUAGES: &[LanguageDef] = &LANGUAGE_TABLE;
+
+static LANGUAGE_TABLE: [LanguageDef; 22] = [
+    LanguageDef {
         id: "rust",
         name: "Rust",
         extensions: &["rs"],
@@ -86,8 +287,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[tree_sitter_rust::TAGS_QUERY],
         capture_keys: NO_OVERRIDES,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_RUST,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "java",
         name: "Java",
         extensions: &["java"],
@@ -103,8 +310,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
             include_str!("../queries/java/tags.scm"),
         ],
         capture_keys: NO_OVERRIDES,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_JAVA,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "kotlin",
         name: "Kotlin",
         extensions: &["kt", "kts"],
@@ -120,8 +333,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[include_str!("../queries/kotlin/tags.scm")],
         capture_keys: NO_OVERRIDES,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_KOTLIN,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "groovy",
         name: "Groovy",
         extensions: &["groovy", "gradle", "gvy", "gy", "gsh"],
@@ -134,8 +353,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[],
         capture_keys: NO_OVERRIDES,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_GROOVY,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "xml",
         name: "XML",
         extensions: &["xml", "xsd", "xsl", "xslt", "svg", "plist", "iml"],
@@ -148,8 +373,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[include_str!("../queries/xml/tags.scm")],
         capture_keys: XML_KEYS,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_XML,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "json",
         name: "JSON",
         extensions: &["json", "jsonc", "json5"],
@@ -162,8 +393,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[include_str!("../queries/json/tags.scm")],
         capture_keys: NO_OVERRIDES,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_JSON,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "toml",
         name: "TOML",
         extensions: &["toml"],
@@ -176,8 +413,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[include_str!("../queries/toml/tags.scm")],
         capture_keys: NO_OVERRIDES,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_TOML,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "yaml",
         name: "YAML",
         extensions: &["yaml", "yml"],
@@ -190,8 +433,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[include_str!("../queries/yaml/tags.scm")],
         capture_keys: NO_OVERRIDES,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_YAML,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "markdown",
         name: "Markdown",
         extensions: &["md", "markdown"],
@@ -204,8 +453,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[include_str!("../queries/markdown/tags.scm")],
         capture_keys: NO_OVERRIDES,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_MARKDOWN,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         // Only reached through Markdown's `(inline) @injection.content`.
         id: "markdown_inline",
         name: "Markdown",
@@ -219,8 +474,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[],
         capture_keys: NO_OVERRIDES,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_MARKDOWN_INLINE,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "starlark",
         name: "Starlark",
         extensions: &["bzl", "bazel", "star", "sky"],
@@ -241,8 +502,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: Some(tree_sitter_starlark::FOLDS_QUERY),
         tags: &[],
         capture_keys: NO_OVERRIDES,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_STARLARK,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "python",
         name: "Python",
         extensions: &["py", "pyi", "pyw"],
@@ -255,8 +522,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[tree_sitter_python::TAGS_QUERY],
         capture_keys: NO_OVERRIDES,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_PYTHON,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "javascript",
         name: "JavaScript",
         extensions: &["js", "mjs", "cjs", "jsx"],
@@ -272,8 +545,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[tree_sitter_javascript::TAGS_QUERY],
         capture_keys: HTML_KEYS,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_JAVASCRIPT,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "typescript",
         name: "TypeScript",
         extensions: &["ts", "mts", "cts"],
@@ -289,8 +568,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[tree_sitter_typescript::TAGS_QUERY],
         capture_keys: NO_OVERRIDES,
+        base: Some("javascript"),
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_TYPESCRIPT,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "tsx",
         name: "TypeScript JSX",
         extensions: &["tsx"],
@@ -307,8 +592,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[tree_sitter_typescript::TAGS_QUERY],
         capture_keys: HTML_KEYS,
+        base: Some("typescript"),
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_TSX,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "go",
         name: "Go",
         extensions: &["go"],
@@ -321,8 +612,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[tree_sitter_go::TAGS_QUERY],
         capture_keys: NO_OVERRIDES,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_GO,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "c",
         name: "C",
         extensions: &["c", "h"],
@@ -335,8 +632,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[tree_sitter_c::TAGS_QUERY],
         capture_keys: NO_OVERRIDES,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_C,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "cpp",
         name: "C++",
         extensions: &[
@@ -354,8 +657,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[tree_sitter_cpp::TAGS_QUERY],
         capture_keys: NO_OVERRIDES,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_CPP,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "bash",
         name: "Shell Script",
         extensions: &["sh", "bash", "zsh", "ksh"],
@@ -375,8 +684,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[],
         capture_keys: NO_OVERRIDES,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_BASH,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "html",
         name: "HTML",
         extensions: &["html", "htm", "xhtml"],
@@ -389,8 +704,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[include_str!("../queries/html/tags.scm")],
         capture_keys: HTML_KEYS,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_HTML,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "css",
         name: "CSS",
         extensions: &["css"],
@@ -403,8 +724,14 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[],
         capture_keys: NO_OVERRIDES,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_CSS,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
-    LanguageSpec {
+    LanguageDef {
         id: "properties",
         name: "Properties",
         extensions: &["properties"],
@@ -417,6 +744,12 @@ pub static LANGUAGES: &[LanguageSpec] = &[
         folds: None,
         tags: &[tree_sitter_properties::TAGS_QUERY],
         capture_keys: PROPERTIES_KEYS,
+        base: None,
+        tier: CompletenessTier::G0,
+        token_sets: TOKENS_PROPERTIES,
+        extra_queries: ExtraQueries::NONE,
+        services: no_services,
+        tables: LanguageTables::new(),
     },
 ];
 
@@ -522,6 +855,25 @@ mod tests {
         assert_eq!(by_id("Rust").map(|spec| spec.id), Some("rust"));
         assert_eq!(by_id("c++").map(|spec| spec.id), Some("cpp"));
         assert!(by_id("cobol").is_none());
+    }
+
+    #[test]
+    fn token_set_names_exist_in_their_grammars() {
+        for spec in LANGUAGES {
+            assert!(
+                spec.unknown_token_names().is_empty(),
+                "{}: unknown kinds {:?}",
+                spec.id,
+                spec.unknown_token_names()
+            );
+            if let Some(base) = spec.base {
+                assert!(by_id(base).is_some(), "{}: unknown base {base}", spec.id);
+            }
+        }
+        let rust = by_id("rust").expect("rust");
+        let table = rust.element_types();
+        let comment = table.lookup("line_comment").next().expect("kind");
+        assert!(rust.token_set_table().comments.contains(comment));
     }
 
     #[test]

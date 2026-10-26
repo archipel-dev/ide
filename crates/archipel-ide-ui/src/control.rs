@@ -403,6 +403,13 @@ impl IdeApp {
                 "menu": egui::Popup::is_any_open(ctx),
                 "settings": self.settings_dialog.is_some(),
             },
+            // Click targets in window pixels, so automation follows layout changes.
+            "targets": {
+                "firstRunSkip": self.first_run_skip.map(|rect| {
+                    let center = rect.center() * ctx.pixels_per_point();
+                    [center.x.round(), center.y.round()]
+                }),
+            },
             "window": {
                 "width": ctx.content_rect().width(),
                 "height": ctx.content_rect().height(),
@@ -643,5 +650,29 @@ mod tests {
         assert!(app.control_execute(&ctx, "app.about", Value::Null).ok);
         assert_eq!(app.control_state(&ctx)["popups"]["about"], true);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn state_reports_the_first_run_skip_button_while_the_dialog_is_open() {
+        let mut app = IdeApp::with_update_check(None, Vec::new(), false);
+        app.state.first_run_open = true;
+        let ctx = egui::Context::default();
+        crate::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            crate::first_run::show(&mut app, ctx)
+        });
+        let skip = app.control_state(&ctx)["targets"]["firstRunSkip"].clone();
+        let xy = skip
+            .as_array()
+            .expect("Skip position while the dialog is open");
+        assert!(xy[0].as_f64().unwrap() > 0.0 && xy[1].as_f64().unwrap() > 0.0);
+        app.state.first_run_open = false;
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            crate::first_run::show(&mut app, ctx)
+        });
+        assert_eq!(
+            app.control_state(&ctx)["targets"]["firstRunSkip"],
+            Value::Null
+        );
     }
 }

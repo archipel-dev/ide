@@ -29,6 +29,7 @@ impl Draft {
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     if !app.state.first_run_open {
         app.customize = None;
+        app.first_run_skip = None;
         return;
     }
     let mut draft = app.customize.take().unwrap_or_else(|| Draft::current(app));
@@ -37,6 +38,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     let width = 460.0;
     let screen = ctx.content_rect();
     let mut action: Option<(&str, Value)> = None;
+    let mut skip_rect = None;
     // Modal: the welcome buttons behind it stay inert until a choice is made,
     // otherwise a click on "New Project" stacks a second dialog on top.
     crate::popups::modal_backdrop(ctx, "first_run_backdrop");
@@ -108,13 +110,16 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                             }
                             action = Some(("app.completeCustomize", params));
                         }
-                        if ui.button("Skip").clicked() {
+                        let skip = ui.button("Skip");
+                        skip_rect = Some(skip.rect);
+                        if skip.clicked() {
                             action = Some(("app.skipCustomize", Value::Null));
                         }
                     });
                 });
         });
     app.customize = Some(draft);
+    app.first_run_skip = skip_rect;
     if let Some((id, params)) = action {
         app.dispatch(id, params);
     }

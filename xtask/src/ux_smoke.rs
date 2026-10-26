@@ -35,7 +35,8 @@ mod layout {
     pub type Point = (i32, i32);
     // Welcome screen.
     pub const WELCOME_NEW_PROJECT: Point = (318, 204);
-    pub const FIRST_RUN_SKIP: Point = (672, 411);
+    /// Fallback only: scenes click the position the IDE reports in `/targets/firstRunSkip`.
+    pub const FIRST_RUN_SKIP: Point = (699, 411);
     // New Project dialog (1440×900).
     pub const NP_GENERATOR_RUST_APP: Point = (440, 587);
     pub const NP_NAME: Point = (850, 231);
@@ -319,6 +320,26 @@ impl Driver {
         Ok(())
     }
 
+    /// Clicks the control the IDE reports at `/targets/<target>` (window pixels), so the
+    /// scene follows layout changes; `fallback` is used when the IDE reports nothing.
+    fn click_target(&mut self, target: &str, fallback: layout::Point, what: &str) -> Result<()> {
+        let state = self.state()?;
+        let reported = state
+            .pointer(&format!("/targets/{target}"))
+            .and_then(Value::as_array)
+            .and_then(|xy| Some((xy.first()?.as_f64()?, xy.get(1)?.as_f64()?)));
+        let point = match reported {
+            Some((x, y)) => (x.round() as i32, y.round() as i32),
+            None => {
+                self.note(format!(
+                    "no /targets/{target} reported; using the fallback position"
+                ));
+                fallback
+            }
+        };
+        self.click(point, what)
+    }
+
     fn double_click(&mut self, (x, y): layout::Point, what: &str) -> Result<()> {
         self.note(format!("double-click {what} at ({x}, {y})"));
         let (x, y) = (x.to_string(), y.to_string());
@@ -440,7 +461,11 @@ impl Driver {
 /// still fresh, so the modal first-run dialog has to be dismissed first.
 fn dismiss_first_run(d: &mut Driver) -> Result<()> {
     if d.state()?["popups"]["customize"] == Value::Bool(true) {
-        d.click(layout::FIRST_RUN_SKIP, "Skip (first-run dialog)")?;
+        d.click_target(
+            "firstRunSkip",
+            layout::FIRST_RUN_SKIP,
+            "Skip (first-run dialog)",
+        )?;
         d.expect(
             "/popups/customize",
             Value::Bool(false),
@@ -468,7 +493,7 @@ fn first_run_dialog_is_modal(d: &mut Driver) -> Result<()> {
         Value::Null,
         "no New Project dialog opened behind the modal first-run dialog",
     )?;
-    d.click(layout::FIRST_RUN_SKIP, "Skip")?;
+    d.click_target("firstRunSkip", layout::FIRST_RUN_SKIP, "Skip")?;
     d.expect(
         "/popups/customize",
         Value::Bool(false),

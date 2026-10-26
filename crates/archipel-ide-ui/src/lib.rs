@@ -146,6 +146,9 @@ pub struct IdeApp {
     dialog_focus: bool,
     /// Pending choices in the first-run "Customize Archipel IDE" wizard.
     customize: Option<first_run::Draft>,
+    /// Where the first-run dialog's Skip button was drawn last frame (for UI automation:
+    /// the control state reports it so scripts do not depend on the dialog layout).
+    first_run_skip: Option<egui::Rect>,
     commit_message: String,
     /// Commit checkbox overrides; by default tracked changes are included and
     /// unversioned files are not.
@@ -315,6 +318,7 @@ impl IdeApp {
             settings_dialog: None,
             dialog_focus: false,
             customize: None,
+            first_run_skip: None,
             commit_message: String::new(),
             commit_overrides: std::collections::HashMap::new(),
             window_focused: true,

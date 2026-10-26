@@ -111,7 +111,7 @@ fn nav_column(app: &mut IdeApp, ui: &mut egui::Ui) {
         ui.painter().text(
             rect.center(),
             Align2::CENTER_CENTER,
-            "JT",
+            theme::project_initials("Archipel IDE"),
             theme::semibold(16.0),
             Color32::WHITE,
         );

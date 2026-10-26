@@ -17,7 +17,7 @@ JSON line and gets one JSON response line (`{"ok":true,"result":…}` or
 | Request | Effect |
 |---|---|
 | `{"op":"execute","command":"editor.openFile","args":{"path":"src/main.rs"}}` | runs any registered command |
-| `{"op":"state"}` | project, tabs (modified flag, `diskConflict` for outside changes), active tab, visible tool windows, Project tree selection and expanded directories, focused component, active editor text/caret/selection count, popups (Search Everywhere tab, dialog kind, find bar, completion, notification, any open menu), Find in Files query and result count, Problems count for the active file, run task and running flag, status text, background busy flag |
+| `{"op":"state"}` | project, tabs (modified flag, `diskConflict` for outside changes), active tab, visible tool windows, Project tree selection and expanded directories, focused component, active editor text/caret/selection count, popups (Search Everywhere tab, dialog kind, find bar, completion, notification, any open menu), click targets in window pixels (`targets.firstRunSkip`: centre of the first-run Skip button, `null` when closed), Find in Files query and result count, Problems count for the active file, run task and running flag, status text, background busy flag |
 | `{"op":"key","chord":"Ctrl+Shift+A"}` | injects press/text/release events through egui input, i.e. the same shortcut and focus paths as a real keystroke; modifiers `Ctrl`, `Alt`, `Shift`, `Cmd`, and `Primary` (⌘ on macOS, Ctrl elsewhere) |
 | `{"op":"key","chord":"DoubleShift"}` | the modifier-only Search Everywhere gesture, injected over four frames |
 | `{"op":"type","text":"save"}` | text input into the focused component |

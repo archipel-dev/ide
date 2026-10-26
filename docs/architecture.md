@@ -75,9 +75,17 @@ show the old product name.
 - `archipel-ide-project`: safe project-root model, bounded file tree, UTF-8 document IO.
 - `archipel-ide-text`: revisioned rope storage, Unicode-safe multi-selection transactions,
   typing coalescence, and history.
-- `archipel-ide-language`: data-driven Tree-sitter language registry (grammar crates plus their
-  bundled queries), a generic highlight engine producing `HighlightLayer`s keyed by IntelliJ
-  text-attribute keys, and the editor color-scheme model loaded from `docs/spec/data/`.
+- `archipel-ide-language`: data-driven Tree-sitter language registry (`LanguageDef`: grammar
+  crates plus their bundled queries, token sets, completeness tier, services hook), a generic
+  highlight engine producing `HighlightLayer`s keyed by IntelliJ text-attribute keys, the syntax
+  layer (`SyntaxSnapshot`/`SyntaxNode`, element types, `Anchor`, injected fragments), the
+  language-keyed `ServiceRegistry`, and the editor color-scheme model loaded from `docs/spec/data/`.
+- `archipel-ide-analysis`: the native code-analysis pipeline core: `FileId`/`FileTable`, VFS
+  facade and document overlay, `AnalysisHost`/`Snapshot`/`Change`, background jobs with
+  cancellation, modification stamps and cached values with early cutoff, and the extension
+  contracts (index, daemon, inspections, intentions, structure, resolve, completion, refactoring,
+  LSP provider) with in-memory implementations. No UI code; see
+  [analysis/architecture.md](analysis/architecture.md).
 - `archipel-ide-terminal`: native PTY process lifecycle, asynchronous output, input, and resizing.
 - `archipel-ide-search`: cancellable generation-based background text search with streamed,
   bounded results and binary/large-file exclusion.
@@ -130,7 +138,9 @@ show the old product name.
 - `archipel-ide-core`: application state, the plugin host (scoped `PluginHost`, command
   routing, plugin tool window/tab state), tool window layout model (one visible tool window
   per anchor), the problems model (`problems`: syntax errors and LSP diagnostics merged
-  into per-file problems with severities, counts and ancestor error propagation), and
+  into per-file problems with severities, counts and ancestor error propagation), the analysis
+  seam (`analysis_host`: `IdeState::analysis` kept in sync with the open documents by
+  `poll_analysis`; `analysis_modules`: one registration line per analysis package), and
   built-in command handlers.
 - `archipel-ide-ui`: native workbench shell split into `chrome` (main toolbar, stripe, status
   bar, window controls), `toolwindows` (Project, Commit, Find, Build/Run, Problems,
@@ -243,8 +253,9 @@ Commands: `settings.open {page?}`, `settings.get/set/reset {id}`,
 
 ## Long-term direction
 
-The semantic platform will layer VFS snapshots, incremental syntax, symbol/stub
-indexes, dependency-aware invalidation, and prioritized cancellable jobs. LSP is one
+The semantic platform layers VFS snapshots, incremental syntax, symbol/stub
+indexes, dependency-aware invalidation, and prioritized cancellable jobs; the core of it
+(`archipel-ide-analysis`) exists, see [analysis/architecture.md](analysis/architecture.md). LSP is one
 provider behind a richer language-service interface, not the semantic architecture.
 Untrusted compiled plugins use the WebAssembly Component Model with explicit capabilities
 (`archipel-ide-plugin-wasm`); native plugins remain compiled-in and trusted.

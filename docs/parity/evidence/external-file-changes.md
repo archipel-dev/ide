@@ -5,11 +5,11 @@ reloaded into unmodified editors automatically; when the editor also has unsaved
 the IDE asks which version to keep (File Cache Conflict) instead of overwriting either
 side. File → Reload All from Disk (⌥⌘Y / Ctrl+Alt+Y) forces a refresh.
 
-## Jetthing
+## Archipel IDE
 
-- `jetthing-project::ProjectWatcher` (notify crate) watches the project recursively and
+- `archipel-ide-project::ProjectWatcher` (notify crate) watches the project recursively and
   batches events until the next frame; build output (`target`, `node_modules`, `.gradle`)
-  and `.jetthing` are ignored, `.git` changes only set `vcs_stale` for the VCS refresh.
+  and `.archipel` are ignored, `.git` changes only set `vcs_stale` for the VCS refresh.
 - Each open document remembers a hash of the content it last loaded or saved, so the
   IDE's own saves are never mistaken for outside edits.
 - Unmodified buffer + outside change → reloaded as one undoable edit
@@ -36,10 +36,10 @@ Captured 2026-10-10 on Xvfb/glow: `Other.java` (clean) and `App.java` (typed
 2. After **Load Disk Version** the buffer holds the disk content and is clean.
 3. `Other.java` was reloaded silently with the outside change.
 
-Tests: `jetthing-project` watcher filtering and a real write; `jetthing-core::disk_sync`
+Tests: `archipel-ide-project` watcher filtering and a real write; `archipel-ide-core::disk_sync`
 reload, conflict with save/saveAll/autosave refusal, keep-mine, load-disk, own-save,
 deletion (clean closes, dirty conflicts and recreates on keep), and a real watcher round
-trip; `jetthing-ui::disk_banner` command wiring.
+trip; `archipel-ide-ui::disk_banner` command wiring.
 
 ## Gaps
 

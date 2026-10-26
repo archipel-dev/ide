@@ -14,9 +14,9 @@ use std::path::{Path, PathBuf};
 
 /// Roots holding UI code. Engine crates have no egui and are not scanned.
 const ROOTS: &[&str] = &[
-    "crates/jetthing-ui/src",
-    "crates/jetthing-app/src",
-    "crates/jetthing-plugin-ui/src",
+    "crates/archipel-ide-ui/src",
+    "crates/archipel-ide-app/src",
+    "crates/archipel-ide-plugin-ui/src",
     "plugins",
 ];
 const BASELINE: &str = "xtask/design-lint-baseline.txt";

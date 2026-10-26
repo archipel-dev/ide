@@ -1,6 +1,6 @@
 # Bazel targets, build/run/test
 
-Captured 2026-10-10 under Xvfb (1600x1000, `JETTHING_RENDERER=glow`) with **Bazelisk 1.25.0**
+Captured 2026-10-10 under Xvfb (1600x1000, `ARCHIPEL_RENDERER=glow`) with **Bazelisk 1.25.0**
 on PATH (downloaded Bazel 7.4.1 via `.bazelversion`). Sample `bazel-java` (Bzlmod
 `MODULE.bazel`): `//:app` (`java_binary` → `//lib:greeter` `java_library`), `//:hello`
 (`sh_binary`), `//:app_test` (`sh_test`, passes), `//:flaky_test` (`sh_test`, fails).

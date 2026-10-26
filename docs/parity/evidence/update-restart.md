@@ -13,15 +13,15 @@ current project root, letting workspace restoration reopen tabs.
 Automated save/error evidence:
 
 ```sh
-cargo test -p jetthing-core restart_preparation
-cargo test -p jetthing-core welcome_session_can_prepare_for_restart
+cargo test -p archipel-ide-core restart_preparation
+cargo test -p archipel-ide-core welcome_session_can_prepare_for_restart
 ```
 
 Manual release-build checks still required: silently check for updates while idle,
 dismiss a download balloon and verify it completes without input; edit a file,
 switch projects, install an update and restart; check that saved text and the
 current project return and Help/About reports the new version. Repeat on Linux
-to verify the restart executes `jetthing`, not `jetthing.old`.
+to verify the restart executes `archipel-ide`, not `archipel-ide.old`.
 
 No live self-update was installed during this change's validation. The separate
 release-tag publication bug is tracked in issue #33.

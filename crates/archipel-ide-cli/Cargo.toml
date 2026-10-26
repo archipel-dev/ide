@@ -1,0 +1,17 @@
+[package]
+name = "archipel-ide-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "archipel-cli"
+path = "src/main.rs"
+
+[dependencies]
+archipel-ide-compat = { path = "../archipel-ide-compat" }
+archipel-ide-command = { path = "../archipel-ide-command" }
+archipel-ide-control = { path = "../archipel-ide-control" }
+archipel-ide-core = { path = "../archipel-ide-core" }
+serde_json.workspace = true
+

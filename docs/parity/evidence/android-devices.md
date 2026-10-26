@@ -5,7 +5,7 @@ selector left of the run configuration) in `docs/parity/evidence/reference/andro
 
 ## Setup
 
-Linux under Xvfb (1600x1000x24, openbox), `JETTHING_RENDERER=glow`, `JETTHING_NO_UPDATE_CHECK=1`,
+Linux under Xvfb (1600x1000x24, openbox), `ARCHIPEL_RENDERER=glow`, `ARCHIPEL_NO_UPDATE_CHECK=1`,
 the `MyApplication` sample from `android-sdk.md`. The container has **no KVM**, so no emulator can
 boot here. Evidence therefore comes in two kinds:
 
@@ -20,10 +20,10 @@ boot here. Evidence therefore comes in two kinds:
 
 | File | Kind | Shows |
 |---|---|---|
-| `jetthing/android/a01-device-manager-avds.png` | real | Device Manager on the right stripe: AVDs with name, `Android 15.0 ("VanillaIceCream") \| x86_64`, API, Type and a start button; toolbar selector "No Devices" |
-| `jetthing/android/a01-emulator-no-acceleration.png` | real | ▶ on Pixel 8 API 35: the emulator exits and its FATAL line is shown in the tool window |
-| `jetthing/android/a01-device-selector-simulated.png` | simulated | selector "Pixel 8 API 35" with Running devices (emulator, Google Pixel 8) and Available devices (the stopped tablet AVD) |
-| `jetthing/android/a01-device-manager-simulated.png` | simulated | running AVD with a stop button, physical device row with release name and serial |
+| `archipel-ide/android/a01-device-manager-avds.png` | real | Device Manager on the right stripe: AVDs with name, `Android 15.0 ("VanillaIceCream") \| x86_64`, API, Type and a start button; toolbar selector "No Devices" |
+| `archipel-ide/android/a01-emulator-no-acceleration.png` | real | ▶ on Pixel 8 API 35: the emulator exits and its FATAL line is shown in the tool window |
+| `archipel-ide/android/a01-device-selector-simulated.png` | simulated | selector "Pixel 8 API 35" with Running devices (emulator, Google Pixel 8) and Available devices (the stopped tablet AVD) |
+| `archipel-ide/android/a01-device-manager-simulated.png` | simulated | running AVD with a stop button, physical device row with release name and serial |
 
 ## Behaviour
 
@@ -49,4 +49,4 @@ Commands: `android.devices.list`, `android.devices.track`, `android.devices.sele
   panel or per-row ⋮ menu (wipe data, cold boot, duplicate, delete).
 - No embedded "Running Devices" emulator display (scene a03).
 - The emulator boot itself could not be verified in this container (no KVM).
-- The right tool window layout is not persisted in `.jetthing/workspace.json` yet.
+- The right tool window layout is not persisted in `.archipel/workspace.json` yet.

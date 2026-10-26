@@ -1,6 +1,6 @@
 # IntelliJ IDEA Community reference captures (Java/Gradle + Bazel)
 
-Comparison evidence for Jetthing gap analysis. Screenshots are observational references only;
+Comparison evidence for Archipel IDE gap analysis. Screenshots are observational references only;
 no icons/artwork may be extracted from them (clean-room rule).
 
 ## Environment

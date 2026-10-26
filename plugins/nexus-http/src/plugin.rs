@@ -1,9 +1,9 @@
-//! Jetthing plugin entry point: the HTTP client as an editor tab (Tools › HTTP Client)
-//! or as the standalone app (`jetthing --app dev.jetthing.nexus-http`). `.http` and
+//! Archipel IDE plugin entry point: the HTTP client as an editor tab (Tools › HTTP Client)
+//! or as the standalone app (`archipel-ide --app dev.archipel.nexus-http`). `.http` and
 //! `.rest` files open in the same editor and are imported into the workspace.
 
 use crate::NexusApp;
-use jetthing_plugin_api::{
+use archipel_ide_plugin_api::{
     CommandContribution, CommandError, CommandResult, Contributions, EditorContribution,
     EditorTabRequest, MenuLocation, Notification, Plugin, PluginHost, PluginManifest, Value,
     ViewContext, ViewFrame, ViewPlacement,
@@ -33,7 +33,7 @@ impl Default for NexusHttpPlugin {
 impl NexusHttpPlugin {
     pub fn new() -> Self {
         Self {
-            manifest: PluginManifest::parse(include_str!("../jetthing-plugin.toml"))
+            manifest: PluginManifest::parse(include_str!("../archipel-plugin.toml"))
                 .expect("bundled manifest is valid"),
             app: None,
             imported: HashSet::new(),
@@ -115,7 +115,7 @@ impl Plugin for NexusHttpPlugin {
         frame: &mut ViewFrame<'_>,
         host: &mut dyn PluginHost,
     ) {
-        let Some(ui) = jetthing_plugin_ui::ui(frame) else {
+        let Some(ui) = archipel_ide_plugin_ui::ui(frame) else {
             return;
         };
         if view.view != VIEW {
@@ -143,7 +143,7 @@ impl Plugin for NexusHttpPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jetthing_plugin_api::testing::RecordingHost;
+    use archipel_ide_plugin_api::testing::RecordingHost;
 
     #[test]
     fn contributes_the_open_command_menu_entry_and_request_file_editor() {

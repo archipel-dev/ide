@@ -7,11 +7,11 @@ Reference: IntelliJ IDEA *Generate* (Alt+Insert / ⌘N), *Go to Super Method* (C
 ## Environment
 
 No jdtls is installed in the capture environment, so the scenes run against the scriptable
-`jetthing-fake-lsp` configured as the `jdtls` server (`.jetthing/lsp.toml`: `[servers.jdtls]
-command = ".../jetthing-fake-lsp"`) over a three-file Java project (`Shape`, `Base implements Shape`,
+`archipel-fake-lsp` configured as the `jdtls` server (`.archipel/lsp.toml`: `[servers.jdtls]
+command = ".../archipel-fake-lsp"`) over a three-file Java project (`Shape`, `Base implements Shape`,
 `Circle extends Base`). The fake answers from word-level parsing of `class … extends/implements` and
 `void name(` lines, so the `detail` column shows its `fake` marker. Real jdtls answers are not captured yet.
-Xvfb 1440×900, `JETTHING_CONTROL_SOCKET` driving (`docs/parity/evidence/ui-control-socket.md`).
+Xvfb 1440×900, `ARCHIPEL_CONTROL_SOCKET` driving (`docs/parity/evidence/ui-control-socket.md`).
 
 ## Scenes
 
@@ -23,8 +23,8 @@ Xvfb 1440×900, `JETTHING_CONTROL_SOCKET` driving (`docs/parity/evidence/ui-cont
 | `call-hierarchy.png` | caret on `helper`, Ctrl+Alt+H | "Callers of helper": `Circle.area`; "Show Callees" flips the direction. |
 | `go-to-super-method.png` | caret on `Circle.area`, Ctrl+U | Opens `Base.area` (a second Ctrl+U reaches `Shape.area`). |
 
-Mechanics covered by tests: `cargo test -p jetthing-core --test generate_hierarchy` (needs the fake server
-built: `cargo build -p jetthing-lsp --bins`) and `cargo test -p jetthing-core test_nav`.
+Mechanics covered by tests: `cargo test -p archipel-ide-core --test generate_hierarchy` (needs the fake server
+built: `cargo build -p archipel-ide-lsp --bins`) and `cargo test -p archipel-ide-core test_nav`.
 
 ## Real mouse and keyboard pass (xdotool, Xvfb 1280×800)
 
@@ -41,7 +41,7 @@ Tab-order checks do not apply.
 ## Still different from the reference
 
 - Generate entries come from the server's `source.generate.*` code actions; jdtls actions that ask the client
-  for choices (fields, members) run as the server's own commands without a Jetthing dialog yet.
+  for choices (fields, members) run as the server's own commands without an Archipel IDE dialog yet.
 - Go to Super Method searches the supertypes' text for the declaration (the server has no super-method
   request); overloads are not told apart by signature.
 - The hierarchy has one tree per direction; scope selector, "base on this class" and Method Hierarchy

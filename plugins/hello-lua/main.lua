@@ -1,4 +1,4 @@
--- Example Jetthing Lua plugin (plugin API 1). See docs/plugins/lua.md.
+-- Example Archipel IDE Lua plugin (plugin API 1). See docs/plugins/lua.md.
 local util = require("util")
 
 local state = { name = "Lua", greetings = 0, todos = {}, draft = "", selected = nil }

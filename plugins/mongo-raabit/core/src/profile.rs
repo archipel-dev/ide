@@ -686,7 +686,7 @@ pub struct ProfileStore {
 }
 
 impl ProfileStore {
-    /// Default location: `$XDG_CONFIG_HOME/jetthing/mongo-raabit/connections.json`
+    /// Default location: `$XDG_CONFIG_HOME/archipel/mongo-raabit/connections.json`
     /// (or the platform equivalent).
     pub fn default_path() -> Option<PathBuf> {
         let base = if cfg!(target_os = "windows") {
@@ -699,11 +699,20 @@ impl ProfileStore {
                 .map(PathBuf::from)
                 .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
         };
-        base.map(|base| {
-            base.join("jetthing")
-                .join("mongo-raabit")
-                .join("connections.json")
-        })
+        let base = base?;
+        let file = Path::new("mongo-raabit").join("connections.json");
+        let path = base.join("archipel").join(&file);
+        // Profiles saved by the Jetthing versions (`.../jetthing/mongo-raabit/...`) are copied
+        // to the new location on first use; the old file stays in place.
+        let legacy = base.join("jetthing").join(&file);
+        if !path.exists()
+            && legacy.is_file()
+            && let Some(parent) = path.parent()
+            && std::fs::create_dir_all(parent).is_ok()
+        {
+            let _ = std::fs::copy(&legacy, &path);
+        }
+        Some(path)
     }
 
     /// Load the store; a missing file is an empty store.

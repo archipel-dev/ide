@@ -1,6 +1,6 @@
 # Kotlin language server provisioning (#159)
 
-Captured 2026-10-11 under Xvfb (1600x1000 virtual screen, `JETTHING_RENDERER=glow`, debug build) with an empty
+Captured 2026-10-11 under Xvfb (1600x1000 virtual screen, `ARCHIPEL_RENDERER=glow`, debug build) with an empty
 `$HOME`, driven through the control socket. Sample: a Gradle Kotlin DSL app (`kotlin("jvm")`, `fun main`).
 
 | File | Result |
@@ -20,7 +20,7 @@ the JetBrains host) falls back to fwcd/kotlin-language-server's `server.zip`, st
 
 Tests: provider test against a fake server (skips a version without archive, wrong request, fwcd fallback),
 requirement detection test (Kotlin DSL, Kotlin plugin text, `src/main/kotlin`), resolver test
-(`--stdio`), and the ignored real test `cargo test -p jetthing-lsp --test real_servers kotlin -- --ignored`
+(`--stdio`), and the ignored real test `cargo test -p archipel-ide-lsp --test real_servers kotlin -- --ignored`
 (completion on a Gradle sample, 5 s warm).
 
 Notes: `toolchain.setup` takes explicit components (the banner and notice pass them); with `{}` it does nothing.

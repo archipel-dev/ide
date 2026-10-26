@@ -1,19 +1,19 @@
 # Plugin system evidence (API 1)
 
-Captured under Xvfb 1600×1000, `JETTHING_RENDERER=glow`. The build used
-`cargo build -p jetthing-app --features example-plugins` with an empty
-`JETTHING_CONFIG_DIR`.
+Captured under Xvfb 1600×1000, `ARCHIPEL_RENDERER=glow`. The build used
+`cargo build -p archipel-ide-app --features example-plugins` with an empty
+`ARCHIPEL_CONFIG_DIR`.
 
 | File | Shows |
 |---|---|
 | `hello-toolwindow-and-tab.png` | Example plugin: "H" button on the right stripe with the Hello tool window open, a plugin editor tab ("Hello") next to a file tab, the plugin notification balloon and the plugin status widget. "Open Hello Tab" ran from Find Action, where plugin commands are listed with category and shortcut. |
-| `24-plugins-installed.png` | File ▸ Plugins… (`plugin.manager.open`) right after ⚙ ▸ Install Plugin from Disk… installed `darcula-plus.jtplugin` (packed with `cargo xtask pack-plugin`): Marketplace / Installed tabs with count badge and gear; search field; groups "Downloaded (1 of 1 enabled)", "Project" and "Bundled" with Disable all links; rows with icon, bold name, version and vendor, checkbox; details with vendor, homepage link, Disable / Uninstall, version, Overview / Additional Info tabs. |
+| `24-plugins-installed.png` | File ▸ Plugins… (`plugin.manager.open`) right after ⚙ ▸ Install Plugin from Disk… installed `darcula-plus.archipelplugin` (packed with `cargo xtask pack-plugin`): Marketplace / Installed tabs with count badge and gear; search field; groups "Downloaded (1 of 1 enabled)", "Project" and "Bundled" with Disable all links; rows with icon, bold name, version and vendor, checkbox; details with vendor, homepage link, Disable / Uninstall, version, Overview / Additional Info tabs. |
 | `24-plugins-settings-tab.png` | Same page with the bundled Hello plugin selected: the Settings tab renders its declarative settings page (text and boolean fields). |
 | `24-plugins-marketplace.png` | Marketplace tab: no marketplace is configured yet, so an empty state offers Install Plugin from Disk…. |
-| `standalone-app.png` | `jetthing-app --app dev.jetthing.hello`: only the plugin's app view, with title bar, window controls, status text, status widget and notification. |
+| `standalone-app.png` | `archipel-ide --app dev.archipel.hello`: only the plugin's app view, with title bar, window controls, status text, status widget and notification. |
 
 | `lua-plugin-toolwindow-and-declarative-tab.png` | `plugins/hello-lua`, discovered from the open project's `plugins/` directory: "L" tool window with the immediate-mode view (text input, buttons, properties) and the "Todos (Lua)" editor tab with a declarative view (text input + Add, list toggled by clicking, muted label). Two todos added, one toggled. The status bar shows the Lua status widget ("Lua × 1"); a Lua notification is showing. |
-| `lua-standalone-app-with-tab.png` | `--app dev.jetthing.hello-lua` (installed from `hello-lua.jtplugin`): the app view plus the Todos tab it opened; the status bar shows only this plugin's widget. |
+| `lua-standalone-app-with-tab.png` | `--app dev.archipel.hello-lua` (installed from `hello-lua.archipelplugin`): the app view plus the Todos tab it opened; the status bar shows only this plugin's widget. |
 
 | `wasm-plugin-toolwindow-project-permission.png` | `plugins/hello-wasm` (a 146 KB `wasm32-wasip2` component) in its "W" tool window: declarative view with a name field and Say Hello, statistics, and `List /project` showing the project root read through the WASI preopen granted by `permissions = ["fs.project"]`. The status bar shows "WASM × 1". |
 | `24-plugins-wasm-additional-info.png` | Plugins page listing Rust (bundled), Lua, WASM and declarative plugins; Hello WASM's Additional Info shows kind `wasm` and the permission "Read and write files in the open project". |
@@ -23,9 +23,9 @@ Also observed in the same session:
 - Uninstall removed `<config>/plugins/com.example.darcula-plus/` and the entry; the status bar said
   "Uninstalled plugin com.example.darcula-plus".
 - Unchecking Hello removed its stripe button, status widget and commands at once, and
-  wrote `{"disabled":["dev.jetthing.hello"]}` to `plugins.json`. Re-checking restored them.
-- `jetthing-app --app no.such` printed
-  `jetthing: unknown plugin `no.such`; plugins with an app view: dev.jetthing.hello`
+  wrote `{"disabled":["dev.archipel.hello"]}` to `plugins.json`. Re-checking restored them.
+- `archipel-ide --app no.such` printed
+  `archipel-ide: unknown plugin `no.such`; plugins with an app view: dev.archipel.hello`
   and exited with code 2.
 - Alt-based chords could not be sent through xdotool in this Xvfb setup; the built-in
   Alt+1 failed the same way. Ctrl chords work. Keybinding mapping is covered by unit tests

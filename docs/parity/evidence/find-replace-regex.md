@@ -3,7 +3,7 @@
 Reference: the editor Find/Replace bar (Ctrl+F / Ctrl+R) has Match Case, Words and Regex
 toggles. In regex mode, `$1`-style group references in the replacement are expanded.
 
-Jetthing (captured 2026-10-10 on Xvfb/glow; `Main.kt` holds `let a = 1;`, `let bb = 22;`
+Archipel IDE (captured 2026-10-10 on Xvfb/glow; `Main.kt` holds `let a = 1;`, `let bb = 22;`
 and `const c = 3;`):
 
 ![Regex off: 0 results; .* on: 2 results; Replace All with val $1: Int = $2](workbench-bugs/find-replace-regex.png)
@@ -34,7 +34,7 @@ Gaps: no Replace in Files, no Alt+C/O/X shortcuts, no regex help popup, no
 
 `search.replacePreview` returns, per file, the replacement count and the before/after
 text of each changed line without touching disk; `search.replaceInFiles` applies the
-same plan. The `jetthing-search` engine (`Matcher::replace_contents`,
+same plan. The `archipel-ide-search` engine (`Matcher::replace_contents`,
 `plan_replacements`) works line by line like Find in Files, keeps CRLF/LF endings,
 expands `$1`/`${name}` only in regex mode (plain queries replace literally) and skips
 empty matches. Files whose open editor has unsaved changes are never overwritten and

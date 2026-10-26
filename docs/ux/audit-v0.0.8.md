@@ -1,8 +1,8 @@
 # Human walkthrough audit v0.0.8
 
-A first-hour walkthrough of Jetthing `0.0.8` (`b4836d0`, debug build) done the way a person
+A first-hour walkthrough of Archipel IDE `0.0.8` (`b4836d0`, debug build) done the way a person
 uses an IDE: every interaction was a real X11 mouse move, click, double click, drag, scroll
-or key press sent with `xdotool` to the window on `Xvfb :77` (1440×900, `JETTHING_RENDERER=glow`,
+or key press sent with `xdotool` to the window on `Xvfb :77` (1440×900, `ARCHIPEL_RENDERER=glow`,
 no window manager). No command was dispatched and no input was injected through the control
 socket; it was used read-only for the `state` snapshot and for a few PNGs. Screenshots are in
 `evidence/` (what the X server showed, 256 colours).
@@ -32,10 +32,10 @@ code or artwork was consulted.
 
 | ID | Area | What happens (steps) | Expected on the IntelliJ platform | Sev | Evidence | Suspected code | Cluster | Status |
 |---|---|---|---|---|---|---|---|---|
-| UX-001 | First run | With the "Welcome to Jetthing" dialog open, click **New Project** behind it. The wizard opens on top of the first-run dialog; Escape then closes the *first-run* dialog underneath, the wizard stays. | Dialogs are modal: the window behind is dimmed and inert; Escape closes the top-most dialog. | blocker | [01](evidence/01-first-run-stacked-dialogs.png) | `first_run.rs` (no backdrop); Escape chain in `lib.rs::handle_shortcuts` orders `first_run_open` before `dialog` | C1 | **fixed** (modal backdrop, `popups::modal_backdrop`) |
+| UX-001 | First run | With the "Welcome to Archipel IDE" dialog open, click **New Project** behind it. The wizard opens on top of the first-run dialog; Escape then closes the *first-run* dialog underneath, the wizard stays. | Dialogs are modal: the window behind is dimmed and inert; Escape closes the top-most dialog. | blocker | [01](evidence/01-first-run-stacked-dialogs.png) | `first_run.rs` (no backdrop); Escape chain in `lib.rs::handle_shortcuts` orders `first_run_open` before `dialog` | C1 | **fixed** (modal backdrop, `popups::modal_backdrop`) |
 | UX-002 | New Project | Resize the window to the 800×500 minimum and open New Project. The content row is a fixed 420 pt, the frame runs past the bottom edge; the button row sits on the last pixels. (v0.0.7 shipped with Create entirely off-screen.) | Dialogs size to the screen and keep their button row visible; content scrolls. | blocker | [02](evidence/02-new-project-800x500-clipped.png) | `new_project.rs::CONTENT_HEIGHT` | C1 | **fixed** (`content_height()` shrinks with the window; smoke scene `new-project-in-minimum-window`) |
-| UX-003 | New Project | Type a Location that does not exist yet (the natural thing for a new project), click Create: `command failed: filesystem error: No such file or directory (os error 2)`. | The location is created; errors name the field and the path. | blocker | [03](evidence/03-new-project-raw-error.png) | `jetthing-project::generator::create_project_with` canonicalizes the parent | C5 | **fixed** (`create_dir_all` + `ProjectError::CreateLocation`) |
-| UX-004 | Open Project | Type a wrong path in Open Project, press Enter: `command failed: filesystem error: No such file or directory (os error 2)`. | "There is no directory at …" next to the field. | major | [21](evidence/21-open-project-raw-error.png) | `jetthing-project::Project::open` | C5 | **fixed** (`ProjectError::NotFound`) |
+| UX-003 | New Project | Type a Location that does not exist yet (the natural thing for a new project), click Create: `command failed: filesystem error: No such file or directory (os error 2)`. | The location is created; errors name the field and the path. | blocker | [03](evidence/03-new-project-raw-error.png) | `archipel-ide-project::generator::create_project_with` canonicalizes the parent | C5 | **fixed** (`create_dir_all` + `ProjectError::CreateLocation`) |
+| UX-004 | Open Project | Type a wrong path in Open Project, press Enter: `command failed: filesystem error: No such file or directory (os error 2)`. | "There is no directory at …" next to the field. | major | [21](evidence/21-open-project-raw-error.png) | `archipel-ide-project::Project::open` | C5 | **fixed** (`ProjectError::NotFound`) |
 | UX-005 | Dialogs | No dialog has a default (accent) button except Delete; button order differs per dialog: `Create · Cancel`, `Cancel · Delete`, `Browse… · Open · Cancel`, `Clone · Cancel`; Rename has no buttons at all; no title-bar close or `?`; dialogs sit at 20 % from the top instead of centred. | One default button (Enter), a consistent `[Cancel] [OK]` order per platform, a title bar, centred placement. | major | [08](evidence/08-rename-dialog.png) [09](evidence/09-delete-dialog.png) [22](evidence/22-get-from-vcs-focus-ring.png) | `popups.rs::popup_frame`, each dialog's own button row | C1 | open |
 | UX-006 | Push | Push with no remote: a small error box appears at the dialog anchor, overlapping the Commit tool window, with a raw `Git command failed:` prefix. | A dialog with a clear message and the remedy as an action ("Define remote"). | polish | [20](evidence/20-push-dialog-error.png) | `push_dialog.rs` | C1, C5 | open |
 | UX-007 | Project tree | Click a row, type `Car`: nothing happens (speed search), the selection stays. | Typing in a tree starts speed search: matching rows are highlighted and selected. | major | [06](evidence/06-tree-speed-search-and-drag.png) | `toolwindows.rs` tree rows (`Sense::click` only, no focus id) | C2 | open |
@@ -88,7 +88,7 @@ button, Enter/Escape and focus-on-open are re-implemented (or forgotten) per dia
 (`new_project.rs`, `clone_dialog.rs`, `popups.rs` × 9, `push_dialog.rs`, `run_config_dialog.rs`,
 `settings_dialog.rs`, `first_run.rs`). Findings: UX-001, UX-002, UX-005, UX-006.
 
-Fix: one `jetthing_ui::dialog::Dialog` builder (title, optional help, content closure,
+Fix: one `archipel_ide_ui::dialog::Dialog` builder (title, optional help, content closure,
 `buttons: [Button]` with exactly one `default` and one `cancel`, `modal: bool`) that owns the
 backdrop, centring with clamping to the content rect, max size = window − 40 pt with the
 content in a scroll area, the button row pinned at the bottom, Enter → default button
@@ -104,7 +104,7 @@ popup). None of them has a focus id, so arrow keys, Home/End, Page keys, type-ah
 (speed search) and Enter are per-widget afterthoughts; menus built on egui `Popup` have no
 keyboard handling at all. Findings: UX-007, UX-008, UX-010, UX-013, UX-020.
 
-Fix: a `jetthing_ui::list::ListView`/`TreeView` primitive that is focusable, owns
+Fix: a `archipel_ide_ui::list::ListView`/`TreeView` primitive that is focusable, owns
 selection + anchor, handles ↑↓←→ Home End PgUp PgDn Enter Space, exposes speed search
 (typed prefix shown in a small field at the top-left of the component, matches highlighted,
 Escape clears), scrolls the selection into view and paints hover/selected/focused states from
@@ -157,7 +157,7 @@ spec.
 keeps the whole window repainting at 10 Hz (UX-026).
 
 Fix: services wake the UI through `state.waker`/`repaint` callbacks when they have news
-(they already exist for files, search, runner); the timers go, and `JETTHING_DEBUG_FRAMES=1`
+(they already exist for files, search, runner); the timers go, and `ARCHIPEL_DEBUG_FRAMES=1`
 logs frames per second so `ux-smoke` can assert an idle budget.
 
 ## Fixed in this change

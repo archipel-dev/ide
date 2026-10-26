@@ -1,13 +1,13 @@
 # Plugins settings page (scene 24, PLAT-034)
 
-Reference: `reference/intellij-community/java-gradle/24-plugins.png`. Jetthing:
-`jetthing/plugins/24-plugins-installed.png`, `24-plugins-failed-manifest.png`,
+Reference: `reference/intellij-community/java-gradle/24-plugins.png`. Archipel IDE:
+`archipel-ide/plugins/24-plugins-installed.png`, `24-plugins-failed-manifest.png`,
 `24-plugins-marketplace.png`.
 
 ## Steps
 
 1. Put a valid (`go/plugin.toml`, id `dev.example.go`) and an invalid (`broken/`, id
-   `bad`) manifest under `$JETTHING_CONFIG_DIR/plugins/`, then start Jetthing.
+   `bad`) manifest under `$ARCHIPEL_CONFIG_DIR/plugins/`, then start Archipel IDE.
 2. Ctrl+Alt+S › Plugins: the tabs read "Marketplace" and "Installed 3". The list shows Rust Language Support
    (0.1.0, Bundled), broken (Failed to load) and Go Support (0.2.0, User).
 3. Select broken → `24-plugins-failed-manifest.png`: "This plugin failed to load", the
@@ -22,7 +22,7 @@ Reference: `reference/intellij-community/java-gradle/24-plugins.png`. Jetthing:
 ## Differences from the reference
 
 The reference Marketplace (Suggested, Staff Picks, Install buttons, ratings, screenshots,
-Overview / What's New / Reviews) has no Jetthing counterpart: there is no marketplace
+Overview / What's New / Reviews) has no Archipel IDE counterpart: there is no marketplace
 service and plugins cannot run code yet. Toggling a plugin applies immediately; the
 reference applies it on OK/Apply and asks for a restart.
 
@@ -30,6 +30,6 @@ reference applies it on OK/Apply and asks for a restart.
 
 The screenshots were taken on the branch before it was integrated with the plugin API
 (PLAT-006). In the integrated build the page lists the plugin registry: compiled-in
-plugins (Rust Language Support, Hello) and `jetthing-plugin.toml` / `plugin.toml`
+plugins (Rust Language Support, Hello) and `archipel-plugin.toml` / `plugin.toml`
 manifests from the plugin directories. The checkbox runs `plugin.enable` / `plugin.disable`,
 which the plugin store persists, instead of the `plugins.disabled` setting.

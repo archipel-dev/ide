@@ -1,4 +1,4 @@
-//! nexus-http: an Insomnia-class API client for Jetthing.
+//! nexus-http: an Insomnia-class API client for Archipel IDE.
 //!
 //! [`NexusApp`] renders the whole client into any `egui::Ui` — a plugin tool
 //! window, an editor tab or the standalone app window — using the host's theme
@@ -24,7 +24,7 @@ use std::path::Path;
 use theme::Palette;
 use views::overlays::{Overlay, OverlayUi};
 
-pub const PLUGIN_ID: &str = "dev.jetthing.nexus-http";
+pub const PLUGIN_ID: &str = "dev.archipel.nexus-http";
 
 const GAP: f32 = 2.0;
 const RADIUS: u8 = 10;

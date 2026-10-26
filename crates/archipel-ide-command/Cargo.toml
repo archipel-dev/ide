@@ -1,0 +1,9 @@
+[package]
+name = "archipel-ide-command"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Compatibility shim re-exporting archipel-command."
+
+[dependencies]
+archipel-command.workspace = true

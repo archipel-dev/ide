@@ -279,6 +279,450 @@ dependencies = [
 ]
 
 [[package]]
+name = "archipel-ide-actions"
+version = "0.0.9"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "archipel-ide-ai"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-compat",
+ "pulldown-cmark",
+ "serde",
+ "serde_json",
+ "similar",
+ "thiserror 2.0.21",
+ "toml",
+ "ureq",
+]
+
+[[package]]
+name = "archipel-ide-android"
+version = "0.0.9"
+dependencies = [
+ "regex",
+ "roxmltree",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "toml",
+ "walkdir",
+]
+
+[[package]]
+name = "archipel-ide-app"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-compat",
+ "archipel-ide-plugin-hello",
+ "archipel-ide-plugin-lua",
+ "archipel-ide-plugin-wasm",
+ "archipel-ide-ui",
+ "eframe",
+ "mongo-raabit",
+ "nexus-http",
+]
+
+[[package]]
+name = "archipel-ide-bazel"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-compat",
+ "archipel-ide-runner",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "archipel-ide-cli"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-command",
+ "archipel-ide-compat",
+ "archipel-ide-control",
+ "archipel-ide-core",
+ "serde_json",
+]
+
+[[package]]
+name = "archipel-ide-command"
+version = "0.0.9"
+dependencies = [
+ "archipel-command",
+]
+
+[[package]]
+name = "archipel-ide-compat"
+version = "0.0.9"
+
+[[package]]
+name = "archipel-ide-control"
+version = "0.0.9"
+dependencies = [
+ "interprocess",
+ "png",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "archipel-ide-core"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-actions",
+ "archipel-ide-ai",
+ "archipel-ide-android",
+ "archipel-ide-bazel",
+ "archipel-ide-command",
+ "archipel-ide-compat",
+ "archipel-ide-dap",
+ "archipel-ide-git",
+ "archipel-ide-gradle",
+ "archipel-ide-keymap",
+ "archipel-ide-language",
+ "archipel-ide-lsp",
+ "archipel-ide-markdown",
+ "archipel-ide-plugins",
+ "archipel-ide-project",
+ "archipel-ide-runnables",
+ "archipel-ide-runner",
+ "archipel-ide-search",
+ "archipel-ide-settings",
+ "archipel-ide-split",
+ "archipel-ide-templates",
+ "archipel-ide-terminal",
+ "archipel-ide-text",
+ "archipel-ide-toolchains",
+ "archipel-ide-update",
+ "flate2",
+ "regex",
+ "serde",
+ "serde_json",
+ "tar",
+ "toml",
+ "url",
+]
+
+[[package]]
+name = "archipel-ide-dap"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-runner",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "archipel-ide-git"
+version = "0.0.9"
+dependencies = [
+ "similar",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "archipel-ide-gradle"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-compat",
+ "archipel-ide-runner",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "archipel-ide-keymap"
+version = "0.0.9"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "archipel-ide-language"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-text",
+ "dekobon-tree-sitter-groovy",
+ "proptest",
+ "serde_json",
+ "tree-sitter",
+ "tree-sitter-bash",
+ "tree-sitter-c",
+ "tree-sitter-cpp",
+ "tree-sitter-css",
+ "tree-sitter-go",
+ "tree-sitter-html",
+ "tree-sitter-java",
+ "tree-sitter-javascript",
+ "tree-sitter-json",
+ "tree-sitter-kotlin-sg",
+ "tree-sitter-language",
+ "tree-sitter-md",
+ "tree-sitter-properties",
+ "tree-sitter-python",
+ "tree-sitter-rust",
+ "tree-sitter-starlark",
+ "tree-sitter-toml-ng",
+ "tree-sitter-typescript",
+ "tree-sitter-xml",
+ "tree-sitter-yaml",
+]
+
+[[package]]
+name = "archipel-ide-lsp"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-compat",
+ "lsp-types",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "toml",
+ "url",
+ "which",
+]
+
+[[package]]
+name = "archipel-ide-markdown"
+version = "0.0.9"
+dependencies = [
+ "pulldown-cmark",
+]
+
+[[package]]
+name = "archipel-ide-plugin-api"
+version = "0.0.9"
+dependencies = [
+ "archipel-plugin-api",
+]
+
+[[package]]
+name = "archipel-ide-plugin-hello"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-plugin-api",
+ "archipel-ide-plugin-ui",
+ "archipel-plugin-testing",
+]
+
+[[package]]
+name = "archipel-ide-plugin-lua"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-plugin-api",
+ "archipel-ide-plugin-ui",
+ "archipel-ide-plugins",
+ "egui",
+ "mlua",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "archipel-ide-plugin-ui"
+version = "0.0.9"
+dependencies = [
+ "archipel-plugin-ui",
+]
+
+[[package]]
+name = "archipel-ide-plugin-wasm"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-plugin-api",
+ "archipel-ide-plugin-ui",
+ "archipel-ide-plugins",
+ "egui",
+ "serde_json",
+ "wasmtime",
+ "wasmtime-wasi",
+]
+
+[[package]]
+name = "archipel-ide-plugins"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-command",
+ "archipel-ide-compat",
+ "archipel-ide-plugin-api",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "toml",
+ "zip",
+]
+
+[[package]]
+name = "archipel-ide-project"
+version = "0.0.9"
+dependencies = [
+ "notify",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "walkdir",
+]
+
+[[package]]
+name = "archipel-ide-runnables"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-language",
+ "tree-sitter",
+]
+
+[[package]]
+name = "archipel-ide-runner"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-compat",
+ "quick-xml 0.37.5",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "toml",
+ "walkdir",
+]
+
+[[package]]
+name = "archipel-ide-search"
+version = "0.0.9"
+dependencies = [
+ "globset",
+ "regex",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "archipel-ide-settings"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-compat",
+ "archipel-ide-keymap",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "toml",
+]
+
+[[package]]
+name = "archipel-ide-split"
+version = "0.0.9"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "archipel-ide-templates"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-text",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "archipel-ide-terminal"
+version = "0.0.9"
+dependencies = [
+ "portable-pty",
+ "thiserror 2.0.21",
+ "vt100",
+]
+
+[[package]]
+name = "archipel-ide-text"
+version = "0.0.9"
+dependencies = [
+ "proptest",
+ "regex",
+ "ropey",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "archipel-ide-toolchains"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-compat",
+ "flate2",
+ "lzma-rs",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.21",
+ "toml",
+ "ureq",
+ "which",
+ "zip",
+]
+
+[[package]]
+name = "archipel-ide-ui"
+version = "0.0.9"
+dependencies = [
+ "archipel-icons",
+ "archipel-ide-actions",
+ "archipel-ide-ai",
+ "archipel-ide-android",
+ "archipel-ide-bazel",
+ "archipel-ide-command",
+ "archipel-ide-compat",
+ "archipel-ide-control",
+ "archipel-ide-core",
+ "archipel-ide-dap",
+ "archipel-ide-git",
+ "archipel-ide-gradle",
+ "archipel-ide-keymap",
+ "archipel-ide-language",
+ "archipel-ide-lsp",
+ "archipel-ide-markdown",
+ "archipel-ide-plugins",
+ "archipel-ide-runner",
+ "archipel-ide-settings",
+ "archipel-ide-split",
+ "archipel-ide-templates",
+ "archipel-ide-terminal",
+ "archipel-ide-text",
+ "archipel-kit",
+ "eframe",
+ "egui",
+ "egui_extras",
+ "image",
+ "pollster",
+ "pulldown-cmark",
+ "rfd",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "archipel-ide-update"
+version = "0.0.9"
+dependencies = [
+ "archipel-ide-compat",
+ "flate2",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tar",
+ "thiserror 2.0.21",
+ "ureq",
+ "zip",
+]
+
+[[package]]
 name = "archipel-kit"
 version = "0.1.0"
 source = "git+https://github.com/archipel-dev/kit?branch=main#89e6bb6682c87507b8e328877321cdebea267919"
@@ -3025,433 +3469,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
-name = "jetthing-actions"
-version = "0.0.9"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "jetthing-ai"
-version = "0.0.9"
-dependencies = [
- "pulldown-cmark",
- "serde",
- "serde_json",
- "similar",
- "thiserror 2.0.21",
- "toml",
- "ureq",
-]
-
-[[package]]
-name = "jetthing-android"
-version = "0.0.9"
-dependencies = [
- "regex",
- "roxmltree",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "toml",
- "walkdir",
-]
-
-[[package]]
-name = "jetthing-app"
-version = "0.0.9"
-dependencies = [
- "eframe",
- "jetthing-plugin-hello",
- "jetthing-plugin-lua",
- "jetthing-plugin-wasm",
- "jetthing-ui",
- "mongo-raabit",
- "nexus-http",
-]
-
-[[package]]
-name = "jetthing-bazel"
-version = "0.0.9"
-dependencies = [
- "jetthing-runner",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "jetthing-cli"
-version = "0.0.9"
-dependencies = [
- "jetthing-command",
- "jetthing-control",
- "jetthing-core",
- "serde_json",
-]
-
-[[package]]
-name = "jetthing-command"
-version = "0.0.9"
-dependencies = [
- "archipel-command",
-]
-
-[[package]]
-name = "jetthing-control"
-version = "0.0.9"
-dependencies = [
- "interprocess",
- "png",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "jetthing-core"
-version = "0.0.9"
-dependencies = [
- "flate2",
- "jetthing-actions",
- "jetthing-ai",
- "jetthing-android",
- "jetthing-bazel",
- "jetthing-command",
- "jetthing-dap",
- "jetthing-git",
- "jetthing-gradle",
- "jetthing-keymap",
- "jetthing-language",
- "jetthing-lsp",
- "jetthing-markdown",
- "jetthing-plugins",
- "jetthing-project",
- "jetthing-runnables",
- "jetthing-runner",
- "jetthing-search",
- "jetthing-settings",
- "jetthing-split",
- "jetthing-templates",
- "jetthing-terminal",
- "jetthing-text",
- "jetthing-toolchains",
- "jetthing-update",
- "regex",
- "serde",
- "serde_json",
- "tar",
- "toml",
- "url",
-]
-
-[[package]]
-name = "jetthing-dap"
-version = "0.0.9"
-dependencies = [
- "jetthing-runner",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "jetthing-git"
-version = "0.0.9"
-dependencies = [
- "similar",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "jetthing-gradle"
-version = "0.0.9"
-dependencies = [
- "jetthing-runner",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "jetthing-keymap"
-version = "0.0.9"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "jetthing-language"
-version = "0.0.9"
-dependencies = [
- "dekobon-tree-sitter-groovy",
- "jetthing-text",
- "proptest",
- "serde_json",
- "tree-sitter",
- "tree-sitter-bash",
- "tree-sitter-c",
- "tree-sitter-cpp",
- "tree-sitter-css",
- "tree-sitter-go",
- "tree-sitter-html",
- "tree-sitter-java",
- "tree-sitter-javascript",
- "tree-sitter-json",
- "tree-sitter-kotlin-sg",
- "tree-sitter-language",
- "tree-sitter-md",
- "tree-sitter-properties",
- "tree-sitter-python",
- "tree-sitter-rust",
- "tree-sitter-starlark",
- "tree-sitter-toml-ng",
- "tree-sitter-typescript",
- "tree-sitter-xml",
- "tree-sitter-yaml",
-]
-
-[[package]]
-name = "jetthing-lsp"
-version = "0.0.9"
-dependencies = [
- "lsp-types",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "toml",
- "url",
- "which",
-]
-
-[[package]]
-name = "jetthing-markdown"
-version = "0.0.9"
-dependencies = [
- "pulldown-cmark",
-]
-
-[[package]]
-name = "jetthing-plugin-api"
-version = "0.0.9"
-dependencies = [
- "archipel-plugin-api",
-]
-
-[[package]]
-name = "jetthing-plugin-hello"
-version = "0.0.9"
-dependencies = [
- "archipel-plugin-testing",
- "jetthing-plugin-api",
- "jetthing-plugin-ui",
-]
-
-[[package]]
-name = "jetthing-plugin-lua"
-version = "0.0.9"
-dependencies = [
- "egui",
- "jetthing-plugin-api",
- "jetthing-plugin-ui",
- "jetthing-plugins",
- "mlua",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "jetthing-plugin-ui"
-version = "0.0.9"
-dependencies = [
- "archipel-plugin-ui",
-]
-
-[[package]]
-name = "jetthing-plugin-wasm"
-version = "0.0.9"
-dependencies = [
- "egui",
- "jetthing-plugin-api",
- "jetthing-plugin-ui",
- "jetthing-plugins",
- "serde_json",
- "wasmtime",
- "wasmtime-wasi",
-]
-
-[[package]]
-name = "jetthing-plugins"
-version = "0.0.9"
-dependencies = [
- "jetthing-command",
- "jetthing-plugin-api",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "toml",
- "zip",
-]
-
-[[package]]
-name = "jetthing-project"
-version = "0.0.9"
-dependencies = [
- "notify",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "walkdir",
-]
-
-[[package]]
-name = "jetthing-runnables"
-version = "0.0.9"
-dependencies = [
- "jetthing-language",
- "tree-sitter",
-]
-
-[[package]]
-name = "jetthing-runner"
-version = "0.0.9"
-dependencies = [
- "quick-xml 0.37.5",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "toml",
- "walkdir",
-]
-
-[[package]]
-name = "jetthing-search"
-version = "0.0.9"
-dependencies = [
- "globset",
- "regex",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "jetthing-settings"
-version = "0.0.9"
-dependencies = [
- "jetthing-keymap",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "toml",
-]
-
-[[package]]
-name = "jetthing-split"
-version = "0.0.9"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "jetthing-templates"
-version = "0.0.9"
-dependencies = [
- "jetthing-text",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "jetthing-terminal"
-version = "0.0.9"
-dependencies = [
- "portable-pty",
- "thiserror 2.0.21",
- "vt100",
-]
-
-[[package]]
-name = "jetthing-text"
-version = "0.0.9"
-dependencies = [
- "proptest",
- "regex",
- "ropey",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "jetthing-toolchains"
-version = "0.0.9"
-dependencies = [
- "flate2",
- "lzma-rs",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tar",
- "tempfile",
- "thiserror 2.0.21",
- "toml",
- "ureq",
- "which",
- "zip",
-]
-
-[[package]]
-name = "jetthing-ui"
-version = "0.0.9"
-dependencies = [
- "archipel-icons",
- "archipel-kit",
- "eframe",
- "egui",
- "egui_extras",
- "image",
- "jetthing-actions",
- "jetthing-ai",
- "jetthing-android",
- "jetthing-bazel",
- "jetthing-command",
- "jetthing-control",
- "jetthing-core",
- "jetthing-dap",
- "jetthing-git",
- "jetthing-gradle",
- "jetthing-keymap",
- "jetthing-language",
- "jetthing-lsp",
- "jetthing-markdown",
- "jetthing-plugins",
- "jetthing-runner",
- "jetthing-settings",
- "jetthing-split",
- "jetthing-templates",
- "jetthing-terminal",
- "jetthing-text",
- "pollster",
- "pulldown-cmark",
- "rfd",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "jetthing-update"
-version = "0.0.9"
-dependencies = [
- "flate2",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tar",
- "thiserror 2.0.21",
- "ureq",
- "zip",
-]
-
-[[package]]
 name = "jni"
 version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4032,12 +4049,13 @@ dependencies = [
 name = "mongo-raabit"
 version = "0.1.0"
 dependencies = [
+ "archipel-ide-compat",
+ "archipel-ide-plugin-api",
+ "archipel-ide-plugin-ui",
+ "archipel-ide-ui",
  "eframe",
  "egui",
  "egui_extras",
- "jetthing-plugin-api",
- "jetthing-plugin-ui",
- "jetthing-ui",
  "mongo-raabit-core",
  "serde",
  "serde_json",
@@ -4213,10 +4231,11 @@ dependencies = [
 name = "nexus-http"
 version = "0.0.9"
 dependencies = [
+ "archipel-ide-compat",
+ "archipel-ide-plugin-api",
+ "archipel-ide-plugin-ui",
  "eframe",
  "egui",
- "jetthing-plugin-api",
- "jetthing-plugin-ui",
  "nexus-http-core",
  "serde_json",
  "tempfile",
@@ -8695,9 +8714,10 @@ name = "xtask"
 version = "0.0.9"
 dependencies = [
  "anyhow",
+ "archipel-ide-compat",
+ "archipel-ide-control",
+ "archipel-ide-plugins",
  "flate2",
- "jetthing-control",
- "jetthing-plugins",
  "serde",
  "serde_json",
  "sha2 0.10.9",

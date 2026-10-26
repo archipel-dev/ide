@@ -1,9 +1,9 @@
 [package]
-name = "jetthing-plugin-hello-wasm"
+name = "archipel-ide-plugin-hello-wasm"
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0 OR MIT"
-description = "Example Jetthing WASM component plugin (build: cargo xtask build-wasm-example)."
+description = "Example Archipel IDE WASM component plugin (build: cargo xtask build-wasm-example)."
 publish = false
 
 # Built for wasm32-wasip2, separately from the host workspace.

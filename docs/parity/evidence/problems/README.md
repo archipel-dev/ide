@@ -6,7 +6,7 @@ after line 11) and Android Studio (`docs/parity/evidence/reference/*/20-problems
 
 ## Environment
 
-- Linux, Xvfb 1600x1000, `JETTHING_RENDERER=glow JETTHING_NO_UPDATE_CHECK=1`, xdotool.
+- Linux, Xvfb 1600x1000, `ARCHIPEL_RENDERER=glow ARCHIPEL_NO_UPDATE_CHECK=1`, xdotool.
 - rust-analyzer 1.97.0 (rustup component), Eclipse JDT LS 1.40.0 (`jdtls` on PATH), OpenJDK 21, Gradle.
 - `/home/user/samples/java-gradle`: `settings.gradle.kts`, `build.gradle.kts` (application plugin) and
   `src/main/java/com/example/App.java` as in the reference scene, with `app.greting("typo");` on line 12.
@@ -27,7 +27,7 @@ opens the file and puts the caret on the problem; clicking a stripe mark jumps t
 
 ## Still different from the reference
 
-- IntelliJ colours unresolved references red (`WRONG_REFERENCES_ATTRIBUTES`) instead of a wave; Jetthing
+- IntelliJ colours unresolved references red (`WRONG_REFERENCES_ATTRIBUTES`) instead of a wave; Archipel IDE
   draws a wave for every error because LSP does not distinguish unresolved references.
 - No quick-fix row (`Create function … Alt+Shift+Enter`, `More actions… Alt+Enter`) in the tooltip yet:
   code actions are the next slice.
@@ -41,7 +41,7 @@ opens the file and puts the caret on the problem; clicking a stripe mark jumps t
 ## Reproduce
 
 ```bash
-cargo test -p jetthing-lsp --test fake_server diagnostics
-cargo test -p jetthing-core problems
-cargo test -p jetthing-ui problems_ui
+cargo test -p archipel-ide-lsp --test fake_server diagnostics
+cargo test -p archipel-ide-core problems
+cargo test -p archipel-ide-ui problems_ui
 ```

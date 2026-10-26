@@ -1,6 +1,6 @@
 # Releases, installers and updates
 
-Jetthing ships two kinds of downloads for every release:
+Archipel IDE ships two kinds of downloads for every release:
 
 - **Archives** — portable directories the self-updater reads and replaces in place.
 - **Native installers** — `.msi`, `.dmg` and `.deb`, for a normal install with menu
@@ -8,11 +8,11 @@ Jetthing ships two kinds of downloads for every release:
 
 | Platform | Installer | Archive |
 |---|---|---|
-| Windows x86_64 | `jetthing-<version>-windows-x86_64.msi` | `jetthing-<version>-windows-x86_64.zip` |
-| macOS Apple silicon | `jetthing-<version>-macos-aarch64.dmg` | `jetthing-<version>-macos-aarch64.tar.gz` |
-| macOS Intel | `jetthing-<version>-macos-x86_64.dmg` | `jetthing-<version>-macos-x86_64.tar.gz` |
-| Linux x86_64 | `jetthing_<version>_amd64.deb` | `jetthing-<version>-linux-x86_64.tar.gz` |
-| Linux x86_64 (any distribution) | `jetthing-<version>-linux-x86_64.AppImage` | (single file) |
+| Windows x86_64 | `archipel-ide-<version>-windows-x86_64.msi` | `archipel-ide-<version>-windows-x86_64.zip` |
+| macOS Apple silicon | `archipel-ide-<version>-macos-aarch64.dmg` | `archipel-ide-<version>-macos-aarch64.tar.gz` |
+| macOS Intel | `archipel-ide-<version>-macos-x86_64.dmg` | `archipel-ide-<version>-macos-x86_64.tar.gz` |
+| Linux x86_64 | `archipel-ide_<version>_amd64.deb` | `archipel-ide-<version>-linux-x86_64.tar.gz` |
+| Linux x86_64 (any distribution) | `archipel-ide-<version>-linux-x86_64.AppImage` | (single file) |
 
 Every file has a `<file>.sha256` next to it in `sha256sum` format. Check a download with
 `sha256sum -c <file>.sha256` (Linux), `shasum -a 256 -c <file>.sha256` (macOS) or
@@ -23,23 +23,23 @@ docs depend on them.
 
 ### Windows (MSI)
 
-Double-click `jetthing-<version>-windows-x86_64.msi` and approve the administrator
+Double-click `archipel-ide-<version>-windows-x86_64.msi` and approve the administrator
 prompt. It installs:
 
-- `C:\Program Files\Jetthing\` with `jetthing.exe` and `jetthing-cli.exe`;
-- a **Jetthing** Start Menu entry;
-- the install folder on the system `PATH` (new terminals), so `jetthing .` and
-  `jetthing-cli` work from a shell.
+- `C:\Program Files\Archipel IDE\` with `archipel-ide.exe` and `archipel-cli.exe`;
+- a **Archipel IDE** Start Menu entry;
+- the install folder on the system `PATH` (new terminals), so `archipel-ide .` and
+  `archipel-cli` work from a shell.
 
 A newer MSI replaces an older one in place, because all versions share one upgrade
 code. Installing an older MSI over a newer one is refused.
 
 To install without prompts, for example in scripts, run
-`msiexec /i jetthing-<version>-windows-x86_64.msi /qn` from an elevated shell.
+`msiexec /i archipel-ide-<version>-windows-x86_64.msi /qn` from an elevated shell.
 
-To uninstall, use **Settings → Apps → Installed apps → Jetthing → Uninstall**, or run
-`msiexec /x jetthing-<version>-windows-x86_64.msi /qn`. This removes the files, the
-Start Menu entry and the `PATH` entry. Project data in `.jetthing/` folders inside your
+To uninstall, use **Settings → Apps → Installed apps → Archipel IDE → Uninstall**, or run
+`msiexec /x archipel-ide-<version>-windows-x86_64.msi /qn`. This removes the files, the
+Start Menu entry and the `PATH` entry. Project data in `.archipel/` folders inside your
 projects is left alone.
 
 **SmartScreen.** Unsigned MSIs show "Windows protected your PC". Click
@@ -48,16 +48,16 @@ this once the certificate has a reputation.
 
 ### macOS (DMG)
 
-Open `jetthing-<version>-macos-<arch>.dmg`. Use `aarch64` on Apple silicon and
-`x86_64` on Intel. Then drag **Jetthing** onto **Applications**. The bundle
-(`io.github.henryschwerdt.jetthing`) contains `jetthing` and `jetthing-cli` in
-`Jetthing.app/Contents/MacOS/`. To use them from a terminal, run:
+Open `archipel-ide-<version>-macos-<arch>.dmg`. Use `aarch64` on Apple silicon and
+`x86_64` on Intel. Then drag **Archipel IDE** onto **Applications**. The bundle
+(`dev.archipel.ide`) contains `archipel-ide` and `archipel-cli` in
+`Archipel IDE.app/Contents/MacOS/`. To use them from a terminal, run:
 
 ```bash
-sudo ln -s /Applications/Jetthing.app/Contents/MacOS/jetthing /usr/local/bin/jetthing
+sudo ln -s "/Applications/Archipel IDE.app/Contents/MacOS/archipel-ide" /usr/local/bin/archipel-ide
 ```
 
-To uninstall, move `/Applications/Jetthing.app` to the Bin.
+To uninstall, move `/Applications/Archipel IDE.app` to the Bin.
 
 **Gatekeeper.** Release builds are signed ad hoc but not notarized unless the signing
 secrets below are configured. The first time you open one, macOS reports that it
@@ -65,32 +65,32 @@ secrets below are configured. The first time you open one, macOS reports that it
 
 - **System Settings → Privacy & Security → Open Anyway** (macOS 15 and later), or
   right-click the app → **Open** on older versions.
-- `xattr -dr com.apple.quarantine /Applications/Jetthing.app`
+- `xattr -dr com.apple.quarantine "/Applications/Archipel IDE.app"`
 
 Apps launched from Finder do not inherit your shell's `PATH`. If Cargo, Gradle or Git
-live in a shell-only location, start Jetthing from a terminal with
-`open -a Jetthing` or the symlink above.
+live in a shell-only location, start Archipel IDE from a terminal with
+`open -a "Archipel IDE"` or the symlink above.
 
 ### Linux (.deb)
 
 ```bash
-sudo apt install ./jetthing_<version>_amd64.deb   # or: sudo dpkg -i …
+sudo apt install ./archipel-ide_<version>_amd64.deb   # or: sudo dpkg -i …
 ```
 
-The package installs `/usr/lib/jetthing/`, adds `/usr/bin/jetthing` and
-`/usr/bin/jetthing-cli` links, `jetthing.desktop` and hicolor icons. The `Depends:`
+The package installs `/usr/lib/archipel-ide/`, adds `/usr/bin/archipel-ide` and
+`/usr/bin/archipel-cli` links, `archipel-ide.desktop` and hicolor icons. The `Depends:`
 glibc version comes from the binary's symbol versions. Release builds run on Ubuntu
 22.04, so they need glibc 2.35 or newer.
 
-To uninstall, run `sudo apt remove jetthing` (or `sudo dpkg -r jetthing`).
+To uninstall, run `sudo apt remove archipel-ide` (or `sudo dpkg -r archipel-ide`).
 
 ### Linux (AppImage)
 
 The AppImage is one self-contained file and needs no installation or root:
 
 ```bash
-chmod +x jetthing-<version>-linux-x86_64.AppImage
-./jetthing-<version>-linux-x86_64.AppImage .
+chmod +x archipel-ide-<version>-linux-x86_64.AppImage
+./archipel-ide-<version>-linux-x86_64.AppImage .
 ```
 
 It needs FUSE 2 (`libfuse2` on Debian/Ubuntu). Without FUSE, run it with
@@ -106,20 +106,20 @@ files' checksums (workflow artifact `package-manifests-<version>`, or
 
 | Manager | File | Installs |
 |---|---|---|
-| Homebrew | `homebrew/jetthing.rb` (cask) | the DMG for the Mac's architecture; links `jetthing` and `jetthing-cli` |
-| winget | `winget/manifests/h/HenrySchwerdt/Jetthing/<version>/` (schema 1.6.0) | the MSI, machine scope |
-| Scoop | `scoop/jetthing.json` | the portable zip, with shims and a Start Menu shortcut; `checkver`/`autoupdate` included |
+| Homebrew | `homebrew/archipel-ide.rb` (cask) | the DMG for the Mac's architecture; links `archipel-ide` and `archipel-cli` |
+| winget | `winget/manifests/a/ArchipelDev/ArchipelIDE/<version>/` (schema 1.6.0) | the MSI, machine scope |
+| Scoop | `scoop/archipel-ide.json` | the portable zip, with shims and a Start Menu shortcut; `checkver`/`autoupdate` included |
 
 Nothing is published automatically. To ship them:
 
 - **Homebrew:** open a pull request against a tap, for example
-  `HenrySchwerdt/homebrew-tap`, so users can run
-  `brew install --cask henryschwerdt/tap/jetthing`. Unsigned builds do not qualify
+  `archipel-dev/homebrew-tap`, so users can run
+  `brew install --cask archipel-dev/tap/archipel-ide`. Unsigned builds do not qualify
   for `homebrew/cask`.
 - **winget:** run `wingetcreate submit <dir>`, or open a pull request against
   `microsoft/winget-pkgs` with the version directory.
-- **Scoop:** commit `jetthing.json` to a bucket repository, so users can run
-  `scoop bucket add jetthing <url>` and then `scoop install jetthing`.
+- **Scoop:** commit `archipel-ide.json` to a bucket repository, so users can run
+  `scoop bucket add archipel-ide <url>` and then `scoop install archipel-ide`.
 
 Copies installed by Homebrew, winget or Scoop should be updated with that package
 manager (`brew upgrade`, `winget upgrade`, `scoop update`). The IDE's own updater
@@ -129,37 +129,37 @@ the newer version cleanly.
 
 ### Archives (all platforms)
 
-Extract the archive anywhere you can write and run `jetthing` (`jetthing.exe` on
-Windows). On Linux, the archive also contains `jetthing.desktop` and `jetthing.png`. To
-add a menu entry, copy `jetthing.desktop` to `~/.local/share/applications/` and
-`jetthing.png` to `~/.local/share/icons/hicolor/512x512/apps/`, then set `Exec=` to
-the absolute path of `jetthing`. To uninstall, delete the directory.
+Extract the archive anywhere you can write and run `archipel-ide` (`archipel-ide.exe` on
+Windows). On Linux, the archive also contains `archipel-ide.desktop` and `archipel-ide.png`. To
+add a menu entry, copy `archipel-ide.desktop` to `~/.local/share/applications/` and
+`archipel-ide.png` to `~/.local/share/icons/hicolor/512x512/apps/`, then set `Exec=` to
+the absolute path of `archipel-ide`. To uninstall, delete the directory.
 
 ## Updates
 
 **Help → Check for Updates…** (also run silently at startup unless
-`JETTHING_NO_UPDATE_CHECK` is set) reads the latest GitHub release. **Update and
-Restart** then works according to how Jetthing was installed.
-`jetthing_update::InstallKind::detect` decides this from the running executable:
+`ARCHIPEL_NO_UPDATE_CHECK` is set) reads the latest GitHub release. **Update and
+Restart** then works according to how Archipel IDE was installed.
+`archipel_ide_update::InstallKind::detect` decides this from the running executable:
 
 | Installed from | Detected by | What the update does |
 |---|---|---|
-| Archive | default | Downloads the archive, verifies its `.sha256` and replaces `jetthing` and `jetthing-cli` in place (the old binary is kept as `jetthing.old`). **Restart** relaunches. |
-| MSI | `jetthing.install` containing `msi` next to the exe | Downloads and verifies the new `.msi`. **Quit and Install** saves the session, starts `msiexec /i <msi>` and quits. The MSI upgrades the installed version. |
-| DMG | executable inside `*.app/Contents/MacOS/` | Downloads and verifies the new `.dmg`. **Quit and Install** opens it and quits; drag Jetthing into Applications and replace the old copy. |
-| .deb | `jetthing.install` containing `deb` | Downloads and verifies the new `.deb`. **Quit and Install** opens it with `xdg-open` (your software installer) and quits. |
+| Archive | default | Downloads the archive, verifies its `.sha256` and replaces `archipel-ide` and `archipel-cli` in place (the old binary is kept as `archipel-ide.old`). **Restart** relaunches. |
+| MSI | `archipel-ide.install` containing `msi` next to the exe | Downloads and verifies the new `.msi`. **Quit and Install** saves the session, starts `msiexec /i <msi>` and quits. The MSI upgrades the installed version. |
+| DMG | executable inside `*.app/Contents/MacOS/` | Downloads and verifies the new `.dmg`. **Quit and Install** opens it and quits; drag Archipel IDE into Applications and replace the old copy. |
+| .deb | `archipel-ide.install` containing `deb` | Downloads and verifies the new `.deb`. **Quit and Install** opens it with `xdg-open` (your software installer) and quits. |
 | AppImage | `$APPIMAGE` (set by the AppImage runtime) | Downloads and verifies the new `.AppImage` and replaces the file in place (the old one is kept as `<name>.old`). **Restart** relaunches. The file name keeps the old version number. |
-| `cargo run` | executable not named `jetthing` | Links to the release page only. |
+| `cargo run` | executable not named `archipel-ide` | Links to the release page only. |
 
-Installer downloads go to `<temp>/jetthing-update/`. A release without a `.sha256` for
+Installer downloads go to `<temp>/archipel-ide-update/`. A release without a `.sha256` for
 the needed file is refused. The installed-copy paths (Program Files, `/Applications`,
 `/usr/lib`) are never written by the IDE itself.
 
 | Variable | Effect |
 |---|---|
-| `JETTHING_NO_UPDATE_CHECK` | disable the startup check |
-| `JETTHING_GITHUB_TOKEN` / `GITHUB_TOKEN` | token for a private release repository |
-| `JETTHING_UPDATE_REPOSITORY` | `owner/repo` to update from (default `HenrySchwerdt/jetthing`) |
+| `ARCHIPEL_NO_UPDATE_CHECK` | disable the startup check |
+| `ARCHIPEL_GITHUB_TOKEN` / `GITHUB_TOKEN` | token for a private release repository |
+| `ARCHIPEL_UPDATE_REPOSITORY` | `owner/repo` to update from (default `archipel-dev/ide`) |
 
 ## Building locally
 
@@ -173,12 +173,12 @@ The output goes to `dist/`. Each artifact path is printed on its own line.
 
 | Installer | Needs |
 |---|---|
-| `.msi` | [WiX Toolset v5](https://wixtoolset.org) (`dotnet tool install --global wix --version 5.0.2`); the `WIX_EXE` variable overrides the `wix` path. Definition: `packaging/windows/jetthing.wxs`. |
-| `.dmg` | Xcode command line tools (`codesign`, `hdiutil`). Signing uses `JETTHING_MACOS_SIGN_IDENTITY` when it is set, and ad hoc (`-`) otherwise. |
+| `.msi` | [WiX Toolset v5](https://wixtoolset.org) (`dotnet tool install --global wix --version 5.0.2`); the `WIX_EXE` variable overrides the `wix` path. Definition: `packaging/windows/archipel-ide.wxs`. |
+| `.dmg` | Xcode command line tools (`codesign`, `hdiutil`). Signing uses `ARCHIPEL_MACOS_SIGN_IDENTITY` when it is set, and ad hoc (`-`) otherwise. |
 | `.deb` | `dpkg-deb` (and `objdump` for the glibc requirement). |
 | `.AppImage` | [appimagetool](https://github.com/AppImage/appimagetool) 1.9.0 (`APPIMAGETOOL` overrides the path) and `desktop-file-validate` (`desktop-file-utils`). Built together with the `.deb`. |
 
-The app icon is original artwork. `assets/icon/jetthing.svg` is the source, and
+The app icon is original artwork. `assets/icon/archipel.svg` is the source, and
 `python3 assets/icon/render.py` (cairosvg and Pillow) regenerates the committed `.png`,
 `.ico` and `.icns` files.
 

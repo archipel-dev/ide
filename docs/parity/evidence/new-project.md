@@ -5,10 +5,10 @@ and an existing parent directory, then click **Create**. File and the project
 widget expose the same dialog. Successful creation opens the new project.
 
 ```sh
-cargo run -p jetthing-app
-cargo test -p jetthing-project templates_and_collisions
-cargo test -p jetthing-core create_project_command
-cargo test -p jetthing-runner detects_gradle
+cargo run -p archipel-ide-app
+cargo test -p archipel-ide-project templates_and_collisions
+cargo test -p archipel-ide-core create_project_command
+cargo test -p archipel-ide-runner detects_gradle
 ```
 
 Templates: Empty, Rust application, Rust library, Java/Gradle with Kotlin DSL or

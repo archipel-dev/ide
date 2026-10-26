@@ -1,0 +1,41 @@
+[package]
+name = "archipel-ide-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+archipel-ide-compat = { path = "../archipel-ide-compat" }
+archipel-ide-android = { path = "../archipel-ide-android" }
+archipel-ide-ai = { path = "../archipel-ide-ai" }
+archipel-ide-bazel = { path = "../archipel-ide-bazel" }
+archipel-ide-command = { path = "../archipel-ide-command" }
+archipel-ide-gradle = { path = "../archipel-ide-gradle" }
+archipel-ide-dap = { path = "../archipel-ide-dap" }
+archipel-ide-git = { path = "../archipel-ide-git" }
+archipel-ide-keymap = { path = "../archipel-ide-keymap" }
+archipel-ide-language = { path = "../archipel-ide-language" }
+archipel-ide-lsp = { path = "../archipel-ide-lsp" }
+archipel-ide-markdown = { path = "../archipel-ide-markdown" }
+archipel-ide-plugins = { path = "../archipel-ide-plugins" }
+archipel-ide-project = { path = "../archipel-ide-project" }
+archipel-ide-runnables = { path = "../archipel-ide-runnables" }
+archipel-ide-runner = { path = "../archipel-ide-runner" }
+archipel-ide-settings = { path = "../archipel-ide-settings" }
+archipel-ide-search = { path = "../archipel-ide-search" }
+archipel-ide-split = { path = "../archipel-ide-split" }
+archipel-ide-terminal = { path = "../archipel-ide-terminal" }
+archipel-ide-templates = { path = "../archipel-ide-templates" }
+archipel-ide-text = { path = "../archipel-ide-text" }
+archipel-ide-toolchains = { path = "../archipel-ide-toolchains" }
+archipel-ide-update = { path = "../archipel-ide-update" }
+regex = "1"
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+flate2 = "1"
+tar = "0.4"
+archipel-ide-actions = { path = "../archipel-ide-actions" }

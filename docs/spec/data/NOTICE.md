@@ -15,5 +15,5 @@ defaults, theme color tokens and editor color scheme values. No Java or Kotlin s
 icons, images or other artwork were copied. The extraction is reproducible with
 [`../tools/extract_intellij_data.py`](../tools/extract_intellij_data.py).
 
-IntelliJ, IntelliJ IDEA and JetBrains are trademarks of JetBrains s.r.o. Jetthing is not
+IntelliJ, IntelliJ IDEA and JetBrains are trademarks of JetBrains s.r.o. Archipel IDE is not
 affiliated with or endorsed by JetBrains.

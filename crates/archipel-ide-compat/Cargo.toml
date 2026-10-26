@@ -1,0 +1,6 @@
+[package]
+name = "archipel-ide-compat"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Compatibility with the pre-rename Jetthing names: environment variables, per-user and per-project directories."

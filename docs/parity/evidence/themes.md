@@ -1,12 +1,12 @@
 # Themes: Islands Dark / Islands Light
 
-Captures in `jetthing/themes/` (Linux, Xvfb 1600×1000, `JETTHING_RENDERER=glow`).
+Captures in `archipel-ide/themes/` (Linux, Xvfb 1600×1000, `ARCHIPEL_RENDERER=glow`).
 
 ## Steps
 
 1. Put `"appearance.theme" = "Islands Light"` under `[settings]` in
-   `$JETTHING_CONFIG_DIR/settings.toml` (or pick it in Settings › Appearance › Theme), then
-   `cargo run -p jetthing-app -- . crates/jetthing-settings/src/lib.rs`.
+   `$ARCHIPEL_CONFIG_DIR/settings.toml` (or pick it in Settings › Appearance › Theme), then
+   `cargo run -p archipel-ide-app -- . crates/archipel-ide-settings/src/lib.rs`.
 2. Alt+F12, then Double Shift and type `setting` → `islands-light-workbench.png`: toolbar,
    stripes, islands, project tree, editor (scheme "Light"), terminal and Search
    Everywhere all use the Islands Light tokens.
@@ -17,20 +17,20 @@ Captures in `jetthing/themes/` (Linux, Xvfb 1600×1000, `JETTHING_RENDERER=glow`
 
 ## Project color in the main toolbar
 
-Reference: `reference/android-studio/04-editor-project-tree.png`. Jetthing:
-`jetthing/themes/toolbar-gradient-dark.png` (project `my-application`, whose badge hashes to
+Reference: `reference/android-studio/04-editor-project-tree.png`. Archipel IDE:
+`archipel-ide/themes/toolbar-gradient-dark.png` (project `my-application`, whose badge hashes to
 teal like the reference's "MA" tile), `toolbar-gradient-light.png` (Islands Light) and
-`toolbar-gradient-compare.png` (top: reference toolbar band y 18–82, bottom: Jetthing y 0–64,
+`toolbar-gradient-compare.png` (top: reference toolbar band y 18–82, bottom: Archipel IDE y 0–64,
 both 700 px wide, scaled 2×).
 
-Steps: `cargo run -p jetthing-app -- <dir named my-application> <file>` under Xvfb 1600×1000;
+Steps: `cargo run -p archipel-ide-app -- <dir named my-application> <file>` under Xvfb 1600×1000;
 turn it off with `"appearance.projectColors" = false` (Settings › Appearance › "Use project
 colors in main toolbar"), which leaves the toolbar at the plain frame color (38,40,44).
 
 Pixel samples (the reference's toolbar starts at y 19 below the window manager's title bar,
-Jetthing's at y 0):
+Archipel IDE's at y 0):
 
-| x | reference (y 22) | Jetthing (y 10) | Jetthing (y 38) |
+| x | reference (y 22) | Archipel IDE (y 10) | Archipel IDE (y 38) |
 |---:|---|---|---|
 | 5 | 38,40,44 | 39,45,48 | 38,44,47 |
 | 20 | 41,53,56 | 41,58,59 | 41,56,57 |
@@ -41,18 +41,18 @@ Jetthing's at y 0):
 | 550 | 40,45,49 | 39,45,48 | 39,45,49 |
 | 650 | 38,40,44 | 38,40,44 | 38,40,44 |
 
-The glow (`crates/jetthing-ui/src/toolbar_gradient.rs`) is a vertex-colored mesh on the
+The glow (`crates/archipel-ide-ui/src/toolbar_gradient.rs`) is a vertex-colored mesh on the
 background layer, below the toolbar widgets and the islands: it rises from the left edge
 to the badge, stays flat to 30 px past it, fades linearly to neutral 570 px right of the
 badge centre, and loses 15 % towards the toolbar's bottom edge before fading out in the
 island gaps. Dark themes blend the badge color (lightened 12 % towards white) at 32 %,
-light themes at 16 %. Differences: Jetthing's badge sits ~12 px further left (no VCS
+light themes at 16 %. Differences: Archipel IDE's badge sits ~12 px further left (no VCS
 widget offset), so the rise is slightly steeper; the light tint has no reference to check
 against.
 
 ## How it works
 
-Every color is a token (`crates/jetthing-ui/src/theme_engine.rs`) naming, per theme,
+Every color is a token (`crates/archipel-ide-ui/src/theme_engine.rs`) naming, per theme,
 `ui:` keys and `palette:` entries in `docs/spec/data/themes.json` and `color:` / `attr:`
 entries of the theme's editor scheme in `docs/spec/data/color-schemes.json` (falling back
 along the scheme's lineage). A test asserts that resolving Islands Dark from the data

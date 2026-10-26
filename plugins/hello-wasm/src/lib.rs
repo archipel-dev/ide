@@ -1,15 +1,15 @@
-//! Example Jetthing plugin as a WebAssembly component (`jetthing:plugin`
+//! Example Archipel IDE plugin as a WebAssembly component (`archipel:plugin`
 //! world). Structured values cross the boundary as JSON.
 
 use serde_json::{Value, json};
 use std::cell::RefCell;
 
 wit_bindgen::generate!({
-    path: "../../crates/jetthing-plugin-wasm/wit",
+    path: "../../crates/archipel-ide-plugin-wasm/wit",
     world: "plugin",
 });
 
-use jetthing::plugin::host;
+use archipel::plugin::host;
 
 #[derive(Default)]
 struct State {

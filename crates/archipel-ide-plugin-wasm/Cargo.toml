@@ -1,0 +1,17 @@
+[package]
+name = "archipel-ide-plugin-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "WebAssembly component plugin runtime for Archipel IDE (wasmtime + WIT), with declared permissions."
+
+[dependencies]
+archipel-ide-plugin-api = { path = "../archipel-ide-plugin-api" }
+archipel-ide-plugin-ui = { path = "../archipel-ide-plugin-ui" }
+archipel-ide-plugins = { path = "../archipel-ide-plugins" }
+serde_json.workspace = true
+wasmtime = { version = "49", default-features = false, features = ["cranelift", "component-model", "runtime", "std", "addr2line"] }
+wasmtime-wasi = { version = "49", default-features = false, features = ["p2"] }
+
+[dev-dependencies]
+egui.workspace = true

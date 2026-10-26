@@ -1,22 +1,22 @@
-# First run: Customize Jetthing
+# First run: Customize Archipel IDE
 
 Reference: on a first start (no previous configuration), IntelliJ-based IDEs
 offer to import settings from a previous installation and to customize the UI
 theme and keymap before the welcome screen.
 
-## Jetthing behaviour
+## Archipel IDE behaviour
 
 - **When it opens.** At startup the wizard opens if the config directory
-  (`jetthing_settings::default_config_dir`, `JETTHING_CONFIG_DIR` overrides it)
+  (`archipel_ide_settings::default_config_dir`, `ARCHIPEL_CONFIG_DIR` overrides it)
   contains neither `settings.toml` nor the `first-run.done` marker. Existing users
-  who already have settings are not asked. **Help → Customize Jetthing…**
+  who already have settings are not asked. **Help → Customize Archipel IDE…**
   (`app.customize`) reopens it.
 - **Choices.**
   - **Theme:** Islands Dark or Islands Light.
   - **Keymap:** the option list of `keymap.active`, defaulting to the platform keymap.
   - **Import settings (optional):** a path to a `settings.toml` from another
     installation.
-- **Start Using Jetthing** (`app.completeCustomize`, with the parameters `theme`,
+- **Start Using Archipel IDE** (`app.completeCustomize`, with the parameters `theme`,
   `keymap` and `importFrom`):
   - It validates the choices before changing anything, so an invalid choice leaves
     the wizard open.
@@ -32,13 +32,13 @@ theme and keymap before the welcome screen.
 ## Reproduction (Linux, Xvfb)
 
 ```text
-$ export JETTHING_CONFIG_DIR=/tmp/jt-cfg JETTHING_CONTROL_SOCKET=/tmp/jt.sock
-$ DISPLAY=:99 JETTHING_RENDERER=glow JETTHING_NO_UPDATE_CHECK=1 jetthing-app &
-$ jetthing-cli ui state            # popups.customize == true
-$ jetthing-cli ui screenshot first-run-customize.png
-$ jetthing-cli ui execute app.completeCustomize '{"theme":"Islands Light","keymap":"Default for KDE"}'
+$ export ARCHIPEL_CONFIG_DIR=/tmp/jt-cfg ARCHIPEL_CONTROL_SOCKET=/tmp/jt.sock
+$ DISPLAY=:99 ARCHIPEL_RENDERER=glow ARCHIPEL_NO_UPDATE_CHECK=1 archipel-ide &
+$ archipel-cli ui state            # popups.customize == true
+$ archipel-cli ui screenshot first-run-customize.png
+$ archipel-cli ui execute app.completeCustomize '{"theme":"Islands Light","keymap":"Default for KDE"}'
 {"imported": [], "skipped": []}
-$ jetthing-cli ui state            # popups.customize == false, status "Jetthing is set up"
+$ archipel-cli ui state            # popups.customize == false, status "Archipel IDE is set up"
 $ ls /tmp/jt-cfg && cat /tmp/jt-cfg/settings.toml
 first-run.done  settings.toml
 [settings]
@@ -46,11 +46,11 @@ first-run.done  settings.toml
 "keymap.active" = "Default for KDE"
 ```
 
-| First start | After "Start Using Jetthing" with Islands Light |
+| First start | After "Start Using Archipel IDE" with Islands Light |
 |---|---|
-| ![Customize Jetthing](first-run-customize.png) | ![Light theme applied](first-run-light.png) |
+| ![Customize Archipel IDE](first-run-customize.png) | ![Light theme applied](first-run-light.png) |
 
-Tests (`jetthing-core::first_run`):
+Tests (`archipel-ide-core::first_run`):
 - the wizard opens only without previous settings or the marker;
 - completing applies and persists the theme and keymap, and an invalid choice
   keeps the wizard open;

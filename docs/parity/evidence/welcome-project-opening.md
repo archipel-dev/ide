@@ -5,7 +5,7 @@ This is a partial slice of issue #21, not full welcome-screen parity.
 Launch without arguments:
 
 ```sh
-JETTHING_NO_UPDATE_CHECK=1 cargo run -p jetthing-app
+ARCHIPEL_NO_UPDATE_CHECK=1 cargo run -p archipel-ide-app
 ```
 
 The welcome surface offers Open Project. Click it, enter an existing directory's
@@ -21,8 +21,8 @@ and workspace are saved before switching. Reopen the first project to restore
 tabs. Invalid targets and failed document saves preserve the current editor.
 A running build/run task must be stopped before switching.
 
-Automated evidence: `cargo test -p jetthing-core switching_projects` and
-`cargo test -p jetthing-core failed_project_open` exercise these engine policies
+Automated evidence: `cargo test -p archipel-ide-core switching_projects` and
+`cargo test -p archipel-ide-core failed_project_open` exercise these engine policies
 through the same typed `project.open` command used by the UI.
 
 Native folder selection, persistent recent projects, New Project generators,

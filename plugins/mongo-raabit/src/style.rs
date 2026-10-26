@@ -1,7 +1,7 @@
-//! Palette and small drawing helpers following the Jetthing "Islands" look.
+//! Palette and small drawing helpers following the Archipel IDE "Islands" look.
 //!
 //! Colors are picked from the host's visuals (`dark_mode`), so the views follow the
-//! workbench theme. Dark values match the Islands Dark tokens of `jetthing-ui`; light
+//! workbench theme. Dark values match the Islands Dark tokens of `archipel-ide-ui`; light
 //! values follow the IntelliJ Light theme facts (Apache-2.0 theme files).
 
 use egui::{Color32, CornerRadius, FontId, Margin, Stroke, Ui};

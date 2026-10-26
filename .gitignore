@@ -4,5 +4,7 @@
 *.swp
 
 /dist
+/.archipel
+# Legacy per-project data dir (before the Archipel rename); still ignored.
 /.jetthing
 /plugins/hello-wasm/target

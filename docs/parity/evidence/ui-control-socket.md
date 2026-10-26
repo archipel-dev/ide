@@ -2,15 +2,15 @@
 
 Reference: IntelliJ-based IDEs are driven in UI tests by an in-process robot
 (Remote Robot / Driver) that executes actions, sends keystrokes and captures the
-window. Jetthing's equivalent is an opt-in local socket, so parity scenes and
+window. Archipel IDE's equivalent is an opt-in local socket, so parity scenes and
 smoke tests need no `xdotool` clicking.
 
 ## Protocol
 
-Start the IDE with `JETTHING_CONTROL_SOCKET=/path/ctl.sock` (a Unix domain socket on
+Start the IDE with `ARCHIPEL_CONTROL_SOCKET=/path/ctl.sock` (a Unix domain socket on
 Linux and macOS). On Windows the transport is a named pipe: a `\\.\pipe\name` value is
 used as given, any other value names a pipe by its file name
-(`JETTHING_CONTROL_SOCKET=jetthing` → `\\.\pipe\jetthing`). Each request is one
+(`ARCHIPEL_CONTROL_SOCKET=archipel-ide` → `\\.\pipe\archipel-ide`). Each request is one
 JSON line and gets one JSON response line (`{"ok":true,"result":…}` or
 `{"ok":false,"error":"…"}`):
 
@@ -26,7 +26,7 @@ JSON line and gets one JSON response line (`{"ok":true,"result":…}` or
 | `{"op":"screenshot","path":"out.png"}` | PNG of the window via egui's viewport screenshot (glow and wgpu; no X11 dependency) |
 | `{"op":"wait","until":"idle\|popup\|text","text":"…","timeoutMs":10000}` | blocks until no search/task/update/screenshot is running and input has settled for 3 frames, a popup is visible, or the active editor, terminal screen or status bar contains `text` |
 
-`jetthing-cli ui [--socket PATH] <execute|state|key|type|screenshot|wait|raw> …`
+`archipel-cli ui [--socket PATH] <execute|state|key|type|screenshot|wait|raw> …`
 wraps the socket. Once a client injects input the window counts as focused, so keys reach
 widgets even without a window manager (Xvfb/CI); autosave-on-focus-loss therefore does not
 fire under automation. A stale socket file from a crashed instance is replaced; a
@@ -39,10 +39,10 @@ scenes`); see the README there.
 
 ```bash
 Xvfb :99 -screen 0 1600x1000x24 &
-export JETTHING_CONTROL_SOCKET=/tmp/jt.sock
-DISPLAY=:99 JETTHING_RENDERER=glow JETTHING_NO_UPDATE_CHECK=1 \
-  cargo run -p jetthing-app -- . crates/jetthing-control/src/lib.rs &
-cli() { cargo run -q -p jetthing-cli -- ui "$@"; }
+export ARCHIPEL_CONTROL_SOCKET=/tmp/jt.sock
+DISPLAY=:99 ARCHIPEL_RENDERER=glow ARCHIPEL_NO_UPDATE_CHECK=1 \
+  cargo run -p archipel-ide-app -- . crates/archipel-ide-control/src/lib.rs &
+cli() { cargo run -q -p archipel-ide-cli -- ui "$@"; }
 cli wait idle
 cli key Ctrl+Shift+A && cli wait popup && cli type save && cli wait idle
 cli screenshot docs/parity/evidence/control-socket-find-action.png

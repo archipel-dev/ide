@@ -15,7 +15,7 @@
 //! one-line update here.
 
 use anyhow::{Context, Result, anyhow, bail};
-use jetthing_control::{ControlClient, Request, Response};
+use archipel_ide_control::{ControlClient, Request, Response};
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -238,13 +238,13 @@ impl Driver {
             .env("XDG_DATA_HOME", home.join(".local/share"))
             .env("XDG_CACHE_HOME", home.join(".cache"))
             .env("XDG_STATE_HOME", home.join(".local/state"))
-            .env(jetthing_control::SOCKET_ENV, &socket)
-            .env("JETTHING_NO_UPDATE_CHECK", "1")
+            .env(archipel_ide_control::SOCKET_ENV, &socket)
+            .env("ARCHIPEL_NO_UPDATE_CHECK", "1")
             .env("DISPLAY", &display_name)
             .stdout(log.try_clone()?)
             .stderr(log);
-        if std::env::var_os("JETTHING_RENDERER").is_none() {
-            command.env("JETTHING_RENDERER", "glow");
+        if archipel_ide_compat::env_var_os("ARCHIPEL_RENDERER").is_none() {
+            command.env("ARCHIPEL_RENDERER", "glow");
         }
         let mut process = AppProcess(
             command
@@ -276,7 +276,7 @@ impl Driver {
         loop {
             let output = Command::new("xdotool")
                 .env("DISPLAY", &self.display)
-                .args(["search", "--onlyvisible", "--class", "jetthing"])
+                .args(["search", "--onlyvisible", "--class", "archipel-ide"])
                 .output()
                 .context("run xdotool search")?;
             let text = String::from_utf8_lossy(&output.stdout);

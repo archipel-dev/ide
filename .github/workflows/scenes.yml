@@ -24,7 +24,7 @@ jobs:
       # socket and asserts workbench state; the PNGs are uploaded for review.
       - run: cargo run -p xtask -- scenes --out target/scenes/out
         env:
-          JETTHING_RENDERER: glow
+          ARCHIPEL_RENDERER: glow
           LIBGL_ALWAYS_SOFTWARE: "1"
       - uses: actions/upload-artifact@v4
         if: always()

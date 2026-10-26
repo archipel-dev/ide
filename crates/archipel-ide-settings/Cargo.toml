@@ -1,0 +1,13 @@
+[package]
+name = "archipel-ide-settings"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+archipel-ide-compat = { path = "../archipel-ide-compat" }
+archipel-ide-keymap = { path = "../archipel-ide-keymap" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true

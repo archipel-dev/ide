@@ -12,7 +12,7 @@ is reused.
 Rows tagged `[Ultimate]` require an IntelliJ IDEA Ultimate subscription. Untagged rows are
 available in the free distribution. `Weight` (1-5) is the relative importance used by the
 weighted dashboard: 5 = core daily workflow, 3 = significant, 2 = moderate, 1 = minor.
-Statuses describe Jetthing, conservatively: nothing in this catalog is `Verified`.
+Statuses describe Archipel IDE, conservatively: nothing in this catalog is `Verified`.
 
 | ID | Reference | Feature | Status | Weight | Commands | Tests | Limitations / evidence |
 |---|---|---|---|---:|---|---|---|
@@ -24,7 +24,7 @@ Statuses describe Jetthing, conservatively: nothing in this catalog is `Verified
 | IJ-JAVA-006 | [configure-sdk-documentation](https://www.jetbrains.com/help/idea/configure-sdk-documentation.html) | Attach JDK sources and documentation | Missing | 1 | — | — | not started |
 | IJ-JAVA-010 | [working-with-source-code](https://www.jetbrains.com/help/idea/working-with-source-code.html) | Java syntax highlighting and parsing | Implemented | 5 | `editor` edit pipeline | Java token/color tests against Islands Dark spec values, Xvfb scene 04 | tree-sitter-java grammar and highlight query; declarations vs. calls, doc comments; `docs/parity/evidence/syntax-highlighting.md` |
 | IJ-JAVA-011 | [code-inspection](https://www.jetbrains.com/help/idea/code-inspection.html) | Java semantic error highlighting (resolve, types) | Missing | 5 | — | — | not started |
-| IJ-JAVA-012 | [auto-completing-code](https://www.jetbrains.com/help/idea/auto-completing-code.html) | Java code completion | Partial | 5 | `language.complete`, `language.completion` | `filter_text_drops_signatures_appended_by_jdtls` (`crates/jetthing-lsp/src/completion.rs`), `completion_is_enabled_for_java_files_and_explains_a_missing_server` (`crates/jetthing-core/src/lsp_commands.rs`); ignored live test `jdtls_completes_java_members` (`crates/jetthing-lsp/tests/real_servers.rs`) | delegated to jdtls via `JdtlsProvider` (`crates/jetthing-lsp/src/registry.rs`); live run needs an installed jdtls and was not exercised in `docs/parity/evidence/smoke-v0.0.7/README.md` (no jdtls); no in-process Java semantics |
+| IJ-JAVA-012 | [auto-completing-code](https://www.jetbrains.com/help/idea/auto-completing-code.html) | Java code completion | Partial | 5 | `language.complete`, `language.completion` | `filter_text_drops_signatures_appended_by_jdtls` (`crates/archipel-ide-lsp/src/completion.rs`), `completion_is_enabled_for_java_files_and_explains_a_missing_server` (`crates/archipel-ide-core/src/lsp_commands.rs`); ignored live test `jdtls_completes_java_members` (`crates/archipel-ide-lsp/tests/real_servers.rs`) | delegated to jdtls via `JdtlsProvider` (`crates/archipel-ide-lsp/src/registry.rs`); live run needs an installed jdtls and was not exercised in `docs/parity/evidence/smoke-v0.0.7/README.md` (no jdtls); no in-process Java semantics |
 | IJ-JAVA-013 | [navigating-through-the-source-code](https://www.jetbrains.com/help/idea/navigating-through-the-source-code.html) | Java navigation (declaration, implementations, super) | Missing | 5 | — | — | not started |
 | IJ-JAVA-014 | [code-inspection](https://www.jetbrains.com/help/idea/code-inspection.html) | Java inspections (nullability, unused, probable bugs) | Missing | 3 | — | — | not started |
 | IJ-JAVA-015 | [nullable-and-notnull-annotations](https://www.jetbrains.com/help/idea/nullable-and-notnull-annotations.html) | @Nullable/@NotNull inference and checks | Missing | 2 | — | — | not started |

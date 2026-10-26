@@ -1,0 +1,11 @@
+[package]
+name = "archipel-ide-search"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+
+globset = "0.4"
+regex = "1"
+thiserror.workspace = true

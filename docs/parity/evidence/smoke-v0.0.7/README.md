@@ -2,7 +2,7 @@
 
 Release build of `main` at `1725ba7` (plus the fixes in this PR), driven over the
 control socket (`docs/parity/evidence/ui-control-socket.md`) under Xvfb 1440×900 with
-`JETTHING_RENDERER=glow`, Ubuntu 24.04, JDK 21, Gradle on `PATH`, no `jdtls` and no
+`ARCHIPEL_RENDERER=glow`, Ubuntu 24.04, JDK 21, Gradle on `PATH`, no `jdtls` and no
 `java-debug` installed. Observed on 2026-10-11.
 
 Every flow below was driven end to end; the app never crashed, panicked or hung.
@@ -48,11 +48,11 @@ The app log contained no `panicked` line in any run.
 
 ```bash
 Xvfb :99 -screen 0 1440x900x24 &
-cargo build --release -p jetthing-app -p jetthing-cli
-export DISPLAY=:99 JETTHING_RENDERER=glow JETTHING_NO_UPDATE_CHECK=1 \
-       JETTHING_CONTROL_SOCKET=/tmp/jt.sock
-target/release/jetthing-app &                     # welcome screen
-cli() { target/release/jetthing-cli ui --socket /tmp/jt.sock "$@"; }
+cargo build --release -p archipel-ide-app -p archipel-ide-cli
+export DISPLAY=:99 ARCHIPEL_RENDERER=glow ARCHIPEL_NO_UPDATE_CHECK=1 \
+       ARCHIPEL_CONTROL_SOCKET=/tmp/jt.sock
+target/release/archipel-ide &                     # welcome screen
+cli() { target/release/archipel-cli ui --socket /tmp/jt.sock "$@"; }
 cli wait idle && cli click 318 205                 # New Project
 cli key Primary+A && cli type demo && cli key Tab && cli key Primary+A && cli type /tmp/projects
 cli key Enter && cli wait idle                     # project.create → project opens

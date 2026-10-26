@@ -19,7 +19,7 @@ background). Clicking opens the file with the first occurrence selected
 ![One row per line, three highlighted occurrences on line 9](workbench-bugs/find-in-files-highlights.png)
 
 Tests: `a_line_with_two_hits_is_one_row_with_two_highlights`,
-`case_folding_that_changes_byte_length_does_not_panic` (jetthing-search),
+`case_folding_that_changes_byte_length_does_not_panic` (archipel-ide-search),
 `find_preview_highlights_each_occurrence` (UI),
 `open_file_lands_on_and_selects_a_search_match` (core).
 

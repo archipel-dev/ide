@@ -1,7 +1,7 @@
 # Syntax highlighting and color schemes (scene 04)
 
 Captured 2026-10-10 on Linux under Xvfb (`:99`, 1600x1000x24, openbox) with
-`JETTHING_RENDERER=glow JETTHING_NO_UPDATE_CHECK=1`, debug build of
+`ARCHIPEL_RENDERER=glow ARCHIPEL_NO_UPDATE_CHECK=1`, debug build of
 `claude/tree-sitter-highlighting`. Screenshots: `import -window root`, then
 `convert -strip -colors 256`.
 
@@ -9,14 +9,14 @@ Reference: `docs/parity/evidence/reference/intellij-community/java-gradle/04-edi
 (IntelliJ IDEA Community 2025.2.6.3) and
 `docs/parity/evidence/reference/android-studio/04-editor-project-tree.png`
 (Android Studio 2026.2.1), from PR #40. Before this change every one of these files rendered as
-single-colour text (`docs/parity/evidence/jetthing/*/04-editor-project-tree.png`, PR #40).
+single-colour text (`docs/parity/evidence/archipel-ide/*/04-editor-project-tree.png`, PR #40).
 
 ## How highlighting works
 
-- `jetthing-language::registry` lists every language as data: grammar crate, file extensions,
+- `archipel-ide-language::registry` lists every language as data: grammar crate, file extensions,
   file names, shebang interpreters and the queries the crate ships (`HIGHLIGHTS_QUERY`,
   `INJECTIONS_QUERY`, `LOCALS_QUERY`, `TAGS_QUERY`).
-- `jetthing-language::highlight` runs the highlight query over the syntax tree with
+- `archipel-ide-language::highlight` runs the highlight query over the syntax tree with
   `tree_sitter::QueryCursor` (byte-range bounded) and resolves overlaps with the
   `tree-sitter-highlight` rules: the last matching pattern wins for a node, and inner captures
   override outer ones. The output is a `HighlightLayer`. LSP semantic tokens can later be stacked
@@ -27,14 +27,14 @@ single-colour text (`docs/parity/evidence/jetthing/*/04-editor-project-tree.png`
   declared function name into `DEFAULT_FUNCTION_DECLARATION`, `/** */` and `///` comments into
   `DEFAULT_DOC_COMMENT`, numeric constants into `DEFAULT_NUMBER`, capitalised `type.builtin`
   (`String`) into a class reference, and quotes into part of the string.
-- `jetthing-language::scheme` loads the bundled IntelliJ schemes from
+- `archipel-ide-language::scheme` loads the bundled IntelliJ schemes from
   `docs/spec/data/color-schemes.json`. It follows the scheme lineage
   (Default → Darcula → Islands Dark), resolves `inherit` references and falls back to `DEFAULT_*`
   keys. The editor resolves every key through Islands Dark.
 
 ## Incremental parsing
 
-- `jetthing-text::TextDocument` journals every rope mutation (edits, coalesced typing, undo and
+- `archipel-ide-text::TextDocument` journals every rope mutation (edits, coalesced typing, undo and
   redo) as a `ByteEdit` (bytes plus row/byte-column points). New documents start with
   `EditJournal::Reset`, and a journal with more than 4096 undrained edits also resets.
 - `Document::refresh_analysis` drains the journal. `LanguageAnalysis::apply_edits` applies each
@@ -59,7 +59,7 @@ single-colour text (`docs/parity/evidence/jetthing/*/04-editor-project-tree.png`
 ## Injections
 
 `injections.scm` from the grammar crates drives injected highlighting
-(`jetthing-language::injection`). It follows the `tree-sitter-highlight` conventions:
+(`archipel-ide-language::injection`). It follows the `tree-sitter-highlight` conventions:
 `@injection.content`, `@injection.language` or the `injection.language` property,
 `injection.combined`, `injection.include-children`, and legacy captures named after the language.
 Content is parsed with `Parser::set_included_ranges` (named children are excluded unless
@@ -80,7 +80,7 @@ property test includes Markdown and HTML samples.
 
 ## Extend / Shrink Selection
 
-`jetthing-language::selection::expand` starts at the smallest node around the selection and walks
+`archipel-ide-language::selection::expand` starts at the smallest node around the selection and walks
 up the tree. At each node it returns the first candidate that strictly contains the current
 selection, trying in order: the word under the caret inside a comment or string, the contents
 between the node's first and last anonymous children (brackets, quotes, tags; trimmed), and then
@@ -94,14 +94,14 @@ on macOS.
 
 ## Code folding
 
-`jetthing-language::folding` derives regions from the tree. A grammar's own `folds.scm` is used
+`archipel-ide-language::folding` derives regions from the tree. A grammar's own `folds.scm` is used
 when one ships (Starlark). Otherwise the regions are: nodes delimited by `{}`/`[]`/`()`/`<>` or
 start and end tags on different lines, block comments, and runs of import declarations, with at
 most one region per start line. Queries are bounded by byte range: the editor asks only for the
 viewport (~60 µs on the 10k-line file), and Collapse All asks for the whole file. Collapsed regions
 live in `Document::folds` as byte anchors that follow the edit journal. An edit inside a region
 expands it, and so does a caret that enters hidden text (Go to Line, Find, arrows), as in IntelliJ.
-The editor maps visual rows to document lines (`jetthing-ui::folding::FoldView`), renders a
+The editor maps visual rows to document lines (`archipel-ide-ui::folding::FoldView`), renders a
 collapsed region as prefix + placeholder (`FOLDED_TEXT_ATTRIBUTES`) + the rest of its last line,
 and moves Up/Down by visual rows.
 
@@ -113,7 +113,7 @@ and moves Up/Down by visual rows.
 
 ## Structure, File Structure popup, breadcrumbs
 
-`jetthing-language::structure` runs each grammar's tags query (`@definition.<kind>` with `@name`).
+`archipel-ide-language::structure` runs each grammar's tags query (`@definition.<kind>` with `@name`).
 Java uses upstream plus `queries/java/tags.scm` (constructors, fields, enums, records); Kotlin uses
 the crate's own `tags.scm`, vendored with attribution because the crate does not export it.
 Definitions are nested by byte containment. Callables get an IntelliJ-style signature built from
@@ -133,10 +133,10 @@ the tree's parameter `type` fields and the return type (`greeting(String): Strin
 ## Matching brace, markup and data structure
 
 - The highlight for the matching brace now comes from the tree
-  (`jetthing-language::brackets`). Only real bracket tokens match, and the partner is the
+  (`archipel-ide-language::brackets`). Only real bracket tokens match, and the partner is the
   complementary token among the same node's children. A `(` inside a string or comment never
   matches; files without a grammar keep the text matcher.
-- Structure for languages whose grammars ship no tags query uses Jetthing-owned
+- Structure for languages whose grammars ship no tags query uses Archipel IDE-owned
   `queries/<lang>/tags.scm` data: XML/HTML elements, JSON/YAML/TOML keys and tables, and Markdown
   headings (nested through tree-sitter-md sections). Qualified tag names are shortened in the
   navigation bar (`ConstraintLayout`).
@@ -150,7 +150,7 @@ Rust, Java, Kotlin (`tree-sitter-kotlin-sg`), Groovy (`*.gradle`, `*.groovy`, `J
 Starlark (`BUILD`, `BUILD.bazel`, `WORKSPACE`, `MODULE.bazel`, `*.bzl`), Python, JavaScript/JSX,
 TypeScript, TSX, Go, C, C++, Bash (including `gradlew` and shebangs), HTML, CSS and Properties.
 
-The only query that Jetthing owns is `crates/jetthing-language/queries/kotlin/highlights.scm`. It
+The only query that Archipel IDE owns is `crates/archipel-ide-language/queries/kotlin/highlights.scm`. It
 is appended to the upstream Kotlin query and fills two upstream gaps: there is no `package`
 keyword capture, and function names after modifiers are missed.
 
@@ -161,8 +161,8 @@ keyword capture, and function names after modifiers are missed.
 | `syntax-highlighting/04-java-app.png` | IntelliJ java-gradle 04 | keywords (`package`, `public`, `class`, `void`, `new`, `for`, `return`) orange `#CF8E6D`; strings green `#6AAB73`; method declarations `greeting`/`main` blue `#56A8F5`; class names, type uses and calls in the identifier colour, as in IntelliJ | `System.out` (static field, purple italic) and `List.of` (static call, italic) need semantic information (LSP layer); no inlay hints, gutter icons or folding yet |
 | `syntax-highlighting/04-kotlin-main-activity.png` | Android Studio 04 (same file content) | `package`/`import`/`class`/`override`/`fun`/`private`/`super` orange; `onCreate`/`greet` declarations blue; strings green; `String` and other types plain | `R.layout`/`R.id` qualifiers show purple (all navigation suffixes are captured as properties) where Android Studio draws only the resource field in purple italic with an underline; `$name` template entries are not coloured separately; imports are not folded |
 | `syntax-highlighting/a04-xml-layout.png` | Android Studio a04 (code view) | tag names and `<`/`/>` delimiters `#D5B778` (`XML_TAG_NAME`, `XML_TAG`); attribute values green including quotes; comments grey; `&amp;` entity | `xmlns:`/`android:` prefixes are not coloured separately; the prolog version is coloured as a number |
-| `syntax-highlighting/04b-build-bazel.png` | Jetthing PR #40 `bazel/04b` (was plain text) | Starlark detected from `BUILD.bazel`; strings, comments, punctuation | IntelliJ Bazel plugin keyword-argument colours are not reproduced |
-| `syntax-highlighting/04-rust-main.png` | IntelliJ scene 04 palette (Rust file; Xvfb, glow, `jetthing-control` screenshot) | doc comment green italic; `use`/`fn`/`let`/`mut`/`for`/`in`/`struct`/`impl` orange `#CF8E6D`; function declarations `sum`/`main` blue; macro call `println!` blue; strings green `#6AAB73`; numbers `1.5_f64`/`2.0`/`0` blue; attribute `#[derive(...)]` yellow; one-line body folded as `{ self.x + self.y }` | no IntelliJ Rust plugin capture to compare against (the reference IDE has no Rust scene); lifetimes and generics parameters use the plain identifier colour |
+| `syntax-highlighting/04b-build-bazel.png` | Archipel IDE PR #40 `bazel/04b` (was plain text) | Starlark detected from `BUILD.bazel`; strings, comments, punctuation | IntelliJ Bazel plugin keyword-argument colours are not reproduced |
+| `syntax-highlighting/04-rust-main.png` | IntelliJ scene 04 palette (Rust file; Xvfb, glow, `archipel-ide-control` screenshot) | doc comment green italic; `use`/`fn`/`let`/`mut`/`for`/`in`/`struct`/`impl` orange `#CF8E6D`; function declarations `sum`/`main` blue; macro call `println!` blue; strings green `#6AAB73`; numbers `1.5_f64`/`2.0`/`0` blue; attribute `#[derive(...)]` yellow; one-line body folded as `{ self.x + self.y }` | no IntelliJ Rust plugin capture to compare against (the reference IDE has no Rust scene); lifetimes and generics parameters use the plain identifier colour |
 
 ## Tests
 

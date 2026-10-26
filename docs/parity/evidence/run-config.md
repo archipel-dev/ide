@@ -1,6 +1,6 @@
 # Run/Debug configurations
 
-Captured 2026-10-10 under Xvfb (1600x1000, `JETTHING_RENDERER=glow`), Gradle 8.14.3 and
+Captured 2026-10-10 under Xvfb (1600x1000, `ARCHIPEL_RENDERER=glow`), Gradle 8.14.3 and
 JDK 21 on PATH, `java-gradle` sample (see `build-run.md`). References:
 `reference/intellij-community/java-gradle/15-run-config.png` and
 `x02-run-debug-configurations.png` (PR #40).
@@ -10,7 +10,7 @@ JDK 21 on PATH, `java-gradle` sample (see `build-run.md`). References:
 | `run-config/15a-run-widget-no-configurations.png` | 15 | No saved configurations: the widget shows the detected default ("Gradle Run"); popup: Edit Configurations…, Build Project, Run All Tests, Rerun Last Task |
 | `run-config/x02a-add-configuration.png` | x02 | Edit Configurations… → empty dialog, **+** → "Add New Configuration" with Gradle, Cargo, Bazel, Maven, npm, Go, Shell Command |
 | `run-config/x02-run-debug-configurations.png` | x02 | Gradle → form with Name, Type, Run (tasks), Options, Program arguments, Working directory, Environment variables (`KEY=value; …`, as in the reference); renamed to "App", `GREETING=hi` |
-| `run-config/15-run-widget-configurations.png` | 15 + 17 | **▶ Run** in the dialog saved `.jetthing/runConfigurations/App.toml` and ran it ("java-gradle [App]: successful"); the widget now reads "App" and lists it, selected |
+| `run-config/15-run-widget-configurations.png` | 15 + 17 | **▶ Run** in the dialog saved `.archipel/runConfigurations/App.toml` and ran it ("java-gradle [App]: successful"); the widget now reads "App" and lists it, selected |
 
 Stored file:
 

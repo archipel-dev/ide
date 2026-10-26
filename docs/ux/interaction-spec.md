@@ -1,7 +1,7 @@
 # Interaction specification
 
 The contract every dialog, popup, menu, list, tree, tab bar, tool window and chrome widget in
-`jetthing-ui` must meet so that Jetthing feels like an IntelliJ-platform IDE. Workers
+`archipel-ide-ui` must meet so that Archipel IDE feels like an IntelliJ-platform IDE. Workers
 implement against this document; `docs/ux/audit-v0.0.8.md` records where v0.0.8 breaks it,
 and `cargo xtask ux-smoke` checks the golden paths with real input.
 
@@ -46,7 +46,7 @@ stack so scenes and the smoke harness can assert it.
 
 ## 2. Dialogs
 
-2.1 Built with one shared component (`jetthing_ui::dialog`) that provides: title bar with
+2.1 Built with one shared component (`archipel_ide_ui::dialog`) that provides: title bar with
 the dialog title (left) and a close button (right), optional `?` help button, content area,
 button row, backdrop, placement, sizing and key handling. No dialog assembles these itself.
 

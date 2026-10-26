@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Render the raster app icons from jetthing.svg.
+"""Render the raster app icons from archipel.svg.
 
 Requires cairosvg and Pillow (`pip install cairosvg pillow`). The outputs are
 committed so builds never need these tools:
 
-- jetthing.png       512x512, window icon and Linux hicolor icon
-- jetthing-256.png   256x256, .deb / tarball icon
-- jetthing.ico       Windows (MSI, Start Menu, Add/Remove Programs)
-- jetthing.icns      macOS app bundle
+- archipel.png       512x512, window icon and Linux hicolor icon
+- archipel-256.png   256x256, .deb / tarball icon
+- archipel.ico       Windows (MSI, Start Menu, Add/Remove Programs)
+- archipel.icns      macOS app bundle
 """
 
 import io
@@ -17,7 +17,7 @@ import cairosvg
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
-SVG = HERE / "jetthing.svg"
+SVG = HERE / "archipel.svg"
 
 
 def render(size: int) -> Image.Image:
@@ -27,16 +27,16 @@ def render(size: int) -> Image.Image:
 
 def main() -> None:
     master = render(1024)
-    render(512).save(HERE / "jetthing.png", optimize=True)
-    render(256).save(HERE / "jetthing-256.png", optimize=True)
+    render(512).save(HERE / "archipel.png", optimize=True)
+    render(256).save(HERE / "archipel-256.png", optimize=True)
     ico_sizes = [16, 24, 32, 48, 64, 128, 256]
     render(256).save(
-        HERE / "jetthing.ico",
+        HERE / "archipel.ico",
         sizes=[(s, s) for s in ico_sizes],
         append_images=[render(s) for s in ico_sizes],
     )
-    master.save(HERE / "jetthing.icns")
-    for name in ["jetthing.png", "jetthing-256.png", "jetthing.ico", "jetthing.icns"]:
+    master.save(HERE / "archipel.icns")
+    for name in ["archipel.png", "archipel-256.png", "archipel.ico", "archipel.icns"]:
         print(f"wrote {name} ({(HERE / name).stat().st_size} bytes)")
 
 

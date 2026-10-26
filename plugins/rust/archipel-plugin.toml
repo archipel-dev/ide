@@ -1,0 +1,7 @@
+id = "dev.archipel.rust"
+name = "Rust Language Support"
+version = "0.1.0"
+api_version = 1
+description = "Rust editing via Tree-sitter and rust-analyzer (built into the platform for now)."
+vendor = "Archipel IDE"
+capabilities = ["language", "lsp", "build", "test"]

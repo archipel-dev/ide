@@ -1,0 +1,15 @@
+id = "dev.archipel.hello-wasm"
+name = "Hello WASM"
+version = "0.1.0"
+api_version = 1
+kind = "wasm"
+entry = "hello_wasm.wasm"
+vendor = "Archipel IDE"
+license = "Apache-2.0 OR MIT"
+description = "Example WebAssembly component plugin: a command, a declarative tool window view, settings and a status widget, sandboxed with declared permissions."
+capabilities = ["example"]
+permissions = ["fs.project"]
+
+[app]
+view = "main"
+title = "Hello WASM"

@@ -2,7 +2,7 @@
 # Captures the Project tree and Structure tool window with real mouse input only
 # (xdotool under Xvfb), so the same steps give before and after screenshots.
 #
-#   docs/ui-migration/capture.sh <jetthing-app binary> <output prefix> [demo project dir]
+#   docs/ui-migration/capture.sh <archipel-ide binary> <output prefix> [demo project dir]
 #
 # Needs: Xvfb, xdotool, ImageMagick `import`, libxkbcommon-x11.
 # Coordinates assume a 1440x900 screen and the Islands Dark theme with the tool window
@@ -10,7 +10,7 @@
 set -euo pipefail
 BIN=${1:?binary}; OUT=${2:?output prefix}; DEMO=${3:-}
 DISPLAY_NUM=:77
-export DISPLAY=$DISPLAY_NUM JETTHING_RENDERER=glow JETTHING_NO_UPDATE_CHECK=1
+export DISPLAY=$DISPLAY_NUM ARCHIPEL_RENDERER=glow ARCHIPEL_NO_UPDATE_CHECK=1
 WORK=$(mktemp -d); export HOME=$WORK/home; mkdir -p "$HOME"
 if [ -z "$DEMO" ]; then
   DEMO=$WORK/demo

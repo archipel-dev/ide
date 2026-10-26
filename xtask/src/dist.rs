@@ -1,15 +1,15 @@
 //! `cargo xtask dist`: release builds, archives and native installers.
 //!
-//! Every run stages `dist/jetthing-<version>-<os>-<arch>/` and packs it into the
+//! Every run stages `dist/archipel-ide-<version>-<os>-<arch>/` and packs it into the
 //! archive the self-updater consumes (`.tar.gz`, `.zip` on Windows). With
 //! `--installer` it also builds the native installer for the target OS:
 //!
 //! | OS | Installer | Tooling |
 //! |---|---|---|
-//! | Windows | `jetthing-<version>-windows-<arch>.msi` | WiX Toolset v5 (`wix`) |
-//! | macOS | `jetthing-<version>-macos-<arch>.dmg` with `Jetthing.app` | `codesign`, `hdiutil` |
-//! | Linux | `jetthing_<version>_<debarch>.deb` | `dpkg-deb` |
-//! | Linux | `jetthing-<version>-linux-<arch>.AppImage` | `appimagetool` (`APPIMAGETOOL`) |
+//! | Windows | `archipel-ide-<version>-windows-<arch>.msi` | WiX Toolset v5 (`wix`) |
+//! | macOS | `archipel-ide-<version>-macos-<arch>.dmg` with `Archipel IDE.app` | `codesign`, `hdiutil` |
+//! | Linux | `archipel-ide_<version>_<debarch>.deb` | `dpkg-deb` |
+//! | Linux | `archipel-ide-<version>-linux-<arch>.AppImage` | `appimagetool` (`APPIMAGETOOL`) |
 //!
 //! Each artifact gets a `<artifact>.sha256` in `sha256sum` format. Paths of all
 //! artifacts are printed one per line (forward slashes) for CI scripts.
@@ -23,10 +23,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-pub const BUNDLE_ID: &str = "io.github.henryschwerdt.jetthing";
-const HOMEPAGE: &str = "https://github.com/HenrySchwerdt/jetthing";
-/// Marker read by `jetthing_update::InstallKind::detect`.
-const INSTALL_MARKER: &str = "jetthing.install";
+pub const BUNDLE_ID: &str = "dev.archipel.ide";
+const HOMEPAGE: &str = "https://github.com/archipel-dev/ide";
+/// Marker read by `archipel_ide_update::InstallKind::detect`.
+const INSTALL_MARKER: &str = "archipel-ide.install";
 const ICONS: &str = "assets/icon";
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -118,7 +118,7 @@ pub fn dist(options: Options) -> Result<()> {
         None => Platform::host(),
     };
     let release_dir = build(options.target.as_deref())?;
-    let name = format!("jetthing-{VERSION}-{}-{}", platform.os, platform.arch);
+    let name = format!("archipel-ide-{VERSION}-{}-{}", platform.os, platform.arch);
     let dist = Path::new("dist");
     let stage = dist.join(&name);
     stage_files(&release_dir, &stage, &platform)?;
@@ -153,9 +153,9 @@ fn build(target: Option<&str>) -> Result<PathBuf> {
         "build",
         "--release",
         "-p",
-        "jetthing-app",
+        "archipel-ide-app",
         "-p",
-        "jetthing-cli",
+        "archipel-ide-cli",
     ]);
     if let Some(target) = target {
         command.args(["--target", target]);
@@ -175,8 +175,8 @@ fn stage_files(release_dir: &Path, out: &Path, platform: &Platform) -> Result<()
     fs::create_dir_all(out.join("licenses"))?;
     let exe = platform.exe();
     for (built, shipped) in [
-        ("jetthing-app", "jetthing"),
-        ("jetthing-cli", "jetthing-cli"),
+        ("archipel-ide", "archipel-ide"),
+        ("archipel-cli", "archipel-cli"),
     ] {
         copy(
             &release_dir.join(format!("{built}{exe}")),
@@ -190,16 +190,19 @@ fn stage_files(release_dir: &Path, out: &Path, platform: &Platform) -> Result<()
     )?;
     for license in ["Inter-OFL.txt", "JetBrainsMono-OFL.txt"] {
         copy(
-            &Path::new("crates/jetthing-ui/assets/fonts").join(license),
+            &Path::new("crates/archipel-ide-ui/assets/fonts").join(license),
             &out.join("licenses").join(license),
         )?;
     }
     copy(
-        &Path::new(ICONS).join("jetthing.png"),
-        &out.join("jetthing.png"),
+        &Path::new(ICONS).join("archipel.png"),
+        &out.join("archipel-ide.png"),
     )?;
     if platform.os == "linux" {
-        fs::write(out.join("jetthing.desktop"), desktop_entry("jetthing"))?;
+        fs::write(
+            out.join("archipel-ide.desktop"),
+            desktop_entry("archipel-ide"),
+        )?;
     }
     Ok(())
 }
@@ -219,20 +222,20 @@ fn run(command: &mut Command, what: &str) -> Result<()> {
     Ok(())
 }
 
-/// Freedesktop launcher; `exec` is `jetthing` (on PATH) or an absolute path.
+/// Freedesktop launcher; `exec` is `archipel-ide` (on PATH) or an absolute path.
 pub fn desktop_entry(exec: &str) -> String {
     format!(
         "[Desktop Entry]\n\
          Type=Application\n\
-         Name=Jetthing\n\
+         Name=Archipel IDE\n\
          GenericName=Integrated Development Environment\n\
          Comment=Native Rust IDE\n\
          Exec={exec}\n\
-         Icon=jetthing\n\
+         Icon=archipel-ide\n\
          Terminal=false\n\
          Categories=Development;IDE;TextEditor;\n\
          Keywords=IDE;Rust;Java;Editor;Code;\n\
-         StartupWMClass=jetthing\n"
+         StartupWMClass=archipel-ide\n"
     )
 }
 
@@ -298,7 +301,7 @@ fn files_under(dir: &Path) -> Result<Vec<PathBuf>> {
 
 // ---------------------------------------------------------------- Windows
 
-/// Builds the MSI from `packaging/windows/jetthing.wxs` with WiX v5.
+/// Builds the MSI from `packaging/windows/archipel-ide.wxs` with WiX v5.
 fn msi(stage: &Path, platform: &Platform, dist: &Path) -> Result<PathBuf> {
     fs::write(stage.join(INSTALL_MARKER), "msi\n")?;
     let arch = match platform.arch.as_str() {
@@ -306,7 +309,10 @@ fn msi(stage: &Path, platform: &Platform, dist: &Path) -> Result<PathBuf> {
         "aarch64" => "arm64",
         other => bail!("no MSI architecture for {other}"),
     };
-    let out = dist.join(format!("jetthing-{VERSION}-windows-{}.msi", platform.arch));
+    let out = dist.join(format!(
+        "archipel-ide-{VERSION}-windows-{}.msi",
+        platform.arch
+    ));
     let wix = std::env::var("WIX_EXE").unwrap_or_else(|_| "wix".into());
     run(
         Command::new(wix)
@@ -318,11 +324,11 @@ fn msi(stage: &Path, platform: &Platform, dist: &Path) -> Result<PathBuf> {
             .arg("-d")
             .arg(format!(
                 "Icon={}",
-                absolute(&Path::new(ICONS).join("jetthing.ico"))?.display()
+                absolute(&Path::new(ICONS).join("archipel.ico"))?.display()
             ))
             .arg("-o")
             .arg(&out)
-            .arg("packaging/windows/jetthing.wxs"),
+            .arg("packaging/windows/archipel-ide.wxs"),
         "wix build",
     )?;
     // The marker belongs to the MSI only; the archive stays updatable in place.
@@ -344,45 +350,45 @@ pub fn info_plist(version: &str) -> String {
 <plist version="1.0">
 <dict>
   <key>CFBundleDevelopmentRegion</key><string>en</string>
-  <key>CFBundleDisplayName</key><string>Jetthing</string>
-  <key>CFBundleExecutable</key><string>jetthing</string>
-  <key>CFBundleIconFile</key><string>jetthing</string>
+  <key>CFBundleDisplayName</key><string>Archipel IDE</string>
+  <key>CFBundleExecutable</key><string>archipel-ide</string>
+  <key>CFBundleIconFile</key><string>archipel-ide</string>
   <key>CFBundleIdentifier</key><string>{BUNDLE_ID}</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-  <key>CFBundleName</key><string>Jetthing</string>
+  <key>CFBundleName</key><string>Archipel IDE</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>{short}</string>
   <key>CFBundleVersion</key><string>{short}</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
   <key>NSHighResolutionCapable</key><true/>
-  <key>NSHumanReadableCopyright</key><string>Jetthing {version}. Apache-2.0 OR MIT.</string>
+  <key>NSHumanReadableCopyright</key><string>Archipel IDE {version}. Apache-2.0 OR MIT.</string>
 </dict>
 </plist>
 "#
     )
 }
 
-/// `Jetthing.app` inside a compressed `.dmg` with an Applications link.
-/// Signs ad hoc unless `JETTHING_MACOS_SIGN_IDENTITY` names a certificate.
+/// `Archipel IDE.app` inside a compressed `.dmg` with an Applications link.
+/// Signs ad hoc unless `ARCHIPEL_MACOS_SIGN_IDENTITY` names a certificate.
 fn dmg(stage: &Path, platform: &Platform, dist: &Path) -> Result<PathBuf> {
     let image_root = dist.join(format!("dmg-{}", platform.arch));
     if image_root.exists() {
         fs::remove_dir_all(&image_root)?;
     }
-    let contents = image_root.join("Jetthing.app/Contents");
+    let contents = image_root.join("Archipel IDE.app/Contents");
     let macos = contents.join("MacOS");
     let resources = contents.join("Resources");
     fs::create_dir_all(&macos)?;
     fs::create_dir_all(resources.join("licenses"))?;
     fs::write(contents.join("Info.plist"), info_plist(VERSION))?;
     fs::write(contents.join("PkgInfo"), "APPL????")?;
-    for binary in ["jetthing", "jetthing-cli"] {
+    for binary in ["archipel-ide", "archipel-cli"] {
         copy(&stage.join(binary), &macos.join(binary))?;
     }
     copy(
-        &Path::new(ICONS).join("jetthing.icns"),
-        &resources.join("jetthing.icns"),
+        &Path::new(ICONS).join("archipel.icns"),
+        &resources.join("archipel-ide.icns"),
     )?;
     for file in ["README.md", "NOTICE-intellij-data.md"] {
         copy(&stage.join(file), &resources.join(file))?;
@@ -396,7 +402,7 @@ fn dmg(stage: &Path, platform: &Platform, dist: &Path) -> Result<PathBuf> {
     #[cfg(unix)]
     std::os::unix::fs::symlink("/Applications", image_root.join("Applications"))?;
 
-    let identity = std::env::var("JETTHING_MACOS_SIGN_IDENTITY")
+    let identity = archipel_ide_compat::env_var("ARCHIPEL_MACOS_SIGN_IDENTITY")
         .ok()
         .filter(|identity| !identity.is_empty())
         .unwrap_or_else(|| "-".into());
@@ -406,16 +412,22 @@ fn dmg(stage: &Path, platform: &Platform, dist: &Path) -> Result<PathBuf> {
         // Hardened runtime and a secure timestamp are required for notarization.
         codesign.args(["--options", "runtime", "--timestamp"]);
     }
-    run(codesign.arg(image_root.join("Jetthing.app")), "codesign")?;
+    run(
+        codesign.arg(image_root.join("Archipel IDE.app")),
+        "codesign",
+    )?;
 
-    let out = dist.join(format!("jetthing-{VERSION}-macos-{}.dmg", platform.arch));
+    let out = dist.join(format!(
+        "archipel-ide-{VERSION}-macos-{}.dmg",
+        platform.arch
+    ));
     let _ = fs::remove_file(&out);
     // hdiutil intermittently fails with "Resource busy" on CI runners.
     let mut attempt = 1;
     loop {
         let result = run(
             Command::new("hdiutil")
-                .args(["create", "-volname", &format!("Jetthing {VERSION}")])
+                .args(["create", "-volname", &format!("Archipel IDE {VERSION}")])
                 .arg("-srcfolder")
                 .arg(&image_root)
                 .args(["-ov", "-format", "UDZO"])
@@ -439,7 +451,7 @@ fn dmg(stage: &Path, platform: &Platform, dist: &Path) -> Result<PathBuf> {
 pub fn deb_control(version: &str, arch: &str, installed_kib: u64, glibc: Option<&str>) -> String {
     let libc = glibc.map_or_else(|| "libc6".to_owned(), |v| format!("libc6 (>= {v})"));
     format!(
-        "Package: jetthing\n\
+        "Package: archipel-ide\n\
          Version: {}\n\
          Section: devel\n\
          Priority: optional\n\
@@ -447,10 +459,10 @@ pub fn deb_control(version: &str, arch: &str, installed_kib: u64, glibc: Option<
          Installed-Size: {installed_kib}\n\
          Depends: {libc}, libgcc-s1\n\
          Recommends: libgl1, libxkbcommon0, libwayland-client0 | libx11-6, xdg-utils, git\n\
-         Maintainer: Jetthing contributors <{HOMEPAGE}/issues>\n\
+         Maintainer: Archipel IDE contributors <{HOMEPAGE}/issues>\n\
          Homepage: {HOMEPAGE}\n\
          Description: Native Rust IDE\n \
-         Jetthing is an experimental, clean-room, native Rust IDE platform with\n \
+         Archipel IDE is an experimental, clean-room, native Rust IDE platform with\n \
          a workbench modelled on the IntelliJ New UI.\n",
         deb_version(version),
         deb_arch(arch),
@@ -470,17 +482,17 @@ pub fn required_glibc(objdump_output: &str) -> Option<String> {
         .map(|(_, version)| version)
 }
 
-/// `/usr/lib/jetthing` payload, `/usr/bin` links, desktop entry and icons.
+/// `/usr/lib/archipel-ide` payload, `/usr/bin` links, desktop entry and icons.
 fn deb(stage: &Path, platform: &Platform, dist: &Path) -> Result<PathBuf> {
     let root = dist.join(format!("deb-{}", platform.arch));
     if root.exists() {
         fs::remove_dir_all(&root)?;
     }
-    let lib = root.join("usr/lib/jetthing");
+    let lib = root.join("usr/lib/archipel-ide");
     fs::create_dir_all(lib.join("licenses"))?;
     for file in files_under(stage)? {
         let relative = file.strip_prefix(stage)?;
-        if relative == Path::new("jetthing.desktop") {
+        if relative == Path::new("archipel-ide.desktop") {
             continue;
         }
         copy(&file, &lib.join(relative))?;
@@ -491,37 +503,37 @@ fn deb(stage: &Path, platform: &Platform, dist: &Path) -> Result<PathBuf> {
     let applications = root.join("usr/share/applications");
     fs::create_dir_all(&applications)?;
     fs::write(
-        applications.join("jetthing.desktop"),
-        desktop_entry("jetthing"),
+        applications.join("archipel-ide.desktop"),
+        desktop_entry("archipel-ide"),
     )?;
-    for (size, icon) in [("256x256", "jetthing-256.png"), ("512x512", "jetthing.png")] {
+    for (size, icon) in [("256x256", "archipel-256.png"), ("512x512", "archipel.png")] {
         let dir = root.join(format!("usr/share/icons/hicolor/{size}/apps"));
         fs::create_dir_all(&dir)?;
-        copy(&Path::new(ICONS).join(icon), &dir.join("jetthing.png"))?;
+        copy(&Path::new(ICONS).join(icon), &dir.join("archipel-ide.png"))?;
     }
-    let doc = root.join("usr/share/doc/jetthing");
+    let doc = root.join("usr/share/doc/archipel-ide");
     fs::create_dir_all(&doc)?;
     fs::write(
         doc.join("copyright"),
         format!(
             "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/\n\
-             Upstream-Name: jetthing\nSource: {HOMEPAGE}\n\n\
+             Upstream-Name: archipel-ide\nSource: {HOMEPAGE}\n\n\
              Files: *\nLicense: Apache-2.0 OR MIT\n\n\
-             Files: usr/lib/jetthing/licenses/*\nLicense: OFL-1.1\n"
+             Files: usr/lib/archipel-ide/licenses/*\nLicense: OFL-1.1\n"
         ),
     )?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::{PermissionsExt, symlink};
-        for binary in ["jetthing", "jetthing-cli"] {
-            symlink(format!("../lib/jetthing/{binary}"), bin.join(binary))?;
+        for binary in ["archipel-ide", "archipel-cli"] {
+            symlink(format!("../lib/archipel-ide/{binary}"), bin.join(binary))?;
         }
         // Normalise modes regardless of the builder's umask.
         for file in files_under(&root)? {
             let executable = file.parent() == Some(lib.as_path())
                 && matches!(
                     file.file_name().and_then(|n| n.to_str()),
-                    Some("jetthing" | "jetthing-cli")
+                    Some("archipel-ide" | "archipel-cli")
                 );
             if !fs::symlink_metadata(&file)?.file_type().is_symlink() {
                 let mode = if executable { 0o755 } else { 0o644 };
@@ -536,7 +548,7 @@ fn deb(stage: &Path, platform: &Platform, dist: &Path) -> Result<PathBuf> {
         .sum();
     let glibc = Command::new("objdump")
         .arg("-T")
-        .arg(lib.join("jetthing"))
+        .arg(lib.join("archipel-ide"))
         .output()
         .ok()
         .and_then(|output| required_glibc(&String::from_utf8_lossy(&output.stdout)));
@@ -552,7 +564,7 @@ fn deb(stage: &Path, platform: &Platform, dist: &Path) -> Result<PathBuf> {
         ),
     )?;
     let out = dist.join(format!(
-        "jetthing_{}_{}.deb",
+        "archipel-ide_{}_{}.deb",
         deb_version(VERSION),
         deb_arch(&platform.arch)
     ));
@@ -576,10 +588,10 @@ fn appimage(stage: &Path, platform: &Platform, dist: &Path) -> Result<PathBuf> {
     }
     let bin = app_dir.join("usr/bin");
     fs::create_dir_all(&bin)?;
-    for binary in ["jetthing", "jetthing-cli"] {
+    for binary in ["archipel-ide", "archipel-cli"] {
         copy(&stage.join(binary), &bin.join(binary))?;
     }
-    let share = app_dir.join("usr/share/jetthing");
+    let share = app_dir.join("usr/share/archipel-ide");
     fs::create_dir_all(share.join("licenses"))?;
     for file in ["README.md", "NOTICE-intellij-data.md"] {
         copy(&stage.join(file), &share.join(file))?;
@@ -592,27 +604,27 @@ fn appimage(stage: &Path, platform: &Platform, dist: &Path) -> Result<PathBuf> {
     }
     let applications = app_dir.join("usr/share/applications");
     fs::create_dir_all(&applications)?;
-    let desktop = desktop_entry("jetthing");
-    fs::write(applications.join("jetthing.desktop"), &desktop)?;
-    fs::write(app_dir.join("jetthing.desktop"), &desktop)?;
-    for (size, icon) in [("256x256", "jetthing-256.png"), ("512x512", "jetthing.png")] {
+    let desktop = desktop_entry("archipel-ide");
+    fs::write(applications.join("archipel-ide.desktop"), &desktop)?;
+    fs::write(app_dir.join("archipel-ide.desktop"), &desktop)?;
+    for (size, icon) in [("256x256", "archipel-256.png"), ("512x512", "archipel.png")] {
         let dir = app_dir.join(format!("usr/share/icons/hicolor/{size}/apps"));
         fs::create_dir_all(&dir)?;
-        copy(&Path::new(ICONS).join(icon), &dir.join("jetthing.png"))?;
+        copy(&Path::new(ICONS).join(icon), &dir.join("archipel-ide.png"))?;
     }
     copy(
-        &Path::new(ICONS).join("jetthing.png"),
-        &app_dir.join("jetthing.png"),
+        &Path::new(ICONS).join("archipel.png"),
+        &app_dir.join("archipel-ide.png"),
     )?;
     fs::write(app_dir.join("AppRun"), APP_RUN)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::{PermissionsExt, symlink};
         fs::set_permissions(app_dir.join("AppRun"), fs::Permissions::from_mode(0o755))?;
-        symlink("jetthing.png", app_dir.join(".DirIcon"))?;
+        symlink("archipel-ide.png", app_dir.join(".DirIcon"))?;
     }
     let out = dist.join(format!(
-        "jetthing-{VERSION}-linux-{}.AppImage",
+        "archipel-ide-{VERSION}-linux-{}.AppImage",
         platform.arch
     ));
     let _ = fs::remove_file(&out);
@@ -633,7 +645,7 @@ fn appimage(stage: &Path, platform: &Platform, dist: &Path) -> Result<PathBuf> {
 /// Starts the bundled IDE; `APPDIR` is set by the AppImage runtime.
 const APP_RUN: &str = r#"#!/bin/sh
 HERE="${APPDIR:-$(dirname "$(readlink -f "$0")")}"
-exec "$HERE/usr/bin/jetthing" "$@"
+exec "$HERE/usr/bin/archipel-ide" "$@"
 "#;
 
 #[cfg(test)]
@@ -683,7 +695,7 @@ mod tests {
     #[test]
     fn deb_control_declares_package_metadata() {
         let control = deb_control("0.0.1", "x86_64", 4242, Some("2.34"));
-        assert!(control.contains("Package: jetthing\n"));
+        assert!(control.contains("Package: archipel-ide\n"));
         assert!(control.contains("Version: 0.0.1\n"));
         assert!(control.contains("Architecture: amd64\n"));
         assert!(control.contains("Installed-Size: 4242\n"));
@@ -712,26 +724,26 @@ mod tests {
     #[test]
     fn bundle_metadata_names_the_executable_and_icon() {
         let plist = info_plist("1.2.0-beta.1");
-        assert!(plist.contains("<key>CFBundleExecutable</key><string>jetthing</string>"));
-        assert!(plist.contains("<key>CFBundleIconFile</key><string>jetthing</string>"));
+        assert!(plist.contains("<key>CFBundleExecutable</key><string>archipel-ide</string>"));
+        assert!(plist.contains("<key>CFBundleIconFile</key><string>archipel-ide</string>"));
         assert!(plist.contains(&format!("<string>{BUNDLE_ID}</string>")));
         assert!(plist.contains("<key>CFBundleVersion</key><string>1.2.0</string>"));
-        let desktop = desktop_entry("jetthing");
+        let desktop = desktop_entry("archipel-ide");
         assert!(desktop.starts_with("[Desktop Entry]\n"));
-        assert!(desktop.contains("Exec=jetthing\n"));
-        assert!(desktop.contains("Icon=jetthing\n"));
+        assert!(desktop.contains("Exec=archipel-ide\n"));
+        assert!(desktop.contains("Icon=archipel-ide\n"));
     }
 
     #[test]
     fn checksum_files_use_sha256sum_format() {
         let dir = std::env::temp_dir().join(format!("xtask-sum-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
-        let file = dir.join("jetthing.tar.gz");
+        let file = dir.join("archipel.tar.gz");
         fs::write(&file, b"abc").unwrap();
         write_checksum(&file).unwrap();
         assert_eq!(
-            fs::read_to_string(dir.join("jetthing.tar.gz.sha256")).unwrap(),
-            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  jetthing.tar.gz\n"
+            fs::read_to_string(dir.join("archipel.tar.gz.sha256")).unwrap(),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  archipel.tar.gz\n"
         );
         fs::remove_dir_all(dir).unwrap();
     }
@@ -740,14 +752,14 @@ mod tests {
     fn icon_assets_exist_for_every_installer() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
         for icon in [
-            "jetthing.svg",
-            "jetthing.png",
-            "jetthing-256.png",
-            "jetthing.ico",
-            "jetthing.icns",
+            "archipel.svg",
+            "archipel.png",
+            "archipel-256.png",
+            "archipel.ico",
+            "archipel.icns",
         ] {
             assert!(root.join(ICONS).join(icon).is_file(), "{icon}");
         }
-        assert!(root.join("packaging/windows/jetthing.wxs").is_file());
+        assert!(root.join("packaging/windows/archipel-ide.wxs").is_file());
     }
 }

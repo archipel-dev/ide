@@ -4,8 +4,8 @@ Captured on Linux/Xvfb 1600×1000 (glow) with the UI control socket, against a g
 `my-application` project (PNG and vector drawables, colours, strings, a layout) and a fake
 `adb` (`track-devices`, `getprop`, `exec-out screencap -p` returning a PNG).
 
-Reproduction: `ANDROID_HOME=<fake sdk> JETTHING_CONTROL_SOCKET=… cargo run -p jetthing-app -- my-application`,
-then `jetthing-cli ui execute toolwindow.activate.resourceManager '{}'` and `screenshot <path>`.
+Reproduction: `ANDROID_HOME=<fake sdk> ARCHIPEL_CONTROL_SOCKET=… cargo run -p archipel-ide-app -- my-application`,
+then `archipel-cli ui execute toolwindow.activate.resourceManager '{}'` and `screenshot <path>`.
 
 | Item | Result | Evidence |
 |---|---|---|

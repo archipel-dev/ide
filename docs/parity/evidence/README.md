@@ -7,9 +7,9 @@ not a pixel-parity claim.
 Reproduce:
 
 ```bash
-cargo build --release -p jetthing-app
+cargo build --release -p archipel-ide-app
 Xvfb :99 -screen 0 1440x900x24 &
-DISPLAY=:99 ./target/release/jetthing-app . crates/jetthing-ui/src/keys.rs &
+DISPLAY=:99 ./target/release/archipel-ide . crates/archipel-ide-ui/src/keys.rs &
 DISPLAY=:99 import -window root shot.png   # ImageMagick
 ```
 

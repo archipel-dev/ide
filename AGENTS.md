@@ -1,20 +1,29 @@
-# Jetthing engineering guide
+# Archipel IDE engineering guide
 
 ## Non-negotiables
 
 - Keep engine crates independent of `egui`, `eframe`, `winit`, and OS UI APIs.
-- Every meaningful user action is a typed command registered in `jetthing-command`.
+- Every meaningful user action is a typed command registered in `archipel-ide-command`.
 - UI controls dispatch commands; they do not own filesystem or project policy.
 - Prefer complete vertical slices with tests over empty crates or decorative controls.
 - Never claim parity without reproducible evidence recorded in `docs/parity/`.
 - Preserve clean-room boundaries: use public documentation, public source with compatible
   licensing, and observable behavior; do not copy JetBrains code, artwork, or branding.
-- No new ad-hoc egui painting in `jetthing-ui`: use `archipel-kit` components, parts and
+- No new ad-hoc egui painting in `archipel-ide-ui`: use `archipel-kit` components, parts and
   behaviours; if the kit lacks something, add it there. See `docs/ui-migration.md`.
   `cargo xtask design-lint` fails on new `Color32::from_rgb*`, hex palettes, rounded
   `rect_filled` or `CornerRadius::same` outside the kit; after migrating an area, lower
   the baseline with `cargo xtask design-lint --update`.
 - Avoid panics on user-controlled input. Return structured, actionable errors.
+
+## Names
+
+Crates are `archipel-ide-<name>` (lib `archipel_ide_<name>`); `archipel-<name>` without `ide`
+is a suite crate from the kit or SDK repository. Environment variables are `ARCHIPEL_*`,
+per-project data is `.archipel/`. The old Jetthing names live only in `archipel-ide-compat`
+and in the few documented compatibility spots (see `docs/architecture.md`); new code
+reads environment variables through `archipel_ide_compat::env_var[_os]` and never spells
+the old names.
 
 ## Required checks
 
@@ -32,7 +41,8 @@ versioning. See `docs/contributing.md`.
 
 ## Layering
 
-`jetthing-app -> jetthing-ui -> jetthing-core -> {command, project, plugins}`.
+`archipel-ide -> archipel-ide-ui -> archipel-ide-core -> {command, project, plugins}`, with
+`archipel-ide-compat` (the old Jetthing names) at the bottom.
 Lower layers must not depend on higher layers. Language integrations belong behind
 plugin/service traits, never inside the platform core.
 

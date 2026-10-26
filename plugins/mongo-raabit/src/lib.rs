@@ -1,4 +1,4 @@
-//! mongo-raabit: a clean-room MongoDB GUI for Jetthing.
+//! mongo-raabit: a clean-room MongoDB GUI for Archipel IDE.
 //!
 //! [`MongoRaabit`] is the whole view state; render it with [`MongoRaabit::ui`] inside
 //! any egui `Ui` (a plugin tool window, an editor tab or a standalone window). All
@@ -36,7 +36,7 @@ use egui::{CornerRadius, FontId, RichText, Sense, Stroke, Ui, vec2};
 use icons::Icon;
 use style::Palette;
 
-pub const PLUGIN_ID: &str = "dev.jetthing.mongo-raabit";
+pub const PLUGIN_ID: &str = "dev.archipel.mongo-raabit";
 
 impl MongoRaabit {
     /// Render the full application view into `ui`.

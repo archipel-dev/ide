@@ -1,0 +1,10 @@
+[package]
+name = "archipel-ide-git"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+similar.workspace = true
+thiserror.workspace = true
+

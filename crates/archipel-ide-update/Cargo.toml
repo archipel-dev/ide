@@ -1,0 +1,16 @@
+[package]
+name = "archipel-ide-update"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+archipel-ide-compat = { path = "../archipel-ide-compat" }
+flate2 = "1"
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+tar = "0.4"
+thiserror.workspace = true
+ureq = { version = "2.12", default-features = false, features = ["tls", "native-certs", "proxy-from-env", "json"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }

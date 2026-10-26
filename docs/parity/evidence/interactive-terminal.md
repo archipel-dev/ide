@@ -12,11 +12,11 @@ current project. The PTY follows panel dimensions. Editor shortcuts do not consu
 terminal Ctrl+R, Ctrl+Z or similar shell controls.
 
 ```sh
-cargo run -p jetthing-app -- .
-cargo test -p jetthing-terminal
-cargo test -p jetthing-core terminal_commands_validate
-cargo test -p jetthing-ui forwards_shell_keys
-cargo test -p jetthing-ui forward_and_backward_cell_selection
+cargo run -p archipel-ide-app -- .
+cargo test -p archipel-ide-terminal
+cargo test -p archipel-ide-core terminal_commands_validate
+cargo test -p archipel-ide-ui forwards_shell_keys
+cargo test -p archipel-ide-ui forward_and_backward_cell_selection
 ```
 
 Native macOS walkthrough, 2026-10-10: project-relative zsh prompt, direct pasted

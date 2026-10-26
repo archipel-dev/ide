@@ -60,15 +60,15 @@ jobs:
             deb_version=${version/-/\~}
             expected=""
             for asset in \
-              "jetthing-$version-linux-x86_64.tar.gz" \
-              "jetthing-$version-windows-x86_64.zip" \
-              "jetthing-$version-macos-aarch64.tar.gz" \
-              "jetthing-$version-macos-x86_64.tar.gz" \
-              "jetthing-$version-windows-x86_64.msi" \
-              "jetthing-$version-macos-aarch64.dmg" \
-              "jetthing-$version-macos-x86_64.dmg" \
-              "jetthing_${deb_version}_amd64.deb" \
-              "jetthing-$version-linux-x86_64.AppImage"; do
+              "archipel-ide-$version-linux-x86_64.tar.gz" \
+              "archipel-ide-$version-windows-x86_64.zip" \
+              "archipel-ide-$version-macos-aarch64.tar.gz" \
+              "archipel-ide-$version-macos-x86_64.tar.gz" \
+              "archipel-ide-$version-windows-x86_64.msi" \
+              "archipel-ide-$version-macos-aarch64.dmg" \
+              "archipel-ide-$version-macos-x86_64.dmg" \
+              "archipel-ide_${deb_version}_amd64.deb" \
+              "archipel-ide-$version-linux-x86_64.AppImage"; do
               expected="$expected $asset $asset.sha256"
             done
             published=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" \
@@ -179,7 +179,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain"
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
           rm "$RUNNER_TEMP/certificate.p12"
-          echo "JETTHING_MACOS_SIGN_IDENTITY=$MACOS_SIGN_IDENTITY" >> "$GITHUB_ENV"
+          echo "ARCHIPEL_MACOS_SIGN_IDENTITY=$MACOS_SIGN_IDENTITY" >> "$GITHUB_ENV"
 
       - name: Build archive and installer
         shell: bash
@@ -190,7 +190,7 @@ jobs:
         shell: bash
         run: |
           cd dist
-          dmg=$(ls jetthing-*.dmg)
+          dmg=$(ls archipel-ide-*.dmg)
           xcrun notarytool submit "$dmg" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_PASSWORD" --wait
           xcrun stapler staple "$dmg"
@@ -204,7 +204,7 @@ jobs:
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -Last 1
           Set-Location dist
-          $msi = Get-ChildItem jetthing-*.msi | Select-Object -First 1
+          $msi = Get-ChildItem archipel-ide-*.msi | Select-Object -First 1
           & $signtool.FullName sign /f $pfx /p $env:WINDOWS_CERTIFICATE_PASSWORD /fd SHA256 `
             /tr http://timestamp.digicert.com /td SHA256 $msi.Name
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -224,49 +224,49 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          sudo dpkg -i dist/jetthing_*.deb
-          dpkg -s jetthing | grep -E '^(Version|Depends):'
-          test "$(cat /usr/lib/jetthing/jetthing.install)" = deb
-          test -f /usr/share/applications/jetthing.desktop
-          jetthing-cli commands > /dev/null
-          sudo dpkg -r jetthing
-          test ! -e /usr/bin/jetthing && test ! -e /usr/lib/jetthing
+          sudo dpkg -i dist/archipel-ide_*.deb
+          dpkg -s archipel-ide | grep -E '^(Version|Depends):'
+          test "$(cat /usr/lib/archipel-ide/archipel-ide.install)" = deb
+          test -f /usr/share/applications/archipel-ide.desktop
+          archipel-cli commands > /dev/null
+          sudo dpkg -r archipel-ide
+          test ! -e /usr/bin/archipel-ide && test ! -e /usr/lib/archipel-ide
 
       - name: Smoke-test AppImage
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          appimage=$(ls dist/jetthing-*.AppImage)
+          appimage=$(ls dist/archipel-ide-*.AppImage)
           # No FUSE on runners: the runtime extracts itself instead of mounting.
           APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --version
           (cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE/$appimage" --appimage-extract > /dev/null)
-          for file in AppRun jetthing.desktop jetthing.png usr/bin/jetthing usr/bin/jetthing-cli; do
+          for file in AppRun archipel-ide.desktop archipel-ide.png usr/bin/archipel-ide usr/bin/archipel-cli; do
             test -e "$RUNNER_TEMP/squashfs-root/$file"
           done
-          desktop-file-validate "$RUNNER_TEMP/squashfs-root/jetthing.desktop"
+          desktop-file-validate "$RUNNER_TEMP/squashfs-root/archipel-ide.desktop"
 
       - name: Smoke-test MSI install, upgrade code and uninstall
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $msi = (Get-ChildItem dist\jetthing-*.msi | Select-Object -First 1).FullName
+          $msi = (Get-ChildItem dist\archipel-ide-*.msi | Select-Object -First 1).FullName
           $install = Start-Process msiexec -ArgumentList "/i `"$msi`" /qn /l*v install.log" -Wait -PassThru
           if ($install.ExitCode -ne 0) { Get-Content install.log -Tail 50; exit $install.ExitCode }
-          $dir = Join-Path $env:ProgramFiles Jetthing
+          $dir = Join-Path $env:ProgramFiles 'Archipel IDE'
           Get-ChildItem $dir -Recurse | Select-Object -ExpandProperty FullName
-          if ((Get-Content (Join-Path $dir jetthing.install)).Trim() -ne 'msi') { throw 'install marker missing' }
-          $shortcut = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Jetthing.lnk'
+          if ((Get-Content (Join-Path $dir archipel-ide.install)).Trim() -ne 'msi') { throw 'install marker missing' }
+          $shortcut = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Archipel IDE.lnk'
           if (-not (Test-Path $shortcut)) { throw 'Start Menu shortcut missing' }
-          & (Join-Path $dir jetthing-cli.exe) commands | Out-Null
-          if ($LASTEXITCODE -ne 0) { throw 'jetthing-cli failed' }
+          & (Join-Path $dir archipel-cli.exe) commands | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'archipel-cli failed' }
           $entry = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' |
-            Where-Object DisplayName -eq 'Jetthing'
+            Where-Object DisplayName -eq 'Archipel IDE'
           $entry | Select-Object DisplayName, DisplayVersion, Publisher
           # Installing again exercises MajorUpgrade (same UpgradeCode replaces the old product).
           $again = Start-Process msiexec -ArgumentList "/i `"$msi`" /qn" -Wait -PassThru
           if ($again.ExitCode -ne 0) { exit $again.ExitCode }
           $count = @(Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' |
-            Where-Object DisplayName -eq 'Jetthing').Count
+            Where-Object DisplayName -eq 'Archipel IDE').Count
           if ($count -ne 1) { throw "expected one installed product, found $count" }
           $remove = Start-Process msiexec -ArgumentList "/x `"$msi`" /qn" -Wait -PassThru
           if ($remove.ExitCode -ne 0) { exit $remove.ExitCode }
@@ -277,23 +277,23 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          mount="$RUNNER_TEMP/jetthing-dmg"
-          hdiutil attach dist/jetthing-*.dmg -nobrowse -readonly -mountpoint "$mount"
+          mount="$RUNNER_TEMP/archipel-ide-dmg"
+          hdiutil attach dist/archipel-ide-*.dmg -nobrowse -readonly -mountpoint "$mount"
           ls -la "$mount"
           test -L "$mount/Applications"
-          app="$mount/Jetthing.app"
+          app="$mount/Archipel IDE.app"
           plutil -lint "$app/Contents/Info.plist"
           plutil -p "$app/Contents/Info.plist"
           codesign --verify --deep --strict --verbose=2 "$app"
-          lipo -archs "$app/Contents/MacOS/jetthing"
-          if [ "$(uname -m)" = "$(lipo -archs "$app/Contents/MacOS/jetthing-cli")" ]; then
-            "$app/Contents/MacOS/jetthing-cli" commands > /dev/null
+          lipo -archs "$app/Contents/MacOS/archipel-ide"
+          if [ "$(uname -m)" = "$(lipo -archs "$app/Contents/MacOS/archipel-cli")" ]; then
+            "$app/Contents/MacOS/archipel-cli" commands > /dev/null
           fi
           hdiutil detach "$mount"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: jetthing-${{ needs.version.outputs.version }}-${{ matrix.name }}
+          name: archipel-ide-${{ needs.version.outputs.version }}-${{ matrix.name }}
           if-no-files-found: error
           path: |
             dist/*.tar.gz
@@ -323,7 +323,7 @@ jobs:
           cargo run -q -p xtask -- manifests --dir artifacts \
             --version ${{ needs.version.outputs.version }} --out manifests
           find manifests -type f | sort
-          cat manifests/homebrew/jetthing.rb
+          cat manifests/homebrew/archipel-ide.rb
       - uses: actions/upload-artifact@v4
         with:
           name: package-manifests-${{ needs.version.outputs.version }}
@@ -373,7 +373,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.version.outputs.version }}
-          name: Jetthing ${{ needs.version.outputs.version }}
+          name: Archipel IDE ${{ needs.version.outputs.version }}
           target_commitish: ${{ github.sha }}
           body_path: ${{ steps.notes.outputs.body_path }}
           generate_release_notes: ${{ steps.notes.outputs.generate == 'true' }}

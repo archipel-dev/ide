@@ -17,7 +17,7 @@
 - [x] Command palette
 - [x] Manifest plugin discovery
 - [x] Plugin API 1: Rust plugins contribute commands, menus, keybindings, settings, tool windows, editor tabs and status widgets; live enable/disable; `--app <id>` standalone mode (`docs/plugins/api.md`)
-- [x] `.jtplugin` install/uninstall without restart and Plugins page (Marketplace/Installed tabs)
+- [x] `.archipelplugin` install/uninstall without restart and Plugins page (Marketplace/Installed tabs)
 - [x] Lua 5.4 plugins (sandboxed; immediate and declarative views)
 - [x] WASM component plugins (wasmtime, WIT world, permission-gated WASI, fuel/memory limits)
 - [ ] JetBrains Marketplace browsing and conversion
@@ -34,7 +34,7 @@
 - [ ] Terminal hyperlinks, mouse reporting and multiple sessions
 - [x] Cancellable background project text search with streamed result navigation
 - [x] Detected Cargo/Gradle/Maven/npm/Go builds with streamed output and cancellation
-- [x] UI automation control socket (`JETTHING_CONTROL_SOCKET`, `jetthing-cli ui`)
+- [x] UI automation control socket (`ARCHIPEL_CONTROL_SOCKET`, `archipel-cli ui`)
 - [x] Scripted parity scenes (`xtask scenes`: 01, 04, 05, 06, 11, 12) and headless screenshot CI job
 - [x] New UI "Islands Dark" workbench: merged toolbar, stripe, islands, breadcrumbs status bar
 - [x] One-tool-window-per-anchor model with typed `toolwindow.*` commands
@@ -46,22 +46,22 @@
 - [x] Theme engine from spec data with live Islands Dark / Islands Light switching
 - [x] Keymap engine loading all bundled keymaps, keymap-driven shortcuts and Keymap settings page
 - [ ] Bundled icon set beyond the core actions
-- [x] Native installers: MSI, DMG (`Jetthing.app`) and `.deb`, smoke-tested in CI
+- [x] Native installers: MSI, DMG (`Archipel IDE.app`) and `.deb`, smoke-tested in CI
 - [ ] Code signing and notarization with project certificates (pipeline supports it)
 - [x] Editor actions: duplicate/delete/comment/move lines, pairing, smart Enter, word moves
 - [x] Find/Replace in file, Go to Line, Recent Files, Go to File
 - [x] Project tree New/Rename/Delete, commit with message and file selection
-- [x] Workspace restore (`.jetthing/workspace.json`), autosave on focus loss
+- [x] Workspace restore (`.archipel/workspace.json`), autosave on focus loss
 - [x] Check for Updates with verified self-update from GitHub releases
 - [x] `--version` and Help → About with embedded build info (commit, date, target)
 - [x] Log file per OS, crash reports with backtrace, crash notice on next start
 - [x] Release notes from conventional commits (`cargo xtask changelog`)
-- [x] First-run "Customize Jetthing": theme, keymap, settings import
+- [x] First-run "Customize Archipel IDE": theme, keymap, settings import
 - [x] Versioned release pipeline (0.0.2) publishing on every version bump
 
 ## AI Assistant (#52)
 
-- [x] `jetthing-ai` engine: provider trait, Anthropic/OpenAI-compatible/Ollama streaming, mock provider, settings and key storage
+- [x] `archipel-ide-ai` engine: provider trait, Anthropic/OpenAI-compatible/Ollama streaming, mock provider, settings and key storage
 - [x] AI Chat tool window with streaming Markdown, context chips, slash commands, Apply with diff preview
 - [x] Inline ghost-text completion with debounce, type-through, Tab / word accept
 - [x] AI actions (Explain, Refactor, Generate tests/docs, Find problems, Fix with AI on problems and failed builds)
@@ -106,7 +106,7 @@ workspace layout persistence, plugin manager, and recovery.
 Product-neutral bundles start with Web and Rust, then Java/Kotlin/Gradle and Android.
 Use installed SDK, ADB, emulator, and Gradle; do not depend on Android Studio.
 
-- [x] Toolchain provisioning core (`jetthing-toolchains`): verified resumable downloads, atomic
+- [x] Toolchain provisioning core (`archipel-ide-toolchains`): verified resumable downloads, atomic
       installs, PATH-first discovery, project pins, `toolchain.*` commands, status-bar progress
 - [ ] "Missing toolchain" editor notification with Set up, Settings > Toolchains page
 - [ ] Catalog: JDK (foojay Disco) + jdtls, rust-analyzer/rustup, Android cmdline-tools/sdkmanager,

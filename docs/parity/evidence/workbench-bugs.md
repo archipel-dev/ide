@@ -1,7 +1,7 @@
 # Workbench bug fixes (#47)
 
 Fixes for bugs found in the Android Studio / IntelliJ comparison walkthrough
-(`docs/parity/evidence/jetthing/NOTES.md`, "Bugs found"). Each fix has a regression test.
+(`docs/parity/evidence/archipel-ide/NOTES.md`, "Bugs found"). Each fix has a regression test.
 Captured 2026-10-10 on Linux/Xvfb (glow) with `xdotool`.
 
 ## 1. Missing desktop library at startup
@@ -9,16 +9,16 @@ Captured 2026-10-10 on Linux/Xvfb (glow) with `xdotool`.
 Before: `thread 'main' panicked at xkbcommon-dl-0.4.2/src/x11.rs:59:28: Library
 libxkbcommon-x11.so could not be loaded.` plus a backtrace.
 
-After (library moved aside, `DISPLAY=:99 jetthing-app`):
+After (library moved aside, `DISPLAY=:99 archipel-ide`):
 
 ```text
-jetthing: cannot start: the system library libxkbcommon-x11.so is missing.
-Install it with your package manager and start Jetthing again.
+archipel-ide: cannot start: the system library libxkbcommon-x11.so is missing.
+Install it with your package manager and start Archipel IDE again.
   Debian/Ubuntu: sudo apt install libxkbcommon-x11-0
   Fedora:        sudo dnf install libxkbcommon-x11
 ```
 
-Exit code 1. Test: `missing_xkbcommon_gets_install_instructions` (jetthing-app).
+Exit code 1. Test: `missing_xkbcommon_gets_install_instructions` (archipel-ide).
 
 ## 4. Unbound Alt+digit typed the digit
 

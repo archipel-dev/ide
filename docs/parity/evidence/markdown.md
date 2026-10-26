@@ -1,6 +1,6 @@
 # Markdown editor: layout island, live preview, formatting and insertion
 
-Linux, Xvfb 1600x1000, `JETTHING_RENDERER=glow`, debug build, project with `README.md` and
+Linux, Xvfb 1600x1000, `ARCHIPEL_RENDERER=glow`, debug build, project with `README.md` and
 `img/logo.png`. Reference: <https://www.jetbrains.com/help/idea/markdown.html>. Parity rows:
 `IJ-ED-151`, `IJ-ED-157..160` in `docs/parity/intellij-editor.md`.
 
@@ -17,9 +17,9 @@ section (and the reverse for editor scrolling). Every action is a `markdown.*` c
 exist for the actions the reference keymap defines (`Markdown.Styling.CreateLink`,
 `Markdown.InsertEmptyTable` from menus).
 
-Automated coverage: `jetthing-markdown` (parser to block model, formatting transforms on
-selections including Unicode, scroll mapping), `jetthing-core::markdown_commands` (one undo step per
-edit, per-file layout, HTML export), `jetthing-ui::markdown_ui` (scroll sync feedback guards).
+Automated coverage: `archipel-ide-markdown` (parser to block model, formatting transforms on
+selections including Unicode, scroll mapping), `archipel-ide-core::markdown_commands` (one undo step per
+edit, per-file layout, HTML export), `archipel-ide-ui::markdown_ui` (scroll sync feedback guards).
 
 Known gaps: links in the preview are styled but not clickable; no math, Mermaid, table inlay
 editing, Word import or PDF export; preview scroll mapping is block-granular.

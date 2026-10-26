@@ -82,6 +82,8 @@ pub fn main_toolbar(app: &mut IdeApp, ctx: &egui::Context) {
                     crate::toolbar_gradient::paint(ctx, slot, anchor, color);
                 }
                 vcs_widget(app, ui);
+                ui.add_space(8.0);
+                crate::agents_ui::mode_switch(app, ui);
             }
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -627,6 +629,14 @@ pub(crate) fn stripe_button(app: &mut IdeApp, ui: &mut egui::Ui, window: ToolWin
     if window == ToolWindow::Build && app.state.runner.is_running() {
         badge = Some(theme::RUN_GREEN);
     }
+    if window == ToolWindow::Agents {
+        let counts = app.state.agents.counts();
+        if counts.needs_input > 0 {
+            badge = Some(theme::WARNING);
+        } else if counts.working > 0 {
+            badge = Some(theme::RUN_GREEN);
+        }
+    }
     if let Some(color) = badge {
         ui.painter()
             .circle_filled(rect.right_top() + vec2(-7.0, 7.0), 3.0, color);
@@ -652,6 +662,16 @@ pub fn left_stripe(app: &mut IdeApp, ctx: &egui::Context) {
                 stripe_button(app, ui, ToolWindow::Project, Icon::Project);
                 stripe_button(app, ui, ToolWindow::Commit, Icon::Commit);
                 stripe_button(app, ui, ToolWindow::Structure, Icon::Structure);
+                if !app.state.agents.sessions().is_empty()
+                    || app.state.tool_windows.is_visible(ToolWindow::Agents)
+                {
+                    stripe_button(
+                        app,
+                        ui,
+                        ToolWindow::Agents,
+                        Icon::Kit(crate::agents_ui::glyph(crate::agents_ui::Concept::Agent).into()),
+                    );
+                }
                 if app.state.android.project.is_some() {
                     stripe_button(app, ui, ToolWindow::ResourceManager, Icon::Variants);
                     stripe_button(app, ui, ToolWindow::BuildVariants, Icon::Variants);
@@ -857,6 +877,7 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                         crate::ai_chat::status_widget(app, ui, font.clone());
                     }
                     let secondary = theme::TEXT_SECONDARY;
+                    crate::agents_ui::status_widget(app, ui, font.clone());
                     crate::lsp_status::status_widget(app, ui, font.clone());
                     crate::toolchain_status::status_widget(app, ui, font.clone());
                     let active = app

@@ -12,6 +12,9 @@ use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+pub mod agent_events;
+pub mod agents;
+pub mod agents_mock;
 mod ai_actions;
 mod ai_agent;
 mod ai_commands;
@@ -361,6 +364,10 @@ pub struct IdeState {
     /// Breakpoints and the active debug session.
     pub debugger: debug_commands::DebuggerState,
     pub tool_windows: ToolWindowLayout,
+    /// Code or Agents arrangement of the window (documents and tabs are shared).
+    pub workbench_mode: agents::WorkbenchMode,
+    /// Agents mode: sessions, grid, review and balloons (backend behind a trait).
+    pub agents: agents::AgentsState,
     /// Project-relative directories expanded in the Project tool window.
     pub expanded_dirs: BTreeSet<PathBuf>,
     /// Project view options, directory marks and the file clipboard.
@@ -1160,6 +1167,7 @@ pub(crate) fn usize_param(params: &Value, name: &str) -> Result<usize, CommandEr
 
 pub fn built_in_commands() -> CommandRegistry<IdeState> {
     let mut registry = CommandRegistry::default();
+    agents::register(&mut registry);
     android_commands::register(&mut registry);
     android_devices::register(&mut registry);
     android_deploy::register(&mut registry);

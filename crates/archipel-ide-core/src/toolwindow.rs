@@ -32,10 +32,12 @@ pub enum ToolWindow {
     AiChat,
     Debug,
     Hierarchy,
+    /// Compact agents list for Code mode (the Agents mode sidebar, smaller).
+    Agents,
 }
 
 impl ToolWindow {
-    pub const ALL: [ToolWindow; 18] = [
+    pub const ALL: [ToolWindow; 19] = [
         ToolWindow::Project,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -54,6 +56,7 @@ impl ToolWindow {
         ToolWindow::AiChat,
         ToolWindow::Debug,
         ToolWindow::Hierarchy,
+        ToolWindow::Agents,
     ];
 
     pub fn id(self) -> &'static str {
@@ -74,6 +77,7 @@ impl ToolWindow {
             ToolWindow::AiChat => "aiChat",
             ToolWindow::Debug => "debug",
             ToolWindow::Hierarchy => "hierarchy",
+            ToolWindow::Agents => "agents",
             ToolWindow::Gradle => "gradle",
             ToolWindow::Bazel => "bazel",
         }
@@ -97,6 +101,7 @@ impl ToolWindow {
             ToolWindow::AiChat => "AI Chat",
             ToolWindow::Debug => "Debug",
             ToolWindow::Hierarchy => "Hierarchy",
+            ToolWindow::Agents => "Agents",
             ToolWindow::Gradle => "Gradle",
             ToolWindow::Bazel => "Bazel",
         }
@@ -123,6 +128,7 @@ impl ToolWindow {
             | ToolWindow::Gradle
             | ToolWindow::Bazel
             | ToolWindow::Hierarchy
+            | ToolWindow::Agents
             | ToolWindow::AiChat => "",
             ToolWindow::Debug => "⌘5",
             ToolWindow::Git => "⌘9",
@@ -135,7 +141,8 @@ impl ToolWindow {
             | ToolWindow::Commit
             | ToolWindow::Structure
             | ToolWindow::BuildVariants
-            | ToolWindow::ResourceManager => Anchor::Left,
+            | ToolWindow::ResourceManager
+            | ToolWindow::Agents => Anchor::Left,
             ToolWindow::Find
             | ToolWindow::Build
             | ToolWindow::Problems

@@ -106,7 +106,7 @@ pub struct DiffTab {
 }
 
 impl DiffTab {
-    fn new(path: PathBuf, diff: FileDiff, viewer: DiffViewer) -> Self {
+    pub fn new(path: PathBuf, diff: FileDiff, viewer: DiffViewer) -> Self {
         let old_analysis = analyze(&path, &diff.old_text);
         let new_analysis = analyze(&path, &diff.new_text);
         let reveal = (!diff.hunks.is_empty()).then_some(0);

@@ -67,6 +67,7 @@ pub fn left(app: &mut IdeApp, ctx: &egui::Context) {
                 ToolWindow::BuildVariants => crate::build_variants_ui::show(app, ui),
                 ToolWindow::ResourceManager => crate::resource_manager_ui::show(app, ui),
                 ToolWindow::Structure => crate::structure_view::tool_window(app, ui),
+                ToolWindow::Agents => crate::agents_ui::tree(app, ui, true),
                 _ => {}
             }
         });

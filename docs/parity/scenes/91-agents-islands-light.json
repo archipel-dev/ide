@@ -1,0 +1,239 @@
+{
+  "id": "91",
+  "title": "Agents mode prototype, Islands Light",
+  "fixture": "java-gradle",
+  "open": [
+    "src/main/java/com/example/App.java"
+  ],
+  "steps": [
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "execute",
+      "command": "settings.set",
+      "args": {
+        "id": "appearance.theme",
+        "value": "Islands Light"
+      }
+    },
+    {
+      "op": "execute",
+      "command": "toolchain.dismissBanner",
+      "args": {
+        "language": "Java"
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 10500
+    },
+    {
+      "op": "execute",
+      "command": "agents.demo"
+    },
+    {
+      "op": "execute",
+      "command": "toolwindow.toggle",
+      "args": {
+        "id": "agents"
+      }
+    },
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "sleep",
+      "ms": 700
+    },
+    {
+      "op": "assert",
+      "pointer": "/mode",
+      "equals": "code"
+    },
+    {
+      "op": "assert",
+      "pointer": "/agents/statusText",
+      "contains": "input"
+    },
+    {
+      "op": "assert",
+      "pointer": "/agents/notices",
+      "equals": 1
+    },
+    {
+      "op": "screenshot",
+      "name": "91-agents-code-mode.png"
+    },
+    {
+      "op": "execute",
+      "command": "workbench.setMode",
+      "args": {
+        "mode": "agents"
+      }
+    },
+    {
+      "op": "execute",
+      "command": "agents.select",
+      "args": {
+        "session": 4
+      }
+    },
+    {
+      "op": "execute",
+      "command": "agents.select",
+      "args": {
+        "session": 1
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 900
+    },
+    {
+      "op": "assert",
+      "pointer": "/mode",
+      "equals": "agents"
+    },
+    {
+      "op": "assert",
+      "pointer": "/agents/selected",
+      "equals": 1
+    },
+    {
+      "op": "assert",
+      "pointer": "/agents/threads",
+      "equals": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "op": "assert",
+      "pointer": "/agents/sessions/0/state",
+      "equals": "needs input"
+    },
+    {
+      "op": "assert",
+      "pointer": "/agents/notices",
+      "equals": 0
+    },
+    {
+      "op": "screenshot",
+      "name": "91-agents-thread-permission.png"
+    },
+    {
+      "op": "execute",
+      "command": "agents.select",
+      "args": {
+        "session": 2
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 600
+    },
+    {
+      "op": "assert",
+      "pointer": "/agents/selected",
+      "equals": 2
+    },
+    {
+      "op": "screenshot",
+      "name": "91-agents-thread-codex.png"
+    },
+    {
+      "op": "sleep",
+      "ms": 4500
+    },
+    {
+      "op": "execute",
+      "command": "agents.select",
+      "args": {
+        "session": 3
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 400
+    },
+    {
+      "op": "screenshot",
+      "name": "91-agents-thread-done.png"
+    },
+    {
+      "op": "execute",
+      "command": "agents.review",
+      "args": {
+        "session": 3
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 500
+    },
+    {
+      "op": "assert",
+      "pointer": "/agents/screen",
+      "equals": "review"
+    },
+    {
+      "op": "screenshot",
+      "name": "91-agents-review.png"
+    },
+    {
+      "op": "execute",
+      "command": "toolchain.dismissBanner",
+      "args": {
+        "language": "Kotlin"
+      }
+    },
+    {
+      "op": "execute",
+      "command": "agents.openInCode",
+      "args": {
+        "session": 3
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 500
+    },
+    {
+      "op": "assert",
+      "pointer": "/mode",
+      "equals": "code"
+    },
+    {
+      "op": "assert",
+      "pointer": "/agents/returnTo",
+      "equals": 3
+    },
+    {
+      "op": "screenshot",
+      "name": "91-agents-back-banner.png"
+    },
+    {
+      "op": "execute",
+      "command": "agents.backToAgent"
+    },
+    {
+      "op": "sleep",
+      "ms": 300
+    },
+    {
+      "op": "assert",
+      "pointer": "/mode",
+      "equals": "agents"
+    },
+    {
+      "op": "assert",
+      "pointer": "/agents/screen",
+      "equals": "review"
+    }
+  ]
+}

@@ -81,6 +81,17 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
     }
 }
 
+/// The diff body of a [`DiffTab`] without the editor tab toolbar (Agents mode review).
+/// Chunk actions of the viewer are dropped: a review only reads.
+pub(crate) fn show_review(ui: &mut egui::Ui, tab: &mut DiffTab) {
+    let reveal = tab.reveal.take();
+    let scroll_id = egui::Id::new(("review_scroll", &tab.path, tab.viewer.id()));
+    match tab.viewer {
+        DiffViewer::SideBySide => side_by_side(ui, tab, scroll_id, reveal, &mut Vec::new()),
+        DiffViewer::Unified => unified(ui, tab, scroll_id, reveal),
+    }
+}
+
 fn icon_button(ui: &mut egui::Ui, rect: Rect, icon: Icon, enabled: bool, tooltip: &str) -> bool {
     let id = ui.id().with(("diff_toolbar", tooltip));
     let response = ui.interact(rect, id, Sense::click());

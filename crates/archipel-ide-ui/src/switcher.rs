@@ -71,6 +71,9 @@ fn window_icon(window: ToolWindow) -> Icon {
         ToolWindow::AiChat => Icon::Ai,
         ToolWindow::Debug => Icon::Debug,
         ToolWindow::Hierarchy => Icon::Structure,
+        ToolWindow::Agents => {
+            Icon::Kit(crate::agents_ui::glyph(crate::agents_ui::Concept::Agent).into())
+        }
     }
 }
 

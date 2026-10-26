@@ -6,6 +6,7 @@
 //! dispatched through the typed command registry.
 
 mod about;
+mod agents_ui;
 mod ai_actions;
 mod ai_agent;
 mod ai_chat;
@@ -91,6 +92,7 @@ mod welcome;
 mod widgets;
 
 use archipel_ide_command::{CommandRegistry, CommandSpec};
+use archipel_ide_core::agents::WorkbenchMode;
 use archipel_ide_core::{Anchor, IdeState, ToolWindow, built_in_commands};
 use archipel_ide_settings::ids;
 use eframe::egui;
@@ -191,6 +193,7 @@ pub struct IdeApp {
     markdown_ui: markdown_ui::State,
     doc_view: doc_ui::DocView,
     ai_ui: ai_chat::AiChatUi,
+    agents_ui: agents_ui::State,
 }
 
 impl IdeApp {
@@ -286,6 +289,10 @@ impl IdeApp {
                 state.status = error.to_string();
             }
         }
+        state.sync_agents_project();
+        if state.project.is_some() && agents_demo_enabled() {
+            state.seed_agents_demo();
+        }
         if check_updates && state.settings.bool(ids::CHECK_UPDATES).unwrap_or(true) {
             let _ = commands.execute("app.checkForUpdates", &mut state, json!({"silent": true}));
         }
@@ -341,6 +348,7 @@ impl IdeApp {
             commit_amend: false,
             doc_view: doc_ui::DocView::default(),
             ai_ui: ai_chat::AiChatUi::default(),
+            agents_ui: agents_ui::State::default(),
             file_dialogs: std::sync::Arc::new(native_dialog::SystemDialogs),
             pending_dialog: None,
             kind_cache: Default::default(),
@@ -365,6 +373,12 @@ impl IdeApp {
     }
 
     fn dispatch(&mut self, id: &str, params: Value) {
+        // Tab navigation walks the agent threads while Agents mode shows them.
+        let id = match (self.state.workbench_mode, id) {
+            (WorkbenchMode::Agents, "editor.nextTab") => "agents.nextThread",
+            (WorkbenchMode::Agents, "editor.previousTab") => "agents.previousThread",
+            _ => id,
+        };
         if let Err(error) = self.commands.execute(id, &mut self.state, params) {
             diagnostics::log(diagnostics::Level::Warn, &format!("{id}: {error}"));
             self.state.status = error.to_string();
@@ -504,6 +518,10 @@ impl IdeApp {
 
     fn project_opened(&mut self, ctx: &egui::Context) {
         self.dispatch("plugin.refresh", Value::Null);
+        self.state.sync_agents_project();
+        if agents_demo_enabled() {
+            self.state.seed_agents_demo();
+        }
         self.tree_selection = None;
         self.tree_revealed = None;
         self.commit_overrides.clear();
@@ -671,6 +689,14 @@ impl IdeApp {
         }
         if consume(Modifiers::CTRL, Key::Backtick) {
             self.toggle_tool_window(ToolWindow::Terminal);
+        }
+        // Archipel.ToggleAgentsMode. Ctrl+Alt+A is Git Add in the reference keymaps, so the
+        // default is Ctrl+Alt+Shift+X (free in all 26 bundled keymaps).
+        if consume(
+            Modifiers::COMMAND | Modifiers::ALT | Modifiers::SHIFT,
+            Key::X,
+        ) {
+            self.dispatch("workbench.toggleMode", Value::Null);
         }
         self.detect_double_shift(ctx);
         // The Run/Debug Configurations modal closes itself on Escape.
@@ -842,6 +868,13 @@ impl IdeApp {
     }
 }
 
+/// `ARCHIPEL_AGENTS_DEMO=1` starts the IDE with a few scripted agent tasks, so Agents mode
+/// can be tried before the real backend exists.
+fn agents_demo_enabled() -> bool {
+    archipel_ide_compat::env_var("ARCHIPEL_AGENTS_DEMO")
+        .is_ok_and(|value| matches!(value.trim(), "1" | "true" | "yes" | "on"))
+}
+
 /// An open menu (main menu, context menu, toolbar widget popup) owns the
 /// keyboard, as in the reference IDE: Escape closes it, and no workbench
 /// shortcut fires underneath it. Returns whether a popup was open.
@@ -908,6 +941,9 @@ impl IdeApp {
         }
         // Ctrl+-/= are Collapse/Expand in the editor (IntelliJ keymap), not UI zoom.
         ctx.options_mut(|options| options.zoom_with_keyboard = false);
+        if self.state.poll_agents() {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
         self.state.poll_search();
         self.state.poll_runner();
         self.state.poll_debug();
@@ -1016,7 +1052,9 @@ impl IdeApp {
             chrome::main_toolbar(self, ctx);
             chrome::status_bar(self, ctx);
         }
-        if self.state.project.is_some() {
+        if self.state.project.is_some() && self.state.workbench_mode == WorkbenchMode::Agents {
+            agents_ui::show(self, ctx);
+        } else if self.state.project.is_some() {
             chrome::left_stripe(self, ctx);
             plugin_ui::right_side(self, ctx);
             toolwindows::left(self, ctx);
@@ -1053,6 +1091,7 @@ impl IdeApp {
         gutter_popup::show(self, ctx);
         debug_dialogs::show(self, ctx);
         notifications::show(self, ctx);
+        agents_ui::notices(self, ctx);
         crash_notice::show(self, ctx);
         first_run::show(self, ctx);
         about::show(self, ctx);

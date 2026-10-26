@@ -380,6 +380,23 @@ impl IdeApp {
                 "bottom": tool_window(Anchor::Bottom),
             },
             "focus": focus,
+            "mode": self.state.workbench_mode.id(),
+            "agents": {
+                "screen": format!("{:?}", self.state.agents.screen).to_lowercase(),
+                "selected": self.state.agents.selected,
+                "returnTo": self.state.agents.return_to,
+                "statusText": crate::agents_ui::status_text(self),
+                "sessions": self.state.agents.sessions().iter().map(|s| json!({
+                    "id": s.id,
+                    "name": s.name,
+                    "profile": s.profile.id(),
+                    "state": s.state.label(),
+                    "parent": s.parent,
+                    "unread": s.unread,
+                })).collect::<Vec<_>>(),
+                "threads": self.state.agents.threads,
+                "notices": self.state.agents.notices.len(),
+            },
             "projectTree": {
                 "selected": self.tree_selection.as_deref().map(relative),
                 "expanded": self.state.expanded_dirs.iter().map(|path| relative(path.as_path())).collect::<Vec<_>>(),

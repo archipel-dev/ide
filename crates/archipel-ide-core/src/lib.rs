@@ -15,6 +15,9 @@ use std::path::{Path, PathBuf};
 mod ai_actions;
 mod analysis_host;
 mod analysis_modules;
+mod history_commands;
+mod indexing_commands;
+mod todo_commands;
 pub use analysis_host::AnalysisServices;
 mod ai_agent;
 mod ai_commands;
@@ -172,6 +175,7 @@ pub use quick_doc::{DocsState, QuickDoc};
 pub use refactor::{RefactorState, Refactoring, RenameSession};
 pub use signature_help::{ParameterInfo, SignatureLine, SignatureState};
 pub use snippet_session::SnippetSession;
+pub use todo_commands::{TodoGroup, TodoRow, TodoScope, TodoState, TodoView};
 pub use toolchain_commands::ToolchainState;
 mod worktree_commands;
 pub use branch_commands::abort_label;
@@ -568,6 +572,11 @@ impl IdeState {
     }
     pub fn save(&mut self, index: usize) -> Result<(), String> {
         disk_sync::ensure_no_conflict(self, index)?;
+        // Local History: keep what the disk held before the first overwrite.
+        let history_path = self.documents.get(index).map(|d| d.path.clone());
+        let history_previous = history_path
+            .as_deref()
+            .and_then(|path| self.history_previous(path));
         let project = self.project.as_ref().ok_or("no project is open")?;
         let document = self
             .documents
@@ -582,6 +591,9 @@ impl IdeState {
         self.status = format!("Saved {}", document.path.display());
         let absolute = project.root().join(&document.path);
         let _ = self.lsp.save_document(&absolute);
+        if let Some(path) = history_path {
+            self.history_saved(&path, history_previous.as_deref(), &text);
+        }
         Ok(())
     }
 

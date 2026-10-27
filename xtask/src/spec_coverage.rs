@@ -29,6 +29,7 @@ const SETS: &[(&str, &str)] = &[
     ("CI", "Code insight"),
     ("BLD", "Build"),
     ("EXE", "Execution"),
+    ("VCS", "Version control"),
 ];
 /// Pre-spec ID areas from `docs/spec/features/` that still appear in evidence files.
 const LEGACY_AREAS: [&str; 2] = ["JAVA-NAV", "JAVA-GEN"];

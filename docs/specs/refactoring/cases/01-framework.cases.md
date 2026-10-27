@@ -160,10 +160,9 @@ class A { void f() { int x<caret> = 1; int y = x; } }
 ```
 keys: Shift+F6, type "z", then Ctrl+Alt+V
 ```after
-dialog (modal, buttons in order):
-text: Command Rename has not finished yet
-[Continue Started] [Abandon Started]
-(Abandon Started: editor text returns to "int x = 1;" and the Introduce Variable flow starts)
+class A { void f() { int z = 1; int y = z; } }
+editor error hint (no dialog): Rename is not finished yet.
+the in-place rename session is still active
 ```
 
 ### REF-FRM-020 case 1: legacy conflicts dialog contents
@@ -427,7 +426,7 @@ class A {
 (undo stack is as before Shift+F6; no refactoring ran)
 ```
 
-### REF-FRM-052 case 2: invalid identifier keeps the session
+### REF-FRM-052 case 2: invalid identifier shows a confirmation popup
 settings: default
 language: java
 ```before
@@ -440,13 +439,36 @@ class A {
 ```
 keys: Shift+F6, type "1x", Enter
 ```after
+popup (not a dialog), title: Inserted identifier is not valid
+buttons: [Continue editing] [Cancel]
+no refactoring ran. After "Cancel":
 class A {
     void f() {
-        int 1x = 1;
-        System.out.println(1x);
+        int count = 1;
+        System.out.println(count);
     }
 }
-(template session still active, field marked as error; no refactoring ran; Escape then restores "count")
+After "Continue editing" instead: the session restarts with the field text "1x" selected.
+```
+
+### REF-FRM-052 case 4: collision popup for a local variable
+settings: default
+language: java
+```before
+class A {
+    void f() {
+        int a = 1;
+        int co<caret>unt = 2;
+        System.out.println(a + count);
+    }
+}
+```
+keys: Shift+F6, type "a", Enter
+```after
+popup title: Variable 'a' Already Exists
+buttons: [Refactor anyway] [Continue editing]
+the first declaration "int a = 1;" is highlighted as the conflicting element
+no change to the text until a button is pressed (Refactor anyway applies the rename and leaves the code not compiling)
 ```
 
 ### REF-FRM-052 case 3: unchanged name just ends the session

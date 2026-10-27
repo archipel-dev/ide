@@ -11,7 +11,7 @@ use archipel_ide_git::{
 };
 use archipel_ide_platform::{Disposable, MessageBus, ServiceState, Topic};
 use parking_lot::Mutex;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -138,7 +138,7 @@ impl Disposable for GitRepositories {
     }
 }
 
-fn pending(root: &PathBuf) -> Option<PendingOperation> {
+fn pending(root: &Path) -> Option<PendingOperation> {
     pending_operation(root).ok().flatten()
 }
 
@@ -155,6 +155,7 @@ fn structural_changes(git: &RepositoryStatus) -> Vec<&Path> {
 mod tests {
     use super::*;
     use archipel_ide_platform::{Application, ComponentManager, Project, ServiceDescriptor};
+    use std::path::PathBuf;
     use std::process::Command;
 
     fn git(dir: &Path, args: &[&str]) {

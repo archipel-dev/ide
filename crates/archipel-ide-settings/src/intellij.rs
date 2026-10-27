@@ -144,6 +144,7 @@ pub mod ids {
     pub const FOLD_ONE_LINE_METHODS: &str = "editor.folding.oneLineMethods";
     pub const FOLD_DOC_COMMENTS: &str = "editor.folding.docComments";
     pub const FOLD_CUSTOM_REGIONS: &str = "editor.folding.customRegions";
+    pub const FOLD_FILE_HEADER: &str = "editor.folding.fileHeader";
 }
 
 #[derive(Deserialize)]
@@ -1000,6 +1001,7 @@ fn add_editor_definitions(registry: &mut SettingsRegistry) {
             B(false),
         )
         .group(folding),
+        SettingDef::new(ids::FOLD_FILE_HEADER, general, "File header", Bool, B(true)).group(folding),
         SettingDef::new(
             ids::FOLD_CUSTOM_REGIONS,
             general,

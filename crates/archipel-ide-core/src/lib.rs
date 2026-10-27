@@ -205,7 +205,7 @@ pub use snippet_session::SnippetSession;
 pub use todo_commands::{TodoGroup, TodoRow, TodoScope, TodoState, TodoView};
 mod worktree_commands;
 pub use branch_commands::abort_label;
-pub use folds::{CollapsedFold, FoldState};
+pub use folds::{CollapsedFold, FoldDefaults, FoldRegion, FoldState};
 pub use git_log::{DateRange, GitLogState};
 pub use line_changes::hunk_at_line;
 pub use toolwindow::{
@@ -243,6 +243,9 @@ pub struct Document {
     pub force_save: bool,
     /// Modes and memory of the input layer (overwrite, sticky selection, goal column, tab-out).
     pub input: editor_input::InputState,
+    /// The Code Folding settings at the time the file was opened: they decide which regions the
+    /// document has (the one-line method form) and which start collapsed (ED-FOLD-020).
+    pub fold_defaults: folds::FoldDefaults,
 }
 
 /// What a document is backed by (PLAT-SAVE-003).
@@ -286,6 +289,7 @@ impl Document {
             kept_trailing: Vec::new(),
             force_save: false,
             input: Default::default(),
+            fold_defaults: Default::default(),
         };
         // The analysis already reflects `text`.
         document.text.take_edits();
@@ -553,6 +557,8 @@ impl IdeState {
                 (Document::new(path.to_owned(), &text), text)
             }
         };
+        let defaults = folds::FoldDefaults::from_settings(&self.settings().read());
+        document.fold_defaults = defaults;
         document.collapse_default_regions();
         self.documents.push(document);
         self.active_document = Some(self.documents.len() - 1);
@@ -1002,6 +1008,7 @@ impl IdeState {
             document.refresh_analysis(&source);
             self.sync_active_lsp();
             self.close_completion();
+            self.record_change_place();
         }
         Ok(result)
     }

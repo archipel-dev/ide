@@ -371,14 +371,15 @@ pub(crate) fn duplicate_lines(doc: &mut Document) -> Result<bool, String> {
         let copy_start = end + shift + usize::from(missing_break);
         next.push(Selection {
             anchor: copy_start,
-            head: end + shift + added + usize::from(missing_break) * 0,
+            head: end + shift + added,
         });
         shift += added;
     }
     apply_changes(doc, UndoKind::Other, changes, |_, _| next)
 }
 
-/// Transpose Characters (ED-LINE-051).
+/// Transpose Characters (ED-LINE-051): the characters around the caret swap; at the line end
+/// the last two do.
 pub(crate) fn transpose(doc: &mut Document) -> Result<bool, String> {
     let view = view_of(doc);
     let edits: Vec<CaretEdit> = doc
@@ -389,36 +390,19 @@ pub(crate) fn transpose(doc: &mut Document) -> Result<bool, String> {
             let head = sel.head;
             let line_start = view.line_start(head);
             let line_end = view.line_end(head);
-            if head == 0 || line_end - line_start < 2 {
+            if head == line_start || line_end - line_start < 2 {
                 return CaretEdit::move_to(head, head);
             }
-            // At the line end the last two characters swap; elsewhere the two around the caret.
             let (left, right) = if head >= line_end {
                 (head - 2, head)
-            } else if head == line_start {
-                return CaretEdit::move_to(head, head);
             } else {
                 (head - 1, head + 1)
             };
-            let a = view.chars[left];
-            let b = view.chars[left + 1];
-            CaretEdit::new(
-                left,
-                right,
-                format!("{b}{a}"),
-                right - left + (head - left).saturating_sub(right - left) + 0,
-            )
-            .with_caret_at(head - left + usize::from(head < line_end))
+            let swapped = format!("{}{}", view.chars[left + 1], view.chars[left]);
+            CaretEdit::new(left, right, swapped, right - left)
         })
         .collect();
     apply_caret_edits(doc, UndoKind::Other, edits)
-}
-
-impl CaretEdit {
-    fn with_caret_at(mut self, caret: usize) -> Self {
-        self.select = (caret, caret);
-        self
-    }
 }
 
 /// Cut up to Line End and Cut Line Backward (ED-CLIP-006): the text goes to the clipboard.
@@ -488,5 +472,206 @@ pub(crate) fn auto_indent(doc: &mut Document, opts: &EditorOptions) -> Result<bo
                 head: map_through(changes, s.head, Bias::Right),
             })
             .collect()
+    })
+}
+
+/// Move Statement Up / Down (ED-LINE-031): the statement on the caret lines swaps with the
+/// neighbouring statement, or leaves its block when it is the first or last one in it.
+pub(crate) fn move_statement(doc: &mut Document, up: bool) -> Result<bool, String> {
+    let view = view_of(doc);
+    let sel = doc.selections.primary();
+    let (first, last) = lines_of(&view, sel);
+    let own_end = (view.line_end(last) + 1).min(view.len());
+    let own_raw = view.text(first, own_end);
+    let at_eof = !own_raw.ends_with('\n');
+    let own = if at_eof {
+        format!("{own_raw}\n")
+    } else {
+        own_raw
+    };
+    let with_break = |text: String| {
+        if text.ends_with('\n') {
+            text
+        } else {
+            format!("{text}\n")
+        }
+    };
+    let old_indent = view.indent_at(first);
+    // (start, end, new text, where the statement starts in it, its new indent)
+    let (start, end, mut text, own_at, new_indent) = if up {
+        if first == 0 {
+            return Ok(false);
+        }
+        let prev = view.line_start(first - 1);
+        let prev_line = view.text(prev, view.line_end(prev));
+        let prev_full = with_break(view.text(prev, first));
+        if prev_line.trim_end().ends_with('{') {
+            // Out of the block, above the line that opens it.
+            let indent = view.indent_at(prev);
+            let moved = reindent_block(&own, &old_indent, &indent);
+            (prev, own_end, format!("{moved}{prev_full}"), 0, indent)
+        } else {
+            (
+                prev,
+                own_end,
+                format!("{own}{prev_full}"),
+                0,
+                old_indent.clone(),
+            )
+        }
+    } else {
+        if own_end >= view.len() {
+            return Ok(false);
+        }
+        let next = own_end;
+        let next_end = (view.line_end(next) + 1).min(view.len());
+        let next_full = with_break(view.text(next, next_end));
+        let at = next_full.chars().count();
+        if view.text(next, view.line_end(next)).trim() == "}" {
+            // Out of the block, behind the line that closes it.
+            let indent = view.indent_at(next);
+            let moved = reindent_block(&own, &old_indent, &indent);
+            (first, next_end, format!("{next_full}{moved}"), at, indent)
+        } else {
+            (
+                first,
+                next_end,
+                format!("{next_full}{own}"),
+                at,
+                old_indent.clone(),
+            )
+        }
+    };
+    if at_eof && text.ends_with('\n') && end == view.len() {
+        text.pop();
+    }
+    let selections = doc.selections.selections().to_vec();
+    let indent_delta = new_indent.chars().count() as isize - old_indent.chars().count() as isize;
+    let changes = vec![TextChange {
+        start_char: start,
+        end_char: end,
+        inserted: text,
+    }];
+    apply_changes(doc, UndoKind::Other, changes, |_, _| {
+        selections
+            .iter()
+            .map(|s| {
+                let offset = s.head.saturating_sub(first);
+                let shifted = if offset >= old_indent.chars().count() {
+                    offset.saturating_add_signed(indent_delta)
+                } else {
+                    offset.min(new_indent.chars().count())
+                };
+                Selection::caret(start + own_at + shifted)
+            })
+            .collect()
+    })
+}
+
+/// `block` with its lines moved from the indent `from` to `to`.
+fn reindent_block(block: &str, from: &str, to: &str) -> String {
+    block
+        .split_inclusive('\n')
+        .map(|line| match line.strip_prefix(from) {
+            Some(rest) if !line.trim().is_empty() => format!("{to}{rest}"),
+            _ => line.to_owned(),
+        })
+        .collect()
+}
+
+/// Move Element Left / Right (ED-LINE-032): swaps the argument or list element at the caret with its
+/// neighbour.
+pub(crate) fn move_element(doc: &mut Document, right: bool) -> Result<bool, String> {
+    let view = view_of(doc);
+    let sel = doc.selections.primary();
+    let head = sel.head;
+    let open = view.open_brackets(head);
+    let Some(&(opener, bracket)) = open.last() else {
+        return Ok(false);
+    };
+    if bracket == '{' {
+        return Ok(false);
+    }
+    let close_char = if bracket == '(' { ')' } else { ']' };
+    // Find the closing bracket and the top-level commas in between.
+    let mut depth = 0usize;
+    let mut commas = Vec::new();
+    let mut close = None;
+    for i in opener + 1..view.len() {
+        if !view.is_code(i) {
+            continue;
+        }
+        match view.chars[i] {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => {
+                if depth == 0 {
+                    if view.chars[i] == close_char {
+                        close = Some(i);
+                    }
+                    break;
+                }
+                depth -= 1;
+            }
+            ',' if depth == 0 => commas.push(i),
+            _ => {}
+        }
+    }
+    let Some(close) = close else {
+        return Ok(false);
+    };
+    let mut bounds = vec![opener + 1];
+    for &comma in &commas {
+        bounds.push(comma);
+        bounds.push(comma + 1);
+    }
+    bounds.push(close);
+    let elements: Vec<(usize, usize)> = bounds.chunks(2).map(|c| (c[0], c[1])).collect();
+    let trimmed = |(s, e): (usize, usize)| {
+        let mut s2 = s;
+        let mut e2 = e;
+        while s2 < e2 && view.chars[s2].is_whitespace() {
+            s2 += 1;
+        }
+        while e2 > s2 && view.chars[e2 - 1].is_whitespace() {
+            e2 -= 1;
+        }
+        (s2, e2)
+    };
+    let Some(index) = elements.iter().position(|&(s, e)| s <= head && head <= e) else {
+        return Ok(false);
+    };
+    let other = if right {
+        if index + 1 >= elements.len() {
+            return Ok(false);
+        }
+        index + 1
+    } else {
+        if index == 0 {
+            return Ok(false);
+        }
+        index - 1
+    };
+    let (a, b) = (
+        trimmed(elements[index.min(other)]),
+        trimmed(elements[index.max(other)]),
+    );
+    let text_a = view.text(a.0, a.1);
+    let text_b = view.text(b.0, b.1);
+    let between = view.text(a.1, b.0);
+    let changes = vec![TextChange {
+        start_char: a.0,
+        end_char: b.1,
+        inserted: format!("{text_b}{between}{text_a}"),
+    }];
+    let own = trimmed(elements[index]);
+    let offset = head.clamp(own.0, own.1) - own.0;
+    let new_start = if index < other {
+        // Moved right: now after the other element and the separator.
+        a.0 + text_b.chars().count() + between.chars().count()
+    } else {
+        a.0
+    };
+    apply_changes(doc, UndoKind::Other, changes, |_, _| {
+        vec![Selection::caret(new_start + offset)]
     })
 }

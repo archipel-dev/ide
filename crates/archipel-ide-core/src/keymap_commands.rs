@@ -174,6 +174,7 @@ pub const ACTION_COMMANDS: &[ActionCommand] = &[
     editor("CodeCompletion", "language.complete"),
     editor("InsertLiveTemplate", "template.insert"),
     editor("SurroundWithLiveTemplate", "template.surround"),
+    editor("SurroundWith", "template.surroundWith"),
     editor("GotoNextError", "editor.nextProblem"),
     // In Android projects the UI resolves `R.x.y` references at the caret through
     // `android.resources.gotoDeclaration` first; everything else asks the language server.
@@ -184,6 +185,7 @@ pub const ACTION_COMMANDS: &[ActionCommand] = &[
     editor("ShowUsages", "navigate.showUsages"),
     global("Back", "navigate.back", "{}"),
     global("Forward", "navigate.forward", "{}"),
+    global("JumpToLastChange", "navigate.lastEdit", "{}"),
     editor("ShowIntentionActions", "code.showIntentions"),
     editor("Generate", "code.generate"),
     editor("GotoSuperMethod", "navigate.superMethod"),
@@ -207,6 +209,11 @@ pub const ACTION_COMMANDS: &[ActionCommand] = &[
     editor("EditorUnSelectWord", "editor.shrinkSelection"),
     editor("CollapseRegion", "editor.collapseRegion"),
     editor("ExpandRegion", "editor.expandRegion"),
+    editor(
+        "CollapseRegionRecursively",
+        "editor.collapseRegionRecursively",
+    ),
+    editor("ExpandRegionRecursively", "editor.expandRegionRecursively"),
     editor("CollapseSelection", "editor.foldSelection"),
     editor("CollapseAllRegions", "editor.collapseAllRegions"),
     editor("ExpandAllRegions", "editor.expandAllRegions"),
@@ -283,6 +290,12 @@ pub const ACTION_COMMANDS: &[ActionCommand] = &[
     editor_action!("EditorTranspose"),
     editor_action!("CommentByBlockComment"),
     editor_action!("AutoIndentLines"),
+    editor_action!("MoveStatementUp"),
+    editor_action!("MoveStatementDown"),
+    editor_action!("MoveElementLeft"),
+    editor_action!("MoveElementRight"),
+    editor("EditorCloneCaretAbove", "editor.cloneCaretAbove"),
+    editor("EditorCloneCaretBelow", "editor.cloneCaretBelow"),
     editor("EditorEnter", "editor.enter"),
     editor("EditorTab", "editor.tab"),
     editor("BraceOrQuoteOut", "editor.tab"),
@@ -311,6 +324,8 @@ pub const UNBOUND_BY_DEFAULT: &[&str] = &[
     "EditorReverseLines",
     "EditorUniqueLines",
     "EditorCutLineBackward",
+    "EditorCloneCaretAbove",
+    "EditorCloneCaretBelow",
 ];
 
 /// Archipel-only actions: no reference id, so no bundled shortcut, but a keymap override

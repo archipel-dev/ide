@@ -497,7 +497,10 @@ mod tests {
                     if shortcut.to_string() == "Force touch" {
                         continue;
                     }
-                    if let Some(previous) = seen.insert(shortcut.clone(), action.clone()) {
+                    // Two spellings of one shortcut on the same action are no conflict.
+                    if let Some(previous) = seen.insert(shortcut.clone(), action.clone())
+                        && previous != *action
+                    {
                         panic!("{id}: {previous} and {action} share {shortcut}");
                     }
                 }

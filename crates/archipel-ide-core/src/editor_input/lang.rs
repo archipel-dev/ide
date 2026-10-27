@@ -171,6 +171,10 @@ impl View {
         self.chars.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.chars.is_empty()
+    }
+
     pub fn at(&self, index: usize) -> Option<char> {
         self.chars.get(index).copied()
     }

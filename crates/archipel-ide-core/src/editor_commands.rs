@@ -143,7 +143,7 @@ fn register_multicaret(registry: &mut CommandRegistry<IdeState>) {
         "Clone Caret Above",
         None,
         |d| {
-            multicaret::clone_caret(&d.text, &mut d.selections, true);
+            crate::editor_input::clone_caret(d, true);
             Ok(())
         },
     );
@@ -153,7 +153,7 @@ fn register_multicaret(registry: &mut CommandRegistry<IdeState>) {
         "Clone Caret Below",
         None,
         |d| {
-            multicaret::clone_caret(&d.text, &mut d.selections, false);
+            crate::editor_input::clone_caret(d, false);
             Ok(())
         },
     );
@@ -194,6 +194,53 @@ fn register_multicaret(registry: &mut CommandRegistry<IdeState>) {
         .expect("unique built-in id");
 }
 
+/// Extend Selection in text without a syntax tree: the word at the caret (ED-CARET-032), then
+/// the whole text.
+fn plain_text_extension(document: &crate::Document, selection: Selection) -> Selection {
+    let len = document.text.len_chars();
+    let word = |position: usize| {
+        let is_word = |i: usize| {
+            document
+                .text
+                .char_at(i)
+                .is_some_and(|c| c.is_alphanumeric() || c == '_')
+        };
+        let probe = if is_word(position) {
+            Some(position)
+        } else if position > 0 && is_word(position - 1) {
+            Some(position - 1)
+        } else {
+            None
+        }?;
+        let mut start = probe;
+        while start > 0 && is_word(start - 1) {
+            start -= 1;
+        }
+        let mut end = probe;
+        while is_word(end) {
+            end += 1;
+        }
+        Some((start, end))
+    };
+    if let Some((start, end)) = word(selection.head)
+        && start <= selection.start()
+        && selection.end() <= end
+        && (start, end) != (selection.start(), selection.end())
+    {
+        return Selection {
+            anchor: start,
+            head: end,
+        };
+    }
+    if selection.start() == 0 && selection.end() == len {
+        return selection;
+    }
+    Selection {
+        anchor: 0,
+        head: len,
+    }
+}
+
 /// Extend Selection: grows every selection to the next syntactic unit.
 /// Returns false when nothing could grow (plain text or whole file selected).
 pub fn extend_selection(document: &mut crate::Document) -> bool {
@@ -209,6 +256,9 @@ pub fn extend_selection(document: &mut crate::Document) -> bool {
                     anchor: document.text.byte_to_char(range.start),
                     head: document.text.byte_to_char(range.end),
                 },
+                None if document.analysis.syntax.is_none() => {
+                    plain_text_extension(document, *selection)
+                }
                 None => *selection,
             }
         })
@@ -386,7 +436,10 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |state: &mut IdeState, params| {
                 let line = usize_param(&params, "line")?;
                 let column = params.get("column").and_then(Value::as_u64).unwrap_or(1);
+                let origin = state.current_place();
                 select_in_active(state, line, column as usize, 0).map_err(CommandError::Failed)?;
+                // Go to Line is a navigation command (ED-NAV-002).
+                state.navigated_from(origin);
                 Ok(Value::Null)
             },
         ))

@@ -24,7 +24,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 /// Number of cases that must pass. Never lower it; raise it with every fix.
-const PASS_BASELINE: usize = 284;
+const PASS_BASELINE: usize = 341;
 
 // ---------------------------------------------------------------------------------------------
 // Parsing
@@ -52,6 +52,10 @@ struct Case {
 }
 
 impl Case {
+    fn before_has_folds(&self) -> bool {
+        self.before.as_deref().is_some_and(|b| b.contains("<fold "))
+    }
+
     fn name(&self) -> String {
         format!("{} case {}", self.id, self.number)
     }
@@ -559,6 +563,35 @@ impl Runner {
             }
             Ok(())
         })?;
+        if !marked.folds.is_empty() {
+            runner.state.edit_active(|document| {
+                // The markup lists the state of every region: start from none collapsed.
+                document.folds.clear();
+                let generated = document
+                    .analysis
+                    .folds_in(0..document.analysis.source.len());
+                for mark in marked.folds.iter().filter(|m| !m.expanded) {
+                    let start_byte = document.text.char_to_byte(mark.start);
+                    let end_byte = document.text.char_to_byte(mark.end);
+                    let range = generated
+                        .iter()
+                        .find(|g| g.start_byte == start_byte && g.end_byte == end_byte)
+                        .cloned()
+                        .unwrap_or(archipel_ide_language::FoldRange {
+                            start_byte,
+                            end_byte,
+                            start_line: document.text.char_to_line(mark.start),
+                            end_line: document.text.char_to_line(mark.end),
+                            placeholder: mark.placeholder.clone(),
+                            kind: archipel_ide_language::FoldKind::Block,
+                            default: archipel_ide_language::FoldDefault::Expanded,
+                            group: 0,
+                        });
+                    document.folds.collapse(&range);
+                }
+                Ok(())
+            })?;
+        }
         if let Some(clipboard) = &case.clipboard {
             runner.clipboard = unescape(clipboard);
         }
@@ -576,6 +609,15 @@ impl Runner {
             .map_err(|e| e.to_string())
     }
 
+    /// Like [`Runner::run`] for commands the window starts from a key: a command that is
+    /// disabled (nothing to redo) does nothing, as in the window.
+    fn run_from_key(&mut self, command: &str, params: Value) -> Result<Value, String> {
+        match self.commands.execute(command, &mut self.state, params) {
+            Err(archipel_ide_command::CommandError::Disabled(_)) => Ok(Value::Null),
+            other => other.map_err(|e| e.to_string()),
+        }
+    }
+
     fn step(&mut self, step: &Step) -> Result<(), String> {
         match step {
             Step::Type(text) => {
@@ -591,9 +633,35 @@ impl Runner {
             }
             Step::Action(id) => self.action(id, ActionPlace::MainMenu),
             Step::Key(chord) => self.key(chord),
-            Step::Choose(_) => Err("popup choice is not runnable yet".into()),
+            Step::Choose(text) => {
+                let row = self
+                    .state
+                    .completion
+                    .as_ref()
+                    .and_then(|session| {
+                        session
+                            .ranked
+                            .iter()
+                            .position(|ranked| session.items[ranked.index].label == *text)
+                    })
+                    .ok_or_else(|| format!("the popup has no entry `{text}`"))?;
+                self.state.select_completion(row);
+                self.run("completion.accept", json!({"replace": false}))?;
+                Ok(())
+            }
             Step::Open(_) | Step::Close(_) => Err("open/close steps are not runnable yet".into()),
-            Step::Other(text) => Err(format!("unsupported step `{text}`")),
+            Step::Other(text) => {
+                // `Ctrl+G "6" Enter`: the Go to Line dialog with its input.
+                if let Some(rest) = text.strip_prefix("Ctrl+G \"")
+                    && let Some((line, tail)) = rest.split_once('"')
+                    && tail.trim() == "Enter"
+                    && let Ok(line) = line.parse::<u64>()
+                {
+                    self.run("editor.gotoLine", json!({"line": line}))?;
+                    return Ok(());
+                }
+                Err(format!("unsupported step `{text}`"))
+            }
         }
     }
 
@@ -602,6 +670,10 @@ impl Runner {
             "$Copy" | "EditorCopy" => return self.copy(false),
             "$Cut" | "EditorCut" => return self.copy(true),
             "$Paste" | "EditorPaste" => return self.paste(),
+            "SaveAll" => {
+                self.run_from_key("editor.saveAll", Value::Null)?;
+                return Ok(());
+            }
             "EditorPasteSimple" => {
                 let text = self.clipboard.replace("\r\n", "\n");
                 self.run("editor.paste", json!({"text": text, "raw": true}))?;
@@ -618,7 +690,7 @@ impl Runner {
         };
         match effect {
             Some(ActionEffect::Command { id, params }) => {
-                let result = self.run(&id, params)?;
+                let result = self.run_from_key(&id, params)?;
                 if matches!(id.as_str(), "editor.cutLineEnd" | "editor.cutLineBackward") {
                     self.clipboard = result["text"].as_str().unwrap_or_default().to_owned();
                     self.clipboard_line = None;
@@ -638,6 +710,10 @@ impl Runner {
         let Shortcut::Keys(strokes) = shortcut else {
             return Err(format!("not a key chord: {chord}"));
         };
+        // The window gives a visible completion popup the arrows, Enter and Tab first.
+        if self.popup_key(&strokes[0].key)? {
+            return Ok(());
+        }
         let lookup = self.state.keymap_state().keymap.lookup(&strokes);
         let Lookup::Actions(actions) = lookup else {
             return Err(format!("no action is bound to {chord}"));
@@ -653,6 +729,29 @@ impl Runner {
             "no available action for {chord}: {}",
             actions.join(", ")
         ))
+    }
+
+    fn popup_key(&mut self, key: &str) -> Result<bool, String> {
+        let open = self
+            .state
+            .completion
+            .as_ref()
+            .is_some_and(|session| session.visible());
+        if !open {
+            return Ok(false);
+        }
+        match key {
+            "Enter" => {
+                self.run("completion.accept", json!({"replace": false}))?;
+            }
+            "Tab" => {
+                self.run("completion.accept", json!({"replace": true}))?;
+            }
+            "Down" => self.state.move_completion_selection(1),
+            "Up" => self.state.move_completion_selection(-1),
+            _ => return Ok(false),
+        }
+        Ok(true)
     }
 
     fn copy(&mut self, cut: bool) -> Result<(), String> {
@@ -688,10 +787,21 @@ impl Runner {
             .iter()
             .map(|s| (s.anchor, s.head))
             .collect();
+        let mut folds: Vec<FoldMark> = document
+            .fold_regions()
+            .into_iter()
+            .map(|region| FoldMark {
+                start: document.text.byte_to_char(region.range.start_byte),
+                end: document.text.byte_to_char(region.range.end_byte),
+                placeholder: region.range.placeholder.clone(),
+                expanded: !region.collapsed,
+            })
+            .collect();
+        folds.sort_by_key(|f| (f.start, std::cmp::Reverse(f.end)));
         Ok(Marked {
             text: document.text.text(),
             selections,
-            folds: Vec::new(),
+            folds,
         })
     }
 }
@@ -760,7 +870,18 @@ fn run_case(case: &Case) -> Outcome {
             render_marked(&actual.text, &actual.selections, &actual.folds),
         ));
     }
-    if want != got {
+    // Regions are compared in the folding cases and wherever the markup names one.
+    let compare_folds =
+        case.file.starts_with("04-") || !expected.folds.is_empty() || case.before_has_folds();
+    if compare_folds && actual.folds != expected.folds {
+        return Outcome::Fail(format!(
+            "folds differ\n  expected: {}\n  actual:   {}",
+            render_marked(&expected.text, &expected.selections, &expected.folds),
+            render_marked(&actual.text, &actual.selections, &actual.folds),
+        ));
+    }
+    // A case that names no caret does not check them.
+    if !want.is_empty() && want != got {
         return Outcome::Fail(format!(
             "carets differ\n  expected: {}\n  actual:   {}",
             render_marked(&expected.text, &expected.selections, &expected.folds),
@@ -892,7 +1013,7 @@ fn editor_cases_do_not_regress() {
         for case in parse_file(path) {
             if only
                 .as_ref()
-                .is_some_and(|prefix| !case.id.starts_with(prefix.as_str()))
+                .is_some_and(|prefixes| !prefixes.split(',').any(|p| case.id.starts_with(p)))
             {
                 continue;
             }

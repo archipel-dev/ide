@@ -88,11 +88,7 @@ fn quotes_after(view: &View, head: usize, quote: char) -> usize {
 
 /// Typed text: one character goes through the handlers, anything longer (an input method's
 /// commit) is inserted as it is.
-pub(crate) fn type_text(
-    doc: &mut Document,
-    opts: &EditorOptions,
-    text: &str,
-) -> Result<bool, String> {
+pub fn type_text(doc: &mut Document, opts: &EditorOptions, text: &str) -> Result<bool, String> {
     if text.is_empty() {
         return Ok(false);
     }

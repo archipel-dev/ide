@@ -168,32 +168,6 @@ pub fn drag_block(
     BlockSelection { anchor, head }.apply(text, selections);
 }
 
-/// Moves every caret with `target`, extending selections when `extend`.
-/// Carets that land on the same offset merge.
-pub fn move_carets(
-    document: &mut Document,
-    extend: bool,
-    target: impl Fn(&Document, Selection) -> usize,
-) {
-    let moved: Vec<Selection> = document
-        .selections
-        .selections()
-        .iter()
-        .map(|selection| {
-            let head = target(document, *selection);
-            Selection {
-                anchor: if extend { selection.anchor } else { head },
-                head,
-            }
-        })
-        .collect();
-    if moved.len() == 1 {
-        document.selections.set_single(moved[0]);
-    } else {
-        document.selections.set_all(moved);
-    }
-}
-
 /// Alt+Shift+click (⌥⇧click): adds a caret, or removes the caret already there.
 pub fn toggle_caret(selections: &mut SelectionSet, offset: usize) {
     let current = selections.selections();

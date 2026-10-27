@@ -63,6 +63,18 @@ pub(crate) fn perform(
         "EditorTranspose" => lines::transpose(doc).map(|_| ()),
         "CommentByBlockComment" => lines::comment_block(doc, opts).map(|_| ()),
         "AutoIndentLines" => lines::auto_indent(doc, opts).map(|_| ()),
+        "MoveStatementUp" => lines::move_statement(doc, true).map(|_| ()),
+        "MoveStatementDown" => lines::move_statement(doc, false).map(|_| ()),
+        "MoveElementLeft" => lines::move_element(doc, false).map(|_| ()),
+        "MoveElementRight" => lines::move_element(doc, true).map(|_| ()),
+        "EditorCloneCaretAbove" => {
+            movement::clone_caret(doc, true);
+            Ok(())
+        }
+        "EditorCloneCaretBelow" => {
+            movement::clone_caret(doc, false);
+            Ok(())
+        }
         "EditorToggleInsertState" => {
             doc.input.overwrite = !doc.input.overwrite;
             Ok(())

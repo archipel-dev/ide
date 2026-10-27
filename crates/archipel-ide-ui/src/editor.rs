@@ -1159,41 +1159,6 @@ pub fn move_caret_to(app: &mut IdeApp, line: usize, column: usize) {
     app.state.clear_status();
 }
 
-fn line_length(document: &Document, line: usize) -> usize {
-    document
-        .text
-        .line(line)
-        .unwrap_or_default()
-        .trim_end_matches(['\r', '\n'])
-        .chars()
-        .count()
-}
-
-/// Character offset for moving `head` vertically by `delta` visual rows
-/// (collapsed regions count as one row), keeping the column.
-fn vertical_target(document: &Document, folds: &FoldView, head: usize, delta: isize) -> usize {
-    let Ok((line, column)) = document.text.char_to_line_column(head) else {
-        return head;
-    };
-    let last_row = folds.row_count(document.text.len_lines()).saturating_sub(1) as isize;
-    let row = (folds.line_to_row(line) as isize + delta).clamp(0, last_row) as usize;
-    let target = folds.row_to_line(row);
-    if target == line {
-        return if delta < 0 {
-            document.text.line_to_char(line).unwrap_or(0)
-        } else {
-            document.text.line_to_char(line).unwrap_or(0) + line_length(document, line)
-        };
-    }
-    document.text.line_to_char(target).unwrap_or(0) + column.min(line_length(document, target))
-}
-
-fn move_primary(document: &mut Document, head: usize, extend: bool) {
-    let current = document.selections.primary();
-    let anchor = if extend { current.anchor } else { head };
-    document.selections.set_single(Selection { anchor, head });
-}
-
 /// Horizontal layout of the editor gutter. Left to right: blame annotations,
 /// line numbers (breakpoint dots and the execution arrow sit in their left
 /// margin), run icons (when the file has any), folding markers, the
@@ -2189,35 +2154,24 @@ fn editor_surface(
         .filter(|e| !(chooser_open && matches!(e, egui::Event::Key { .. } | egui::Event::Text(_))))
         .collect();
     let initial_revision = document.text.revision();
-    let page = (ui.available_height() / row_height).max(1.0) as isize;
+    // What Page Up/Down and the page-relative moves of the input layer need to know.
+    let page = (ui.available_height() / row_height).max(1.0) as usize;
+    document.input.page_lines = page;
+    document.input.top_line = folds.row_to_line(seen_first.min(row_count.saturating_sub(1)));
     let mac = cfg!(target_os = "macos");
-    let text_error = |error: archipel_ide_text::TextError| error.to_string();
+    let text_error = |error: String| error;
     let command = |id: &'static str| EditorRequest::Command(id, Value::Null);
     let clone_armed = editor_keys::clone_gesture_armed(ui.ctx(), response.id, mac);
     let mut typed = String::new();
-    let pairing = theme::pair_options(ui.ctx());
+    let options = theme::editor_options(ui.ctx());
     for event in events {
         let (key, modifiers) = match event {
             egui::Event::Text(text) if !text.is_empty() => {
                 typed.push_str(&text);
-                let mut chars = text.chars();
-                let single = chars.next().filter(|_| chars.next().is_none());
-                let handled = match single {
-                    Some(c) => ops::type_char_with(
-                        &mut document.text,
-                        &mut document.selections,
-                        c,
-                        pairing,
-                    )
-                    .map_err(text_error)?,
-                    None => false,
-                };
-                if !handled {
-                    document
-                        .selections
-                        .insert(&mut document.text, &text)
-                        .map_err(text_error)?;
-                }
+                // Typed handlers, pairs, overtype and overwrite mode live in the core's input
+                // layer, shared with the terminal UI (ED-TYPE-001 to ED-TYPE-037).
+                archipel_ide_core::editor_input::type_text(document, &options, &text)
+                    .map_err(text_error)?;
                 continue;
             }
             egui::Event::Copy => {
@@ -2256,144 +2210,10 @@ fn editor_surface(
             && let Some((lines, columns)) = editor_keys::column_delta(key, modifiers)
         {
             editor_keys::extend_block(document, lines, columns);
-            continue;
         }
-        let head = document.selections.primary().head;
-        let len = document.text.len_chars();
-        let extend = modifiers.shift;
-        // Word-wise movement: ⌥ on macOS, Ctrl elsewhere.
-        let word = if mac { modifiers.alt } else { modifiers.ctrl };
-        // Duplicate, Delete Line, Comment and Move Line come from the active keymap
-        // (`keybindings`), which consumes their keys before the editor sees them.
-        match key {
-            egui::Key::Enter if modifiers.shift => {
-                // Start New Line: open a line below without splitting the current one.
-                let line = document.text.char_to_line(head);
-                let (_, content_end, _) = ops::line_bounds(&document.text, line);
-                document
-                    .selections
-                    .set_single(Selection::caret(content_end));
-                ops::newline(&mut document.text, &mut document.selections).map_err(text_error)?;
-            }
-            egui::Key::Enter => {
-                ops::newline(&mut document.text, &mut document.selections).map_err(text_error)?
-            }
-            egui::Key::Tab if modifiers.shift => {
-                requests.push(command("editor.unindent"));
-            }
-            egui::Key::Tab => {
-                let primary = document.selections.primary();
-                let multi_line = document.text.char_to_line(primary.start())
-                    != document.text.char_to_line(primary.end());
-                if multi_line {
-                    requests.push(command("editor.indent"));
-                } else {
-                    // Expands a live template abbreviation; otherwise indents.
-                    requests.push(command("template.expand"));
-                }
-            }
-            egui::Key::Backspace if word && document.selections.primary().is_caret() => {
-                let target = ops::word_left(&document.text, head);
-                document.selections.set_single(Selection {
-                    anchor: head,
-                    head: target,
-                });
-                document
-                    .selections
-                    .insert(&mut document.text, "")
-                    .map_err(text_error)?;
-            }
-            egui::Key::Backspace => {
-                ops::backspace(&mut document.text, &mut document.selections).map_err(text_error)?
-            }
-            egui::Key::Delete if word && document.selections.primary().is_caret() => {
-                let target = ops::word_right(&document.text, head);
-                document.selections.set_single(Selection {
-                    anchor: head,
-                    head: target,
-                });
-                document
-                    .selections
-                    .insert(&mut document.text, "")
-                    .map_err(text_error)?;
-            }
-            egui::Key::Delete => document
-                .selections
-                .delete_forward(&mut document.text)
-                .map_err(text_error)?,
-            egui::Key::A if modifiers.command => {
-                document.selections.set_single(Selection {
-                    anchor: 0,
-                    head: len,
-                });
-            }
-            egui::Key::ArrowLeft if word => {
-                editor_keys::move_carets(document, extend, |d, s| ops::word_left(&d.text, s.head))
-            }
-            egui::Key::ArrowRight if word => {
-                editor_keys::move_carets(document, extend, |d, s| ops::word_right(&d.text, s.head))
-            }
-            egui::Key::ArrowLeft => editor_keys::move_carets(document, extend, |_, s| {
-                if !extend && !s.is_caret() {
-                    s.start()
-                } else {
-                    s.head.saturating_sub(1)
-                }
-            }),
-            egui::Key::ArrowRight => editor_keys::move_carets(document, extend, |_, s| {
-                if !extend && !s.is_caret() {
-                    s.end()
-                } else {
-                    (s.head + 1).min(len)
-                }
-            }),
-            egui::Key::ArrowUp => editor_keys::move_carets(document, extend, |d, s| {
-                vertical_target(d, &folds, s.head, -1)
-            }),
-            egui::Key::ArrowDown => editor_keys::move_carets(document, extend, |d, s| {
-                vertical_target(d, &folds, s.head, 1)
-            }),
-            egui::Key::PageUp => move_primary(
-                document,
-                vertical_target(document, &folds, head, -page),
-                extend,
-            ),
-            egui::Key::PageDown => move_primary(
-                document,
-                vertical_target(document, &folds, head, page),
-                extend,
-            ),
-            egui::Key::Home if modifiers.command => move_primary(document, 0, extend),
-            egui::Key::Home => editor_keys::move_carets(document, extend, |d, s| {
-                let line = d.text.char_to_line(s.head);
-                let start = d.text.line_to_char(line).unwrap_or(0);
-                let indent = d
-                    .text
-                    .line(line)
-                    .unwrap_or_default()
-                    .chars()
-                    .take_while(|c| c.is_whitespace() && *c != '\n')
-                    .count();
-                // Smart home: toggle between first non-blank character and column 0.
-                if s.head == start + indent {
-                    start
-                } else {
-                    start + indent
-                }
-            }),
-            egui::Key::End if modifiers.command => move_primary(document, len, extend),
-            egui::Key::End => editor_keys::move_carets(document, extend, |d, s| {
-                let line = d.text.char_to_line(s.head);
-                d.text.line_to_char(line).unwrap_or(0) + line_length(d, line)
-            }),
-            egui::Key::Escape if document.selections.selections().len() > 1 => {
-                let primary = document.selections.primary();
-                document
-                    .selections
-                    .set_single(Selection::caret(primary.head));
-            }
-            _ => {}
-        }
+        // Every other key is an action of the active keymap (Enter, Tab, Backspace, the arrows,
+        // Home, End, Page Up, ...): `dispatch_keymap` ran them through the action registry
+        // before the editor saw the frame (`archipel_ide_core::keymap_commands`).
     }
     Ok(EditorOutput {
         changed: document.text.revision() != initial_revision,

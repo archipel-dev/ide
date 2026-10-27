@@ -20,8 +20,9 @@ mod words;
 
 pub use commands::register;
 pub use lang::{Family, Lang, Region, RegionKind, View};
-pub(crate) use movement::shrink_selection;
+pub(crate) use movement::{clone_caret, shrink_selection};
 pub use options::{EditorOptions, PasteMode, UnindentMode};
+pub use typing::type_text;
 
 use crate::Document;
 use archipel_ide_text::{Selection, TextChange, UndoKind};
@@ -36,6 +37,7 @@ pub struct InputState {
     /// The column Up and Down try to keep, valid while the carets are where the last vertical
     /// move left them (ED-CARET-003).
     goal: Option<Goal>,
+    clone_group: Option<CloneGroup>,
     /// Closing brackets and quotes Tab may jump over (ED-TYPE-011, ED-TYPE-030).
     scopes: Vec<TabOutScope>,
     /// Lines the viewport shows (Page Up/Down, ED-CARET-017); the window keeps it current.
@@ -49,6 +51,15 @@ impl InputState {
     pub(crate) fn goal_reset(&mut self) {
         self.goal = None;
     }
+}
+
+/// The carets a series of Clone Caret actions made (ED-CARET-073).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CloneGroup {
+    pub heads: Vec<usize>,
+    pub column: usize,
+    pub below: usize,
+    pub above: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

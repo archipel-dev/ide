@@ -104,7 +104,9 @@ fn detect(view: &View) -> Option<Detected> {
     if tabs > count && tabs > 0 {
         return Some(Detected::Tabs);
     }
-    (count > 0).then_some(Detected::Spaces(best))
+    // Only the usual 2 to 4 columns count as a style; a lone deep indent is a mistake in the
+    // file, not an indent size.
+    ((2..=4).contains(&best) && count > 0).then_some(Detected::Spaces(best))
 }
 
 /// The indent of the line starting at `line_start` as the code style computes it for an empty

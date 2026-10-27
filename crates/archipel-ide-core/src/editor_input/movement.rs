@@ -1,7 +1,7 @@
 //! Caret movement and selection commands (ED-CARET-001 to ED-CARET-052, ED-CARET-090).
 
 use super::words;
-use super::{EditorOptions, Goal, View, view_of};
+use super::{CloneGroup, EditorOptions, Goal, View, view_of};
 use crate::Document;
 use archipel_ide_text::Selection;
 
@@ -190,12 +190,10 @@ pub(crate) fn run(doc: &mut Document, opts: &EditorOptions, action: &str) -> Opt
                 } else {
                     let first = view.first_non_blank(start);
                     // Toggles between the first non-blank character and column 0.
-                    if head == first || head < first && head != start {
-                        start
-                    } else if head == start && first == start {
-                        start
-                    } else {
+                    if head == start || head > first {
                         first
+                    } else {
+                        start
                     }
                 }
             }
@@ -212,16 +210,37 @@ pub(crate) fn run(doc: &mut Document, opts: &EditorOptions, action: &str) -> Opt
             }
             "EditorTextStart" => 0,
             "EditorTextEnd" => view.len(),
-            "EditorNextWord" => skip_folds(
-                &folds,
-                head,
-                words::next_word(&view, head, opts.camel_humps, opts.caret_stop_windows),
-            ),
-            "EditorPreviousWord" => skip_folds(
-                &folds,
-                head,
-                words::previous_word(&view, head, opts.camel_humps, opts.caret_stop_windows),
-            ),
+            // A collapsed region is one unit: from its edge the word move goes to the other edge
+            // (ED-CARET-013).
+            "EditorNextWord" => match folds
+                .iter()
+                .find(|&&(start, end)| start <= head && head < end)
+            {
+                Some(&(_, end)) => end,
+                None => skip_folds(
+                    &folds,
+                    head,
+                    words::next_word(&view, head, opts.camel_humps, opts.caret_stop_windows),
+                ),
+            },
+            "EditorPreviousWord" => {
+                match folds
+                    .iter()
+                    .find(|&&(start, end)| start < head && head <= end)
+                {
+                    Some(&(start, _)) => start,
+                    None => skip_folds(
+                        &folds,
+                        head,
+                        words::previous_word(
+                            &view,
+                            head,
+                            opts.camel_humps,
+                            opts.caret_stop_windows,
+                        ),
+                    ),
+                }
+            }
             "EditorMoveToPageTop" | "EditorMoveToPageBottom" => {
                 let top = doc.input.top_line.min(last_line);
                 let line = if name == "EditorMoveToPageTop" {
@@ -497,5 +516,101 @@ pub(crate) fn shrink_selection(doc: &mut Document) -> bool {
     let changed = next != before;
     doc.selections.set_all(next);
     doc.selection_history.clear();
+    changed
+}
+
+/// Clone Caret Above / Below (ED-CARET-073): a caret on the next line in the remembered column;
+/// the opposite direction removes the farthest clone first.
+pub(crate) fn clone_caret(doc: &mut Document, above: bool) -> bool {
+    let view = view_of(doc);
+    let selections = doc.selections.selections().to_vec();
+    let heads: Vec<usize> = selections.iter().map(|s| s.head).collect();
+    let line_of = |offset: usize| view.chars[..offset].iter().filter(|c| **c == '\n').count();
+    let last_line = view.chars.iter().filter(|c| **c == '\n').count();
+    let line_start_of = |line: usize| {
+        let mut seen = 0;
+        if line == 0 {
+            return 0;
+        }
+        for (i, c) in view.chars.iter().enumerate() {
+            if *c == '\n' {
+                seen += 1;
+                if seen == line {
+                    return i + 1;
+                }
+            }
+        }
+        view.len()
+    };
+    let mut group = match doc.input.clone_group.take() {
+        Some(group) if group.heads == heads => group,
+        _ => CloneGroup {
+            heads: heads.clone(),
+            column: selections
+                .last()
+                .map(|s| s.head - view.line_start(s.head))
+                .unwrap_or(0),
+            below: 0,
+            above: 0,
+        },
+    };
+    let mut carets: Vec<Selection> = selections.clone();
+    let lines: Vec<usize> = heads.iter().map(|&h| line_of(h)).collect();
+    let changed;
+    if above {
+        if group.below > 0 && carets.len() > 1 {
+            // Remove the lowest clone.
+            let lowest = lines
+                .iter()
+                .enumerate()
+                .max_by_key(|(_, l)| **l)
+                .map(|(i, _)| i);
+            if let Some(i) = lowest {
+                carets.remove(i);
+            }
+            group.below -= 1;
+            changed = true;
+        } else {
+            let top = lines.iter().copied().min().unwrap_or(0);
+            if top == 0 {
+                changed = false;
+            } else {
+                let start = line_start_of(top - 1);
+                let column = group.column.min(line_len(&view, start));
+                carets.push(Selection::caret(start + column));
+                group.above += 1;
+                changed = true;
+            }
+        }
+    } else if group.above > 0 && carets.len() > 1 {
+        let highest = lines
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, l)| **l)
+            .map(|(i, _)| i);
+        if let Some(i) = highest {
+            carets.remove(i);
+        }
+        group.above -= 1;
+        changed = true;
+    } else {
+        let bottom = lines.iter().copied().max().unwrap_or(0);
+        if bottom >= last_line {
+            changed = false;
+        } else {
+            let start = line_start_of(bottom + 1);
+            let column = group.column.min(line_len(&view, start));
+            carets.push(Selection::caret(start + column));
+            group.below += 1;
+            changed = true;
+        }
+    }
+    if changed {
+        doc.selections.set_all(carets);
+        group.heads = doc.selections.selections().iter().map(|s| s.head).collect();
+        doc.input.clone_group = Some(group);
+    } else {
+        doc.input.clone_group = Some(group);
+    }
     changed
 }

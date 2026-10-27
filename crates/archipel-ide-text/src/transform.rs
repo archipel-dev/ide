@@ -78,7 +78,16 @@ pub fn join_lines(
     let mut changes = Vec::new();
     let mut carets = Vec::new();
     let mut shift: isize = 0;
+    let selection_lines_of: Vec<(usize, usize)> = selections
+        .selections()
+        .iter()
+        .filter(|s| !s.is_caret())
+        .map(|s| selection_lines(doc, *s))
+        .collect();
     for (first, last) in groups {
+        let from_selection = selection_lines_of
+            .iter()
+            .any(|(a, b)| *a <= last + 1 && first <= *b);
         let start = line_bounds(doc, first).0;
         let end = line_bounds(doc, last + 1).1;
         let mut joined = line_text(doc, first);
@@ -88,7 +97,16 @@ pub fn join_lines(
             caret = head.chars().count();
             joined = head + &tail;
         }
-        carets.push(Selection::caret(start.saturating_add_signed(shift) + caret));
+        let new_start = start.saturating_add_signed(shift);
+        // A joined selection stays selected (ED-LINE-020); a caret lands at the last join.
+        carets.push(if from_selection {
+            Selection {
+                anchor: new_start,
+                head: new_start + joined.chars().count(),
+            }
+        } else {
+            Selection::caret(new_start + caret)
+        });
         shift += joined.chars().count() as isize - (end - start) as isize;
         changes.push(TextChange {
             start_char: start,
@@ -102,41 +120,53 @@ pub fn join_lines(
     Ok(())
 }
 
-/// IntelliJ's toggle rule: all-lowercase text becomes uppercase, anything else
+/// The conversion Toggle Case applies to `texts`: all lower case becomes upper case, anything
+/// else lower case; one direction for every selection (ED-LINE-050).
+fn converts_to_lower(texts: &[String]) -> bool {
+    texts.iter().any(|text| text.to_lowercase() != *text)
+}
+
+/// IntelliJ's toggle rule for one text: all-lowercase text becomes uppercase, anything else
 /// becomes lowercase.
 pub fn toggled_case(text: &str) -> String {
-    let lower = text.to_lowercase();
-    if lower == text {
-        text.to_uppercase()
+    if converts_to_lower(&[text.to_owned()]) {
+        text.to_lowercase()
     } else {
-        lower
+        text.to_uppercase()
     }
 }
 
-/// Toggle Case (Ctrl+Shift+U / ⌘⇧U) on each selection, or on the word at a bare
-/// caret. Selections keep covering the converted text.
+/// Toggle Case (Ctrl+Shift+U / ⌘⇧U) on each selection, or on the word at a bare caret, which
+/// ends up selected. Selections keep covering the converted text.
 pub fn toggle_case(doc: &mut TextDocument, selections: &mut SelectionSet) -> Result<(), TextError> {
+    let ranges: Vec<(usize, usize)> = selections
+        .selections()
+        .iter()
+        .map(|selection| {
+            if selection.is_caret() {
+                crate::ops::word_at(doc, selection.head)
+            } else {
+                (selection.start(), selection.end())
+            }
+        })
+        .collect();
+    let mut texts = Vec::new();
+    for &(start, end) in &ranges {
+        texts.push(doc.slice(start, end)?);
+    }
+    let lower = converts_to_lower(&texts);
     let mut changes = Vec::new();
     let mut next = Vec::new();
     let mut shift: isize = 0;
-    for selection in selections.selections() {
-        let (start, end) = if selection.is_caret() {
-            crate::ops::word_at(doc, selection.head)
+    for ((selection, (start, end)), text) in selections.selections().iter().zip(ranges).zip(texts) {
+        let converted = if lower {
+            text.to_lowercase()
         } else {
-            (selection.start(), selection.end())
+            text.to_uppercase()
         };
-        let text = doc.slice(start, end)?;
-        let converted = toggled_case(&text);
         let new_len = converted.chars().count();
         let new_start = start.saturating_add_signed(shift);
-        next.push(if selection.is_caret() {
-            Selection::caret(
-                selection
-                    .head
-                    .saturating_add_signed(shift)
-                    .min(new_start + new_len),
-            )
-        } else if selection.head >= selection.anchor {
+        next.push(if selection.head >= selection.anchor {
             Selection {
                 anchor: new_start,
                 head: new_start + new_len,
@@ -170,32 +200,77 @@ fn target_lines(doc: &TextDocument, selections: &SelectionSet) -> (usize, usize)
     }
 }
 
+/// Rewrites the target lines. `reorder` returns, for every output line, the index of the input
+/// line it comes from. Carets follow their line; selections keep their offsets.
 fn rewrite_lines(
     doc: &mut TextDocument,
     selections: &mut SelectionSet,
-    reorder: impl FnOnce(&mut Vec<String>),
+    reorder: impl FnOnce(&[String]) -> Vec<usize>,
 ) -> Result<(), TextError> {
     let (first, last) = target_lines(doc, selections);
     let start = line_bounds(doc, first).0;
     let end = line_bounds(doc, last).1;
-    let mut lines: Vec<String> = (first..=last).map(|line| line_text(doc, line)).collect();
+    let lines: Vec<String> = (first..=last).map(|line| line_text(doc, line)).collect();
     let separator = if doc.slice(start, doc.len_chars())?.contains("\r\n") {
         "\r\n"
     } else {
         "\n"
     };
-    reorder(&mut lines);
+    let order = reorder(&lines);
+    let output: Vec<&str> = order.iter().map(|&i| lines[i].as_str()).collect();
     let before = selections.selections().to_vec();
-    doc.edit(start, end, &lines.join(separator))?;
+    let ages = selections.ages().to_vec();
+    let line_starts: Vec<usize> = (first..=last)
+        .map(|line| line_bounds(doc, line).0)
+        .collect();
+    let joined = output.join(separator);
+    let mut new_starts = Vec::with_capacity(output.len());
+    let mut at = start;
+    for line in &output {
+        new_starts.push(at);
+        at += line.chars().count() + separator.chars().count();
+    }
+    doc.edit(start, end, &joined)?;
     let len = doc.len_chars();
-    selections.set_all(before);
+    let next: Vec<Selection> = before
+        .iter()
+        .map(|selection| {
+            if !selection.is_caret() || selection.head < start || selection.head > end {
+                return *selection;
+            }
+            // The caret stays on its line: find the line it was on and where that line went.
+            let line = line_starts
+                .iter()
+                .rposition(|&s| s <= selection.head)
+                .unwrap_or(0);
+            let column = selection.head - line_starts[line];
+            let moved = order
+                .iter()
+                .position(|&source| source == line)
+                .or_else(|| {
+                    // A removed duplicate: its first equal line.
+                    order
+                        .iter()
+                        .position(|&source| lines[source] == lines[line])
+                })
+                .unwrap_or(line);
+            Selection::caret(
+                (new_starts[moved] + column).min(new_starts[moved] + output[moved].chars().count()),
+            )
+        })
+        .collect();
+    selections.set_all_aged(next, ages);
     selections.clamp(len);
     Ok(())
 }
 
 /// Sort Lines: sorts the target lines lexicographically (by code point).
 pub fn sort_lines(doc: &mut TextDocument, selections: &mut SelectionSet) -> Result<(), TextError> {
-    rewrite_lines(doc, selections, |lines| lines.sort())
+    rewrite_lines(doc, selections, |lines| {
+        let mut order: Vec<usize> = (0..lines.len()).collect();
+        order.sort_by(|&a, &b| lines[a].cmp(&lines[b]).then(a.cmp(&b)));
+        order
+    })
 }
 
 /// Reverse Lines: reverses the order of the target lines.
@@ -203,7 +278,7 @@ pub fn reverse_lines(
     doc: &mut TextDocument,
     selections: &mut SelectionSet,
 ) -> Result<(), TextError> {
-    rewrite_lines(doc, selections, |lines| lines.reverse())
+    rewrite_lines(doc, selections, |lines| (0..lines.len()).rev().collect())
 }
 
 /// Delete Duplicate Lines (ED-LINE-052): keeps the first of equal target lines.
@@ -213,7 +288,9 @@ pub fn unique_lines(
 ) -> Result<(), TextError> {
     rewrite_lines(doc, selections, |lines| {
         let mut seen = std::collections::HashSet::new();
-        lines.retain(|line| seen.insert(line.clone()));
+        (0..lines.len())
+            .filter(|&i| seen.insert(lines[i].clone()))
+            .collect()
     })
 }
 
@@ -343,7 +420,8 @@ mod tests {
         let (mut doc, mut sel) = setup("foo Bar", Selection::caret(1));
         toggle_case(&mut doc, &mut sel).unwrap();
         assert_eq!(doc.text(), "FOO Bar");
-        assert_eq!(sel.primary(), Selection::caret(1));
+        // The word at a bare caret ends up selected (ED-LINE-050).
+        assert_eq!(sel.primary(), Selection { anchor: 0, head: 3 });
         sel.set_single(Selection { anchor: 7, head: 4 });
         toggle_case(&mut doc, &mut sel).unwrap();
         assert_eq!(doc.text(), "FOO bar");

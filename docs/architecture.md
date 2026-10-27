@@ -157,8 +157,11 @@ show the old product name.
   `palette` (Search Everywhere), `theme` / `theme_engine` (color tokens resolved from
   `docs/spec/data` for the active theme, fonts, egui visuals), and `icons`
   (original 16×16 vector icons).
+- `archipel-ide-tui`: the terminal frontend on `archipel-kit-tui` (ratatui), a sibling of
+  `archipel-ide-ui` that reads the same core through commands, actions and service accessors
+  (the `Ide` wrapper; `view` mirrors editor buffers with core documents). See [tui.md](tui.md).
 - `archipel-ide`: process startup, native window (custom title bar on Windows/Linux),
-  and wgpu → OpenGL renderer fallback.
+  wgpu → OpenGL renderer fallback, and `--tui` (the terminal frontend from the same binary).
 - `archipel-ide-control`: UI automation wire protocol (JSON lines), local-socket listener and
   blocking client; toolkit-independent. The workbench drains requests each frame.
 - `archipel-cli`: headless command discovery and execution, and `ui …` requests to a

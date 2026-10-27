@@ -56,7 +56,10 @@ menus, toolbars, context menus, Find Action and shortcuts ask the action registr
 
 `archipel-ide -> archipel-ide-ui -> archipel-ide-core -> {platform, command, project, plugins}`, with
 `archipel-ide-compat` (the old Jetthing names) at the bottom.
-Lower layers must not depend on higher layers. Language integrations belong behind
+Lower layers must not depend on higher layers. `archipel-ide-tui` (the terminal frontend, started
+with `archipel-ide --tui`) is a second frontend next to `archipel-ide-ui`: it asks the core through
+commands, actions and accessors and owns no project, document or run state; see `docs/tui.md`.
+Language integrations belong behind
 plugin/service traits, never inside the platform core: a language is a **language pack**
 (`crates/archipel-ide-langpacks`) that registers extensions on the language extension points
 at start. Core, daemon and UI read the points and never name a language; see

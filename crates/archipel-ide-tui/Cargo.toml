@@ -1,0 +1,30 @@
+[package]
+name = "archipel-ide-tui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Terminal frontend of Archipel IDE on archipel-kit-tui."
+
+[dependencies]
+archipel-ide-actions = { path = "../archipel-ide-actions" }
+archipel-ide-command = { path = "../archipel-ide-command" }
+archipel-ide-compat = { path = "../archipel-ide-compat" }
+archipel-ide-core = { path = "../archipel-ide-core" }
+archipel-ide-keymap = { path = "../archipel-ide-keymap" }
+archipel-ide-language = { path = "../archipel-ide-language" }
+archipel-ide-git = { path = "../archipel-ide-git" }
+archipel-ide-index = { path = "../archipel-ide-index" }
+archipel-ide-runner = { path = "../archipel-ide-runner" }
+archipel-ide-lsp = { path = "../archipel-ide-lsp" }
+archipel-ide-platform = { path = "../archipel-ide-platform" }
+archipel-ide-plugins = { path = "../archipel-ide-plugins" }
+archipel-ide-settings = { path = "../archipel-ide-settings" }
+archipel-ide-text = { path = "../archipel-ide-text" }
+archipel-ide-terminal = { path = "../archipel-ide-terminal" }
+archipel-kit.workspace = true
+archipel-kit-tui.workspace = true
+serde_json.workspace = true
+unicode-width = "0.2"
+
+[dev-dependencies]
+serde_json.workspace = true

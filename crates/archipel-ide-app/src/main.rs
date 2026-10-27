@@ -13,6 +13,11 @@ enum Mode {
     },
     /// `--app <plugin-id>`: only the plugin's app view.
     App(String),
+    /// `--tui [PROJECT_DIR] [FILE...]`: the IDE in the terminal.
+    Tui {
+        project: Option<PathBuf>,
+        files: Vec<PathBuf>,
+    },
 }
 
 /// Window chrome per platform. macOS keeps its traffic-light buttons but merges
@@ -150,7 +155,12 @@ fn install_startup_panic_hook() {
 fn parse_args() -> Result<Mode, String> {
     let mut args = std::env::args_os().skip(1);
     let mut positional = Vec::new();
+    let mut tui = false;
     while let Some(arg) = args.next() {
+        if arg == "--tui" {
+            tui = true;
+            continue;
+        }
         if arg == "--app" {
             let id = args
                 .next()
@@ -164,9 +174,11 @@ fn parse_args() -> Result<Mode, String> {
         positional.push(PathBuf::from(arg));
     }
     let mut positional = positional.into_iter();
-    Ok(Mode::Ide {
-        project: positional.next(),
-        files: positional.collect(),
+    let (project, files) = (positional.next(), positional.collect());
+    Ok(if tui {
+        Mode::Tui { project, files }
+    } else {
+        Mode::Ide { project, files }
     })
 }
 
@@ -186,13 +198,35 @@ fn build_app(mode: &Mode) -> Result<archipel_ide_ui::IdeApp, String> {
             Ok(app)
         }
         Mode::App(id) => archipel_ide_ui::IdeApp::standalone(id, plugins::plugin_set()),
+        Mode::Tui { .. } => Err("the terminal mode has no window".into()),
+    }
+}
+
+/// `--tui`: the IDE in the terminal (`archipel-ide-tui`), started from the same binary.
+fn run_tui(project: Option<PathBuf>, files: Vec<PathBuf>) -> ! {
+    attach_parent_console();
+    let options = archipel_ide_tui::StartOptions {
+        project,
+        files,
+        plugins: plugins::plugin_set(),
+        toolchain_setup: archipel_ide_compat::env_var_os("ARCHIPEL_NO_TOOLCHAIN_SETUP").is_none(),
+        isolated: false,
+    };
+    match archipel_ide_tui::run(options) {
+        Ok(()) => std::process::exit(0),
+        Err(error) => {
+            eprintln!("archipel-ide: the terminal frontend failed: {error}");
+            std::process::exit(1);
+        }
     }
 }
 
 const USAGE: &str = "usage: archipel-ide [PROJECT_DIR] [FILE...]
+       archipel-ide --tui [PROJECT_DIR] [FILE...]
        archipel-ide --app <PLUGIN_ID>
 
 Opens PROJECT_DIR (or the welcome screen) and FILEs relative to it.
+  --tui           run in the terminal instead of a window (see docs/tui.md)
   --app ID        run only the plugin's app view
   -V, --version   print version and build information
   -h, --help      print this help
@@ -243,6 +277,9 @@ fn main() -> eframe::Result<()> {
             std::process::exit(2);
         }
     };
+    if let Mode::Tui { project, files } = &mode {
+        run_tui(project.clone(), files.clone());
+    }
     let app = match build_app(&mode) {
         Ok(app) => app,
         Err(error) => {
@@ -251,7 +288,7 @@ fn main() -> eframe::Result<()> {
         }
     };
     let project = match &mode {
-        Mode::Ide { project, .. } => project.clone(),
+        Mode::Ide { project, .. } | Mode::Tui { project, .. } => project.clone(),
         Mode::App(_) => None,
     };
     let title = app.app_title().unwrap_or_else(|| title_for(project));

@@ -33,3 +33,5 @@ Conventions:
 * `template: <abbreviation> = <text>` after `settings:` defines a user live template (context: everywhere,
   expand with the default key) that exists before the keys are pressed. `choose "<text>"` means pick the
   popup entry with that text.
+* `viewport: N lines, top=K` after `language:` fixes the visible window (zero-based first line K); an
+  `after viewport: top=K2` line after the `after` block states the expected first visible line.

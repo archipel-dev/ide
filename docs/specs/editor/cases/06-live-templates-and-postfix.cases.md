@@ -260,7 +260,7 @@ ab<caret>
 ```
 keys: Tab
 ```after
-ab   <caret>
+ab  <caret>
 ```
 
 ### ED-TMPL-015 case 1: Insert Live Template

@@ -73,15 +73,31 @@ IdeState
 - `IdeState` reaches services through thin accessors in `platform.rs`:
   `state.settings()`, `state.toolchains()`, `state.notifications()`, `state.git()`,
   `state.git_status()`, `state.toolchain_requirements()`, `state.find()`, `state.keymap()`,
-  `state.updates()`, `state.git_log()` and so on. Commands and the UI use these (or
+  `state.updates()`, `state.git_log()`, `state.execution()`, `state.debugger()`, `state.terminal()`,
+  `state.spring()` and so on. Commands and the UI use these (or
   `state.application().service::<T>()` and `state.platform_project()`).
+- **Run, debug and terminal without a project.** The Run, debug and Terminal services are project
+  services, but the UI asks for them on the welcome screen too. Their accessors return the
+  project's service while one is open, and otherwise a *detached* instance owned by `Platform`
+  (so call sites need no `Option`). It never belongs to a project: opening a project resets it
+  (a shell started on the welcome screen is killed), and a project's own services start empty.
+- **Guards.** These services keep their state in a `Cell` (`services/mod.rs`): a read-write lock
+  whose reads nest, so the UI can paint from a read guard (`state.execution().runner()`) and
+  call commands that read again. Writes (`runner_mut`, `state_mut`, `configurations_mut`, ...)
+  are exclusive: do not write while a guard of the same cell is alive on the thread. Debug
+  builds panic after ten seconds with the name of the cell instead of hanging. Release guards
+  before dispatching a command that changes the state.
 - **Reactions.** A feature that still lives on `IdeState` needs `&mut IdeState` to react to an
   event, which a bus listener cannot have. Its listener records a `Reaction` in a queue and
   `IdeState::dispatch_reactions` runs it right after the publisher returns. Today:
   `VcsChanged` (rescan the tree if files were added or removed; refresh the open diff; the line
   changes, Git log and blame invalidate themselves), `SearchFinished`, `RemoteFinished`,
-  `UpdateMessage` (status line) and `ToolchainInstalled` (restart language servers that were
-  missing, start the Gradle sync once the install queue is idle). When the reacting feature
+  `UpdateMessage` (status line), `ToolchainInstalled` (restart language servers that were
+  missing, start the Gradle sync once the install queue is idle), `RunExited` (a task exited on
+  its own: continue a debug session that waited for its build, finish a Gradle or Bazel sync,
+  status bar text) and `DebugPaused` (reveal the execution point in the editor and show the
+  Debug tool window). The Build tool window is not a reaction: it is a listener of
+  `EXECUTION_TOPIC` that updates the state inside `ExecutionManager`. When the reacting feature
   becomes a service, its listener does the work itself and the reaction disappears.
 
 ### Services in place
@@ -93,6 +109,10 @@ IdeState
 | `SettingsService` (`ServiceState<Settings>`) | application | `IdeState::settings` | |
 | `Notifications` | application | `IdeState::update_notification`, `PluginHostState::notifications` | publishes `NOTIFICATION_TOPIC` (`notification_shown`) |
 | `GitRepositories` | project | `IdeState::{git, git_watcher, git_pending, vcs_stale}` | publishes `GIT_REPO_CHANGE` (`repository_changed(status, structure_changed)`) on the project bus |
+| `ExecutionManager` | project, disposable | `IdeState::{runner, build_window, run_configurations, edit_run_configurations, runnable_cache}`: the task service, run/debug configurations, Build tool window, gutter run targets | publishes `EXECUTION_TOPIC` (`process_started`, `process_terminated`) |
+| `XDebuggerManager` | project, disposable | `IdeState::debugger`: breakpoints, options, watches, the DAP session | publishes `DEBUG_SESSION_TOPIC` (`session_started`, `session_paused`, `session_resumed`, `session_stopped`) |
+| `TerminalService` | project, disposable | `IdeState::{terminal, terminal_tabs}`: the shells of the Terminal tool window | publishes `TERMINAL_TOPIC` (`terminal_exited`) |
+| `SpringStarters` | application | `IdeState::spring`: starter catalog of the New Project wizard | |
 | `FindInProjectService` | project | `IdeState::{search, search_results, search_query, search_scope_kind, custom_scopes, search_custom_scope, search_background, search_options, search_files_scanned, search_truncated}`: Find in Files | publishes `FIND_TOPIC` (`search_finished(summary)`); the status line follows |
 | `SearchEverywhereManager` (`ServiceState<QuickNavState>`) | application | `IdeState::quick_nav`: Search Everywhere, Recent Locations, Switcher. Application scope because the popup works on the welcome screen; `project_opened` resets it | |
 | `ActionManager` (`ServiceState<ActionOptions>`) | application | `IdeState::include_disabled_actions` | |
@@ -271,18 +291,21 @@ this list (so it cannot go stale) or if the struct grows. Tick a field when it h
 - [x] `clone_job`, `clone_progress`, `clone_error`: Get from VCS clone.
 
 **Run and build (`RunManager`, `ExecutionManager`, `XDebuggerManager`)**
-- [ ] `runner`: the task service (project service).
-- [ ] `build_window`: Build tool window tabs and console.
-- [ ] `run_configurations`, `edit_run_configurations`: run/debug configurations and the dialog request.
-- [ ] `runnable_cache`: gutter run targets.
-- [ ] `debugger`: breakpoints and the debug session.
-- [ ] `spring`: Spring Boot starter catalog of the New Project wizard (becomes a project
-  generator extension).
+- [x] `runner`: the task service, now `ExecutionManager::runner()` (project service).
+- [x] `build_window`: Build tool window tabs and console, now `ExecutionManager::build_window()`.
+- [x] `run_configurations`, `edit_run_configurations`: run/debug configurations and the dialog request,
+  now `ExecutionManager::configurations()` and `request_edit_configurations`.
+- [x] `runnable_cache`: gutter run targets, now `ExecutionManager::runnables()`.
+- [x] `debugger`: breakpoints and the debug session, now `XDebuggerManager` (project service).
+- [x] `spring`: Spring Boot starter catalog of the New Project wizard, now `SpringStarters`, a
+  small application service (the wizard runs without a project, and there is no generator
+  extension point yet; when it exists the Spring generator contributes to it and uses this
+  service as its store).
 
 **Workbench (`ToolWindowManager`, `WindowManager`)**
 - [ ] `tool_windows`: tool window layout.
 - [ ] `workbench_mode`: Code or Agents arrangement.
-- [ ] `terminal`, `terminal_tabs`: Terminal tool window sessions.
+- [x] `terminal`, `terminal_tabs`: Terminal tool window sessions, now `TerminalService` (project service).
 - [ ] `repaint`, `waker`: UI wake hooks (one application `UiWaker` service).
 - [ ] `injected_dialog_paths`: paths queued for the next native file dialog (tests, control socket).
 - [ ] `settings_request`: settings page the UI should open.
@@ -298,4 +321,6 @@ this list (so it cannot go stale) or if the struct grows. Tick a field when it h
 - [ ] `ai`, `agents`: AI assistant and agents (application and project services).
 
 **Already moved** (see "Services in place"): `toolchains`, `settings`, `update_notification`,
-`git`, `git_watcher`, `git_pending`, `vcs_stale`, and the ticked groups above.
+`git`, `git_watcher`, `git_pending`, `vcs_stale`, and the ticked groups above (including `runner`,
+`build_window`, `run_configurations`, `edit_run_configurations`, `runnable_cache`, `debugger`, `spring`,
+`terminal`, `terminal_tabs`).

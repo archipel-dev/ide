@@ -17,7 +17,12 @@ pub fn input_id() -> egui::Id {
 pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
     let mut restart = false;
     let mut clear = false;
-    let exited = app.state.terminal.as_ref().is_some_and(|t| t.is_exited());
+    let exited = app
+        .state
+        .terminal()
+        .session()
+        .as_ref()
+        .is_some_and(|t| t.is_exited());
     let ai_available = app.commands.is_enabled("ai.terminal.suggest", &app.state);
     let ai_open = app.ai_ui.terminal_open;
     let mut ai_toggle = false;
@@ -51,7 +56,13 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         if exited {
             ui.label(egui::RichText::new("process exited").color(theme::TEXT_INFO));
         }
-        if let Some(error) = app.state.terminal.as_ref().and_then(|t| t.error()) {
+        let error = app
+            .state
+            .terminal()
+            .session()
+            .as_ref()
+            .and_then(|t| t.error().map(str::to_owned));
+        if let Some(error) = error {
             ui.label(egui::RichText::new(error).color(theme::ERROR));
         }
         clear = ui.button("Clear").clicked();
@@ -86,7 +97,8 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
     let cols = (available.width() / cell_width).floor().clamp(1.0, 500.0) as u16;
     if app
         .state
-        .terminal
+        .terminal()
+        .session()
         .as_ref()
         .is_some_and(|t| t.screen().size() != (rows, cols))
     {
@@ -144,7 +156,9 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
     }
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0, theme::ISLAND);
-    let Some(terminal) = app.state.terminal.as_ref() else {
+    let terminal = app.state.terminal();
+    let session = terminal.session();
+    let Some(terminal) = session.as_ref() else {
         return;
     };
     let screen = terminal.screen();
@@ -208,6 +222,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         );
     }
     let application_cursor = screen.application_cursor();
+    drop(session);
     if response.hovered() {
         let delta = ui.input(|i| i.smooth_scroll_delta.y);
         if delta.abs() > 1.0 {
@@ -289,7 +304,8 @@ fn copy_selection(app: &mut IdeApp, ctx: &egui::Context) {
     if let Some(selection) = app.terminal_selection {
         let Some(cols) = app
             .state
-            .terminal
+            .terminal()
+            .session()
             .as_ref()
             .map(|terminal| terminal.screen().size().1)
         else {

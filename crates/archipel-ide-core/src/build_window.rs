@@ -2,11 +2,12 @@
 //! their last finished result, and the console toolbar (soft-wrap, scroll to
 //! end, clear) acts on the shown console.
 
+use crate::services::{ExecutionListener, ExecutionManager};
 use crate::{CommandError, IdeState, spec};
 use archipel_ide_command::{Command, CommandRegistry};
 use archipel_ide_runner::{BuildEvents, ConsoleBuffer, TaskKind, TaskPlan, TaskState};
 use serde_json::{Value, json};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 /// A tab of the Build tool window.
@@ -68,8 +69,6 @@ pub struct BuildWindowState {
     /// Console lines hidden by Clear, per tab.
     cleared: [usize; 2],
     snapshots: [Option<Arc<BuildSnapshot>>; 2],
-    captured: [Option<u64>; 2],
-    seen_run: u64,
 }
 
 impl BuildWindowState {
@@ -85,56 +84,71 @@ impl BuildWindowState {
     pub fn take_scroll_to_end(&mut self) -> bool {
         std::mem::take(&mut self.scroll_to_end)
     }
+
+    /// Asks the console to scroll to its last line.
+    pub fn request_scroll_to_end(&mut self) {
+        self.scroll_to_end = true;
+    }
+
+    /// Hides the `hidden` console lines currently shown by the selected tab.
+    pub fn clear_shown(&mut self, hidden: usize) {
+        self.cleared[self.tab.slot()] = hidden;
+    }
+}
+
+/// Makes the Build tool window follow the runner: a new run selects its tab with a fresh
+/// console, a finished run is kept as the tab's snapshot. Subscribed to
+/// [`EXECUTION_TOPIC`](crate::services::EXECUTION_TOPIC) next to the manager it reads.
+pub(crate) struct BuildWindowFollower(pub(crate) Weak<ExecutionManager>);
+
+impl ExecutionListener for BuildWindowFollower {
+    fn process_started(&self, plan: &TaskPlan, _run_id: u64) {
+        let (Some(manager), Some(tab)) = (self.0.upgrade(), BuildTab::of_kind(plan.kind)) else {
+            return;
+        };
+        let mut window = manager.build_window_mut();
+        window.tab = tab;
+        window.cleared[tab.slot()] = 0;
+    }
+
+    fn process_terminated(&self, plan: &TaskPlan, state: &TaskState, _run_id: u64) {
+        let (Some(manager), Some(tab)) = (self.0.upgrade(), BuildTab::of_kind(plan.kind)) else {
+            return;
+        };
+        let snapshot = {
+            let runner = manager.runner();
+            BuildSnapshot {
+                plan: plan.clone(),
+                state: state.clone(),
+                events: runner.events().clone(),
+                console: runner.console().clone(),
+                elapsed: runner.elapsed(),
+            }
+        };
+        manager.build_window_mut().snapshots[tab.slot()] = Some(Arc::new(snapshot));
+    }
 }
 
 impl IdeState {
     /// The tab whose content is the running (or last started) task, if it
     /// is a build or sync.
     pub fn live_build_tab(&self) -> Option<BuildTab> {
-        self.runner
+        self.execution()
+            .runner()
             .plan()
             .and_then(|plan| BuildTab::of_kind(plan.kind))
     }
 
-    /// Follows the runner: a new run selects its tab, a finished run is kept.
-    pub(crate) fn update_build_window(&mut self) {
-        let run = self.runner.run_id();
-        let Some(tab) = self.live_build_tab() else {
-            self.build_window.seen_run = run;
-            return;
-        };
-        let window = &mut self.build_window;
-        if window.seen_run != run {
-            window.seen_run = run;
-            window.tab = tab;
-            window.cleared[tab.slot()] = 0;
-        }
-        if !self.runner.is_running()
-            && self.runner.state() != &TaskState::Idle
-            && window.captured[tab.slot()] != Some(run)
-            && let Some(plan) = self.runner.plan()
-        {
-            window.captured[tab.slot()] = Some(run);
-            window.snapshots[tab.slot()] = Some(Arc::new(BuildSnapshot {
-                plan: plan.clone(),
-                state: self.runner.state().clone(),
-                events: self.runner.events().clone(),
-                console: self.runner.console().clone(),
-                elapsed: self.runner.elapsed(),
-            }));
-        }
-    }
-
     fn shown_console_len(&self) -> usize {
-        let tab = self.build_window.tab;
-        let console = if self.live_build_tab() == Some(tab) {
-            Some(self.runner.console())
+        let len = |console: &ConsoleBuffer| console.dropped() + console.lines().len();
+        let execution = self.execution();
+        let tab = execution.build_window().tab;
+        if self.live_build_tab() == Some(tab) {
+            len(execution.runner().console())
         } else {
-            self.build_window.snapshots[tab.slot()]
-                .as_ref()
-                .map(|snapshot| &snapshot.console)
-        };
-        console.map_or(0, |console| console.dropped() + console.lines().len())
+            let snapshot = execution.build_window().snapshot(tab);
+            snapshot.map_or(0, |snapshot| len(&snapshot.console))
+        }
     }
 }
 
@@ -154,7 +168,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     .as_str()
                     .and_then(BuildTab::parse)
                     .ok_or_else(|| CommandError::InvalidParams("tab must be sync or output".into()))?;
-                state.build_window.tab = tab;
+                state.execution().build_window_mut().tab = tab;
                 Ok(json!({ "tab": tab.title() }))
             },
         ))
@@ -170,8 +184,10 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             |_: &IdeState| true,
             |state: &mut IdeState, _| {
-                state.build_window.soft_wrap = !state.build_window.soft_wrap;
-                Ok(json!({ "softWrap": state.build_window.soft_wrap }))
+                let execution = state.execution();
+                let mut window = execution.build_window_mut();
+                window.soft_wrap = !window.soft_wrap;
+                Ok(json!({ "softWrap": window.soft_wrap }))
             },
         ))
         .expect("unique built-in id");
@@ -186,7 +202,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             |_: &IdeState| true,
             |state: &mut IdeState, _| {
-                state.build_window.scroll_to_end = true;
+                state.execution().build_window_mut().request_scroll_to_end();
                 Ok(Value::Null)
             },
         ))
@@ -203,8 +219,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |state: &IdeState| state.shown_console_len() > 0,
             |state: &mut IdeState, _| {
                 let hidden = state.shown_console_len();
-                let tab = state.build_window.tab;
-                state.build_window.cleared[tab.slot()] = hidden;
+                state.execution().build_window_mut().clear_shown(hidden);
                 Ok(json!({ "cleared": hidden }))
             },
         ))
@@ -219,10 +234,10 @@ mod tests {
     fn run(state: &mut IdeState, program: &str, args: &[&str], kind: TaskKind) {
         let mut plan = TaskPlan::new("job", program, args.iter().map(|a| a.to_string()), ".");
         plan.kind = kind;
-        state.runner.start(plan).expect("start");
+        state.execution().start(plan).expect("start");
         for _ in 0..500 {
             state.poll_runner();
-            if !state.runner.is_running() {
+            if !state.execution().is_running() {
                 break;
             }
             std::thread::sleep(Duration::from_millis(10));
@@ -235,16 +250,18 @@ mod tests {
         let commands = built_in_commands();
         let mut state = IdeState::default();
         run(&mut state, "echo", &["syncing"], TaskKind::Sync);
-        assert_eq!(state.build_window.tab, BuildTab::Sync);
+        assert_eq!(state.execution().build_window().tab, BuildTab::Sync);
         run(&mut state, "echo", &["building"], TaskKind::Build);
-        assert_eq!(state.build_window.tab, BuildTab::Output);
+        assert_eq!(state.execution().build_window().tab, BuildTab::Output);
         let sync = state
-            .build_window
+            .execution()
+            .build_window()
             .snapshot(BuildTab::Sync)
             .expect("sync kept");
         assert!(sync.console.lines().iter().any(|l| l.text == "syncing"));
         let output = state
-            .build_window
+            .execution()
+            .build_window()
             .snapshot(BuildTab::Output)
             .expect("output kept");
         assert!(output.console.lines().iter().any(|l| l.text == "building"));
@@ -252,7 +269,7 @@ mod tests {
         commands
             .execute("build.showTab", &mut state, json!({"tab": "sync"}))
             .unwrap();
-        assert_eq!(state.build_window.tab, BuildTab::Sync);
+        assert_eq!(state.execution().build_window().tab, BuildTab::Sync);
         assert!(
             commands
                 .execute("build.showTab", &mut state, json!({"tab": "nope"}))
@@ -262,20 +279,23 @@ mod tests {
         commands
             .execute("build.console.clear", &mut state, json!({}))
             .unwrap();
-        assert_eq!(state.build_window.cleared(BuildTab::Sync), 1);
-        assert_eq!(state.build_window.cleared(BuildTab::Output), 0);
+        assert_eq!(state.execution().build_window().cleared(BuildTab::Sync), 1);
+        assert_eq!(
+            state.execution().build_window().cleared(BuildTab::Output),
+            0
+        );
         commands
             .execute("build.console.softWrap", &mut state, json!({}))
             .unwrap();
-        assert!(state.build_window.soft_wrap);
+        assert!(state.execution().build_window().soft_wrap);
         commands
             .execute("build.console.scrollToEnd", &mut state, json!({}))
             .unwrap();
-        assert!(state.build_window.take_scroll_to_end());
-        assert!(!state.build_window.take_scroll_to_end());
+        assert!(state.execution().build_window_mut().take_scroll_to_end());
+        assert!(!state.execution().build_window_mut().take_scroll_to_end());
 
         // A new run of a tab starts with a fresh console.
         run(&mut state, "echo", &["again"], TaskKind::Sync);
-        assert_eq!(state.build_window.cleared(BuildTab::Sync), 0);
+        assert_eq!(state.execution().build_window().cleared(BuildTab::Sync), 0);
     }
 }

@@ -94,14 +94,14 @@ impl IdeState {
         label: &str,
         kind: TaskKind,
     ) -> Result<(), String> {
-        if self.runner.is_running() {
+        if self.execution().is_running() {
             return Err("A task is already running; stop it first.".into());
         }
         self.tool_windows.show(ToolWindow::Build);
         match plan {
             Ok(plan) => {
                 let name = plan.name.clone();
-                self.runner.start(plan).map_err(|error| {
+                self.execution().start(plan).map_err(|error| {
                     let message = error.to_string();
                     self.status = format!("{name}: {message}");
                     message
@@ -116,7 +116,7 @@ impl IdeState {
                     .as_ref()
                     .map(|project| project.root().to_owned())
                     .unwrap_or_default();
-                self.runner.fail(
+                self.execution().fail(
                     Some(TaskPlan::new(label, "", Vec::<String>::new(), cwd).with_kind(kind)),
                     message.clone(),
                 );
@@ -134,7 +134,7 @@ impl IdeState {
     /// Runs the selected run configuration, else the runnable at the caret ("Current File"),
     /// else the detected default target.
     pub fn start_run(&mut self) -> Result<(), String> {
-        if self.run_configurations.selected().is_some() {
+        if self.execution().configurations().selected().is_some() {
             return self.run_configuration(None);
         }
         // "Current File": the entry point or test at the caret, resolved like the gutter.
@@ -150,51 +150,56 @@ impl IdeState {
         self.start_task(plan, "Test", TaskKind::Test)
     }
 
+    /// Pumps the running task. A task that exited is handled through the manager's
+    /// `process_terminated` event, see [`IdeState::run_exited`].
     pub fn poll_runner(&mut self) {
-        self.poll_runner_task();
-        self.update_build_window();
+        if let Err(error) = self.execution().poll() {
+            self.status = error.to_string();
+        }
+        self.dispatch_reactions();
     }
 
-    fn poll_runner_task(&mut self) {
-        let was_running = self.runner.is_running();
-        if let Err(error) = self.runner.poll() {
-            self.status = error.to_string();
-            return;
-        }
-        if was_running && !self.runner.is_running() {
-            self.continue_pending_debug();
-            if self
-                .runner
-                .plan()
-                .is_some_and(|plan| plan.kind == TaskKind::Sync)
-            {
-                if self.is_bazel_project() {
-                    self.finish_bazel_sync();
-                } else {
-                    self.finish_gradle_sync();
-                }
-                if matches!(self.runner.state(), TaskState::Exited(0)) {
-                    return;
-                }
+    /// What follows a task that exited: the debug session waiting for its build, the end of a
+    /// sync, and the status bar text.
+    pub(crate) fn run_exited(&mut self) {
+        self.continue_pending_debug();
+        let (kind, name, state) = {
+            let execution = self.execution();
+            let runner = execution.runner();
+            (
+                runner.plan().map(|plan| plan.kind),
+                runner.plan().map(|plan| plan.name.clone()),
+                runner.state().clone(),
+            )
+        };
+        if kind == Some(TaskKind::Sync) {
+            if self.is_bazel_project() {
+                self.finish_bazel_sync();
+            } else {
+                self.finish_gradle_sync();
             }
-            let name = self
-                .runner
-                .plan()
-                .map(|plan| plan.name.clone())
-                .unwrap_or_else(|| "Task".into());
-            self.status = match self.runner.state() {
-                TaskState::Exited(0) => format!("{name} finished successfully"),
-                TaskState::Exited(code) => format!("{name} failed with exit code {code}"),
-                TaskState::Cancelled => format!("{name} cancelled"),
-                _ => self.status.clone(),
-            };
+            if matches!(state, TaskState::Exited(0)) {
+                return;
+            }
         }
+        let name = name.unwrap_or_else(|| "Task".into());
+        self.status = match state {
+            TaskState::Exited(0) => format!("{name} finished successfully"),
+            TaskState::Exited(code) => format!("{name} failed with exit code {code}"),
+            TaskState::Cancelled => format!("{name} cancelled"),
+            _ => self.status.clone(),
+        };
     }
 
     /// Re-runs only the tests that failed in the last test task.
     pub fn rerun_failed_tests(&mut self) -> Result<(), String> {
-        let last = self.runner.plan().cloned().ok_or("nothing has run yet")?;
-        let failed = self.runner.tests().failed_tests();
+        let last = self
+            .execution()
+            .runner()
+            .plan()
+            .cloned()
+            .ok_or("nothing has run yet")?;
+        let failed = self.execution().runner().tests().failed_tests();
         let root = self
             .project
             .as_ref()
@@ -210,7 +215,7 @@ impl IdeState {
     }
 
     fn can_start(&self) -> bool {
-        self.project.is_some() && !self.runner.is_running() && self.detected_build.is_some()
+        self.project.is_some() && !self.execution().is_running() && self.detected_build.is_some()
     }
 }
 
@@ -229,9 +234,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
         .register(Command::new(
             spec("run.project", "Run", "Run", Some("⌃R"), "{}"),
             |state: &IdeState| {
-                let configured = state.run_configurations.selected().is_some();
+                let configured = state.execution().configurations().selected().is_some();
                 state.project.is_some()
-                    && !state.runner.is_running()
+                    && !state.execution().is_running()
                     && (configured
                         || state
                             .detected_build
@@ -259,8 +264,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             spec("test.rerunFailed", "Rerun Failed Tests", "Run", None, "{}"),
             |state: &IdeState| {
                 state.project.is_some()
-                    && !state.runner.is_running()
-                    && state.runner.tests().counts().failed > 0
+                    && !state.execution().is_running()
+                    && state.execution().runner().tests().counts().failed > 0
             },
             |state: &mut IdeState, _| {
                 state.rerun_failed_tests().map_err(CommandError::Failed)?;
@@ -295,7 +300,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"program":"string","args":["string"]}"#,
             ),
-            |state: &IdeState| state.project.is_some() && !state.runner.is_running(),
+            |state: &IdeState| state.project.is_some() && !state.execution().is_running(),
             |state: &mut IdeState, params| {
                 let program = string_param(&params, "program")?;
                 let args = string_array_param(&params, "args")?;
@@ -318,15 +323,17 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             spec("run.rerun", "Rerun", "Run", None, "{}"),
             |state: &IdeState| {
                 state.project.is_some()
-                    && !state.runner.is_running()
+                    && !state.execution().is_running()
                     && state
-                        .runner
+                        .execution()
+                        .runner()
                         .plan()
                         .is_some_and(|plan| !plan.program.is_empty())
             },
             |state: &mut IdeState, _| {
                 let plan = state
-                    .runner
+                    .execution()
+                    .runner()
                     .plan()
                     .cloned()
                     .ok_or_else(|| CommandError::Disabled("run.rerun".into()))?;
@@ -341,10 +348,10 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
     registry
         .register(Command::new(
             spec("run.cancel", "Stop Running Task", "Run", None, "{}"),
-            |state: &IdeState| state.runner.is_running(),
+            |state: &IdeState| state.execution().is_running(),
             |state: &mut IdeState, _| {
                 state
-                    .runner
+                    .execution()
                     .cancel()
                     .map_err(|error| CommandError::Failed(error.to_string()))?;
                 state.status = "Task cancelled".into();
@@ -405,7 +412,7 @@ mod tests {
         // Even when invoked directly, the failure is shown in the Build window.
         assert!(state.start_run().is_err());
         assert!(
-            matches!(state.runner.state(), TaskState::Failed(reason) if reason.contains("Android"))
+            matches!(state.execution().runner().state(), TaskState::Failed(reason) if reason.contains("Android"))
         );
         assert_eq!(
             state.tool_windows.visible(crate::Anchor::Bottom),
@@ -442,21 +449,21 @@ mod tests {
             .execute("test.project", &mut state, Value::Null)
             .unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while state.runner.is_running() && std::time::Instant::now() < deadline {
+        while state.execution().is_running() && std::time::Instant::now() < deadline {
             state.poll_runner();
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
         state.poll_runner();
-        assert_eq!(state.runner.tests().counts().failed, 1);
+        assert_eq!(state.execution().runner().tests().counts().failed, 1);
         assert!(commands.is_enabled("test.rerunFailed", &state));
         commands
             .execute("test.rerunFailed", &mut state, Value::Null)
             .unwrap();
         assert_eq!(
-            state.runner.plan().unwrap().args,
+            state.execution().runner().plan().unwrap().args,
             ["test", "--console=plain", "--tests", "com.T.bad"]
         );
-        let _ = state.runner.cancel();
+        let _ = state.execution().cancel();
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -474,7 +481,7 @@ mod tests {
         }
         assert!(state.start_build().is_err());
         assert!(
-            matches!(state.runner.state(), TaskState::Failed(reason) if reason.contains("no supported build system"))
+            matches!(state.execution().runner().state(), TaskState::Failed(reason) if reason.contains("no supported build system"))
         );
         std::fs::remove_dir_all(root).unwrap();
     }

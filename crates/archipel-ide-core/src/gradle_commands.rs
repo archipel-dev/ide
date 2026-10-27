@@ -84,7 +84,8 @@ impl IdeState {
             return;
         };
         if self
-            .run_configurations
+            .execution()
+            .configurations()
             .configurations()
             .iter()
             .any(|config| !config.temporary)
@@ -119,19 +120,24 @@ impl IdeState {
         configs.sort_by_key(|config| !config.name.ends_with("[run]"));
         let first = configs.first().map(|config| config.name.clone());
         for config in configs {
-            if let Err(error) = self.run_configurations.save(&root, None, config) {
+            if let Err(error) = self
+                .execution()
+                .configurations_mut()
+                .save(&root, None, config)
+            {
                 self.status = format!("Could not create run configuration: {error}");
                 return;
             }
         }
         if let Some(name) = first {
-            let _ = self.run_configurations.select(&name);
+            let _ = self.execution().configurations_mut().select(&name);
         }
     }
 
     /// Applies the result of a finished sync.
     pub(crate) fn finish_gradle_sync(&mut self) {
-        match self.runner.state() {
+        let task_state = self.execution().runner().state().clone();
+        match &task_state {
             TaskState::Exited(0) => {
                 self.load_gradle_model();
                 self.create_gradle_run_configurations();
@@ -169,7 +175,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.is_gradle_project() && !state.runner.is_running(),
+            |state: &IdeState| state.is_gradle_project() && !state.execution().is_running(),
             |state: &mut IdeState, _| {
                 state.start_gradle_sync().map_err(CommandError::Failed)?;
                 Ok(Value::Null)
@@ -188,7 +194,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |state: &IdeState| {
                 state.gradle_changes_pending
                     && state.is_gradle_project()
-                    && !state.runner.is_running()
+                    && !state.execution().is_running()
             },
             |state: &mut IdeState, _| {
                 state.start_gradle_sync().map_err(CommandError::Failed)?;
@@ -221,7 +227,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"task":"string"}"#,
             ),
-            |state: &IdeState| state.is_gradle_project() && !state.runner.is_running(),
+            |state: &IdeState| state.is_gradle_project() && !state.execution().is_running(),
             |state: &mut IdeState, params| {
                 let task = string_param(&params, "task")?;
                 state.run_gradle_task(&task).map_err(CommandError::Failed)?;
@@ -277,7 +283,7 @@ mod tests {
 
     fn wait(state: &mut IdeState) {
         let deadline = Instant::now() + Duration::from_secs(10);
-        while state.runner.is_running() && Instant::now() < deadline {
+        while state.execution().is_running() && Instant::now() < deadline {
             state.poll_runner();
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -319,24 +325,26 @@ fi
             .execute("gradle.sync", &mut state, Value::Null)
             .unwrap();
         wait(&mut state);
-        assert_eq!(state.runner.state(), &TaskState::Exited(0));
+        assert_eq!(state.execution().runner().state(), &TaskState::Exited(0));
         let model = state
             .gradle_model
             .as_ref()
             .expect("model loaded after sync");
         assert_eq!(model.project(":app").unwrap().tasks[0].path, ":app:run");
         // The first sync creates run and test configurations and selects run.
-        let names: Vec<&str> = state
-            .run_configurations
+        let execution = state.execution();
+        let configurations = execution.configurations();
+        let names: Vec<&str> = configurations
             .configurations()
             .iter()
             .map(|config| config.name.as_str())
             .collect();
         assert_eq!(names, ["app [run]", "app [test]"]);
         assert_eq!(
-            state.run_configurations.selected().map(|c| c.name.as_str()),
+            configurations.selected().map(|c| c.name.as_str()),
             Some("app [run]")
         );
+        drop(configurations);
         assert!(root.join(".archipel/runConfigurations").is_dir());
         assert!(
             state.status.contains("2 projects, 2 tasks "),
@@ -349,7 +357,7 @@ fi
             .unwrap();
         wait(&mut state);
         assert_eq!(
-            state.runner.console().lines()[0].text,
+            state.execution().runner().console().lines()[0].text,
             "ran :app:run --console=plain"
         );
         assert!(
@@ -370,7 +378,7 @@ fi
             .unwrap();
         wait(&mut state);
         assert_eq!(
-            state.runner.console().lines()[0].text,
+            state.execution().runner().console().lines()[0].text,
             "ran clean :app:test --offline --console=plain"
         );
 

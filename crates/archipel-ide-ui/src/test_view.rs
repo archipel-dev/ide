@@ -67,7 +67,9 @@ fn duration_text(duration: Option<Duration>) -> String {
 /// Paints the tree; returns whether a toolbar toggle should be drawn as active.
 pub fn tree(app: &IdeApp, ui: &mut egui::Ui, running: bool) {
     let mut view: View = ui.data(|data| data.get_temp(view_id())).unwrap_or_default();
-    let results = app.state.runner.tests();
+    let execution = app.state.execution();
+    let runner = execution.runner();
+    let results = runner.tests();
     widgets::toolbar_row(ui, |ui| {
         ui.add_space(theme::layout::TOOLBAR_LEAD);
         ui.spacing_mut().item_spacing.x = 2.0;
@@ -237,7 +239,8 @@ pub fn selected_case(app: &IdeApp, ctx: &egui::Context) -> Option<TestCase> {
         .unwrap_or_default();
     let (suite, case) = view.selected?;
     app.state
-        .runner
+        .execution()
+        .runner()
         .tests()
         .suites()
         .iter()
@@ -250,7 +253,9 @@ pub fn selected_case(app: &IdeApp, ctx: &egui::Context) -> Option<TestCase> {
 
 /// Header above the console: status icon, summary, total count and time.
 pub fn header(app: &IdeApp, ui: &mut egui::Ui) {
-    let results = app.state.runner.tests();
+    let execution = app.state.execution();
+    let runner = execution.runner();
+    let results = runner.tests();
     let (text, color) = summary(results);
     ui.horizontal(|ui| {
         let counts = results.counts();

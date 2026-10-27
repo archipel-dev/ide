@@ -191,7 +191,7 @@ impl IdeState {
             let _ = self.start_external_import(crate::project_model::ImportReason::Open);
         }
         // A Gradle project imports itself once its JDK (and Gradle) are there.
-        if self.is_gradle_project() && !self.runner.is_running() {
+        if self.is_gradle_project() && !self.execution().is_running() {
             let status = std::mem::take(&mut self.status);
             match self.start_gradle_sync() {
                 Ok(()) => self.status = format!("{status}; syncing Gradle project…"),

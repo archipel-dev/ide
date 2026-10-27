@@ -42,18 +42,22 @@ impl IdeState {
     /// Applies the target list of a finished `bazel query`.
     pub(crate) fn finish_bazel_sync(&mut self) {
         // `--keep_going` exits with 3 when some packages failed but results exist.
-        if !matches!(self.runner.state(), TaskState::Exited(0 | 3)) {
+        if !matches!(self.execution().runner().state(), TaskState::Exited(0 | 3)) {
             self.bazel_error = Some("Bazel sync failed; see the Build tool window".into());
             return;
         }
-        let targets = BazelTargets::parse_label_kind(
-            self.runner
-                .console()
-                .lines()
-                .iter()
-                .filter(|line| line.stream == OutputStream::Stdout)
-                .map(|line| line.text.as_str()),
-        );
+        let targets = {
+            let execution = self.execution();
+            let runner = execution.runner();
+            BazelTargets::parse_label_kind(
+                runner
+                    .console()
+                    .lines()
+                    .iter()
+                    .filter(|line| line.stream == OutputStream::Stdout)
+                    .map(|line| line.text.as_str()),
+            )
+        };
         if let Some(project) = &self.project
             && let Err(error) = targets.save(project.root())
         {
@@ -91,7 +95,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
     registry
         .register(Command::new(
             spec("bazel.sync", "Sync Bazel Project", "Bazel", None, "{}"),
-            |state: &IdeState| state.is_bazel_project() && !state.runner.is_running(),
+            |state: &IdeState| state.is_bazel_project() && !state.execution().is_running(),
             |state: &mut IdeState, _| {
                 state.start_bazel_sync().map_err(CommandError::Failed)?;
                 Ok(Value::Null)
@@ -107,7 +111,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"label":"string","command":"build|run|test?"}"#,
             ),
-            |state: &IdeState| state.bazel_targets.is_some() && !state.runner.is_running(),
+            |state: &IdeState| state.bazel_targets.is_some() && !state.execution().is_running(),
             |state: &mut IdeState, params| {
                 let label = string_param(&params, "label")?;
                 let command = params
@@ -145,7 +149,7 @@ mod tests {
 
     fn wait(state: &mut IdeState) {
         let deadline = Instant::now() + Duration::from_secs(10);
-        while state.runner.is_running() && Instant::now() < deadline {
+        while state.execution().is_running() && Instant::now() < deadline {
             state.poll_runner();
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -204,7 +208,7 @@ mod tests {
             .unwrap();
         wait(&mut state);
         assert_eq!(
-            state.runner.console().lines()[0].text,
+            state.execution().runner().console().lines()[0].text,
             "bazel test //lib:t_test"
         );
         assert_eq!(

@@ -73,7 +73,7 @@ pub fn status_text(session: &Session) -> (String, Color32) {
 }
 
 pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let name = app.state.debugger.name.clone();
+    let name = app.state.debugger().state().name.clone();
     if tool_window_header(ui, "Debug", |ui| {
         ui.label(RichText::new(&name).color(*theme::TEXT_SECONDARY));
     }) {
@@ -155,10 +155,12 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         }
     });
     ui.separator();
-    let Some(client) = app.state.debugger.client.as_ref() else {
+    let debugger = app.state.debugger();
+    let debugger_state = debugger.state();
+    let Some(client) = debugger_state.client.as_ref() else {
         ui.add_space(12.0);
         ui.vertical_centered(|ui| {
-            if app.state.debugger.pending.is_some() {
+            if debugger_state.pending.is_some() {
                 ui.label(RichText::new("Building before debugging…").color(*theme::TEXT_SECONDARY));
             } else {
                 ui.label(RichText::new("No debug session").color(*theme::TEXT_SECONDARY));
@@ -170,7 +172,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
                     .color(*theme::TEXT_INFO),
                 );
             }
-            if let Some(error) = &app.state.debugger.error {
+            if let Some(error) = &debugger_state.error {
                 ui.label(RichText::new(error).color(*theme::ERROR));
             }
         });
@@ -305,6 +307,8 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
             });
     }
     ui.data_mut(|data| data.insert_temp(view_id(), view));
+    // Commands change the session: release the read guard first.
+    drop(debugger_state);
     if let Some(frame) = select_frame {
         app.dispatch("debug.selectFrame", json!({"frame": frame}));
     }

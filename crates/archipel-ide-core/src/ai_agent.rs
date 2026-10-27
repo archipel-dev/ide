@@ -156,6 +156,7 @@ impl IdeState {
     }
 
     pub fn ai_agent_stop(&mut self) {
+        let execution = self.execution();
         let Some(agent) = self.ai.agent.as_mut() else {
             return;
         };
@@ -163,7 +164,7 @@ impl IdeState {
             self.ai.service.cancel(id);
         }
         if agent.phase == AgentPhase::RunningCommand {
-            let _ = self.runner.cancel();
+            let _ = execution.cancel();
         }
         for step in &mut agent.steps {
             if matches!(
@@ -501,12 +502,12 @@ impl IdeState {
             .ok_or("no project is open")?
             .root()
             .to_owned();
-        if self.runner.is_running() {
+        if self.execution().is_running() {
             return Err("another task is running; try again when it finishes".into());
         }
         let (program, mut args) = Self::agent_shell();
         args.push(command.to_owned());
-        self.runner
+        self.execution()
             .start(TaskPlan {
                 name: "Agent".into(),
                 program,
@@ -579,7 +580,7 @@ impl IdeState {
         let Some(agent) = self.ai.agent.as_ref() else {
             return;
         };
-        if agent.phase != AgentPhase::RunningCommand || self.runner.is_running() {
+        if agent.phase != AgentPhase::RunningCommand || self.execution().is_running() {
             return;
         }
         // Output can arrive shortly after the exit status; give it a moment.
@@ -600,13 +601,14 @@ impl IdeState {
             return;
         };
         let output: String = self
-            .runner
+            .execution()
+            .runner()
             .output()
             .iter()
             .map(|c| c.text.as_str())
             .collect();
         let tail = archipel_ide_ai::actions::output_tail(&output, OUTPUT_LINES);
-        let result = match self.runner.state() {
+        let result = match self.execution().runner().state() {
             TaskState::Exited(code) => Ok(format!("exit code {code}\n{tail}")),
             TaskState::Cancelled => Err(format!("cancelled\n{tail}")),
             other => Err(format!("command did not complete ({other:?})\n{tail}")),
@@ -947,7 +949,7 @@ mod tests {
             .execute("ai.agent.start", &mut state, json!({"goal": "run it"}))
             .unwrap();
         assert_eq!(settle(&mut state), AgentPhase::AwaitingApproval);
-        assert!(!state.runner.is_running());
+        assert!(!state.execution().is_running());
         commands
             .execute("ai.agent.approve", &mut state, Value::Null)
             .unwrap();

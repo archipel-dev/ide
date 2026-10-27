@@ -3,7 +3,6 @@ use archipel_ide_git::RepositoryStatus;
 use archipel_ide_language::{LanguageAnalysis, analyze_lazy};
 use archipel_ide_lsp::{LspDiagnostic, LspManager};
 use archipel_ide_project::{FileEntry, Project};
-use archipel_ide_runner::TaskService;
 use archipel_ide_search::SearchEvent;
 pub use archipel_ide_search::TextMatch;
 use archipel_ide_terminal::TerminalSession;
@@ -302,9 +301,6 @@ pub struct IdeState {
     /// The active tab as of the last `sync_splits`; a different one means
     /// something outside the split model activated a tab.
     splits_synced: Option<PathBuf>,
-    pub terminal: Option<TerminalSession>,
-    /// Sessions of the Terminal tool window; the active one lives in `terminal`.
-    pub terminal_tabs: terminal_tabs::TerminalTabs,
     /// Code vision and inlay hints per document.
     code_vision: code_vision::CodeVisionState,
     /// The diff viewer tab, if open.
@@ -313,9 +309,6 @@ pub struct IdeState {
     pub diff_active: bool,
     /// Lets background services wake the UI.
     pub repaint: RepaintHook,
-    pub runner: TaskService,
-    /// Tabs and console toolbar of the Build tool window.
-    pub build_window: build_window::BuildWindowState,
     /// Language servers of the open project, started lazily per language.
     pub lsp: LspManager,
     /// Project-wide problems, refreshed by [`IdeState::refresh_problems`].
@@ -351,16 +344,6 @@ pub struct IdeState {
     /// Bazel targets from the last sync (cached in `.archipel/bazel/targets.json`).
     pub bazel_targets: Option<archipel_ide_bazel::BazelTargets>,
     pub bazel_error: Option<String>,
-    /// Run/Debug configurations of the open project and the run widget selection.
-    pub run_configurations: archipel_ide_runner::RunManager,
-    /// Pending request to show the Run/Debug Configurations dialog (focused name).
-    pub edit_run_configurations: Option<String>,
-    /// Gutter run targets of the active document, cached per text revision.
-    pub runnable_cache: gutter_commands::RunnableCache,
-    /// Spring Boot starter catalog of the New Project wizard.
-    pub spring: spring_commands::SpringState,
-    /// Breakpoints and the active debug session.
-    pub debugger: debug_commands::DebuggerState,
     pub tool_windows: ToolWindowLayout,
     /// Code or Agents arrangement of the window (documents and tabs are shared).
     pub workbench_mode: agents::WorkbenchMode,
@@ -420,8 +403,6 @@ impl IdeState {
             limit: self.tabs.limit,
             ..Default::default()
         };
-        self.terminal = None;
-        self.runner = TaskService::default();
         self.watcher = None;
         self.lsp.set_project(None);
         self.close_diff();
@@ -431,7 +412,8 @@ impl IdeState {
         self.recent_files.clear();
         self.tool_windows = ToolWindowLayout::default();
         self.project = None;
-        // Disposes the project services (Git status and its watcher, toolchain requirements).
+        // Disposes the project services (Git status and its watcher, toolchain requirements,
+        // the running task, debug session and shells).
         self.platform.close_project();
         self.status = "Closed project".into();
         Ok(())
@@ -439,7 +421,7 @@ impl IdeState {
 
     pub(crate) fn prepare_project_switch(&mut self) -> Result<(), String> {
         if self.project.is_some() {
-            if self.runner.is_running() {
+            if self.execution().is_running() {
                 return Err("Stop the running task before opening another project.".into());
             }
             self.save_all()?;
@@ -460,9 +442,6 @@ impl IdeState {
             limit: self.tabs.limit,
             ..Default::default()
         };
-        self.terminal = None;
-        self.terminal_tabs = Default::default();
-        self.runner = TaskService::default();
         if let Some(git) = self.git() {
             git.open(project.root(), self.repaint.notifier());
         }
@@ -738,19 +717,23 @@ impl IdeState {
     /// Opens the Terminal; a new shell starts in `dir` (default: the project
     /// root) and a running shell is sent a `cd` there.
     pub fn open_terminal_in(&mut self, dir: Option<&Path>) -> Result<(), String> {
+        let terminal = self.terminal();
+        let running = terminal
+            .session()
+            .as_ref()
+            .is_some_and(|terminal| !terminal.is_exited());
         if let Some(dir) = dir
-            && let Some(terminal) = self.terminal.as_mut().filter(|t| !t.is_exited())
+            && running
         {
             let quoted = dir.display().to_string().replace('\'', "'\\''");
-            terminal
-                .send(&format!("cd '{quoted}'\n"))
-                .map_err(|error| error.to_string())?;
-        } else if self
-            .terminal
-            .as_ref()
-            .is_none_or(|terminal| terminal.is_exited())
-        {
-            self.terminal = Some(self.spawn_terminal_session(dir)?);
+            if let Some(session) = terminal.session_mut().as_mut() {
+                session
+                    .send(&format!("cd '{quoted}'\n"))
+                    .map_err(|error| error.to_string())?;
+            }
+        } else if !running {
+            let session = self.spawn_terminal_session(dir)?;
+            terminal.state_mut().set_session(session);
         }
         self.tool_windows.show(ToolWindow::Terminal);
         self.status = "Terminal ready".into();
@@ -1396,7 +1379,7 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
             spec("terminal.toggle", "Toggle Terminal", "Terminal", None, "{}"),
             |_| true,
             |state: &mut IdeState, _| {
-                if state.terminal.is_none() {
+                if !state.terminal().has_session() {
                     state.open_terminal().map_err(CommandError::Failed)?;
                 } else {
                     state.tool_windows.toggle(ToolWindow::Terminal);
@@ -1414,11 +1397,12 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
                 None,
                 r#"{"text":"string"}"#,
             ),
-            |state: &IdeState| state.terminal.is_some(),
+            |state: &IdeState| state.terminal().has_session(),
             |state: &mut IdeState, params| {
                 let text = string_param(&params, "text")?;
                 state
-                    .terminal
+                    .terminal()
+                    .session_mut()
                     .as_mut()
                     .ok_or_else(|| CommandError::Disabled("terminal.sendText".into()))?
                     .send(&text)
@@ -1536,7 +1520,7 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
             |_| true,
             |state: &mut IdeState, params| {
                 let window = tool_window_param(&params)?;
-                if window == ToolWindow::Terminal && state.terminal.is_none() {
+                if window == ToolWindow::Terminal && !state.terminal().has_session() {
                     state.open_terminal().map_err(CommandError::Failed)?;
                     return Ok(json!({"visible": true}));
                 }

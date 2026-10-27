@@ -208,10 +208,11 @@ fn content(app: &mut IdeApp, ui: &mut egui::Ui) {
         app.toggle_tool_window(ToolWindow::Gradle);
     }
     let mut view: View = ui.data(|data| data.get_temp(view_id())).unwrap_or_default();
-    let syncing = app.state.runner.is_running()
+    let syncing = app.state.execution().is_running()
         && app
             .state
-            .runner
+            .execution()
+            .runner()
             .plan()
             .is_some_and(|plan| plan.kind == TaskKind::Sync);
     widgets::toolbar_row(ui, |ui| {

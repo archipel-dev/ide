@@ -124,7 +124,8 @@ fn debug_start_resolves_through_jdtls_and_stops_at_a_breakpoint() {
         )
         .unwrap();
     state
-        .run_configurations
+        .execution()
+        .configurations_mut()
         .add_temporary(RunConfiguration::new(
             "App",
             RunTarget::Gradle {
@@ -143,7 +144,7 @@ fn debug_start_resolves_through_jdtls_and_stops_at_a_breakpoint() {
             Instant::now() < deadline,
             "no stop: {} / {:?}",
             state.status,
-            state.debugger.error
+            state.debugger().state().error
         );
         state.poll_lsp();
         state.poll_debug();
@@ -151,7 +152,7 @@ fn debug_start_resolves_through_jdtls_and_stops_at_a_breakpoint() {
     }
     let point = state.execution_point().unwrap();
     assert_eq!(point.line, 0);
-    if let Some(client) = state.debugger.client.as_mut() {
+    if let Some(client) = state.debugger().state_mut().client.as_mut() {
         client.kill();
     }
     let _ = std::fs::remove_dir_all(root);

@@ -35,12 +35,16 @@ impl IdeState {
         if query.trim().is_empty() {
             return Err("describe the command first".into());
         }
-        let terminal = self.terminal.as_ref().ok_or("open the terminal first")?;
-        let screen = self.ai.policy.share_file_contents.then(|| {
-            let contents = terminal.screen().contents();
-            let lines: Vec<&str> = contents.lines().collect();
-            lines[lines.len().saturating_sub(SCREEN_LINES)..].join("\n")
-        });
+        let screen = {
+            let service = self.terminal();
+            let session = service.session();
+            let terminal = session.as_ref().ok_or("open the terminal first")?;
+            self.ai.policy.share_file_contents.then(|| {
+                let contents = terminal.screen().contents();
+                let lines: Vec<&str> = contents.lines().collect();
+                lines[lines.len().saturating_sub(SCREEN_LINES)..].join("\n")
+            })
+        };
         let cwd = self
             .project
             .as_ref()
@@ -97,13 +101,17 @@ impl IdeState {
         else {
             return Err("no suggested command".into());
         };
-        let terminal = self.terminal.as_mut().ok_or("open the terminal first")?;
-        // Typed like keystrokes: `parse_command` guarantees a single line without
-        // control characters.
-        let enter = if run { "\r" } else { "" };
-        terminal
-            .send(&format!("{command}{enter}"))
-            .map_err(|e| e.to_string())?;
+        {
+            let service = self.terminal();
+            let mut session = service.session_mut();
+            let terminal = session.as_mut().ok_or("open the terminal first")?;
+            // Typed like keystrokes: `parse_command` guarantees a single line without
+            // control characters.
+            let enter = if run { "\r" } else { "" };
+            terminal
+                .send(&format!("{command}{enter}"))
+                .map_err(|e| e.to_string())?;
+        }
         self.ai.shell = None;
         Ok(())
     }
@@ -117,7 +125,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 state: ShellSuggestionState::Ready { .. },
                 ..
             })
-        ) && state.terminal.is_some()
+        ) && state.terminal().has_session()
     };
     let commands = vec![
         Command::new(
@@ -128,7 +136,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"text":"string"}"#,
             ),
-            |state: &IdeState| state.ai.is_enabled() && state.terminal.is_some(),
+            |state: &IdeState| state.ai.is_enabled() && state.terminal().has_session(),
             |state: &mut IdeState, params| {
                 let text = string_param(&params, "text")?;
                 let id = state
@@ -212,7 +220,8 @@ mod tests {
         // Let the shell draw its prompt (and enable bracketed paste, as in the IDE).
         let deadline = Instant::now() + Duration::from_secs(5);
         while state
-            .terminal
+            .terminal()
+            .session_mut()
             .as_mut()
             .is_some_and(|t| t.poll().trim().is_empty())
         {
@@ -240,7 +249,7 @@ mod tests {
     fn screen_contains(state: &mut IdeState, needle: &str, wait: Duration) -> bool {
         let deadline = Instant::now() + wait;
         while Instant::now() < deadline {
-            if let Some(terminal) = state.terminal.as_mut() {
+            if let Some(terminal) = state.terminal().session_mut().as_mut() {
                 terminal.poll();
                 if terminal.screen().contents().contains(needle) {
                     return true;

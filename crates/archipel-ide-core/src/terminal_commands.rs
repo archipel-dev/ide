@@ -21,8 +21,10 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             _ => "{}",
         };
         registry.register(Command::new(spec(id, label, "Terminal", None, schema),
-            |state: &IdeState| state.terminal.is_some(), move |state: &mut IdeState, params| {
-                let terminal = state.terminal.as_mut().ok_or_else(|| CommandError::Disabled(id.into()))?;
+            |state: &IdeState| state.terminal().has_session(), move |state: &mut IdeState, params| {
+                let service = state.terminal();
+                let mut session = service.session_mut();
+                let terminal = session.as_mut().ok_or_else(|| CommandError::Disabled(id.into()))?;
                 match id {
                     "terminal.resize" => {
                         let rows = usize_param(&params, "rows")?;
@@ -73,7 +75,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     .unwrap_or_else(|| std::path::PathBuf::from("."));
                 let terminal = archipel_ide_terminal::TerminalSession::spawn_shell(&cwd)
                     .map_err(|e| CommandError::Failed(e.to_string()))?;
-                state.terminal = Some(terminal);
+                state.terminal().state_mut().set_session(terminal);
                 state.tool_windows.show(crate::ToolWindow::Terminal);
                 Ok(Value::Null)
             },
@@ -86,17 +88,15 @@ mod tests {
     use super::*;
     #[test]
     fn terminal_commands_validate_dimensions_and_selection_boundaries() {
-        let mut state = IdeState {
-            terminal: Some(
-                archipel_ide_terminal::TerminalSession::spawn(
-                    "/bin/sh",
-                    &["-c", "sleep 30"],
-                    std::path::Path::new("/tmp"),
-                )
-                .unwrap(),
-            ),
-            ..Default::default()
-        };
+        let mut state = IdeState::default();
+        state.terminal().state_mut().set_session(
+            archipel_ide_terminal::TerminalSession::spawn(
+                "/bin/sh",
+                &["-c", "sleep 30"],
+                std::path::Path::new("/tmp"),
+            )
+            .unwrap(),
+        );
         let commands = crate::built_in_commands();
         assert!(
             commands

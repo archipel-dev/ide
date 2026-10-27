@@ -225,7 +225,8 @@ impl IdeState {
             include_disabled_actions: self.actions().read().include_disabled,
             splits: self.splits_json(),
             selected_run_configuration: self
-                .run_configurations
+                .execution()
+                .configurations()
                 .selected()
                 .filter(|config| !config.temporary)
                 .map(|config| config.name.clone()),
@@ -303,7 +304,7 @@ impl IdeState {
             self.sync_splits();
         }
         if let Some(name) = &workspace.selected_run_configuration {
-            let _ = self.run_configurations.select(name);
+            let _ = self.execution().configurations_mut().select(name);
         }
         self.tool_windows.hide_all();
         if let Some(height) = workspace.bottom_tool_height {

@@ -304,7 +304,7 @@ impl IdeApp {
         !self.state.search_running()
             && !self.state.text_search_running()
             && !self.find_popup.pending()
-            && !self.state.runner.is_running()
+            && !self.state.execution().is_running()
             && !self.state.updates().is_busy()
             && self.state.analysis.index.is_idle()
             && !self.state.project_model().is_some_and(|m| m.is_busy())
@@ -334,7 +334,8 @@ impl IdeApp {
 
     fn terminal_text(&self) -> Option<String> {
         self.state
-            .terminal
+            .terminal()
+            .session()
             .as_ref()
             .map(|terminal| terminal.screen().contents())
     }
@@ -536,8 +537,8 @@ impl IdeApp {
             },
             "projectModel": self.state.project_model().map_or(Value::Null, |m| m.snapshot(root.as_deref().unwrap_or(std::path::Path::new("")))),
             "run": {
-                "task": self.state.runner.plan().map(|plan| plan.name.clone()),
-                "running": self.state.runner.is_running(),
+                "task": self.state.execution().runner().plan().map(|plan| plan.name.clone()),
+                "running": self.state.execution().is_running(),
             },
             "status": self.state.status,
             "busy": !self.background_idle(),

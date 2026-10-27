@@ -152,7 +152,7 @@ fn segmented(ui: &mut egui::Ui, value: &mut String, options: &[(&str, &str)]) {
 }
 
 fn refresh_row(ui: &mut egui::Ui, app: &mut IdeApp) {
-    let status = app.state.spring.refresh_status.clone();
+    let status = app.state.spring().state().refresh_status.clone();
     let running = status == Some(RefreshStatus::Running);
     ui.horizontal(|ui| {
         if ui
@@ -203,8 +203,8 @@ pub(super) fn settings_page(
 ) -> bool {
     let mut submit = false;
     let progress = app.state.toolchains().read().progress();
-    let catalog_versions = app.state.spring.catalog.boot_versions.clone();
-    let java_versions = app.state.spring.catalog.java_versions.clone();
+    let catalog_versions = app.state.spring().state().catalog.boot_versions.clone();
+    let java_versions = app.state.spring().state().catalog.java_versions.clone();
     egui::Grid::new("new_project_spring_fields")
         .num_columns(2)
         .spacing([16.0, 10.0])
@@ -362,7 +362,7 @@ pub(super) fn settings_page(
 /// The dependency picker: search, categories, checkboxes with descriptions and the
 /// list of selected dependencies.
 pub(super) fn dependencies_page(ui: &mut egui::Ui, form: &mut Form, app: &mut IdeApp, height: f32) {
-    let catalog = app.state.spring.catalog.clone();
+    let catalog = app.state.spring().state().catalog.clone();
     ui.horizontal(|ui| {
         ui.add(
             JBTextField::search(&mut form.spring.query)

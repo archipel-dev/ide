@@ -92,7 +92,7 @@ fn breakpoint_frame(ctx: &egui::Context, width: f32, add: impl FnOnce(&mut egui:
 }
 
 fn breakpoint_properties(app: &mut IdeApp, ctx: &egui::Context) {
-    let Some((path, line)) = app.state.debugger.editing_breakpoint.clone() else {
+    let Some((path, line)) = app.state.debugger().state().editing_breakpoint.clone() else {
         // Closed (maybe by Escape in the workbench): the next open starts fresh.
         ctx.data_mut(|data| {
             data.remove::<BreakpointForm>(form_id());
@@ -105,7 +105,7 @@ fn breakpoint_properties(app: &mut IdeApp, ctx: &egui::Context) {
         .unwrap_or_default();
     let key = Some((path.clone(), line));
     if form.key != key {
-        let options = app.state.breakpoint_options(&path, line).cloned();
+        let options = app.state.breakpoint_options(&path, line);
         let options = options.unwrap_or_default();
         form = BreakpointForm {
             key,
@@ -206,11 +206,11 @@ fn breakpoint_properties(app: &mut IdeApp, ctx: &egui::Context) {
 }
 
 fn evaluate_dialog(app: &mut IdeApp, ctx: &egui::Context) {
-    let Some(mut expression) = app.state.debugger.evaluate_dialog.clone() else {
+    let Some(mut expression) = app.state.debugger().state().evaluate_dialog.clone() else {
         ctx.data_mut(|data| data.remove::<bool>(egui::Id::new("evaluate_dialog_opened")));
         return;
     };
-    let (result, stopped) = match app.state.debugger.client.as_ref() {
+    let (result, stopped) = match app.state.debugger().state().client.as_ref() {
         Some(client) => (
             client.session().evaluations().last().cloned(),
             matches!(client.session().state(), SessionState::Stopped { .. }),
@@ -310,6 +310,6 @@ fn evaluate_dialog(app: &mut IdeApp, ctx: &egui::Context) {
         ctx.data_mut(|data| data.remove::<bool>(egui::Id::new("evaluate_dialog_opened")));
         app.dispatch("debug.closeEvaluateDialog", serde_json::Value::Null);
     } else {
-        app.state.debugger.evaluate_dialog = Some(expression);
+        app.state.debugger().state_mut().evaluate_dialog = Some(expression);
     }
 }

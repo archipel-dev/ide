@@ -61,7 +61,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_min_width(280.0);
-                let running = app.state.runner.is_running();
+                let running = app.state.execution().is_running();
                 let run = ui.add(
                     crate::widgets::menu_item(mark.label.clone())
                         .icon(Icon::Run)

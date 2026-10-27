@@ -9,7 +9,8 @@ use serde_json::{Value, json};
 
 /// Label of the toolbar device selector.
 pub fn selector_label(app: &IdeApp) -> (String, bool) {
-    let hub = &app.state.android().devices;
+    let tooling = app.state.android_tooling();
+    let hub = tooling.devices();
     match hub.selected_device() {
         Some(device) => (device.display_name(), true),
         None if hub.devices.is_empty() => ("No Devices".into(), false),
@@ -43,7 +44,8 @@ pub fn device_selector(app: &mut IdeApp, ui: &mut egui::Ui) {
     );
     egui::Popup::menu(&response).show(|ui| {
         ui.set_min_width(260.0);
-        let hub = &app.state.android().devices;
+        let tooling = app.state.android_tooling();
+        let hub = tooling.devices();
         let mut select = None;
         let mut start = None;
         ui.label(RichText::new("Running devices").color(theme::TEXT_INFO));
@@ -93,6 +95,8 @@ pub fn device_selector(app: &mut IdeApp, ui: &mut egui::Ui) {
             Some(device) => format!("Run 'app' on {}", device.display_name()),
             None => "Run 'app'".into(),
         };
+        // Commands write the device state: release the read guard first.
+        drop(hub);
         let mut run = false;
         if ui
             .add_enabled(can_run, egui::Button::new(run_label))
@@ -139,7 +143,8 @@ struct Row {
 }
 
 fn rows(app: &IdeApp) -> Vec<Row> {
-    let hub = &app.state.android().devices;
+    let tooling = app.state.android_tooling();
+    let hub = tooling.devices();
     let mut rows: Vec<Row> = hub
         .avds
         .iter()
@@ -229,7 +234,7 @@ pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
             let hide = widgets::tool_window_header(ui, window.title(), |ui| {
                 if icons::button(ui, Icon::Refresh, "Refresh devices").clicked() {
                     app.dispatch("android.avd.list", Value::Null);
-                    if !app.state.android().devices.is_tracking() {
+                    if !app.state.android_tooling().devices().is_tracking() {
                         app.dispatch("android.devices.track", Value::Null);
                     }
                 }
@@ -320,10 +325,10 @@ fn dm_dialogs(app: &mut IdeApp, ctx: &egui::Context, dm: &mut DmState) {
                 DmDialog::Create => {
                     let images: Vec<String> = app
                         .state
-                        .android
-                        .sdk
+                        .android_tooling()
+                        .sdk()
+                        .and_then(|d| d.sdk)
                         .as_ref()
-                        .and_then(|d| d.sdk.as_ref())
                         .map(|sdk| {
                             sdk.packages
                                 .iter()
@@ -449,7 +454,7 @@ fn device_table(app: &mut IdeApp, ui: &mut egui::Ui, dm: &mut DmState) {
         header.bottom(),
         egui::Stroke::new(1.0_f32, theme::BORDER),
     );
-    if let Some(error) = &app.state.android().devices.error {
+    if let Some(error) = &app.state.android_tooling().devices().error {
         let error = error.split_whitespace().collect::<Vec<_>>().join(" ");
         egui::Frame::new()
             .inner_margin(egui::Margin::symmetric(12, 6))

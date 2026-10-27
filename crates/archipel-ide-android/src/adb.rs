@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
@@ -339,7 +339,7 @@ pub enum TrackEvent {
 /// Live device list fed by `adb track-devices`. Dropping it stops tracking.
 pub struct DeviceTracker {
     child: Arc<Mutex<Child>>,
-    events: Receiver<TrackEvent>,
+    events: crate::Inbox<TrackEvent>,
 }
 
 impl DeviceTracker {
@@ -370,12 +370,15 @@ impl DeviceTracker {
                 message: error.to_string(),
             });
         }
-        Ok(Self { child, events })
+        Ok(Self {
+            child,
+            events: crate::Inbox::new(events),
+        })
     }
 
     /// Drains pending events without blocking.
     pub fn poll(&self) -> Vec<TrackEvent> {
-        self.events.try_iter().collect()
+        self.events.try_iter()
     }
 
     /// Blocks up to `timeout` for the next event (tests and CLI).

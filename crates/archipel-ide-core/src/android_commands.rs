@@ -63,12 +63,12 @@ impl IdeState {
         archipel_ide_android::validate_sdk(path)
             .map_err(|problem| format!("{} is not an Android SDK: {problem}", path.display()))?;
         let root = self.project_root();
-        if let (Some(root), Some(_)) = (&root, &self.android.project) {
+        let is_android = self.android_tooling().is_android_project();
+        if let (Some(root), true) = (&root, is_android) {
             archipel_ide_android::write_local_properties_sdk_dir(root, path)
                 .map_err(|error| format!("cannot update local.properties: {error}"))?;
         }
-        self.android.sdk_setting = Some(path.to_owned());
-        self.android.detect_sdk(root.as_deref());
+        self.android_tooling().set_sdk(path, root.as_deref());
         self.status = format!("Android SDK: {}", path.display());
         Ok(())
     }
@@ -77,7 +77,9 @@ impl IdeState {
 impl IdeState {
     /// The Android project view, computed from the project tree's file index.
     pub fn android_view_nodes(&self) -> Vec<archipel_ide_android::view::ViewNode> {
-        let Some(project) = &self.android.project else {
+        let tooling = self.android_tooling();
+        let guard = tooling.read();
+        let Some(project) = &guard.project else {
             return Vec::new();
         };
         let files: Vec<PathBuf> = self
@@ -108,17 +110,18 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"view":"android|project"}"#,
             ),
-            |state: &IdeState| state.android.project.is_some(),
+            |state: &IdeState| state.android_tooling().read().project.is_some(),
             |state: &mut IdeState, params| {
-                state.android.android_view = match string_param(&params, "view")?.as_str() {
-                    "android" => true,
-                    "project" => false,
-                    other => {
-                        return Err(CommandError::InvalidParams(format!(
-                            "unknown project view `{other}`; expected android or project"
-                        )));
-                    }
-                };
+                state.android_tooling().write().android_view =
+                    match string_param(&params, "view")?.as_str() {
+                        "android" => true,
+                        "project" => false,
+                        other => {
+                            return Err(CommandError::InvalidParams(format!(
+                                "unknown project view `{other}`; expected android or project"
+                            )));
+                        }
+                    };
                 Ok(Value::Null)
             },
         ))
@@ -132,7 +135,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.android.project.is_some(),
+            |state: &IdeState| state.android_tooling().read().project.is_some(),
             |state: &mut IdeState, _| Ok(json!({ "nodes": state.android_view_nodes() })),
         ))
         .expect("unique built-in id");
@@ -148,7 +151,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |_| true,
             |state: &mut IdeState, _| {
                 let root = state.project_root();
-                let detection = state.android.detect_sdk(root.as_deref());
+                let tooling = state.android_tooling();
+                let mut guard = tooling.write();
+                let detection = guard.detect_sdk(root.as_deref());
                 Ok(detection_json(detection))
             },
         ))
@@ -159,8 +164,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |_| true,
             |state: &mut IdeState, _| {
                 let root = state.project_root();
-                state.android.detect_sdk(root.as_deref());
-                state.android.sdk_manager_open = true;
+                state.android_tooling().detect_sdk(root.as_deref());
+                state.android_tooling().write().sdk_manager_open = true;
                 Ok(Value::Null)
             },
         ))
@@ -187,7 +192,12 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     .set_android_sdk(Path::new(path))
                     .map_err(CommandError::Failed)?;
                 Ok(detection_json(
-                    state.android.sdk.as_ref().expect("detected"),
+                    state
+                        .android_tooling()
+                        .read()
+                        .sdk
+                        .as_ref()
+                        .expect("detected"),
                 ))
             },
         ))
@@ -206,8 +216,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 let root = state
                     .project_root()
                     .ok_or_else(|| CommandError::Disabled("android.project.detect".into()))?;
-                state.android.project_opened(&root);
-                Ok(json!({ "project": state.android.project }))
+                state.android_tooling().project_opened(&root);
+                Ok(json!({ "project": state.android_tooling().read().project }))
             },
         ))
         .expect("unique built-in id");
@@ -279,7 +289,7 @@ mod tests {
         commands
             .execute("project.open", &mut state, json!({"path": project}))
             .unwrap();
-        let android = state.android.project.as_ref().unwrap();
+        let android = state.android_tooling().project().unwrap();
         assert_eq!(
             android
                 .app_module()
@@ -297,7 +307,10 @@ mod tests {
         assert_eq!(result["sdk"]["packages"][0]["path"], "platforms;android-35");
         assert_eq!(result["problem"], serde_json::Value::Null);
 
-        assert!(state.android.android_view, "Android view is the default");
+        assert!(
+            state.android_tooling().read().android_view,
+            "Android view is the default"
+        );
         let view = commands
             .execute("android.projectView.tree", &mut state, json!({}))
             .unwrap();
@@ -311,7 +324,7 @@ mod tests {
                 json!({"view": "project"}),
             )
             .unwrap();
-        assert!(!state.android.android_view);
+        assert!(!state.android_tooling().read().android_view);
         assert!(
             commands
                 .execute(
@@ -329,7 +342,7 @@ mod tests {
         commands
             .execute("android.sdk.manager", &mut state, json!({}))
             .unwrap();
-        assert!(state.android.sdk_manager_open);
+        assert!(state.android_tooling().read().sdk_manager_open);
         std::fs::remove_dir_all(base).unwrap();
     }
 
@@ -376,8 +389,8 @@ mod tests {
         built_in_commands()
             .execute("project.open", &mut state, json!({"path": base}))
             .unwrap();
-        assert!(state.android.project.is_none());
-        assert!(state.android.sdk.is_none());
+        assert!(state.android_tooling().read().project.is_none());
+        assert!(state.android_tooling().read().sdk.is_none());
         std::fs::remove_dir_all(base).unwrap();
     }
 }

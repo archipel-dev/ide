@@ -13,10 +13,10 @@
 use crate::build_window::BuildWindowFollower;
 use crate::services::Settings;
 use crate::services::{
-    ActionManager, BlameAnnotations, CloneManager, DEBUG_SESSION_TOPIC, DebugSessionListener,
-    EXECUTION_TOPIC, ExecutionListener, ExecutionManager, FIND_TOPIC, FindInProjectService,
-    FindListener, GIT_REPO_CHANGE, GitLogService, GitRemoteOperations, GitRepositories,
-    GitRepositoryChangeListener, KeymapManager, LineStatusTracker, Notifications,
+    ActionManager, AndroidTooling, BlameAnnotations, CloneManager, DEBUG_SESSION_TOPIC,
+    DebugSessionListener, EXECUTION_TOPIC, ExecutionListener, ExecutionManager, FIND_TOPIC,
+    FindInProjectService, FindListener, GIT_REPO_CHANGE, GitLogService, GitRemoteOperations,
+    GitRepositories, GitRepositoryChangeListener, KeymapManager, LineStatusTracker, Notifications,
     ProjectModelService, REMOTE_TOPIC, RecentProjectsManager, RemoteOperationListener,
     RemoteOutcome, SETTINGS_TOPIC, SearchEverywhereManager, SearchSummary, SettingsListener,
     SettingsService, SpringStarters, TOOLCHAIN_TOPIC, TerminalService, ToolchainBanner,
@@ -246,6 +246,9 @@ fn register_core_services(application: &Application) {
             CloneManager::new(application.message_bus().clone())
         })),
         application.register_service(ServiceDescriptor::of_default::<ActionManager>()),
+        application.register_service(ServiceDescriptor::new(|application: &Application| {
+            AndroidTooling::new(application.message_bus().clone())
+        })),
         application.register_service(ServiceDescriptor::of_default::<SearchEverywhereManager>()),
         application.register_service(ServiceDescriptor::new(|application: &Application| {
             archipel_ide_langpacks::LanguagePacks::new(application)
@@ -504,6 +507,12 @@ impl IdeState {
     /// Whether a Find in Files search is running.
     pub fn search_running(&self) -> bool {
         self.find().is_some_and(|find| find.is_running())
+    }
+
+    /// The Android SDK, devices, Logcat, deploys and tool windows (application service: the SDK
+    /// manager and the Device Manager also work on the welcome screen).
+    pub fn android_tooling(&self) -> Arc<AndroidTooling> {
+        self.application().service()
     }
 
     /// Search Everywhere, Recent Locations and the Switcher (application service: the popup

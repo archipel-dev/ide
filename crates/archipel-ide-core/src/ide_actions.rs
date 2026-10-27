@@ -244,7 +244,7 @@ impl IdeState {
 
     /// Whether the open project is an Android project.
     pub fn is_android_project(&self) -> bool {
-        self.android.project.is_some()
+        self.android_tooling().read().project.is_some()
     }
 
     /// Number of open editor tabs.

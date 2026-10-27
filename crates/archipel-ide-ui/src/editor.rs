@@ -109,7 +109,7 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                 }
                 if crate::merged_manifest_ui::applies(app) {
                     crate::merged_manifest_ui::tab_bar(app, ui);
-                    if app.state.android().merged_manifest.open {
+                    if app.state.android_tooling().merged_manifest().open {
                         crate::merged_manifest_ui::body(app, ui);
                         app.caret_screen_pos = None;
                         return;
@@ -117,7 +117,7 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                 }
                 if crate::layout_editor_ui::applies(app) {
                     crate::layout_editor_ui::mode_bar(app, ui);
-                    match app.state.android().layout.mode {
+                    match app.state.android_tooling().layout().mode {
                         archipel_ide_core::LayoutMode::Design => {
                             crate::layout_editor_ui::design_body(app, ui);
                             app.caret_screen_pos = None;

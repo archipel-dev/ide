@@ -306,21 +306,26 @@ impl IdeState {
     /// Starts Logcat for `serial`, or for the selected device.
     pub fn start_logcat(&mut self, serial: Option<String>) -> Result<(), String> {
         let serial = serial
-            .or_else(|| self.android.devices.selected.clone())
+            .or_else(|| self.android_tooling().read().devices.selected.clone())
             .ok_or("No connected devices. Connect a device or start an emulator.")?;
-        let adb = self.android.adb()?;
+        let tooling = self.android_tooling();
+        let adb = tooling.write().adb()?;
         let session = LogcatSession::start(&adb, &serial)?;
-        let logcat = &mut self.android.logcat;
+        let mine: Option<Vec<String>> = tooling.project().map(|project| {
+            project
+                .modules
+                .iter()
+                .filter_map(|m| m.package_name().map(str::to_owned))
+                .collect()
+        });
+        let mut guard = tooling.write();
+        let logcat = &mut guard.logcat;
         if logcat.serial.as_deref() != Some(serial.as_str()) {
             logcat.clear();
             logcat.processes.clear();
         }
-        if let Some(project) = &self.android.project {
-            logcat.mine = project
-                .modules
-                .iter()
-                .filter_map(|m| m.package_name().map(str::to_owned))
-                .collect();
+        if let Some(mine) = mine {
+            logcat.mine = mine;
         }
         logcat.serial = Some(serial);
         logcat.error = None;
@@ -330,10 +335,10 @@ impl IdeState {
     }
 
     pub(crate) fn logcat_opened(&mut self) {
-        if !self.android.logcat.is_running() {
-            let _ = self.android.ensure_device_tracking();
+        if !self.android_tooling().read().logcat.is_running() {
+            let _ = self.android_tooling().write().ensure_device_tracking();
             if let Err(error) = self.start_logcat(None) {
-                self.android.logcat.error = Some(error);
+                self.android_tooling().write().logcat.error = Some(error);
             }
         }
     }
@@ -375,8 +380,10 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 let match_case = params
                     .get("matchCase")
                     .and_then(Value::as_bool)
-                    .unwrap_or(state.android.logcat.match_case);
-                let logcat = &mut state.android.logcat;
+                    .unwrap_or(state.android_tooling().read().logcat.match_case);
+                let tooling = state.android_tooling();
+                let mut guard = tooling.write();
+                let logcat = &mut guard.logcat;
                 logcat.set_query(&query, match_case);
                 if let Some(error) = &logcat.filter_error {
                     return Err(CommandError::InvalidParams(error.clone()));
@@ -400,8 +407,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             |_| true,
             |state: &mut IdeState, _| {
-                state.android.logcat.new_tab();
-                Ok(json!({"tabs": state.android.logcat.tabs.len()}))
+                state.android_tooling().write().logcat.new_tab();
+                Ok(json!({"tabs": state.android_tooling().read().logcat.tabs.len()}))
             },
         ))
         .expect("unique built-in id");
@@ -418,7 +425,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                         params.get("index").and_then(Value::as_u64).ok_or_else(|| {
                             CommandError::InvalidParams("index is required".into())
                         })? as usize;
-                    let logcat = &mut state.android.logcat;
+                    let tooling = state.android_tooling();
+                    let mut guard = tooling.write();
+                    let logcat = &mut guard.logcat;
                     let tab = if id == "android.logcat.tab.select" {
                         logcat.select_tab(index)
                     } else {
@@ -429,14 +438,14 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                             "no Logcat tab {index} (or it is the last one)"
                         )));
                     };
-                    if tab.serial != state.android.logcat.serial
+                    if tab.serial != state.android_tooling().read().logcat.serial
                         && let Some(serial) = tab.serial.clone()
                     {
                         state
                             .start_logcat(Some(serial))
                             .map_err(CommandError::Failed)?;
                     }
-                    Ok(json!({"active": state.android.logcat.active_tab}))
+                    Ok(json!({"active": state.android_tooling().read().logcat.active_tab}))
                 },
             ))
             .expect("unique built-in id");
@@ -453,7 +462,11 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |_| true,
             |state: &mut IdeState, params| {
                 let query = string_param(&params, "query")?;
-                let added = state.android.logcat.toggle_favourite(&query);
+                let added = state
+                    .android_tooling()
+                    .write()
+                    .logcat
+                    .toggle_favourite(&query);
                 Ok(json!({"favourite": added}))
             },
         ))
@@ -469,7 +482,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 spec(id, label, "Android", None, "{}"),
                 |_| true,
                 move |state: &mut IdeState, _| {
-                    let logcat = &mut state.android.logcat;
+                    let tooling = state.android_tooling();
+                    let mut guard = tooling.write();
+                    let logcat = &mut guard.logcat;
                     match id {
                         "android.logcat.clear" => logcat.clear(),
                         "android.logcat.pause" => logcat.set_paused(!logcat.paused),
@@ -562,17 +577,24 @@ mod tests {
         let commands = built_in_commands();
         let mut state = IdeState::default();
         state.set_android_sdk(&sdk).unwrap();
-        state.android.ensure_device_tracking().unwrap();
-        wait_until(&mut state, |s| s.android.devices.selected.is_some());
-        state.android.logcat.mine = vec!["com.example.app".into()];
+        state
+            .android_tooling()
+            .write()
+            .ensure_device_tracking()
+            .unwrap();
+        wait_until(&mut state, |s| {
+            s.android_tooling().read().devices.selected.is_some()
+        });
+        state.android_tooling().write().logcat.mine = vec!["com.example.app".into()];
         commands
             .execute("toolwindow.activate.logcat", &mut state, json!({}))
             .unwrap();
         assert!(state.tool_windows.is_visible(ToolWindow::Logcat));
-        wait_until(&mut state, |s| s.android.logcat.len() == 4);
+        wait_until(&mut state, |s| s.android_tooling().read().logcat.len() == 4);
         // `package:mine` (default) resolves pid 4321 from the "Start proc" line.
         let tags: Vec<_> = state
-            .android
+            .android_tooling()
+            .read()
             .logcat
             .visible()
             .map(|e| e.tag.clone())
@@ -587,7 +609,7 @@ mod tests {
             .unwrap();
         assert_eq!(result, json!({"visible": 2, "total": 4}));
         wait_until(&mut state, |s| {
-            s.android.logcat.process_name(777) == Some("logd")
+            s.android_tooling().read().logcat.process_name(777) == Some("logd")
         });
         commands
             .execute(
@@ -596,7 +618,7 @@ mod tests {
                 json!({"query": "package:logd"}),
             )
             .unwrap();
-        assert_eq!(state.android.logcat.visible_len(), 1);
+        assert_eq!(state.android_tooling().read().logcat.visible_len(), 1);
         assert!(
             commands
                 .execute(
@@ -607,7 +629,7 @@ mod tests {
                 .is_err()
         );
         assert_eq!(
-            state.android.logcat.visible_len(),
+            state.android_tooling().read().logcat.visible_len(),
             1,
             "invalid query keeps the last filter"
         );
@@ -615,19 +637,19 @@ mod tests {
         commands
             .execute("android.logcat.pause", &mut state, json!({}))
             .unwrap();
-        assert!(state.android.logcat.paused);
+        assert!(state.android_tooling().read().logcat.paused);
         commands
             .execute("android.logcat.clear", &mut state, json!({}))
             .unwrap();
-        assert!(state.android.logcat.is_empty());
+        assert!(state.android_tooling().read().logcat.is_empty());
         commands
             .execute("android.logcat.softWrap", &mut state, json!({}))
             .unwrap();
-        assert!(state.android.logcat.soft_wrap);
+        assert!(state.android_tooling().read().logcat.soft_wrap);
         commands
             .execute("android.logcat.stop", &mut state, json!({}))
             .unwrap();
-        assert!(!state.android.logcat.is_running());
+        assert!(!state.android_tooling().read().logcat.is_running());
         drop(state);
         std::fs::remove_dir_all(base).unwrap();
     }

@@ -116,8 +116,6 @@ macro_rules! handles {
 }
 
 handles! {
-    /// Android project, devices, logcat, SDK manager and layout editor.
-    android, android_mut: crate::AndroidState;
     /// Agents mode: sessions, grid, review.
     agents, agents_mut: crate::agents::AgentsState;
     /// The plugin registry and the contributions of plugins.

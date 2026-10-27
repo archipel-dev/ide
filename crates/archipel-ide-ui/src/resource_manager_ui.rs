@@ -76,10 +76,12 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         return;
     }
     let modules = app.state.android_module_dirs();
-    let manager = &app.state.android().resource_manager;
+    let tooling = app.state.android_tooling();
+    let manager = tooling.resource_manager();
     let module = manager.module.clone().or_else(|| modules.first().cloned());
     let tab = manager.tab;
     let mut query = manager.query.clone();
+    drop(manager);
     let mut select_module = None;
     let mut select_tab = None;
 
@@ -138,7 +140,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
     if let Some(candidate) = select_tab {
         params.insert("tab".into(), json!(candidate.id()));
     }
-    if query != app.state.android().resource_manager.query {
+    if query != app.state.android_tooling().resource_manager().query {
         params.insert("query".into(), json!(query));
     }
     if !params.is_empty() {
@@ -147,8 +149,8 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
 
     let items: Vec<ResourceItem> = app
         .state
-        .android
-        .resource_manager
+        .android_tooling()
+        .resource_manager()
         .visible(&modules)
         .into_iter()
         .cloned()
@@ -168,8 +170,8 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
     };
     let colors: HashMap<String, u32> = app
         .state
-        .android
-        .resource_manager
+        .android_tooling()
+        .resource_manager()
         .items
         .iter()
         .filter_map(|i| match i.preview {

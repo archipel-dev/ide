@@ -9,7 +9,7 @@ use archipel_ide_command::{Command, CommandError, CommandRegistry};
 use archipel_ide_runner::{TaskPlan, TaskState};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeployPhase {
@@ -37,7 +37,7 @@ pub struct DeployState {
     pub phase: DeployPhase,
     /// Deploy waiting for the Gradle build to finish.
     pending: Option<(DeployPlan, PathBuf)>,
-    events: Option<Receiver<DeployEvent>>,
+    events: Option<archipel_ide_android::Inbox<DeployEvent>>,
     /// adb output and progress of the last deploy.
     pub log: Vec<String>,
 }
@@ -73,12 +73,13 @@ fn device_name(devices: &[Device], serial: &str) -> String {
 impl IdeState {
     fn deploy_target(&self, serial: Option<String>) -> Result<String, String> {
         let serial = serial
-            .or_else(|| self.android.devices.selected.clone())
+            .or_else(|| self.android_tooling().read().devices.selected.clone())
             .ok_or(
                 "No target device. Connect a device or start an emulator from the Device Manager.",
             )?;
         match self
-            .android
+            .android_tooling()
+            .read()
             .devices
             .devices
             .iter()
@@ -94,24 +95,22 @@ impl IdeState {
     }
 
     fn deploy_plan(&self, serial: &str) -> Result<(DeployPlan, PathBuf), String> {
-        let project = self
-            .android
-            .project
-            .as_ref()
+        let tooling = self.android_tooling();
+        let project = tooling
+            .project()
             .ok_or("The open project is not an Android project.")?;
         let variant = project
             .app_module()
-            .and_then(|m| self.android.active_variants.get(&m.gradle_path))
-            .map(String::as_str);
+            .and_then(|m| tooling.active_variant(&m.gradle_path));
         Ok((
-            DeployPlan::for_project(project, serial, variant)?,
+            DeployPlan::for_project(&project, serial, variant.as_deref())?,
             project.root.clone(),
         ))
     }
 
     /// Run 'app': builds the debug APK with Gradle, then installs and launches it.
     pub fn run_android_app(&mut self, serial: Option<String>) -> Result<(), String> {
-        if self.execution().is_running() || self.android.deploy.is_busy() {
+        if self.execution().is_running() || self.android_tooling().read().deploy.is_busy() {
             return Err("A build or deploy is already running.".into());
         }
         let serial = self.deploy_target(serial)?;
@@ -135,18 +134,15 @@ impl IdeState {
         };
         self.execution().start(task).map_err(|e| e.to_string())?;
         self.tool_windows.show(ToolWindow::Build);
-        let deploy = &mut self.android.deploy;
-        deploy.log = vec![format!(
-            "Building {} for {}",
-            plan.gradle_task,
-            device_name(&self.android.devices.devices, &serial)
-        )];
-        deploy.phase = DeployPhase::Building;
-        deploy.pending = Some((plan, root));
-        self.status = format!(
-            "Building 'app' for {}",
-            device_name(&self.android.devices.devices, &serial)
-        );
+        let tooling = self.android_tooling();
+        let device = device_name(&tooling.devices().devices, &serial);
+        {
+            let mut deploy = tooling.deploy_mut();
+            deploy.log = vec![format!("Building {} for {device}", plan.gradle_task)];
+            deploy.pending = Some((plan, root));
+        }
+        tooling.set_deploy_phase(DeployPhase::Building);
+        self.status = format!("Building 'app' for {device}");
         Ok(())
     }
 
@@ -157,7 +153,8 @@ impl IdeState {
         apk: Option<PathBuf>,
         steps: Steps,
     ) -> Result<(), String> {
-        let adb: Adb = self.android.adb()?;
+        let tooling = self.android_tooling();
+        let adb: Adb = tooling.write().adb()?;
         let apk = match (steps, apk) {
             (Steps::Launch, _) => None,
             (_, Some(apk)) => Some(apk),
@@ -184,7 +181,7 @@ impl IdeState {
                 plan.package
             ));
         }
-        let name = device_name(&self.android.devices.devices, &plan.serial);
+        let name = device_name(&self.android_tooling().read().devices.devices, &plan.serial);
         let (sender, receiver) = mpsc::channel();
         let serial = plan.serial.clone();
         std::thread::Builder::new()
@@ -238,24 +235,34 @@ impl IdeState {
                 }
             })
             .map_err(|e| e.to_string())?;
-        self.android.deploy.events = Some(receiver);
-        self.android.deploy.phase = DeployPhase::Installing;
+        self.android_tooling().write().deploy.events =
+            Some(archipel_ide_android::Inbox::new(receiver));
+        self.android_tooling()
+            .set_deploy_phase(DeployPhase::Installing);
         Ok(())
     }
 
     /// Advances a pending Run after its Gradle build and drains deploy events.
     pub(crate) fn poll_deploy(&mut self) -> bool {
         let mut changed = false;
-        if self.android.deploy.pending.is_some() && !self.execution().is_running() {
+        if self.android_tooling().read().deploy.pending.is_some() && !self.execution().is_running()
+        {
             changed = true;
-            let (plan, root) = self.android.deploy.pending.take().expect("pending deploy");
+            let (plan, root) = self
+                .android_tooling()
+                .write()
+                .deploy
+                .pending
+                .take()
+                .expect("pending deploy");
             let task_state = self.execution().runner().state().clone();
             match task_state {
                 TaskState::Exited(0) => {
                     if let Err(error) =
                         self.start_deploy_job(plan, &root, None, Steps::InstallAndLaunch)
                     {
-                        self.android.deploy.phase = DeployPhase::Failed(error);
+                        self.android_tooling()
+                            .set_deploy_phase(DeployPhase::Failed(error));
                     }
                 }
                 state => {
@@ -266,27 +273,36 @@ impl IdeState {
                         TaskState::Cancelled => "Gradle build cancelled".into(),
                         _ => "Gradle build did not run".into(),
                     };
-                    self.android.deploy.phase = DeployPhase::Failed(reason);
+                    self.android_tooling()
+                        .set_deploy_phase(DeployPhase::Failed(reason));
                 }
             }
         }
-        if let Some(events) = &self.android.deploy.events {
-            let events: Vec<_> = events.try_iter().collect();
+        // Drain under the read guard and release it before the events write the state.
+        let events = self
+            .android_tooling()
+            .read()
+            .deploy
+            .events
+            .as_ref()
+            .map(|events| events.try_iter());
+        if let Some(events) = events {
             changed |= !events.is_empty();
             for event in events {
                 match event {
-                    DeployEvent::Line(line) => self.android.deploy.log.push(line),
+                    DeployEvent::Line(line) => self.android_tooling().write().deploy.log.push(line),
                     DeployEvent::Phase(phase) => {
                         if matches!(phase, DeployPhase::Done(_) | DeployPhase::Failed(_)) {
-                            self.android.deploy.events = None;
+                            self.android_tooling().write().deploy.events = None;
                         }
-                        self.android.deploy.phase = phase;
+                        self.android_tooling().set_deploy_phase(phase);
                     }
                 }
             }
         }
         if changed {
-            match &self.android.deploy.phase {
+            let phase = self.android_tooling().read().deploy.phase.clone();
+            match &phase {
                 DeployPhase::Installing => self.status = "Installing APK…".into(),
                 DeployPhase::Launching => self.status = "Launching activity…".into(),
                 DeployPhase::Done(message) | DeployPhase::Failed(message) => {
@@ -316,7 +332,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"serial":"string?"}"#,
             ),
-            |state: &IdeState| state.android.project.is_some() && !state.execution().is_running(),
+            |state: &IdeState| {
+                state.android_tooling().read().project.is_some() && !state.execution().is_running()
+            },
             |state: &mut IdeState, params| {
                 state
                     .run_android_app(serial_param(&params))
@@ -337,14 +355,15 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             .register(Command::new(
                 spec(id, label, "Android", None, r#"{"serial":"string?"}"#),
                 |state: &IdeState| {
-                    state.android.project.is_some() && !state.android.deploy.is_busy()
+                    state.android_tooling().read().project.is_some()
+                        && !state.android_tooling().read().deploy.is_busy()
                 },
                 move |state: &mut IdeState, params| {
                     let serial = state
                         .deploy_target(serial_param(&params))
                         .map_err(CommandError::Failed)?;
                     let (plan, root) = state.deploy_plan(&serial).map_err(CommandError::Failed)?;
-                    state.android.deploy.log.clear();
+                    state.android_tooling().write().deploy.log.clear();
                     state
                         .start_deploy_job(plan, &root, None, steps)
                         .map_err(CommandError::Failed)?;
@@ -362,7 +381,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"path":"string","serial":"string?"}"#,
             ),
-            |state: &IdeState| !state.android.deploy.is_busy(),
+            |state: &IdeState| !state.android_tooling().read().deploy.is_busy(),
             |state: &mut IdeState, params| {
                 let path = PathBuf::from(string_param(&params, "path")?);
                 let root = state.project.as_ref().map(|p| p.root().to_owned());
@@ -388,7 +407,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     package: String::new(),
                     activity: None,
                 };
-                state.android.deploy.log.clear();
+                state.android_tooling().write().deploy.log.clear();
                 state
                     .start_deploy_job(plan, Path::new(""), Some(apk), Steps::Install)
                     .map_err(CommandError::Failed)?;
@@ -407,7 +426,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             |_| true,
             |state: &mut IdeState, _| {
-                let deploy = &state.android.deploy;
+                let tooling = state.android_tooling();
+                let guard = tooling.read();
+                let deploy = &guard.deploy;
                 let (phase, message) = match &deploy.phase {
                     DeployPhase::Idle => ("idle", None),
                     DeployPhase::Building => ("building", None),
@@ -492,7 +513,7 @@ mod tests {
             assert!(
                 Instant::now() < deadline,
                 "timed out: {:?}",
-                state.android.deploy.phase
+                state.android_tooling().read().deploy.phase
             );
             state.poll_runner();
             state.poll_android();
@@ -511,7 +532,9 @@ mod tests {
         commands
             .execute("android.devices.track", &mut state, json!({}))
             .unwrap();
-        wait_until(&mut state, |s| s.android.devices.selected.is_some());
+        wait_until(&mut state, |s| {
+            s.android_tooling().read().devices.selected.is_some()
+        });
         state
     }
 
@@ -524,7 +547,7 @@ mod tests {
         commands
             .execute("android.app.run", &mut state, json!({}))
             .unwrap();
-        wait_until(&mut state, |s| !s.android.deploy.is_busy());
+        wait_until(&mut state, |s| !s.android_tooling().read().deploy.is_busy());
         let status = commands
             .execute("android.app.status", &mut state, json!({}))
             .unwrap();
@@ -568,7 +591,7 @@ mod tests {
         commands
             .execute("android.app.run", &mut state, json!({}))
             .unwrap();
-        wait_until(&mut state, |s| !s.android.deploy.is_busy());
+        wait_until(&mut state, |s| !s.android_tooling().read().deploy.is_busy());
         let status = commands
             .execute("android.app.status", &mut state, json!({}))
             .unwrap();

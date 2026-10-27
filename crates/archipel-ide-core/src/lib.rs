@@ -367,7 +367,6 @@ pub struct IdeState {
     first_run_dir: Option<PathBuf>,
     /// Settings page the UI should open (set by `settings.open`, taken by the UI).
     pub settings_request: Option<String>,
-    pub android: AndroidState,
     pub ai: AiState,
     pub status: String,
     watcher: Option<archipel_ide_project::ProjectWatcher>,
@@ -463,7 +462,7 @@ impl IdeState {
         self.recent_projects().write().record(project.root());
         self.status = format!("Opened {}", project.root().display());
         self.load_project_settings(project.root());
-        self.android.project_opened(project.root());
+        self.android_tooling().project_opened(project.root());
         self.project = Some(project);
         self.start_watcher();
         self.detect_build();

@@ -118,7 +118,7 @@ impl IdeState {
     pub fn active_layout(
         &self,
     ) -> Option<Result<archipel_ide_android::layout::LayoutNode, String>> {
-        self.android.project.as_ref()?;
+        self.android_tooling().read().project.as_ref()?;
         let document = self.documents.get(self.active_document?)?;
         if !archipel_ide_android::layout::is_layout_file(&document.path) {
             return None;
@@ -153,7 +153,8 @@ impl AndroidState {
 impl IdeState {
     /// Module directories of the open Android project, in declaration order.
     pub fn android_module_dirs(&self) -> Vec<PathBuf> {
-        self.android
+        self.android_tooling()
+            .read()
             .project
             .as_ref()
             .map(|p| p.modules.iter().map(|m| m.dir.clone()).collect())
@@ -172,7 +173,8 @@ impl IdeState {
             .map(|f| f.relative_path.clone())
             .collect();
         let modules = self.android_module_dirs();
-        self.android.resource_manager.items = catalog(project.root(), &files, &modules);
+        self.android_tooling().write().resource_manager.items =
+            catalog(project.root(), &files, &modules);
     }
 
     pub(crate) fn resource_manager_opened(&mut self) {
@@ -182,8 +184,10 @@ impl IdeState {
     pub(crate) fn running_devices_opened(&mut self) {
         // Shares the right anchor with plugin tool windows.
         self.plugin_host.tool_window = None;
-        if !self.android.mirror.is_running() {
-            let _ = self.android.start_mirror();
+        if !self.android_tooling().read().mirror.is_running() {
+            let tooling = self.android_tooling();
+            let mut guard = tooling.write();
+            let _ = guard.start_mirror();
         }
     }
 }
@@ -198,10 +202,12 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"module":"string?","tab":"drawable|color|layout|mipmap|string?","query":"string?"}"#,
             ),
-            |state: &IdeState| state.android.project.is_some(),
+            |state: &IdeState| state.android_tooling().read().project.is_some(),
             |state: &mut IdeState, params| {
                 let modules = state.android_module_dirs();
-                let manager = &mut state.android.resource_manager;
+                let tooling = state.android_tooling();
+                let mut guard = tooling.write();
+                let manager = &mut guard.resource_manager;
                 if let Some(module) = params.get("module").and_then(Value::as_str) {
                     let module = PathBuf::from(module);
                     if !modules.contains(&module) {
@@ -234,10 +240,10 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.android.project.is_some(),
+            |state: &IdeState| state.android_tooling().read().project.is_some(),
             |state: &mut IdeState, _| {
                 state.refresh_resource_manager();
-                Ok(json!({"count": state.android.resource_manager.items.len()}))
+                Ok(json!({"count": state.android_tooling().read().resource_manager.items.len()}))
             },
         ))
         .expect("unique built-in id");
@@ -250,7 +256,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"path":"string","line":"number?"}"#,
             ),
-            |state: &IdeState| state.android.project.is_some(),
+            |state: &IdeState| state.android_tooling().read().project.is_some(),
             |state: &mut IdeState, params| {
                 let path = PathBuf::from(string_param(&params, "path")?);
                 let line = params.get("line").and_then(Value::as_u64).unwrap_or(1) as usize;
@@ -284,7 +290,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     .ok_or_else(|| {
                         CommandError::InvalidParams(format!("unknown layout mode `{mode}`"))
                     })?;
-                state.android.layout.mode = mode;
+                state.android_tooling().write().layout.mode = mode;
                 Ok(json!({"mode": mode.id()}))
             },
         ))
@@ -312,7 +318,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     .nth(node)
                     .ok_or_else(|| CommandError::InvalidParams(format!("no component {node}")))?;
                 let tag = selected.tag.clone();
-                state.android.layout.selected = node;
+                state.android_tooling().write().layout.selected = node;
                 Ok(json!({"tag": tag}))
             },
         ))
@@ -326,10 +332,12 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.android.project.is_some(),
+            |state: &IdeState| state.android_tooling().read().project.is_some(),
             |state: &mut IdeState, _| {
-                let serial = state.android.start_mirror().map_err(|error| {
-                    state.android.mirror.error = Some(error.clone());
+                let tooling = state.android_tooling();
+                let started = tooling.write().start_mirror();
+                let serial = started.map_err(|error| {
+                    tooling.mirror_mut().error = Some(error.clone());
                     CommandError::Failed(error)
                 })?;
                 Ok(json!({"serial": serial}))
@@ -345,9 +353,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.android.mirror.is_running(),
+            |state: &IdeState| state.android_tooling().read().mirror.is_running(),
             |state: &mut IdeState, _| {
-                state.android.stop_mirror();
+                state.android_tooling().write().stop_mirror();
                 Ok(Value::Null)
             },
         ))
@@ -457,7 +465,10 @@ mod tests {
         commands
             .execute("android.layout.mode", &mut state, json!({"mode": "split"}))
             .unwrap();
-        assert_eq!(state.android.layout.mode, super::LayoutMode::Split);
+        assert_eq!(
+            state.android_tooling().read().layout.mode,
+            super::LayoutMode::Split
+        );
         assert!(
             commands
                 .execute("android.layout.mode", &mut state, json!({"mode": "x"}))
@@ -483,12 +494,12 @@ mod tests {
             .execute("toolwindow.activate.runningDevices", &mut state, json!({}))
             .unwrap();
         assert!(state.tool_windows.is_visible(ToolWindow::RunningDevices));
-        assert!(!state.android.mirror.is_running());
+        assert!(!state.android_tooling().read().mirror.is_running());
         let error = commands
             .execute("android.mirror.start", &mut state, json!({}))
             .unwrap_err();
         assert!(error.to_string().contains("device") || error.to_string().contains("adb"));
-        assert!(state.android.mirror.error.is_some());
+        assert!(state.android_tooling().read().mirror.error.is_some());
         let _ = std::fs::remove_dir_all(&root);
     }
 }

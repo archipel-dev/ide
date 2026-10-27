@@ -6,7 +6,7 @@
 //! counts the reads that are left and fails when the count rises above
 //! [`SUBSYSTEM_READ_BASELINE`], so the UI can only get cleaner.
 //!
-//! A second ratchet counts the calls of the *transitional handles* (`state.android()`,
+//! A second ratchet counts the calls of the *transitional handles* (`state.ai()`,
 //! `state.agents_mut()`, ...: the `handles!` list in `archipel-ide-core/src/views.rs`). A handle
 //! hands out a whole subsystem, so a call is a read that has not yet become a `DataContext` key,
 //! a narrower accessor or a service. [`HANDLE_BASELINE`] is the work that is left.
@@ -34,7 +34,7 @@ const SUBSYSTEM_READ_BASELINE: usize = 0;
 
 /// The number of calls of whole-subsystem handles the UI may still make. Lower it when calls go
 /// (a call becomes a `DataContext` key, a narrower accessor or a service call); never raise it.
-const HANDLE_BASELINE: usize = 220;
+const HANDLE_BASELINE: usize = 168;
 
 /// The `pub` fields of `pub struct IdeState`.
 fn ide_state_fields() -> Vec<String> {
@@ -175,7 +175,7 @@ fn count_reads() -> (usize, BTreeMap<String, usize>, BTreeMap<String, usize>) {
 #[test]
 fn the_reader_finds_fields_and_counts_only_reads() {
     let fields = ide_state_fields();
-    for known in ["documents", "android", "status", "project"] {
+    for known in ["documents", "lsp", "status", "project"] {
         assert!(fields.iter().any(|f| f == known), "{known} in {fields:?}");
     }
     // `pub(crate)` fields are not reachable from the UI crate.
@@ -186,10 +186,10 @@ fn the_reader_finds_fields_and_counts_only_reads() {
     );
     assert_eq!(
         reads_in_line(
-            "self.state.android.project.is_some() && state.status.is_empty()",
+            "self.state.lsp.is_busy() && state.status.is_empty()",
             &fields
         ),
-        ["android", "status"]
+        ["lsp", "status"]
     );
     assert!(reads_in_line("app.state.settings().read()", &fields).is_empty());
     assert!(reads_in_line("let last_state.documents = 1;", &fields).is_empty());
@@ -243,19 +243,16 @@ fn count_handle_calls() -> usize {
 #[test]
 fn the_handle_reader_finds_handles_and_counts_calls() {
     let handles = handle_names();
-    for known in ["android", "agents", "plugin_host", "tool_windows"] {
+    for known in ["ai", "lsp", "tool_windows"] {
         assert!(handles.iter().any(|h| h == known), "{known} in {handles:?}");
     }
+    assert_eq!(handle_calls_in_line("app.state.lsp().servers", &handles), 1);
     assert_eq!(
-        handle_calls_in_line("app.state.android().devices", &handles),
-        1
-    );
-    assert_eq!(
-        handle_calls_in_line("app.state.agents_mut().x(); state.ai().y()", &handles),
+        handle_calls_in_line("app.state.lsp_mut().x(); state.ai().y()", &handles),
         2
     );
     assert_eq!(handle_calls_in_line("app.state.status()", &handles), 0);
-    assert_eq!(handle_calls_in_line("app.android().x", &handles), 0);
+    assert_eq!(handle_calls_in_line("app.lsp().x", &handles), 0);
 }
 
 #[test]

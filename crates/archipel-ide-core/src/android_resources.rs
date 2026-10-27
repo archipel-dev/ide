@@ -11,7 +11,7 @@ use std::path::PathBuf;
 impl IdeState {
     fn resource_index(&self) -> Result<ResourceIndex, String> {
         let project = self.project.as_ref().ok_or("no project is open")?;
-        if self.android.project.is_none() {
+        if self.android_tooling().read().project.is_none() {
             return Err("The open project is not an Android project.".into());
         }
         let files: Vec<PathBuf> = self
@@ -69,7 +69,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 Some("⌘B"),
                 "{}",
             ),
-            |state: &IdeState| state.android.project.is_some() && state.active_document.is_some(),
+            |state: &IdeState| {
+                state.android_tooling().read().project.is_some() && state.active_document.is_some()
+            },
             |state: &mut IdeState, _| {
                 let reference = state.resource_at_caret().ok_or_else(|| {
                     CommandError::Failed("No Android resource reference at the caret.".into())
@@ -108,7 +110,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"type":"string","name":"string"}"#,
             ),
-            |state: &IdeState| state.android.project.is_some(),
+            |state: &IdeState| state.android_tooling().read().project.is_some(),
             |state: &mut IdeState, params| {
                 let reference = ResourceRef {
                     kind: string_param(&params, "type")?,

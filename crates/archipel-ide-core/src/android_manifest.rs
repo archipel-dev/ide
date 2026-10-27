@@ -19,9 +19,8 @@ impl IdeState {
     /// Loads the merged manifest of the app module's active variant.
     pub fn load_merged_manifest(&mut self, variant: Option<String>) -> Result<(), String> {
         let project = self
-            .android
-            .project
-            .as_ref()
+            .android_tooling()
+            .project()
             .ok_or("The open project is not an Android project.")?;
         let module = project
             .app_module()
@@ -32,7 +31,9 @@ impl IdeState {
         let variant = variant
             .or_else(|| self.active_variant(&gradle_path))
             .ok_or("No build variant.")?;
-        let view = &mut self.android.merged_manifest;
+        let tooling = self.android_tooling();
+        let mut guard = tooling.write();
+        let view = &mut guard.merged_manifest;
         view.title = format!("Merged Manifest — {gradle_path} ({variant})");
         let mut capitalised = variant.chars();
         let capitalised: String = capitalised
@@ -56,7 +57,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"variant":"string?"}"#,
             ),
-            |state: &IdeState| state.android.project.is_some(),
+            |state: &IdeState| state.android_tooling().read().project.is_some(),
             |state: &mut IdeState, params| {
                 let variant = params
                     .get("variant")
@@ -65,7 +66,13 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 state
                     .load_merged_manifest(variant)
                     .map_err(CommandError::Failed)?;
-                match state.android.merged_manifest.result.as_ref() {
+                match state
+                    .android_tooling()
+                    .read()
+                    .merged_manifest
+                    .result
+                    .as_ref()
+                {
                     Some(Ok(merged)) => Ok(json!({
                         "lines": merged.lines.len(),
                         "sources": merged.sources,
@@ -86,9 +93,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.android.merged_manifest.open,
+            |state: &IdeState| state.android_tooling().read().merged_manifest.open,
             |state: &mut IdeState, _| {
-                state.android.merged_manifest.open = false;
+                state.android_tooling().write().merged_manifest.open = false;
                 Ok(Value::Null)
             },
         ))
@@ -125,11 +132,16 @@ mod tests {
             .unwrap_err();
         assert!(error.to_string().contains("assembleDebug"), "{error}");
         assert!(
-            state.android.merged_manifest.open,
+            state.android_tooling().read().merged_manifest.open,
             "the view explains the missing build"
         );
         assert_eq!(
-            state.android.merged_manifest.build_task.as_deref(),
+            state
+                .android_tooling()
+                .read()
+                .merged_manifest
+                .build_task
+                .as_deref(),
             Some(":app:assembleDebug")
         );
         write(
@@ -143,7 +155,7 @@ mod tests {
         assert_eq!(result["sources"][0]["kind"], "injected");
         assert_eq!(result["sources"][1]["kind"], "file");
         assert_eq!(
-            state.android.merged_manifest.title,
+            state.android_tooling().read().merged_manifest.title,
             "Merged Manifest — :app (debug)"
         );
         std::fs::remove_dir_all(root).unwrap();
@@ -154,10 +166,10 @@ mod tests {
         let commands = built_in_commands();
         let mut state = IdeState::default();
         assert!(!commands.is_enabled("android.manifest.text", &state));
-        state.android.merged_manifest.open = true;
+        state.android_tooling().write().merged_manifest.open = true;
         commands
             .execute("android.manifest.text", &mut state, json!({}))
             .unwrap();
-        assert!(!state.android.merged_manifest.open);
+        assert!(!state.android_tooling().read().merged_manifest.open);
     }
 }

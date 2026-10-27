@@ -283,15 +283,23 @@ impl IdeState {
     pub(crate) fn device_manager_opened(&mut self) {
         // The Device Manager shares the right anchor with plugin tool windows.
         self.plugin_host.tool_window = None;
-        self.android.refresh_avds();
-        let _ = self.android.ensure_device_tracking();
+        let tooling = self.android_tooling();
+        let mut guard = tooling.write();
+        guard.refresh_avds();
+        let _ = guard.ensure_device_tracking();
     }
 
     /// Polls device tracking; called every frame by the UI.
     pub fn poll_android(&mut self) -> bool {
-        let devices = self.android.devices.poll();
-        let logcat = self.android.logcat.poll();
-        let mirror = self.android.mirror.poll();
+        let (devices, logcat, mirror) = {
+            let tooling = self.android_tooling();
+            let mut guard = tooling.write();
+            (
+                guard.devices.poll(),
+                guard.logcat.poll(),
+                guard.mirror.poll(),
+            )
+        };
         let deploy = self.poll_deploy();
         let sdk_repo = self.poll_sdk_repo();
         devices || logcat || mirror || deploy || sdk_repo
@@ -300,16 +308,16 @@ impl IdeState {
 
 fn devices_json(state: &IdeState) -> Value {
     json!({
-        "devices": state.android.devices.devices.iter().map(|d| json!({
+        "devices": state.android_tooling().read().devices.devices.iter().map(|d| json!({
             "serial": d.serial,
             "state": d.state.label(),
             "name": d.display_name(),
             "apiLevel": d.api_level(),
             "emulator": d.is_emulator(),
         })).collect::<Vec<_>>(),
-        "selected": state.android.devices.selected,
-        "tracking": state.android.devices.is_tracking(),
-        "error": state.android.devices.error,
+        "selected": state.android_tooling().read().devices.selected,
+        "tracking": state.android_tooling().read().devices.is_tracking(),
+        "error": state.android_tooling().read().devices.error,
     })
 }
 
@@ -325,16 +333,20 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             |_| true,
             |state: &mut IdeState, _| {
-                if !state.android.devices.is_tracking() {
+                if !state.android_tooling().read().devices.is_tracking() {
                     // One-shot listing for headless clients.
-                    let adb = state.android.adb().map_err(CommandError::Failed)?;
+                    let adb = state
+                        .android_tooling()
+                        .write()
+                        .adb()
+                        .map_err(CommandError::Failed)?;
                     let mut devices = adb
                         .devices()
                         .map_err(|e| CommandError::Failed(e.to_string()))?;
                     for device in devices.iter_mut().filter(|d| d.is_online()) {
                         device.properties = adb.describe(&device.serial).ok();
                     }
-                    state.android.devices.set_devices(devices);
+                    state.android_tooling().write().devices.set_devices(devices);
                 }
                 Ok(devices_json(state))
             },
@@ -351,9 +363,10 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             |_| true,
             |state: &mut IdeState, _| {
-                state.android.devices.tracker = None;
+                state.android_tooling().write().devices.tracker = None;
                 state
-                    .android
+                    .android_tooling()
+                    .write()
                     .ensure_device_tracking()
                     .map_err(CommandError::Failed)?;
                 Ok(Value::Null)
@@ -373,7 +386,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |state: &mut IdeState, params| {
                 let serial = string_param(&params, "serial")?;
                 if !state
-                    .android
+                    .android_tooling()
+                    .read()
                     .devices
                     .devices
                     .iter()
@@ -383,7 +397,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                         "no connected device {serial}"
                     )));
                 }
-                state.android.devices.selected = Some(serial);
+                state.android_tooling().write().devices.selected = Some(serial);
                 Ok(Value::Null)
             },
         ))
@@ -399,8 +413,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             |_| true,
             |state: &mut IdeState, _| {
-                state.android.refresh_avds();
-                Ok(json!({ "avds": state.android.devices.avds }))
+                state.android_tooling().write().refresh_avds();
+                Ok(json!({ "avds": state.android_tooling().read().devices.avds }))
             },
         ))
         .expect("unique built-in id");
@@ -419,7 +433,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 let image = string_param(&params, "systemImage")?;
                 let device = params.get("device").and_then(Value::as_str);
                 state
-                    .android
+                    .android_tooling()
+                    .write()
                     .create_avd(&name, &image, device)
                     .map_err(CommandError::Failed)?;
                 Ok(json!({"name": name}))
@@ -440,7 +455,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 let address = string_param(&params, "address")?;
                 let code = string_param(&params, "code")?;
                 let message = state
-                    .android
+                    .android_tooling()
+                    .write()
                     .pair_device(&address, &code)
                     .map_err(CommandError::Failed)?;
                 Ok(json!({"message": message}))
@@ -458,9 +474,15 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 move |state: &mut IdeState, params| {
                     let avd = string_param(&params, "avd")?;
                     let (result, verb) = if id == "android.emulator.start" {
-                        (state.android.start_emulator(&avd), "Starting")
+                        (
+                            state.android_tooling().write().start_emulator(&avd),
+                            "Starting",
+                        )
                     } else {
-                        (state.android.stop_emulator(&avd), "Stopping")
+                        (
+                            state.android_tooling().write().stop_emulator(&avd),
+                            "Stopping",
+                        )
                     };
                     result.map_err(CommandError::Failed)?;
                     state.status = format!("{verb} {avd}");
@@ -596,7 +618,7 @@ esac
         avd(&home, "Tablet_API_34", "Medium Tablet API 34");
         let commands = built_in_commands();
         let mut state = IdeState::default();
-        state.android.devices.avd_home = Some(home);
+        state.android_tooling().write().devices.avd_home = Some(home);
         commands
             .execute("android.sdk.setLocation", &mut state, json!({"path": sdk}))
             .unwrap();
@@ -604,11 +626,13 @@ esac
             .execute("toolwindow.activate.deviceManager", &mut state, json!({}))
             .unwrap();
         assert!(state.tool_windows.is_visible(ToolWindow::DeviceManager));
-        assert_eq!(state.android.devices.avds.len(), 2);
-        assert!(state.android.devices.is_tracking());
-        wait_until(&mut state, |s| !s.android.devices.devices.is_empty());
+        assert_eq!(state.android_tooling().read().devices.avds.len(), 2);
+        assert!(state.android_tooling().read().devices.is_tracking());
+        wait_until(&mut state, |s| {
+            !s.android_tooling().read().devices.devices.is_empty()
+        });
         assert_eq!(
-            state.android.devices.selected.as_deref(),
+            state.android_tooling().read().devices.selected.as_deref(),
             Some("emulator-5554")
         );
         let listed = commands
@@ -618,7 +642,8 @@ esac
         assert_eq!(listed["devices"][0]["apiLevel"], "35");
         assert!(
             state
-                .android
+                .android_tooling()
+                .read()
                 .devices
                 .running_avd("Pixel_8_API_35")
                 .is_some()
@@ -659,8 +684,16 @@ esac
                 json!({"avd": "Tablet_API_34"}),
             )
             .unwrap();
-        wait_until(&mut state, |s| s.android.devices.error.is_some());
-        let error = state.android.devices.error.clone().unwrap();
+        wait_until(&mut state, |s| {
+            s.android_tooling().read().devices.error.is_some()
+        });
+        let error = state
+            .android_tooling()
+            .read()
+            .devices
+            .error
+            .clone()
+            .unwrap();
         assert!(error.contains("hardware acceleration"), "{error}");
         assert!(
             commands
@@ -681,11 +714,19 @@ esac
         std::fs::create_dir_all(base.join("platforms")).unwrap();
         let mut state = IdeState::default();
         state.set_android_sdk(&base).unwrap();
-        assert!(state.android.ensure_device_tracking().is_err() || find_adb_on_path());
+        assert!(
+            state
+                .android_tooling()
+                .write()
+                .ensure_device_tracking()
+                .is_err()
+                || find_adb_on_path()
+        );
         if !find_adb_on_path() {
             assert!(
                 state
-                    .android
+                    .android_tooling()
+                    .read()
                     .devices
                     .error
                     .as_deref()

@@ -6,7 +6,7 @@ use eframe::egui::{self, RichText};
 use serde_json::json;
 
 pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let Some(project) = app.state.android().project.as_ref() else {
+    let Some(project) = app.state.android_tooling().project() else {
         ui.add_space(12.0);
         ui.label(RichText::new("Not an Android project").color(theme::TEXT_INFO));
         return;

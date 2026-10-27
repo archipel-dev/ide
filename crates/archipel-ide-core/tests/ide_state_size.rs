@@ -10,7 +10,7 @@
 //! - Need new state? Add a service (docs: "Add a service") rather than a field.
 
 /// The number of fields `IdeState` may have. Lower it when fields leave; never raise it.
-const IDE_STATE_FIELD_BASELINE: usize = 55;
+const IDE_STATE_FIELD_BASELINE: usize = 54;
 
 /// The fields of `pub struct IdeState`, read from the source: the lines of the struct body that
 /// start a field at the struct's indentation (doc comments, attributes and continuation lines of

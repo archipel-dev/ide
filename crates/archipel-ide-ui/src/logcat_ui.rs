@@ -85,7 +85,12 @@ fn filter_job(text: &str, has_error: bool) -> egui::text::LayoutJob {
 /// Star (favourites) and history (▾) menus beside the filter field.
 fn filter_menus(app: &mut IdeApp, ui: &mut egui::Ui) {
     let query = app.logcat.query.clone();
-    let is_favourite = app.state.android().logcat.favourites.contains(&query);
+    let is_favourite = app
+        .state
+        .android_tooling()
+        .logcat()
+        .favourites
+        .contains(&query);
     let mut apply: Option<String> = None;
     let star = ui
         .menu_button(
@@ -108,7 +113,7 @@ fn filter_menus(app: &mut IdeApp, ui: &mut egui::Ui) {
                     ui.close();
                 }
                 ui.separator();
-                let favourites = app.state.android().logcat.favourites.clone();
+                let favourites = app.state.android_tooling().logcat().favourites.clone();
                 if favourites.is_empty() {
                     ui.label(RichText::new("No favourite filters").color(theme::TEXT_INFO));
                 }
@@ -124,7 +129,7 @@ fn filter_menus(app: &mut IdeApp, ui: &mut egui::Ui) {
     star.on_hover_text("Favourite filters");
     let history = icons::button(ui, Icon::ChevronDown, "Filter history");
     egui::Popup::menu(&history).show(|ui| {
-        let entries = app.state.android().logcat.history.clone();
+        let entries = app.state.android_tooling().logcat().history.clone();
         if entries.is_empty() {
             ui.label(RichText::new("No filter history").color(theme::TEXT_INFO));
         }
@@ -146,8 +151,8 @@ fn filter_menus(app: &mut IdeApp, ui: &mut egui::Ui) {
 
 /// `Logcat ×` tab strip with a `+` button.
 fn tab_strip(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let tabs = app.state.android().logcat.tabs.clone();
-    let active = app.state.android().logcat.active_tab;
+    let tabs = app.state.android_tooling().logcat().tabs.clone();
+    let active = app.state.android_tooling().logcat().active_tab;
     let mut select = None;
     let mut close = None;
     let mut add = false;
@@ -187,13 +192,13 @@ fn tab_strip(app: &mut IdeApp, ui: &mut egui::Ui) {
     });
     if add {
         app.dispatch("android.logcat.tab.new", Value::Null);
-        app.logcat.query = app.state.android().logcat.query.clone();
+        app.logcat.query = app.state.android_tooling().logcat().query.clone();
     } else if let Some(index) = close {
         app.dispatch("android.logcat.tab.close", json!({"index": index}));
-        app.logcat.query = app.state.android().logcat.query.clone();
+        app.logcat.query = app.state.android_tooling().logcat().query.clone();
     } else if let Some(index) = select {
         app.dispatch("android.logcat.tab.select", json!({"index": index}));
-        app.logcat.query = app.state.android().logcat.query.clone();
+        app.logcat.query = app.state.android_tooling().logcat().query.clone();
     }
 }
 
@@ -226,7 +231,8 @@ pub fn tag_color(tag: &str) -> Color32 {
 }
 
 fn device_label(app: &IdeApp, serial: &str) -> String {
-    let hub = &app.state.android().devices;
+    let tooling = app.state.android_tooling();
+    let hub = tooling.devices();
     match hub.devices.iter().find(|d| d.serial == serial) {
         Some(device) => {
             let mut label = format!("{} ({serial})", device.display_name());
@@ -244,7 +250,7 @@ fn device_label(app: &IdeApp, serial: &str) -> String {
 
 pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
     if !app.logcat.synced {
-        app.logcat.query = app.state.android().logcat.query.clone();
+        app.logcat.query = app.state.android_tooling().logcat().query.clone();
         app.logcat.synced = true;
     }
     let hide = widgets::tool_window_header(ui, ToolWindow::Logcat.title(), |_| {});
@@ -257,8 +263,8 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         ui.add_space(8.0);
         let current = app
             .state
-            .android
-            .logcat
+            .android_tooling()
+            .logcat()
             .serial
             .clone()
             .map(|serial| device_label(app, &serial))
@@ -268,8 +274,8 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
             .width(360.0)
             .selected_text(current)
             .show_ui(ui, |ui| {
-                for device in &app.state.android().devices.devices {
-                    let selected = app.state.android().logcat.serial.as_deref()
+                for device in &app.state.android_tooling().devices().devices {
+                    let selected = app.state.android_tooling().logcat().serial.as_deref()
                         == Some(device.serial.as_str());
                     if ui
                         .selectable_label(selected, device_label(app, &device.serial))
@@ -283,7 +289,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
             app.dispatch("android.logcat.start", json!({"serial": serial}));
         }
         ui.add_space(8.0);
-        let has_error = app.state.android().logcat.filter_error.is_some();
+        let has_error = app.state.android_tooling().logcat().filter_error.is_some();
         let field_width = (ui.available_width() - 150.0).max(80.0);
         let mut layouter = |ui: &egui::Ui, text: &dyn egui::TextBuffer, wrap: f32| {
             let mut job = filter_job(text.as_str(), has_error);
@@ -298,7 +304,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
                 .font(egui::FontId::monospace(theme::EDITOR_FONT_SIZE))
                 .desired_width(field_width),
         );
-        let response = match &app.state.android().logcat.filter_error {
+        let response = match &app.state.android_tooling().logcat().filter_error {
             Some(error) => response.on_hover_text(error),
             None => response.on_hover_text(
                 "key:value contains, key=:value exact, key~:regex, -key: excludes. \
@@ -326,7 +332,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
             app.dispatch("android.logcat.filter", json!({"query": ""}));
         }
         filter_menus(app, ui);
-        let match_case = app.state.android().logcat.match_case;
+        let match_case = app.state.android_tooling().logcat().match_case;
         if ui
             .add(
                 egui::Button::new("Cc")
@@ -365,7 +371,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
             if icons::button(ui, Icon::Close, "Clear Logcat").clicked() {
                 app.dispatch("android.logcat.clear", Value::Null);
             }
-            let paused = app.state.android().logcat.paused;
+            let paused = app.state.android_tooling().logcat().paused;
             let (icon, tip) = if paused {
                 (Icon::Run, "Resume Logcat")
             } else {
@@ -375,7 +381,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
                 app.dispatch("android.logcat.pause", Value::Null);
             }
             if icons::button(ui, Icon::Refresh, "Restart Logcat").clicked() {
-                let serial = app.state.android().logcat.serial.clone();
+                let serial = app.state.android_tooling().logcat().serial.clone();
                 app.dispatch("android.logcat.start", json!({"serial": serial}));
             }
             if icons::button_colored(
@@ -394,7 +400,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
                 Icon::SoftWrap,
                 *icons::ICON,
                 "Soft-Wrap",
-                app.state.android().logcat.soft_wrap,
+                app.state.android_tooling().logcat().soft_wrap,
             )
             .clicked()
             {
@@ -412,7 +418,8 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
 }
 
 fn log_rows(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let logcat = &app.state.android().logcat;
+    let tooling = app.state.android_tooling();
+    let logcat = tooling.logcat();
     if logcat.visible_len() == 0 {
         let message = logcat
             .error

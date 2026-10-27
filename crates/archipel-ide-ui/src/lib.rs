@@ -588,8 +588,8 @@ impl IdeApp {
     fn modal_page_open(&self) -> bool {
         self.settings_dialog.is_some()
             || self.state.settings_request.is_some()
-            || self.state.android.sdk_manager_open
-            || self.state.android.merged_manifest.open
+            || self.state.android_tooling().sdk_manager_open()
+            || self.state.android_tooling().merged_manifest().open
     }
 
     fn editor_focused(&self, ctx: &egui::Context) -> bool {
@@ -1024,7 +1024,9 @@ impl IdeApp {
         }
         if self.state.lsp.is_busy() {
             ctx.request_repaint_after(Duration::from_millis(100));
-        } else if self.state.lsp.has_servers() || self.state.android.devices.is_tracking() {
+        } else if self.state.lsp.has_servers()
+            || self.state.android_tooling().devices().is_tracking()
+        {
             // Diagnostics, server messages and device changes arrive without user input.
             ctx.request_repaint_after(Duration::from_millis(500));
         }
@@ -1386,12 +1388,12 @@ mod tests {
                 modifiers: egui::Modifiers::NONE,
             }])
         };
-        app.state.android.sdk_manager_open = true;
+        app.state.android_tooling().set_sdk_manager_open(true);
         for _ in 0..2 {
             let _ = ctx.run(frame_input(Vec::new()), |ctx| app.frame(ctx));
         }
         let _ = ctx.run(escape(), |ctx| app.frame(ctx));
-        assert!(!app.state.android.sdk_manager_open);
+        assert!(!app.state.android_tooling().sdk_manager_open());
         app.dispatch("settings.open", Value::Null);
         for _ in 0..2 {
             let _ = ctx.run(frame_input(Vec::new()), |ctx| app.frame(ctx));

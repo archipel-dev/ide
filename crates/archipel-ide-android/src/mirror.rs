@@ -5,7 +5,7 @@ use crate::adb::Adb;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc;
 use std::time::Duration;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,7 +24,7 @@ const INTERVAL: Duration = Duration::from_millis(150);
 /// A running mirror session; dropping it stops the polling thread.
 pub struct ScreenMirror {
     pub serial: String,
-    events: Receiver<MirrorEvent>,
+    events: crate::Inbox<MirrorEvent>,
     stop: Arc<AtomicBool>,
 }
 
@@ -71,7 +71,7 @@ impl ScreenMirror {
         });
         Self {
             serial: serial.to_owned(),
-            events,
+            events: crate::Inbox::new(events),
             stop,
         }
     }

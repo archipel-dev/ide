@@ -26,10 +26,7 @@ pub fn commit_message_button(app: &mut IdeApp, ui: &mut egui::Ui, selected: &[Pa
             .request_repaint_after(std::time::Duration::from_millis(30));
         return;
     }
-    if !app
-        .commands
-        .is_enabled("ai.vcs.generateCommitMessage", &app.state)
-    {
+    if !app.action_enabled("ai.vcs.generateCommitMessage") {
         return;
     }
     let tooltip = if selected.is_empty() {

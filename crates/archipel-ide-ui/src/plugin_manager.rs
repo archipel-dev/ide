@@ -139,7 +139,7 @@ impl PluginManager {
 
 /// The page body, filling the rest of the settings dialog's page area.
 pub fn page(ui: &mut egui::Ui, manager: &mut PluginManager, cx: &mut PageContext<'_>) {
-    let registry = &cx.state.plugin_host.registry;
+    let registry = &cx.state.plugin_host().registry;
     if manager.tab == Tab::Installed
         && manager
             .selected
@@ -213,7 +213,7 @@ fn plugin_directories(cx: &PageContext<'_>, ui: &mut egui::Ui) {
         .color(theme::TEXT_SECONDARY),
     );
     ui.add_space(4.0);
-    let project = cx.state.project.as_ref().map(|p| p.root());
+    let project = cx.state.project().map(|p| p.root());
     for (source, dir) in archipel_ide_core::plugin_dirs(project) {
         ui.horizontal(|ui| {
             ui.add_sized(
@@ -227,7 +227,7 @@ fn plugin_directories(cx: &PageContext<'_>, ui: &mut egui::Ui) {
 
 fn header_row(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginManager) {
     let rect = ui.max_rect();
-    let installed = cx.state.plugin_host.registry.entries().len();
+    let installed = cx.state.plugin_host().registry.entries().len();
     let font = egui::FontId::proportional(theme::UI_FONT_SIZE);
     let mut x = rect.left();
     for (tab, label) in [
@@ -428,7 +428,7 @@ fn marketplace(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut Plugin
             ui.spacing_mut().item_spacing.y = 0.0;
             group_header(ui, "Local registry", true, false);
             for entry in visible {
-                let installed = cx.state.plugin_host.registry.get(&entry.manifest.id);
+                let installed = cx.state.plugin_host().registry.get(&entry.manifest.id);
                 if market_row(
                     ui,
                     entry,
@@ -778,9 +778,9 @@ fn installed_list(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut Plu
                     }
                 }
             }
-            if !cx.state.plugin_host.registry.problems.is_empty() {
+            if !cx.state.plugin_host().registry.problems.is_empty() {
                 group_header(ui, "Problems", true, false);
-                for (path, problem) in &cx.state.plugin_host.registry.problems {
+                for (path, problem) in &cx.state.plugin_host().registry.problems {
                     egui::Frame::new()
                         .inner_margin(egui::Margin::symmetric(10, 4))
                         .show(ui, |ui| {
@@ -929,7 +929,7 @@ fn details(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginMana
     let Some(entry) = manager
         .selected
         .as_deref()
-        .and_then(|id| cx.state.plugin_host.registry.get(id))
+        .and_then(|id| cx.state.plugin_host().registry.get(id))
     else {
         placeholder(ui, "Select plugin to preview details");
         return;

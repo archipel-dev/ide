@@ -75,8 +75,8 @@ enum Action {
 
 /// Right-anchored tool window; shown before the bottom panel so it spans the height.
 pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
-    let visible = app.state.tool_windows.visible(Anchor::Right) == Some(ToolWindow::AiChat);
-    if visible && !app.ai_ui.last_visible && app.state.ai.is_enabled() {
+    let visible = app.state.tool_windows().visible(Anchor::Right) == Some(ToolWindow::AiChat);
+    if visible && !app.ai_ui.last_visible && app.state.ai().is_enabled() {
         ctx.memory_mut(|memory| memory.request_focus(input_id()));
     }
     app.ai_ui.last_visible = visible;
@@ -91,8 +91,8 @@ pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
         .show_separator_line(false)
         .frame(island_frame(ctx))
         .show(ctx, |ui| {
-            let enabled = app.state.ai.is_enabled();
-            let has_turns = !app.state.ai.chat.turns.is_empty();
+            let enabled = app.state.ai().is_enabled();
+            let has_turns = !app.state.ai().chat.turns.is_empty();
             if tool_window_header(ui, ToolWindow::AiChat.title(), |ui| {
                 if enabled && has_turns && icons::button(ui, Icon::Plus, "New Chat").clicked() {
                     actions.push(Action::NewChat);
@@ -100,7 +100,7 @@ pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
             }) {
                 actions.push(Action::Hide);
             }
-            if !app.state.ai.policy.allow_ai {
+            if !app.state.ai().policy.allow_ai {
                 empty_state(
                     ui,
                     "AI is disabled for this project",
@@ -175,7 +175,7 @@ fn perform(app: &mut IdeApp, ctx: &egui::Context, action: Action) {
                 .execute("ai.chat.send", &mut app.state, json!({"text": text}))
             {
                 Ok(_) => app.ai_ui.input.clear(),
-                Err(error) => app.state.status = error.to_string(),
+                Err(error) => app.state.set_status(error.to_string()),
             }
         }
         Action::Stop => app.dispatch("ai.chat.stop", Value::Null),
@@ -187,9 +187,9 @@ fn perform(app: &mut IdeApp, ctx: &egui::Context, action: Action) {
             {
                 Ok(result) => {
                     ctx.copy_text(result["text"].as_str().unwrap_or_default().to_owned());
-                    app.state.status = "Code copied to the clipboard".into();
+                    app.state.set_status("Code copied to the clipboard".into());
                 }
-                Err(error) => app.state.status = error.to_string(),
+                Err(error) => app.state.set_status(error.to_string()),
             }
         }
         Action::Insert(turn, index) => {
@@ -351,7 +351,7 @@ fn setup(app: &mut IdeApp, ui: &mut egui::Ui, actions: &mut Vec<Action>) {
 }
 
 fn conversation(app: &mut IdeApp, ui: &mut egui::Ui, actions: &mut Vec<Action>) {
-    let chat = &app.state.ai.chat;
+    let chat = &app.state.ai().chat;
     if chat.turns.is_empty() {
         empty_state(
             ui,
@@ -360,7 +360,7 @@ fn conversation(app: &mut IdeApp, ui: &mut egui::Ui, actions: &mut Vec<Action>) 
         );
         return;
     }
-    let demo = app.state.ai.is_demo();
+    let demo = app.state.ai().is_demo();
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .stick_to_bottom(true)
@@ -518,16 +518,12 @@ fn chip(
 }
 
 fn input_area(app: &mut IdeApp, ui: &mut egui::Ui, actions: &mut Vec<Action>) {
-    let ai = &app.state.ai;
+    let ai = &app.state.ai();
     let streaming = ai.chat.is_streaming();
     // Context chips for what will be attached from the active editor.
     let context = app.state.ai_context(true, true);
     let sharing = ai.policy.share_file_contents;
-    if let Some(document) = app
-        .state
-        .active_document
-        .and_then(|i| app.state.documents.get(i))
-    {
+    if let Some(document) = app.state.active_doc() {
         let name = IdeApp::file_name(&document.path);
         let selection = document.selections.primary();
         ui.horizontal_wrapped(|ui| {
@@ -640,7 +636,7 @@ fn input_area(app: &mut IdeApp, ui: &mut egui::Ui, actions: &mut Vec<Action>) {
             );
             ui.horizontal(|ui| {
                 ui.label(
-                    RichText::new(app.state.ai.summary())
+                    RichText::new(app.state.ai().summary())
                         .color(theme::TEXT_INFO)
                         .size(theme::UI_FONT_SIZE - 2.0),
                 );
@@ -674,7 +670,7 @@ fn input_area(app: &mut IdeApp, ui: &mut egui::Ui, actions: &mut Vec<Action>) {
                 });
             });
         });
-    if let Some(error) = &app.state.ai.error {
+    if let Some(error) = &app.state.ai().error {
         ui.label(RichText::new(error).color(theme::ERROR));
     }
 }
@@ -933,7 +929,7 @@ pub(crate) fn markdown_readonly(ui: &mut egui::Ui, text: &str) {
 
 /// Modal diff preview for "Apply…".
 pub fn diff_preview(app: &mut IdeApp, ctx: &egui::Context) {
-    let Some(preview) = app.state.ai.pending_apply.as_ref() else {
+    let Some(preview) = app.state.ai().pending_apply.as_ref() else {
         return;
     };
     let (added, removed) = stats(&preview.diff);
@@ -1003,7 +999,7 @@ pub fn diff_preview(app: &mut IdeApp, ctx: &egui::Context) {
 
 /// Status bar AI widget: provider/model or "off"; toggles the AI Chat window.
 pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::FontId) {
-    let ai = &app.state.ai;
+    let ai = &app.state.ai();
     let (text, color, tooltip) = if !ai.policy.allow_ai {
         (
             String::new(),

@@ -62,7 +62,7 @@ pub fn tab_title(tab: &DiffTab) -> String {
 
 /// Draws the selected diff tab below the editor tab strip.
 pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let Some(tab) = app.state.diff.as_ref() else {
+    let Some(tab) = app.state.diff().as_ref() else {
         return;
     };
     let mut actions: Vec<(&'static str, Value)> = Vec::new();
@@ -73,7 +73,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         DiffViewer::SideBySide => side_by_side(ui, tab, scroll_id, reveal, &mut actions),
         DiffViewer::Unified => unified(ui, tab, scroll_id, reveal),
     }
-    if let Some(tab) = app.state.diff.as_mut() {
+    if let Some(tab) = app.state.diff_mut().as_mut() {
         tab.reveal = None;
     }
     for (id, params) in actions {

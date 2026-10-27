@@ -17,7 +17,7 @@ pub fn frame(app: &mut IdeApp, ctx: &egui::Context) {
         Some(NavigationRequest::RecentFiles) => app.open_dialog(popups::Dialog::Recent {
             query: String::new(),
             // Like the reference IDE, the first entry is the current file.
-            selected: usize::from(app.state.recent_files.len() > 1),
+            selected: usize::from(app.state.recent_files().len() > 1),
         }),
         Some(NavigationRequest::RecentLocations) => {
             app.open_dialog(popups::Dialog::RecentLocations {

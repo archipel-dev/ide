@@ -34,7 +34,7 @@ pub fn panel(app: &mut IdeApp, ui: &mut egui::Ui) {
             if active {
                 ui.horizontal(|ui| {
                     ui.add(egui::Spinner::new().size(12.0));
-                    let phase = app.state.ai.agent.as_ref().map(|a| a.phase.clone());
+                    let phase = app.state.ai().agent.as_ref().map(|a| a.phase.clone());
                     let label = match phase {
                         Some(AgentPhase::AwaitingApproval) => "Waiting for your approval",
                         Some(AgentPhase::RunningCommand) => "Running command…",
@@ -96,7 +96,7 @@ pub fn panel(app: &mut IdeApp, ui: &mut egui::Ui) {
         });
     egui::CentralPanel::default()
         .frame(egui::Frame::new())
-        .show_inside(ui, |ui| match app.state.ai.agent.clone() {
+        .show_inside(ui, |ui| match app.state.ai().agent.clone() {
             None => {
                 ui.add_space(24.0);
                 ui.vertical_centered(|ui| {
@@ -212,7 +212,7 @@ pub fn panel(app: &mut IdeApp, ui: &mut egui::Ui) {
                 .execute("ai.agent.start", &mut app.state, json!({"goal": goal}))
             {
                 Ok(_) => app.ai_ui.agent_input.clear(),
-                Err(error) => app.state.status = error.to_string(),
+                Err(error) => app.state.set_status(error.to_string()),
             }
         }
         Some(Action::Approve) => app.dispatch("ai.agent.approve", Value::Null),

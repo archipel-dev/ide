@@ -82,17 +82,17 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                     crate::agents_ui::back_banner(app, ui);
                 }
                 tabs(app, ui, strip);
-                if app.state.diff_active && app.state.diff.is_some() {
+                if app.state.diff_tab_active() {
                     crate::diff_ui::show(app, ui);
                     app.caret_screen_pos = None;
                     return;
                 }
-                if app.state.plugin_host.active_tab.is_some() {
+                if app.state.plugin_host().active_tab.is_some() {
                     crate::plugin_ui::active_tab_body(app, ui);
                     app.caret_screen_pos = None;
                     return;
                 }
-                if app.state.active_document.is_none() {
+                if app.state.active_index().is_none() {
                     // Offer toolchain setup as soon as the project opens.
                     if primary {
                         crate::gradle_banner::show(app, ui);
@@ -109,7 +109,7 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                 }
                 if crate::merged_manifest_ui::applies(app) {
                     crate::merged_manifest_ui::tab_bar(app, ui);
-                    if app.state.android.merged_manifest.open {
+                    if app.state.android().merged_manifest.open {
                         crate::merged_manifest_ui::body(app, ui);
                         app.caret_screen_pos = None;
                         return;
@@ -117,7 +117,7 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                 }
                 if crate::layout_editor_ui::applies(app) {
                     crate::layout_editor_ui::mode_bar(app, ui);
-                    match app.state.android.layout.mode {
+                    match app.state.android().layout.mode {
                         archipel_ide_core::LayoutMode::Design => {
                             crate::layout_editor_ui::design_body(app, ui);
                             app.caret_screen_pos = None;
@@ -154,17 +154,17 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                 if app.find.open {
                     crate::findbar::show(app, ui);
                 }
-                let Some(index) = app.state.active_document else {
+                let Some(index) = app.state.active_index() else {
                     return;
                 };
                 let problems = app.state.cached_active_problems();
                 let mut highlights = if app.find.open {
-                    app.find.matches(&app.state.documents[index])
+                    app.find.matches(&app.state.documents()[index])
                 } else {
                     Vec::new()
                 };
                 // Snippet tab stops are boxed like search results while active.
-                if let Some(snippet) = &app.state.snippet {
+                if let Some(snippet) = &app.state.snippet() {
                     highlights.extend(snippet.ranges().filter(|(start, end)| start < end));
                     // The painter only visits the matches of visible lines: keep them sorted.
                     highlights.sort_unstable();
@@ -189,7 +189,7 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                 );
                 let text_rect = available.with_max_x(stripe_rect.left());
                 ui.allocate_rect(available, Sense::hover());
-                let line_count = app.state.documents[index].text.len_lines();
+                let line_count = app.state.documents()[index].text.len_lines();
                 let row_height =
                     theme::editor_row_height(ui.ctx(), &theme::editor_font(ui.style()), ROW_HEIGHT);
                 if let Some((line, column)) = problems_ui::error_stripe(
@@ -204,7 +204,7 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                 }
                 let navigable = app.state.active_has_language_server();
                 let mut text_ui = ui.new_child(egui::UiBuilder::new().max_rect(text_rect));
-                let path = app.state.documents[index].path.clone();
+                let path = app.state.documents()[index].path.clone();
                 let breakpoints = app.state.breakpoint_lines(&path);
                 let execution_line = app
                     .state
@@ -225,19 +225,16 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                 let (lenses, inlays) = app.state.code_vision(index);
                 let inline_values = app.state.inline_values(&path);
                 let gutter = run_icons(app, ui.ctx());
-                let doc_path = app.state.absolute_path(&app.state.documents[index].path);
+                let doc_path = app.state.absolute_path(&app.state.documents()[index].path);
                 if md_layout.is_some() {
                     app.markdown_ui.reset_for(&doc_path);
                 }
                 let editor_scroll = app.markdown_ui.take_editor_scroll();
-                let doc = &mut app.state.documents[index];
-                let rename = app
-                    .state
-                    .refactor
-                    .rename
-                    .as_ref()
-                    .filter(|session| session.path == doc.path && !session.dialog)
-                    .map(|session| (session.occurrences.as_slice(), session.name.as_str()));
+                let Some((doc, rename)) = app.state.document_for_editing(index) else {
+                    return;
+                };
+                let rename =
+                    rename.map(|session| (session.occurrences.as_slice(), session.name.as_str()));
                 let surface = editor_surface(
                     &mut text_ui,
                     doc,
@@ -283,7 +280,7 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                 }
                 let mut bulb = None;
                 let mut editor_scroll_y = None;
-                let doc = &mut app.state.documents[index];
+                let doc = &mut app.state.documents_mut()[index];
                 match surface {
                     Ok(EditorOutput {
                         changed,
@@ -310,10 +307,10 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                             ));
                         }
                     }
-                    Err(error) => app.state.status = error,
+                    Err(error) => app.state.set_status(error),
                 }
                 if let Some(preview_rect) = preview_rect {
-                    let doc = &app.state.documents[index];
+                    let doc = &app.state.documents()[index];
                     let (revision, lines) = (doc.text.revision(), doc.text.len_lines());
                     let absolute = app.state.absolute_path(&doc.path);
                     let pending = app.markdown_ui.take_preview_scroll();
@@ -339,7 +336,7 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                         ui.ctx().request_repaint();
                     }
                 }
-                let selection = app.state.documents[index].selections.primary();
+                let selection = app.state.documents()[index].selections.primary();
                 if md_layout.is_some()
                     && primary
                     && !selection.is_caret()
@@ -364,7 +361,7 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
     } else if app.state.active_caret() != caret_before {
         app.state.snippet_after_caret_move();
         app.state.signature_after_caret_move();
-        if app.state.completion.is_some() {
+        if app.state.completion().is_some() {
             app.state.refresh_completion();
         }
     }
@@ -397,7 +394,7 @@ pub(crate) fn handle_request(app: &mut IdeApp, ctx: &egui::Context, request: Edi
                     app.clipboard_line = whole_line.then(|| text.clone());
                     ctx.copy_text(text);
                 }
-                Err(error) => app.state.status = error.to_string(),
+                Err(error) => app.state.set_status(error.to_string()),
             }
         }
         EditorRequest::ContextAction(action) => {
@@ -406,8 +403,8 @@ pub(crate) fn handle_request(app: &mut IdeApp, ctx: &egui::Context, request: Edi
         EditorRequest::Gutter(line, position) => crate::gutter_popup::open(ctx, line, position),
         EditorRequest::BreakpointProperties(line, position) => {
             crate::debug_dialogs::anchor_breakpoint_popup(ctx, position);
-            if let Some(index) = app.state.active_document {
-                let path = app.state.documents[index].path.clone();
+            if let Some(index) = app.state.active_index() {
+                let path = app.state.documents()[index].path.clone();
                 app.dispatch("debug.editBreakpoint", json!({"path": path, "line": line}));
             }
         }
@@ -430,11 +427,11 @@ const MARKDOWN_ISLAND_WIDTH: f32 = 190.0;
 
 /// Preview-only layout: the rendered document fills the editor area.
 fn markdown_preview_only(app: &mut IdeApp, ui: &mut egui::Ui, rect: Rect) {
-    let Some(index) = app.state.active_document else {
+    let Some(index) = app.state.active_index() else {
         return;
     };
     ui.allocate_rect(rect, Sense::hover());
-    let doc = &app.state.documents[index];
+    let doc = &app.state.documents()[index];
     let absolute = app.state.absolute_path(&doc.path);
     app.markdown_ui.reset_for(&absolute);
     let (revision, lines) = (doc.text.revision(), doc.text.len_lines());
@@ -499,16 +496,16 @@ fn tabs(app: &mut IdeApp, ui: &mut egui::Ui, strip: Option<&TabStrip>) {
     let font = egui::FontId::proportional(theme::UI_FONT_SIZE);
     let indices: Vec<usize> = match strip {
         Some(strip) => strip.indices.clone(),
-        None => (0..app.state.documents.len()).collect(),
+        None => (0..app.state.documents().len()).collect(),
     };
     let primary = strip.is_none_or(|strip| strip.primary);
     for index in indices {
-        let doc = &app.state.documents[index];
+        let doc = &app.state.documents()[index];
         let name = IdeApp::file_name(&doc.path);
         let preview = app.state.is_preview(index);
-        let active = app.state.active_document == Some(index)
-            && !app.state.diff_active
-            && app.state.plugin_host.active_tab.is_none();
+        let active = app.state.active_index() == Some(index)
+            && !app.state.diff_active()
+            && app.state.plugin_host().active_tab.is_none();
         let color = if active {
             *theme::TEXT_BRIGHT
         } else {
@@ -572,7 +569,7 @@ fn tabs(app: &mut IdeApp, ui: &mut egui::Ui, strip: Option<&TabStrip>) {
         );
         let text_rect = layout.text;
         ui.painter().galley(layout.text.min, galley, color);
-        if app.state.problems.has_errors(&doc.path) {
+        if app.state.problems().has_errors(&doc.path) {
             problems_ui::squiggle(
                 ui.painter(),
                 text_rect.left(),
@@ -646,10 +643,11 @@ fn tabs(app: &mut IdeApp, ui: &mut egui::Ui, strip: Option<&TabStrip>) {
     }
     if !primary {
         // Only the focused group shows the diff and plugin tabs.
-    } else if let Some(tab) = app.state.diff.as_ref() {
+    } else if let Some(tab) = app.state.diff().as_ref() {
         let title = crate::diff_ui::tab_title(tab);
         let tooltip = format!("Diff of {} against HEAD", tab.path.display());
-        let (clicked, closed, end) = diff_tab(ui, bar, x, &title, &tooltip, app.state.diff_active);
+        let (clicked, closed, end) =
+            diff_tab(ui, bar, x, &title, &tooltip, app.state.diff_active());
         x = end;
         if closed {
             app.dispatch("diff.close", Value::Null);
@@ -688,11 +686,11 @@ fn show_groups(
 ) {
     app.state.sync_splits();
     let area = ui.available_rect_before_wrap();
-    if !app.state.splits.is_split() {
+    if !app.state.splits().is_split() {
         ui.ctx()
             .data_mut(|data| data.insert_temp(egui::Id::new("jt_surface_group"), None::<u32>));
         body(app, ui, None);
-        tab_drag(app, ui.ctx(), &[(app.state.splits.focused_id(), area)]);
+        tab_drag(app, ui.ctx(), &[(app.state.splits().focused_id(), area)]);
         return;
     }
     // A press inside another group focuses it before it is drawn.
@@ -708,18 +706,18 @@ fn show_groups(
             .layout(model_rect(area))
             .into_iter()
             .find(|(_, rect)| rect.contains(pos.x, pos.y))
-        && group != app.state.splits.focused_id()
+        && group != app.state.splits().focused_id()
     {
         app.dispatch("editor.focusGroup", json!({ "group": group }));
     }
-    let focused = app.state.splits.focused_id();
-    let layout = app.state.splits.layout(model_rect(area));
+    let focused = app.state.splits().focused_id();
+    let layout = app.state.splits().layout(model_rect(area));
     let mut order = layout.clone();
     // The focused group is drawn last so the caret and typing state are its own.
     order.sort_by_key(|(group, _)| *group == focused);
     for (group, rect) in order {
         let rect = from_model(rect).shrink(1.0);
-        let Some(info) = app.state.splits.group(group).cloned() else {
+        let Some(info) = app.state.splits().group(group).cloned() else {
             continue;
         };
         let indices: Vec<usize> = app
@@ -733,17 +731,17 @@ fn show_groups(
         let active = info
             .active
             .as_ref()
-            .and_then(|path| app.state.documents.iter().position(|d| &d.path == path));
+            .and_then(|path| app.state.documents().iter().position(|d| &d.path == path));
         let primary = group == focused;
         let saved = (
-            app.state.active_document,
-            app.state.diff_active,
-            app.state.plugin_host.active_tab,
+            app.state.active_index(),
+            app.state.diff_active(),
+            app.state.plugin_host().active_tab,
         );
-        app.state.active_document = active;
+        app.state.set_active_index(active);
         if !primary {
-            app.state.diff_active = false;
-            app.state.plugin_host.active_tab = None;
+            app.state.set_diff_active(false);
+            app.state.plugin_host_mut().active_tab = None;
         }
         ui.ctx().data_mut(|data| {
             data.insert_temp(
@@ -760,11 +758,10 @@ fn show_groups(
         child.set_clip_rect(rect.intersect(ui.clip_rect()));
         body(app, &mut child, Some(&TabStrip { indices, primary }));
         if !primary {
-            (
-                app.state.active_document,
-                app.state.diff_active,
-                app.state.plugin_host.active_tab,
-            ) = saved;
+            let (active, diff_active, plugin_tab) = saved;
+            app.state.set_active_index(active);
+            app.state.set_diff_active(diff_active);
+            app.state.plugin_host_mut().active_tab = plugin_tab;
         }
     }
     ui.ctx()
@@ -847,13 +844,13 @@ fn tab_drag(app: &mut IdeApp, ctx: &egui::Context, groups: &[(archipel_ide_split
     let Some(index) = ctx.data(|data| data.get_temp::<usize>(id)) else {
         return;
     };
-    let Some(path) = app.state.documents.get(index).map(|d| d.path.clone()) else {
+    let Some(path) = app.state.document(index).map(|d| d.path.clone()) else {
         ctx.data_mut(|data| data.remove::<usize>(id));
         return;
     };
-    let source = app.state.splits.group_of(&path);
+    let source = app.state.splits().group_of(&path);
     let only_tab = source
-        .and_then(|group| app.state.splits.group(group))
+        .and_then(|group| app.state.splits().group(group))
         .is_some_and(|group| group.tabs.len() == 1);
     let (down, pos) =
         ctx.input(|input| (input.pointer.primary_down(), input.pointer.interact_pos()));
@@ -1150,16 +1147,16 @@ fn paint_collapsed_tail(
 
 /// Moves the primary caret to a zero-based line/column and focuses the editor.
 pub fn move_caret_to(app: &mut IdeApp, line: usize, column: usize) {
-    let Some(index) = app.state.active_document else {
+    let Some(index) = app.state.active_index() else {
         return;
     };
-    let doc = &mut app.state.documents[index];
+    let doc = &mut app.state.documents_mut()[index];
     let line = line.min(doc.text.len_lines().saturating_sub(1));
     let line_text = doc.text.line(line).unwrap_or_default();
     let length = line_text.trim_end_matches(['\r', '\n']).chars().count();
     let offset = doc.text.line_to_char(line).unwrap_or(0) + column.min(length);
     doc.selections.set_single(Selection::caret(offset));
-    app.state.status.clear();
+    app.state.clear_status();
 }
 
 fn line_length(document: &Document, line: usize) -> usize {
@@ -1278,8 +1275,7 @@ fn run_icons(app: &mut IdeApp, ctx: &egui::Context) -> Vec<archipel_ide_core::Gu
     let id = egui::Id::new("run_icons_last_edit");
     let revision = app
         .state
-        .active_document
-        .and_then(|index| app.state.documents.get(index))
+        .active_doc()
         .map(|document| document.text.revision());
     let now = ctx.input(|input| input.time);
     let (seen, last_edit) = ctx

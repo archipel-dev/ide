@@ -24,12 +24,12 @@ impl IdeApp {
         if !icon.is_java_type() {
             return icon;
         }
-        if let Some(document) = self.state.documents.iter().find(|d| d.path == path) {
+        if let Some(document) = self.state.documents().iter().find(|d| d.path == path) {
             let len = document.text.len_chars().min(PEEK_BYTES);
             let text = document.text.slice(0, len).unwrap_or_default();
             return Icon::for_source(&name, Some(&text));
         }
-        let Some(root) = self.state.project.as_ref().map(|p| p.root().to_owned()) else {
+        let Some(root) = self.state.project_root() else {
             return icon;
         };
         let absolute = root.join(path);

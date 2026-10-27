@@ -51,7 +51,7 @@ fn now_ms() -> u64 {
 }
 
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
-    let Some(dialog) = app.state.analysis.history.dialog.clone() else {
+    let Some(dialog) = app.state.analysis().history.dialog.clone() else {
         return;
     };
     let mut select = None;

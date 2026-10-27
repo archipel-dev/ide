@@ -5,7 +5,7 @@ use archipel_ide_core::build_info::BUILD;
 use eframe::egui::{self, RichText};
 
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
-    if !app.state.about_open {
+    if !app.state.about_open() {
         return;
     }
     let width = 360.0;
@@ -57,7 +57,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                             .clicked()
                         {
                             ctx.copy_text(BUILD.report());
-                            app.state.status = "Build details copied".into();
+                            app.state.set_status("Build details copied".into());
                         }
                         if ui.button("Close").clicked() {
                             close = true;

@@ -145,7 +145,7 @@ fn row_for(item: &CompletionItem, matched: &[usize]) -> Row {
 
 /// Shows the popup; returns its screen rect for the documentation panel.
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) -> Option<Rect> {
-    let session = app.state.completion.as_ref()?;
+    let session = app.state.completion().as_ref()?;
     if !session.visible() && !session.indexing_only() {
         return None;
     }

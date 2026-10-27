@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 impl IdeState {
-    pub(crate) fn project_root(&self) -> Option<PathBuf> {
+    pub fn project_root(&self) -> Option<PathBuf> {
         self.project.as_ref().map(|p| p.root().to_owned())
     }
 

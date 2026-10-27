@@ -10,7 +10,7 @@ use serde_json::json;
 const INDENT: f32 = 16.0;
 
 pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let Some(hierarchy) = app.state.hierarchy.current.clone() else {
+    let Some(hierarchy) = app.state.hierarchy().current.clone() else {
         tool_window_header(ui, "Hierarchy", |_| {});
         ui.add_space(8.0);
         ui.horizontal(|ui| {

@@ -273,7 +273,7 @@ fn run(app: &mut IdeApp, id: &str, params: Value) {
                     branch: params["branch"].as_str().unwrap_or_default().to_owned(),
                 });
             }
-            app.state.status = message;
+            app.state.set_status(message);
         }
     }
 }
@@ -538,7 +538,7 @@ pub fn show_dialog(app: &mut IdeApp, ctx: &egui::Context) {
                     }
                     GitDialog::ForceDelete { .. } | GitDialog::Rollback { .. } => keep = false,
                 }
-                app.state.status = message;
+                app.state.set_status(message);
             }
         }
     }

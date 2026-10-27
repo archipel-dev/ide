@@ -70,13 +70,13 @@ fn module_label(module: &Path) -> String {
 }
 
 pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
-    if app.state.android.project.is_none() {
+    if !app.state.is_android_project() {
         ui.add_space(12.0);
         ui.label(RichText::new("Not an Android project").color(theme::TEXT_INFO));
         return;
     }
     let modules = app.state.android_module_dirs();
-    let manager = &app.state.android.resource_manager;
+    let manager = &app.state.android().resource_manager;
     let module = manager.module.clone().or_else(|| modules.first().cloned());
     let tab = manager.tab;
     let mut query = manager.query.clone();
@@ -138,7 +138,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
     if let Some(candidate) = select_tab {
         params.insert("tab".into(), json!(candidate.id()));
     }
-    if query != app.state.android.resource_manager.query {
+    if query != app.state.android().resource_manager.query {
         params.insert("query".into(), json!(query));
     }
     if !params.is_empty() {
@@ -163,7 +163,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         });
         return;
     }
-    let Some(root) = app.state.project.as_ref().map(|p| p.root().to_path_buf()) else {
+    let Some(root) = app.state.project_root() else {
         return;
     };
     let colors: HashMap<String, u32> = app

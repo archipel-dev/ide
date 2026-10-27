@@ -517,8 +517,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
             let mut submit = false;
             let caret = app
                 .state
-                .active_document
-                .and_then(|index| app.state.documents.get(index))
+                .active_doc()
                 .and_then(|d| d.text.char_to_line_column(d.selections.primary().head).ok())
                 .map(|(l, c)| format!("{}:{}", l + 1, c + 1))
                 .unwrap_or_default();
@@ -717,7 +716,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         }
     }
     if let Some(error) = error {
-        app.state.status = error;
+        app.state.set_status(error);
     }
     if keep {
         app.dialog = Some(dialog);
@@ -735,11 +734,7 @@ fn file_structure(
     query: &mut String,
     selected: &mut Option<usize>,
 ) -> bool {
-    let Some(document) = app
-        .state
-        .active_document
-        .and_then(|i| app.state.documents.get(i))
-    else {
+    let Some(document) = app.state.active_doc() else {
         return false;
     };
     let items = crate::structure_view::items(ctx, document);

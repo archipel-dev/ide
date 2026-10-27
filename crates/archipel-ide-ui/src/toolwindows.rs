@@ -24,7 +24,7 @@ pub fn terminal_input_id() -> egui::Id {
 }
 
 pub fn left(app: &mut IdeApp, ctx: &egui::Context) {
-    let Some(window) = app.state.tool_windows.visible(Anchor::Left) else {
+    let Some(window) = app.state.tool_windows().visible(Anchor::Left) else {
         return;
     };
     egui::SidePanel::left("left_tool_window")
@@ -34,7 +34,7 @@ pub fn left(app: &mut IdeApp, ctx: &egui::Context) {
         .show_separator_line(false)
         .frame(island_frame(ctx))
         .show(ctx, |ui| {
-            let android = window == ToolWindow::Project && app.state.android.project.is_some();
+            let android = window == ToolWindow::Project && app.state.is_android_project();
             let hide = if android {
                 crate::android_view::header(app, ui)
             } else {
@@ -74,14 +74,14 @@ pub fn left(app: &mut IdeApp, ctx: &egui::Context) {
 }
 
 pub fn bottom(app: &mut IdeApp, ctx: &egui::Context) {
-    let Some(window) = app.state.tool_windows.visible(Anchor::Bottom) else {
+    let Some(window) = app.state.tool_windows().visible(Anchor::Bottom) else {
         return;
     };
     // egui persists the panel height from the frame's *content* rect, so the
     // content must fill the panel; otherwise the panel shrinks every frame
     // (the terminal rounds its grid down to whole cells). The stored layout
     // height seeds a new project's panel (id keyed on the project root).
-    let root = app.state.project.as_ref().map(|p| p.root().to_path_buf());
+    let root = app.state.project_root();
     let screen_height = ctx.content_rect().height();
     let height = app
         .state
@@ -111,13 +111,13 @@ pub fn bottom(app: &mut IdeApp, ctx: &egui::Context) {
     let shown = response.response.rect.height();
     // Only a splitter drag changes the stored height, never a window clamp.
     if (shown - height).abs() > 0.5 && ctx.input(|i| i.pointer.any_down()) {
-        app.state.tool_windows.set_bottom_height(shown);
+        app.state.tool_windows_mut().set_bottom_height(shown);
     }
 }
 
 /// Git status per project-relative path.
 fn git_colors(app: &IdeApp) -> HashMap<PathBuf, ChangeKind> {
-    let (Some(git), Some(project)) = (&app.state.git_status(), &app.state.project) else {
+    let (Some(git), Some(project)) = (&app.state.git_status(), app.state.project()) else {
         return HashMap::new();
     };
     git.changes

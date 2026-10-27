@@ -23,7 +23,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         .session()
         .as_ref()
         .is_some_and(|t| t.is_exited());
-    let ai_available = app.commands.is_enabled("ai.terminal.suggest", &app.state);
+    let ai_available = app.action_enabled("ai.terminal.suggest");
     let ai_open = app.ai_ui.terminal_open;
     let mut ai_toggle = false;
     let tabs = app.state.terminal_tab_titles();
@@ -322,7 +322,7 @@ fn copy_selection(app: &mut IdeApp, ctx: &egui::Context) {
                     ctx.copy_text(text.to_owned());
                 }
             }
-            Err(error) => app.state.status = error.to_string(),
+            Err(error) => app.state.set_status(error.to_string()),
         }
     }
 }

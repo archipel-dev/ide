@@ -40,14 +40,14 @@ const BAR_HEIGHT: f32 = 64.0;
 
 /// The bar above the terminal grid.
 pub fn bar(app: &mut IdeApp, ui: &mut egui::Ui) {
-    if !app.ai_ui.terminal_open && app.state.ai.shell.is_none() {
+    if !app.ai_ui.terminal_open && app.state.ai().shell.is_none() {
         return;
     }
     let mut suggest = false;
     let mut run = false;
     let mut insert = false;
     let mut cancel = false;
-    let suggestion = app.state.ai.shell.clone();
+    let suggestion = app.state.ai().shell.clone();
     egui::Frame::new()
         .fill(*theme::FRAME)
         .corner_radius(6)
@@ -136,7 +136,7 @@ pub fn bar(app: &mut IdeApp, ui: &mut egui::Ui) {
             });
         });
     let ready = matches!(
-        app.state.ai.shell.as_ref().map(|s| &s.state),
+        app.state.ai().shell.as_ref().map(|s| &s.state),
         Some(ShellSuggestionState::Ready { .. })
     );
     if suggest {

@@ -53,11 +53,8 @@ pub fn main_toolbar(app: &mut IdeApp, ctx: &egui::Context) {
                     .max_rect(bar.shrink2(vec2(6.0, 0.0)))
                     .layout(egui::Layout::left_to_right(egui::Align::Center)),
             );
-            if custom_title_bar() && app.state.project.is_some() {
-                let active = app
-                    .state
-                    .active_document
-                    .and_then(|index| app.state.documents.get(index));
+            if custom_title_bar() && app.state.has_project() {
+                let active = app.state.active_doc();
                 let title = window_title(&app.project_name(), active.map(|doc| doc.path.as_path()));
                 ui.painter().text(
                     bar.center(),
@@ -227,7 +224,7 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
     {
         app.dispatch("run.cancel", Value::Null);
     }
-    let detected = app.state.detected_build.clone();
+    let detected = app.state.detected_build().clone();
     // Right-to-left: the Debug button sits right of Run, as in the reference.
     if app.state.is_debugging() {
         if icons::button_colored(ui, Icon::Stop, theme::STOP_RED, "Stop Debugging", false).clicked()
@@ -235,7 +232,7 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
             app.dispatch("debug.stop", Value::Null);
         }
     } else {
-        let can_debug = app.commands.is_enabled("debug.start", &app.state);
+        let can_debug = app.action_enabled("debug.start");
         let color = if can_debug {
             theme::RUN_GREEN
         } else {
@@ -257,9 +254,9 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
             app.dispatch("debug.start", Value::Null);
         }
     }
-    let can_build = app.commands.is_enabled("build.project", &app.state);
+    let can_build = app.action_enabled("build.project");
     let build_tip = match &detected {
-        None if app.state.project.is_some() => "No supported build system detected".to_owned(),
+        None if app.state.has_project() => "No supported build system detected".to_owned(),
         _ => format!(
             "Build Project ({})",
             app.action_shortcut("CompileDirty").unwrap_or_default()
@@ -270,13 +267,13 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
         app.dispatch("build.project", Value::Null);
     }
     // Android apps have no `gradlew run`; Run deploys 'app' to the selected device.
-    let android_run = app.state.android.project.is_some();
+    let android_run = app.state.is_android_project();
     let run_command = if android_run {
         "android.app.deploy"
     } else {
         "run.project"
     };
-    let can_run = app.commands.is_enabled(run_command, &app.state);
+    let can_run = app.action_enabled(run_command);
     let run_color = if can_run {
         *theme::RUN_GREEN
     } else {
@@ -300,7 +297,7 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
                 build.run_unavailable.as_deref().unwrap_or_default()
             )
         }
-        None if app.state.project.is_some() => "No supported build system detected".to_owned(),
+        None if app.state.has_project() => "No supported build system detected".to_owned(),
         _ => format!("Run ({})", app.action_shortcut("Run").unwrap_or_default()),
     };
     let run = ui.add_enabled_ui(can_run, |ui| {
@@ -385,7 +382,7 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
                 );
             }
             ui.separator();
-            let enabled = app.commands.is_enabled("runConfig.edit", &app.state);
+            let enabled = app.action_enabled("runConfig.edit");
             if ui
                 .add_enabled(enabled, egui::Button::new("Edit Configurations…"))
                 .clicked()
@@ -599,7 +596,7 @@ pub fn window_resize_handles(ctx: &egui::Context) {
 }
 
 pub(crate) fn stripe_button(app: &mut IdeApp, ui: &mut egui::Ui, window: ToolWindow, icon: Icon) {
-    let selected = app.state.tool_windows.is_visible(window);
+    let selected = app.state.tool_windows().is_visible(window);
     let (rect, response) = ui.allocate_exact_size(vec2(32.0, 32.0), Sense::click());
     let fill = if selected {
         *theme::ACCENT
@@ -622,7 +619,7 @@ pub(crate) fn stripe_button(app: &mut IdeApp, ui: &mut egui::Ui, window: ToolWin
     );
     let mut badge = None;
     if window == ToolWindow::Problems {
-        let counts = app.state.problems.counts();
+        let counts = app.state.problems().counts();
         if counts.errors > 0 {
             badge = Some(theme::ERROR);
         } else if counts.warnings > 0 {
@@ -633,7 +630,7 @@ pub(crate) fn stripe_button(app: &mut IdeApp, ui: &mut egui::Ui, window: ToolWin
         badge = Some(theme::RUN_GREEN);
     }
     if window == ToolWindow::Agents {
-        let counts = app.state.agents.counts();
+        let counts = app.state.agents().counts();
         if counts.needs_input > 0 {
             badge = Some(theme::WARNING);
         } else if counts.working > 0 {
@@ -665,8 +662,8 @@ pub fn left_stripe(app: &mut IdeApp, ctx: &egui::Context) {
                 stripe_button(app, ui, ToolWindow::Project, Icon::Project);
                 stripe_button(app, ui, ToolWindow::Commit, Icon::Commit);
                 stripe_button(app, ui, ToolWindow::Structure, Icon::Structure);
-                if !app.state.agents.sessions().is_empty()
-                    || app.state.tool_windows.is_visible(ToolWindow::Agents)
+                if !app.state.agents().sessions().is_empty()
+                    || app.state.tool_windows().is_visible(ToolWindow::Agents)
                 {
                     stripe_button(
                         app,
@@ -675,7 +672,7 @@ pub fn left_stripe(app: &mut IdeApp, ctx: &egui::Context) {
                         Icon::Kit(crate::agents_ui::glyph(crate::agents_ui::Concept::Agent).into()),
                     );
                 }
-                if app.state.android.project.is_some() {
+                if app.state.is_android_project() {
                     stripe_button(app, ui, ToolWindow::ResourceManager, Icon::Variants);
                     stripe_button(app, ui, ToolWindow::BuildVariants, Icon::Variants);
                 }
@@ -689,10 +686,10 @@ pub fn left_stripe(app: &mut IdeApp, ctx: &egui::Context) {
                 );
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
                     stripe_button(app, ui, ToolWindow::Git, Icon::Branch);
-                    if app.state.hierarchy.current.is_some() {
+                    if app.state.hierarchy().current.is_some() {
                         stripe_button(app, ui, ToolWindow::Hierarchy, Icon::Structure);
                     }
-                    if app.state.android.project.is_some() {
+                    if app.state.is_android_project() {
                         stripe_button(app, ui, ToolWindow::Logcat, Icon::Logcat);
                     }
                     stripe_button(app, ui, ToolWindow::Problems, Icon::Problems);
@@ -709,18 +706,21 @@ pub fn left_stripe(app: &mut IdeApp, ctx: &egui::Context) {
 /// Built-in right-anchored tool windows offered for the open project, top to bottom.
 pub(crate) fn right_stripe_windows(app: &IdeApp) -> Vec<(ToolWindow, Icon)> {
     let mut windows = Vec::new();
-    if app.state.is_gradle_project() || app.state.tool_windows.is_visible(ToolWindow::Gradle) {
+    if app.state.is_gradle_project() || app.state.tool_windows().is_visible(ToolWindow::Gradle) {
         windows.push((ToolWindow::Gradle, Icon::Model));
     }
-    if app.state.is_bazel_project() || app.state.tool_windows.is_visible(ToolWindow::Bazel) {
+    if app.state.is_bazel_project() || app.state.tool_windows().is_visible(ToolWindow::Bazel) {
         windows.push((ToolWindow::Bazel, Icon::Model));
     }
-    if app.state.android.project.is_some()
-        || app.state.tool_windows.is_visible(ToolWindow::DeviceManager)
+    if app.state.is_android_project()
+        || app
+            .state
+            .tool_windows()
+            .is_visible(ToolWindow::DeviceManager)
     {
         windows.push((ToolWindow::DeviceManager, Icon::Device));
     }
-    if app.state.android.project.is_some()
+    if app.state.is_android_project()
         || app
             .state
             .tool_windows
@@ -816,11 +816,7 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                 let mut crumbs = vec![app.project_name()];
                 let mut code_crumbs = Vec::new();
                 let mut file_replaced = false;
-                if let Some(document) = app
-                    .state
-                    .active_document
-                    .and_then(|index| app.state.documents.get(index))
-                {
+                if let Some(document) = app.state.active_doc() {
                     crumbs.extend(
                         document
                             .path
@@ -839,8 +835,7 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                 let last = crumbs.len().saturating_sub(1);
                 let file_icon = app
                     .state
-                    .active_document
-                    .and_then(|index| app.state.documents.get(index))
+                    .active_doc()
                     .map(|document| app.file_icon(&document.path));
                 for (index, crumb) in crumbs.iter().enumerate() {
                     let icon = if index == 0 {
@@ -877,7 +872,7 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     crate::plugin_ui::status_widgets(app, ui, &font, None);
-                    if app.state.project.is_some() {
+                    if app.state.has_project() {
                         crate::ai_chat::status_widget(app, ui, font.clone());
                     }
                     let secondary = theme::TEXT_SECONDARY;
@@ -886,10 +881,7 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                     crate::index_status::status_widget(app, ui, font.clone());
                     crate::toolchain_status::status_widget(app, ui, font.clone());
                     crate::external_status::status_widget(app, ui, font.clone());
-                    let active = app
-                        .state
-                        .active_document
-                        .and_then(|index| app.state.documents.get(index));
+                    let active = app.state.active_doc();
                     if let Some(document) = active {
                         // Bounded detection: never copy the whole buffer per frame.
                         let indent = archipel_ide_text::format::detect_indent(&document.text)
@@ -993,8 +985,8 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                         widgets::busy_spinner(ui, 12.0, *theme::ACCENT);
                         ui.add_space(6.0);
                     }
-                    if !app.state.status.is_empty() {
-                        let status = first_line_truncated(&app.state.status, 70);
+                    if !app.state.status().is_empty() {
+                        let status = first_line_truncated(app.state.status(), 70);
                         // Whatever room the right-hand widgets left, minus a gap
                         // to the breadcrumbs, so a long message is elided instead
                         // of painting over the navigation bar.
@@ -1007,9 +999,9 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                             max_width,
                             22.0,
                         );
-                        let response = response.on_hover_text(app.state.status.clone());
+                        let response = response.on_hover_text(app.state.status());
                         if response.clicked()
-                            && app.state.tool_windows.visible(Anchor::Bottom).is_none()
+                            && app.state.tool_windows().visible(Anchor::Bottom).is_none()
                         {
                             app.dispatch("toolwindow.toggle", json!({"id": "build"}));
                         }

@@ -130,6 +130,13 @@ Each phase lists what it delivers, what it removes, and how we know it is done.
   jdtls (spec 1.10) shows no regressions.
 
 ### Phase 5: UI on DataContext and actions
+
+Status: started. `DataContext`, `AnAction` and the action registry are in place and every menu,
+toolbar button, context menu, Find Action entry and shortcut goes through them; the UI no longer
+names a field of `IdeState` (lint: `crates/archipel-ide-ui/tests/no_subsystem_reads.rs`). What is
+left is the handle ratchet there (whole-subsystem handles that become services) and the god
+object itself. See `platform-kernel.md`, "DataContext and actions".
+
 - All remaining UI reads go through `DataContext`, and every command is an `AnAction` with
   `update()` presentation. The UI crate keeps rendering only.
 - Done when: no `archipel-ide-ui` file reads `state.<field>` of another subsystem (lint test),

@@ -13,7 +13,7 @@ pub struct DeployBalloon {
 }
 
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
-    let deploy = &app.state.android.deploy;
+    let deploy = &app.state.android().deploy;
     if deploy.phase == DeployPhase::Idle
         || app.deploy_balloon.dismissed.as_ref() == Some(&deploy.phase)
     {
@@ -73,6 +73,6 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                 });
         });
     if dismiss {
-        app.deploy_balloon.dismissed = Some(app.state.android.deploy.phase.clone());
+        app.deploy_balloon.dismissed = Some(app.state.android().deploy.phase.clone());
     }
 }

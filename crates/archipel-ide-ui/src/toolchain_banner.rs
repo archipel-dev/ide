@@ -7,11 +7,7 @@ use eframe::egui::{self, RichText};
 use serde_json::json;
 
 pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let path = app
-        .state
-        .active_document
-        .and_then(|index| app.state.documents.get(index))
-        .map(|document| document.path.clone());
+    let path = app.state.active_doc().map(|document| document.path.clone());
     let banner = match &path {
         Some(path) => app.state.toolchain_banner_for(path),
         None => app.state.toolchain_project_banner(),

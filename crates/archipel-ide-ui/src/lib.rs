@@ -6,6 +6,7 @@
 //! dispatched through the typed command registry.
 
 mod about;
+mod actions;
 mod agents_ui;
 mod ai_actions;
 mod ai_agent;
@@ -179,6 +180,8 @@ pub struct IdeApp {
     repaint_hook_installed: bool,
     /// Contributed command ids currently registered in `commands`.
     plugin_commands: Vec<String>,
+    /// The action registry's entries for the registered commands.
+    command_actions: archipel_ide_core::ide_actions::CommandActions,
     /// Registry generation the contributed commands were synced at.
     plugin_generation: u64,
     /// Amend toggle of the Commit tool window.
@@ -315,7 +318,7 @@ impl IdeApp {
         {
             let _ = commands.execute("app.checkForUpdates", &mut state, json!({"silent": true}));
         }
-        Self {
+        let mut app = Self {
             state,
             commands,
             palette: palette::Palette::default(),
@@ -359,6 +362,7 @@ impl IdeApp {
             waker_installed: false,
             repaint_hook_installed: false,
             plugin_commands: Vec::new(),
+            command_actions: Default::default(),
             plugin_generation: u64::MAX,
             change_popup: None,
             git_dialog: None,
@@ -373,7 +377,9 @@ impl IdeApp {
             pending_dialog: None,
             kind_cache: Default::default(),
             welcome: Default::default(),
-        }
+        };
+        app.register_actions();
+        app
     }
 
     /// Standalone app mode (`archipel-ide --app <plugin-id>`): a window showing

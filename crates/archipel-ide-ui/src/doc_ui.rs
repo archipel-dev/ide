@@ -299,7 +299,7 @@ pub fn show_completion_panel(app: &mut IdeApp, ctx: &egui::Context, lookup: Opti
         return;
     };
     let Some(markdown) = app.state.completion_documentation() else {
-        if app.state.docs.completion_panel && app.state.completion.is_some() {
+        if app.state.docs().completion_panel && app.state.completion().is_some() {
             // Resolving: keep the panel's place without flicker.
             egui::Area::new(egui::Id::new("completion_docs"))
                 .order(egui::Order::Foreground)
@@ -323,7 +323,7 @@ pub fn show_completion_panel(app: &mut IdeApp, ctx: &egui::Context, lookup: Opti
 
 /// The quick documentation popup.
 pub fn show_quick_doc(app: &mut IdeApp, ctx: &egui::Context) {
-    let Some(popup) = app.state.docs.popup.clone() else {
+    let Some(popup) = app.state.docs().popup.clone() else {
         app.doc_view.rect = None;
         return;
     };
@@ -342,7 +342,7 @@ pub fn show_quick_doc(app: &mut IdeApp, ctx: &egui::Context) {
 /// Parameter info above the caret line: every overload on its own line, the
 /// active one bright with its current parameter in bold.
 pub fn show_parameter_info(app: &mut IdeApp, ctx: &egui::Context) {
-    let Some(info) = app.state.signature.popup.as_ref() else {
+    let Some(info) = app.state.signature().popup.as_ref() else {
         return;
     };
     let Some(caret) = app.caret_screen_pos else {
@@ -410,12 +410,12 @@ pub fn track_hover(app: &mut IdeApp, ctx: &egui::Context, hover: Option<(usize, 
     let over_popup = pointer
         .zip(app.doc_view.rect)
         .is_some_and(|(pointer, rect)| rect.expand(8.0).contains(pointer));
-    let busy = app.state.completion.is_some()
+    let busy = app.state.completion().is_some()
         || app.palette.open
         || app.find_popup.open
         || app.dialog.is_some()
         || ctx.input(|input| input.pointer.any_down());
-    if let Some(popup) = &app.state.docs.popup
+    if let Some(popup) = &app.state.docs().popup
         && popup.from_mouse
         && !over_popup
         && hover.map(|(offset, _)| offset) != app.doc_view.requested

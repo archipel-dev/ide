@@ -43,13 +43,13 @@ pub fn handle(app: &mut IdeApp, ctx: &egui::Context) {
             input.events.len() != before
         })
     };
-    if app.state.code_actions.popup {
+    if app.state.code_actions().popup {
         if app
             .state
             .current_alerts()
             .is_none_or(|set| set.actions.is_empty())
         {
-            app.state.code_actions.popup = false;
+            app.state.code_actions_mut().popup = false;
         } else {
             popup_keys(app, ctx, &consume);
         }
@@ -64,18 +64,14 @@ pub fn reset_selection(ctx: &egui::Context) {
 }
 
 fn request_when_resting(app: &mut IdeApp, ctx: &egui::Context) {
-    let Some(document) = app
-        .state
-        .active_document
-        .and_then(|index| app.state.documents.get(index))
-    else {
+    let Some(document) = app.state.active_doc() else {
         return;
     };
     let key = CaretKey {
         path: document.path.clone(),
         offset: document.selections.primary().head,
         revision: document.text.revision(),
-        diagnostics: app.state.lsp.diagnostics_generation(),
+        diagnostics: app.state.lsp().diagnostics_generation(),
     };
     let id = egui::Id::new("intention_caret");
     let (last, since, requested): (Option<CaretKey>, Instant, bool) =
@@ -160,7 +156,7 @@ fn popup_keys(app: &mut IdeApp, ctx: &egui::Context, consume: &dyn Fn(Modifiers,
     }
     ctx.data_mut(|data| data.insert_temp(selected_id(), selected));
     if consume(Modifiers::NONE, Key::Escape) {
-        app.state.code_actions.popup = false;
+        app.state.code_actions_mut().popup = false;
         return;
     }
     if consume(Modifiers::NONE, Key::Enter) {
@@ -216,13 +212,13 @@ pub fn lightbulb(app: &mut IdeApp, ui: &mut egui::Ui, anchor: Option<Pos2>) {
     if response.on_hover_text(tooltip).clicked() {
         ui.ctx()
             .data_mut(|data| data.insert_temp(selected_id(), 0usize));
-        app.state.code_actions.popup = true;
+        app.state.code_actions_mut().popup = true;
     }
 }
 
 /// The intention popup below the caret.
 pub fn popup(app: &mut IdeApp, ctx: &egui::Context) {
-    if !app.state.code_actions.popup {
+    if !app.state.code_actions().popup {
         return;
     }
     let Some(set) = app.state.current_alerts() else {
@@ -326,6 +322,6 @@ pub fn popup(app: &mut IdeApp, ctx: &egui::Context) {
         app.dispatch("code.applyAlert", json!({"index": index}));
         ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
     } else if ctx.input(|input| input.pointer.any_pressed()) && !response.contains_pointer() {
-        app.state.code_actions.popup = false;
+        app.state.code_actions_mut().popup = false;
     }
 }

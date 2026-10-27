@@ -13,7 +13,7 @@ fn field_id() -> egui::Id {
 
 /// The rename field or dialog, while a rename is in progress.
 pub fn popup(app: &mut IdeApp, ctx: &egui::Context) {
-    let Some(session) = app.state.refactor.rename.clone() else {
+    let Some(session) = app.state.refactor().rename.clone() else {
         ctx.data_mut(|data| data.remove_temp::<(usize, u64)>(egui::Id::new("rename_focus")));
         return;
     };

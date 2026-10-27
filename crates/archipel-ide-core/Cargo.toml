@@ -11,6 +11,7 @@ archipel-ide-daemon = { path = "../archipel-ide-daemon" }
 archipel-ide-android = { path = "../archipel-ide-android" }
 archipel-ide-ai = { path = "../archipel-ide-ai" }
 archipel-ide-bazel = { path = "../archipel-ide-bazel" }
+archipel-ide-actions = { path = "../archipel-ide-actions" }
 archipel-ide-command = { path = "../archipel-ide-command" }
 archipel-ide-gradle = { path = "../archipel-ide-gradle" }
 archipel-ide-externalsystem = { path = "../archipel-ide-externalsystem" }
@@ -48,4 +49,3 @@ flate2 = "1"
 tar = "0.4"
 tempfile = "3"
 zip = { version = "2", default-features = false, features = ["deflate"] }
-archipel-ide-actions = { path = "../archipel-ide-actions" }

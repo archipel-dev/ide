@@ -5,7 +5,7 @@ use eframe::egui::{self, RichText};
 use serde_json::Value;
 
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
-    if app.state.crash_report.is_none() {
+    if app.state.crash_report().is_none() {
         return;
     }
     let screen = ctx.content_rect();

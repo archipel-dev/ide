@@ -30,11 +30,7 @@ pub fn content(name: &str, conflict: DiskConflict) -> (String, [(&'static str, &
 
 /// Draws the banner above the active editor when its file conflicts.
 pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let Some(document) = app
-        .state
-        .active_document
-        .and_then(|index| app.state.documents.get(index))
-    else {
+    let Some(document) = app.state.active_doc() else {
         return;
     };
     let Some(conflict) = document.conflict else {

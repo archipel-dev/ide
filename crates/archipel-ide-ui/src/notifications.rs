@@ -15,7 +15,7 @@ pub fn restart(app: &mut IdeApp, ctx: &egui::Context) -> Result<(), String> {
         .update_restart_target()
         .ok_or("The updated executable path is unavailable; restart Archipel IDE manually.")?;
     let mut command = std::process::Command::new(exe);
-    if let Some(project) = &app.state.project {
+    if let Some(project) = app.state.project() {
         // Workspace restore reopens the current tabs; stale startup argv may
         // refer to a project the user has since left.
         command.arg(project.root());
@@ -147,7 +147,8 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         ctx.open_url(egui::OpenUrl::new_tab(url));
     }
     if do_restart && let Err(error) = restart(app, ctx) {
-        app.state.status = format!("Could not restart Archipel IDE: {error}");
+        app.state
+            .set_status(format!("Could not restart Archipel IDE: {error}"));
     }
     if do_install {
         // The installer replaces the IDE's files, so quit once it has started.
@@ -156,7 +157,9 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
             .execute("app.runUpdateInstaller", &mut app.state, Value::Null)
         {
             Ok(_) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
-            Err(error) => app.state.status = format!("Could not start the installer: {error}"),
+            Err(error) => app
+                .state
+                .set_status(format!("Could not start the installer: {error}")),
         }
     }
     if let Some(id) = action {

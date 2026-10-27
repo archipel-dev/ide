@@ -20,9 +20,14 @@ fn summary(app: &IdeApp, servers: &[ServerInfo]) -> Option<(String, bool, bool)>
         ));
     }
     let active = app.state.active_absolute_path()?;
-    let (provider, _) = app.state.lsp.registry().for_path(&active)?;
+    let (provider, _) = app.state.lsp().registry().for_path(&active)?;
     let id = provider.spec().id;
-    if app.state.lsp.missing_servers().any(|missing| missing == id) {
+    if app
+        .state
+        .lsp()
+        .missing_servers()
+        .any(|missing| missing == id)
+    {
         return Some((format!("{id}: not installed"), false, true));
     }
     let server = servers
@@ -52,7 +57,7 @@ fn summary(app: &IdeApp, servers: &[ServerInfo]) -> Option<(String, bool, bool)>
 
 /// Status bar entry; hover lists every server, right-click offers a restart.
 pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::FontId) {
-    let servers = app.state.lsp.servers();
+    let servers = app.state.lsp().servers();
     let Some((text, busy, problem)) = summary(app, &servers) else {
         return;
     };
@@ -100,7 +105,7 @@ pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::FontId) {
                 ui.label(RichText::new(describe_progress(progress)).color(theme::TEXT_INFO));
             }
         }
-        for missing in app.state.lsp.missing_servers() {
+        for missing in app.state.lsp().missing_servers() {
             ui.label(format!("{missing} — not installed"));
         }
         ui.label(RichText::new("Right-click for actions").color(theme::TEXT_INFO));

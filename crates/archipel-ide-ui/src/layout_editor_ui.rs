@@ -17,7 +17,7 @@ pub fn applies(app: &IdeApp) -> bool {
 
 /// Top-right `Code | Split | Design` toggle.
 pub fn mode_bar(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let current = app.state.android.layout.mode;
+    let current = app.state.android().layout.mode;
     let mut choice = None;
     egui::TopBottomPanel::top("layout_mode_bar")
         .exact_height(26.0)
@@ -103,7 +103,7 @@ pub fn design_body(app: &mut IdeApp, ui: &mut egui::Ui) {
 
 fn dispatch_select(app: &mut IdeApp, select: Option<usize>) {
     if let Some(node) = select
-        && node != app.state.android.layout.selected
+        && node != app.state.android().layout.selected
     {
         app.dispatch("android.layout.select", json!({"node": node}));
     }
@@ -124,7 +124,7 @@ fn heading(ui: &mut egui::Ui, title: &str) {
 
 fn component_tree(app: &IdeApp, ui: &mut egui::Ui, tree: &LayoutNode, select: &mut Option<usize>) {
     heading(ui, "Component Tree");
-    let selected = app.state.android.layout.selected;
+    let selected = app.state.android().layout.selected;
     egui::ScrollArea::both()
         .auto_shrink([false, false])
         .show(ui, |ui| {
@@ -170,7 +170,7 @@ fn tree_rows(
 
 fn attributes(app: &IdeApp, ui: &mut egui::Ui, tree: &LayoutNode) {
     heading(ui, "Attributes");
-    let Some(node) = tree.nth(app.state.android.layout.selected).or(Some(tree)) else {
+    let Some(node) = tree.nth(app.state.android().layout.selected).or(Some(tree)) else {
         return;
     };
     egui::ScrollArea::vertical()
@@ -213,7 +213,7 @@ fn box_fill(depth: usize) -> Color32 {
 
 fn preview(app: &IdeApp, ui: &mut egui::Ui, tree: &LayoutNode, select: &mut Option<usize>) {
     heading(ui, "Preview");
-    let selected = app.state.android.layout.selected;
+    let selected = app.state.android().layout.selected;
     let available = ui.available_size();
     let scale = (available.x / SCREEN.0)
         .min(available.y / SCREEN.1)

@@ -28,7 +28,7 @@ pub fn visible_summary(status: &IndexStatus) -> Option<String> {
 /// Status-bar item: spinner and "Indexing 1,204 / 20,000 files" while the
 /// indexer works; hover lists every index, right-click offers a rebuild.
 pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::FontId) {
-    if !app.state.analysis.index.is_attached() {
+    if !app.state.analysis().index.is_attached() {
         return;
     }
     let status = app.state.index_status();
@@ -75,7 +75,7 @@ pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::FontId) {
 /// A one-line banner "Indexing… results may be incomplete" with a spinner,
 /// or nothing when the state has no pending index.
 pub fn banner(ui: &mut egui::Ui, state: &IdeState) {
-    if !state.analysis.index.is_attached() {
+    if !state.analysis().index.is_attached() {
         return;
     }
     let status = state.index_status();

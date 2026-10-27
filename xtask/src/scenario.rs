@@ -268,33 +268,63 @@ fn is_unverified(confidence: &Option<String>) -> bool {
 pub enum ScenarioStep {
     Scene(Step),
     /// Moves the caret (1-based line and column).
-    Caret { line: u64, column: u64 },
+    Caret {
+        line: u64,
+        column: u64,
+    },
     /// Moves the caret, then types `text`; `\n` is the Enter key.
-    TypeAt { line: u64, column: u64, text: String },
+    TypeAt {
+        line: u64,
+        column: u64,
+        text: String,
+    },
     /// Types `text` at the caret; `\n` is the Enter key.
     Text(String),
     /// Waits until the analysis of the active file settled and records its markup.
-    WaitAnalysis { name: Option<String>, timeout: Duration },
+    WaitAnalysis {
+        name: Option<String>,
+        timeout: Duration,
+    },
     /// Alt+Enter; records the popup rows.
-    AltEnter { name: Option<String> },
+    AltEnter {
+        name: Option<String>,
+    },
     /// Chooses an Alt+Enter row with Down and Enter.
-    ApplyIntention { title: Option<String>, index: Option<usize> },
+    ApplyIntention {
+        title: Option<String>,
+        index: Option<usize>,
+    },
     /// Ctrl+Space; records the completion rows.
-    Complete { name: Option<String> },
+    Complete {
+        name: Option<String>,
+    },
     /// Ctrl+B; records where the caret lands.
-    Declaration { name: Option<String> },
+    Declaration {
+        name: Option<String>,
+    },
     /// Alt+F7; records the usages.
-    FindUsages { name: Option<String> },
+    FindUsages {
+        name: Option<String>,
+    },
     /// Shift+F6, types the new name, Enter.
-    Rename { to: String },
+    Rename {
+        to: String,
+    },
     /// Ctrl+S.
     Save,
     /// Opens another project file (what a double click in the Project view does).
-    OpenFile { path: String },
+    OpenFile {
+        path: String,
+    },
     /// Runs a build-system sync command (`gradle.sync`, `bazel.sync`) and waits for it.
-    Sync { command: String, timeout: Duration },
+    Sync {
+        command: String,
+        timeout: Duration,
+    },
     /// Waits until a language server finished starting and importing the project.
-    WaitServer { timeout: Duration },
+    WaitServer {
+        timeout: Duration,
+    },
 }
 
 impl ScenarioStep {
@@ -341,7 +371,10 @@ impl ScenarioStep {
             },
             "altEnter" => Self::AltEnter { name: name() },
             "applyIntention" => {
-                let title = value.get("title").and_then(Value::as_str).map(str::to_owned);
+                let title = value
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
                 let index = value
                     .get("index")
                     .and_then(Value::as_u64)
@@ -400,8 +433,8 @@ pub fn load_scenarios(root: &Path) -> Result<Vec<Scenario>> {
             );
             let path = dir.join("scenario.json");
             let text = fs::read_to_string(&path)?;
-            let spec: ScenarioSpec = serde_json::from_str(&text)
-                .with_context(|| format!("parse {}", path.display()))?;
+            let spec: ScenarioSpec =
+                serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
             let steps = spec
                 .steps
                 .iter()
@@ -557,7 +590,10 @@ impl std::fmt::Display for Range {
 }
 
 fn normalize_severity(severity: &str) -> String {
-    severity.trim().to_ascii_lowercase().replace([' ', '-'], "_")
+    severity
+        .trim()
+        .to_ascii_lowercase()
+        .replace([' ', '-'], "_")
 }
 
 fn describe_markup(markup: &[Value]) -> String {
@@ -602,7 +638,8 @@ pub fn check_markup(expect: &MarkupExpect, observed: Option<&Value>) -> CheckRes
     .to_owned();
     let unverified = is_unverified(&expect.confidence);
     let Some(observed) = observed else {
-        return CheckResult::new(Status::Fail, what, "markup was never observed").unverified(unverified);
+        return CheckResult::new(Status::Fail, what, "markup was never observed")
+            .unverified(unverified);
     };
     let range = match Range::parse(&expect.range) {
         Ok(range) => range,
@@ -640,7 +677,9 @@ pub fn check_markup(expect: &MarkupExpect, observed: Option<&Value>) -> CheckRes
             CheckResult::new(
                 Status::Partial,
                 what.clone(),
-                format!("at {range} the code is greyed out (hint) instead of a warning: \"{message}\""),
+                format!(
+                    "at {range} the code is greyed out (hint) instead of a warning: \"{message}\""
+                ),
             )
         } else {
             match expect.message.as_deref() {
@@ -664,7 +703,8 @@ pub fn check_no_markup(expect: &NoMarkupExpect, observed: Option<&Value>) -> Che
     let what = format!("no {severity} markup");
     let unverified = is_unverified(&expect.confidence);
     let Some(observed) = observed else {
-        return CheckResult::new(Status::Fail, what, "markup was never observed").unverified(unverified);
+        return CheckResult::new(Status::Fail, what, "markup was never observed")
+            .unverified(unverified);
     };
     let markup: Vec<Value> = observed["markup"].as_array().cloned().unwrap_or_default();
     let offending: Vec<Value> = markup
@@ -690,7 +730,8 @@ pub fn check_intentions(expect: &IntentionsExpect, observed: Option<&[String]>) 
     let what = format!("Alt+Enter {mode}: {}", expect.items.join(" | "));
     let unverified = is_unverified(&expect.confidence);
     let Some(actual) = observed else {
-        return CheckResult::new(Status::Fail, what, "Alt+Enter was never pressed").unverified(unverified);
+        return CheckResult::new(Status::Fail, what, "Alt+Enter was never pressed")
+            .unverified(unverified);
     };
     let shown = if actual.is_empty() {
         "no popup or no items".to_owned()
@@ -711,22 +752,38 @@ pub fn check_intentions(expect: &IntentionsExpect, observed: Option<&[String]>) 
             if same {
                 CheckResult::new(Status::Pass, what, "")
             } else if present == expect.items.len() {
-                CheckResult::new(Status::Partial, what, format!("all items present but the list differs; {shown}"))
+                CheckResult::new(
+                    Status::Partial,
+                    what,
+                    format!("all items present but the list differs; {shown}"),
+                )
             } else if present > 0 {
-                CheckResult::new(Status::Partial, what, format!("{present} of {} items; {shown}", expect.items.len()))
+                CheckResult::new(
+                    Status::Partial,
+                    what,
+                    format!("{present} of {} items; {shown}", expect.items.len()),
+                )
             } else {
                 CheckResult::new(Status::Fail, what, shown)
             }
         }
         "ordered" => {
-            let ordered = found.iter().all(Option::is_some)
-                && found.windows(2).all(|pair| pair[0] < pair[1]);
+            let ordered =
+                found.iter().all(Option::is_some) && found.windows(2).all(|pair| pair[0] < pair[1]);
             if ordered {
                 CheckResult::new(Status::Pass, what, "")
             } else if present == expect.items.len() {
-                CheckResult::new(Status::Partial, what, format!("all items present in a different order; {shown}"))
+                CheckResult::new(
+                    Status::Partial,
+                    what,
+                    format!("all items present in a different order; {shown}"),
+                )
             } else if present > 0 {
-                CheckResult::new(Status::Partial, what, format!("{present} of {} items; {shown}", expect.items.len()))
+                CheckResult::new(
+                    Status::Partial,
+                    what,
+                    format!("{present} of {} items; {shown}", expect.items.len()),
+                )
             } else {
                 CheckResult::new(Status::Fail, what, shown)
             }
@@ -735,7 +792,11 @@ pub fn check_intentions(expect: &IntentionsExpect, observed: Option<&[String]>) 
             if present == expect.items.len() {
                 CheckResult::new(Status::Pass, what, "")
             } else if present > 0 {
-                CheckResult::new(Status::Partial, what, format!("{present} of {} items; {shown}", expect.items.len()))
+                CheckResult::new(
+                    Status::Partial,
+                    what,
+                    format!("{present} of {} items; {shown}", expect.items.len()),
+                )
             } else {
                 CheckResult::new(Status::Fail, what, shown)
             }
@@ -750,7 +811,10 @@ pub fn check_file(expect: &FileExpect, path: &str, text: Result<&str, &str>) -> 
     let unverified = is_unverified(&expect.confidence);
     let text = match text {
         Ok(text) => text,
-        Err(error) => return CheckResult::new(Status::Fail, what, format!("cannot read: {error}")).unverified(unverified),
+        Err(error) => {
+            return CheckResult::new(Status::Fail, what, format!("cannot read: {error}"))
+                .unverified(unverified);
+        }
     };
     let mut problems = Vec::new();
     if let Some(equals) = &expect.equals
@@ -795,7 +859,8 @@ pub fn check_navigation(expect: &NavigationExpect, observed: Option<&Value>) -> 
     .to_owned();
     let unverified = is_unverified(&expect.confidence);
     let Some(observed) = observed else {
-        return CheckResult::new(Status::Fail, what, "navigation was never invoked").unverified(unverified);
+        return CheckResult::new(Status::Fail, what, "navigation was never invoked")
+            .unverified(unverified);
     };
     let path = observed["path"].as_str().unwrap_or("");
     let landed = format!(
@@ -832,16 +897,25 @@ pub fn check_navigation(expect: &NavigationExpect, observed: Option<&Value>) -> 
     } else {
         Status::Fail
     };
-    CheckResult::new(status, what, format!("{landed}; wrong {}", wrong.join(", "))).unverified(unverified)
+    CheckResult::new(
+        status,
+        what,
+        format!("{landed}; wrong {}", wrong.join(", ")),
+    )
+    .unverified(unverified)
 }
 
 pub fn check_usages(expect: &UsagesExpect, observed: Option<&Value>) -> CheckResult {
     let what = "find usages".to_owned();
     let unverified = is_unverified(&expect.confidence);
     let Some(observed) = observed else {
-        return CheckResult::new(Status::Fail, what, "find usages was never invoked").unverified(unverified);
+        return CheckResult::new(Status::Fail, what, "find usages was never invoked")
+            .unverified(unverified);
     };
-    let items: Vec<&Value> = observed["items"].as_array().map(|a| a.iter().collect()).unwrap_or_default();
+    let items: Vec<&Value> = observed["items"]
+        .as_array()
+        .map(|a| a.iter().collect())
+        .unwrap_or_default();
     let paths: Vec<&str> = items.iter().filter_map(|i| i["path"].as_str()).collect();
     let mut problems = Vec::new();
     if let Some(count) = expect.count
@@ -864,7 +938,11 @@ pub fn check_usages(expect: &UsagesExpect, observed: Option<&Value>) -> CheckRes
     } else {
         let partial = !items.is_empty();
         CheckResult::new(
-            if partial { Status::Partial } else { Status::Fail },
+            if partial {
+                Status::Partial
+            } else {
+                Status::Fail
+            },
             what,
             problems.join("; "),
         )
@@ -876,7 +954,8 @@ pub fn check_completion(expect: &CompletionExpect, observed: Option<&Value>) -> 
     let what = format!("completion {}", expect.contains.join(", "));
     let unverified = is_unverified(&expect.confidence);
     let Some(observed) = observed else {
-        return CheckResult::new(Status::Fail, what, "completion was never invoked").unverified(unverified);
+        return CheckResult::new(Status::Fail, what, "completion was never invoked")
+            .unverified(unverified);
     };
     let labels: Vec<String> = observed["items"]
         .as_array()
@@ -897,15 +976,21 @@ pub fn check_completion(expect: &CompletionExpect, observed: Option<&Value>) -> 
     } else {
         format!(
             "popup: {}{}",
-            labels.iter().take(8).cloned().collect::<Vec<_>>().join(", "),
+            labels
+                .iter()
+                .take(8)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", "),
             if labels.len() > 8 { ", …" } else { "" }
         )
     };
     let present = expect.contains.iter().filter(|wanted| has(wanted)).count();
-    let first_ok = expect
-        .first
-        .as_deref()
-        .is_none_or(|wanted| labels.first().is_some_and(|l| l == wanted || l.split('(').next() == Some(wanted)));
+    let first_ok = expect.first.as_deref().is_none_or(|wanted| {
+        labels
+            .first()
+            .is_some_and(|l| l == wanted || l.split('(').next() == Some(wanted))
+    });
     if present == expect.contains.len() && first_ok {
         CheckResult::new(Status::Pass, what, "").unverified(unverified)
     } else if present > 0 || (present == expect.contains.len() && !first_ok) {
@@ -1110,14 +1195,21 @@ impl Session<'_> {
                     (None, None) => unreachable!("checked at parse time"),
                 };
                 if position >= visible.len() {
-                    bail!("Alt+Enter has only {} items, cannot apply item {position}", visible.len());
+                    bail!(
+                        "Alt+Enter has only {} items, cannot apply item {position}",
+                        visible.len()
+                    );
                 }
+                let before = self.state()?["editor"]["text"].clone();
                 for _ in 0..position {
                     self.key("ArrowDown")?;
                 }
                 self.key("Enter")?;
-                self.wait(WaitCondition::Idle, Duration::from_secs(60))?;
-                std::thread::sleep(Duration::from_millis(500));
+                // Language-server actions resolve their edit asynchronously: wait for the
+                // text to change (an action may change nothing, or another file).
+                self.poll_state(Duration::from_secs(20), |state| {
+                    state["editor"]["text"] != before
+                })?;
                 self.wait(WaitCondition::Idle, Duration::from_secs(60))?;
             }
             ScenarioStep::Complete { name } => {
@@ -1142,10 +1234,11 @@ impl Session<'_> {
                 };
                 let start = at(&before);
                 self.key("Ctrl+B")?;
-                let after = match self.poll_state(Duration::from_secs(45), |state| at(state) != start)? {
-                    Some(state) => state,
-                    None => self.state()?,
-                };
+                let after =
+                    match self.poll_state(Duration::from_secs(45), |state| at(state) != start)? {
+                        Some(state) => state,
+                        None => self.state()?,
+                    };
                 let results = self.execute("navigate.results", Value::Null)?;
                 self.observed.navigation.push((
                     name.clone(),
@@ -1184,8 +1277,15 @@ impl Session<'_> {
                 }
                 self.type_text(to)?;
                 self.key("Enter")?;
-                self.wait(WaitCondition::Idle, Duration::from_secs(60))?;
-                std::thread::sleep(Duration::from_millis(800));
+                // The server applies the rename asynchronously; the session ends with it.
+                let finished = self.poll_state(Duration::from_secs(60), |state| {
+                    state["popups"]["rename"] != json!(true)
+                })?;
+                if finished.is_none() {
+                    self.observed
+                        .notes
+                        .push("the rename did not finish within 60s".into());
+                }
                 self.wait(WaitCondition::Idle, Duration::from_secs(60))?;
             }
             ScenarioStep::Save => self.key("Ctrl+S")?,
@@ -1260,7 +1360,10 @@ fn evaluate(
         checks.push(check_markup(e, pick(&observed.markup, e.when.as_deref())));
     }
     for e in &expect.no_markup {
-        checks.push(check_no_markup(e, pick(&observed.markup, e.when.as_deref())));
+        checks.push(check_no_markup(
+            e,
+            pick(&observed.markup, e.when.as_deref()),
+        ));
     }
     for e in &expect.intentions {
         let rows: Option<Vec<String>> = pick(&observed.intentions, e.when.as_deref()).map(|rows| {
@@ -1272,13 +1375,19 @@ fn evaluate(
         checks.push(check_intentions(e, rows.as_deref()));
     }
     for e in &expect.navigation {
-        checks.push(check_navigation(e, pick(&observed.navigation, e.when.as_deref())));
+        checks.push(check_navigation(
+            e,
+            pick(&observed.navigation, e.when.as_deref()),
+        ));
     }
     for e in &expect.usages {
         checks.push(check_usages(e, pick(&observed.usages, e.when.as_deref())));
     }
     for e in &expect.completion {
-        checks.push(check_completion(e, pick(&observed.completion, e.when.as_deref())));
+        checks.push(check_completion(
+            e,
+            pick(&observed.completion, e.when.as_deref()),
+        ));
     }
     for e in &expect.file {
         let path = e
@@ -1439,14 +1548,19 @@ fn run_scenario(env: &Environment, scenario: &Scenario) -> ScenarioResult {
         Err((error, notes)) => {
             result.notes = notes;
             result.notes.push(format!("{error:#}"));
-            result.checks = vec![CheckResult::new(Status::Fail, "scenario ran", format!("{error:#}"))];
+            result.checks = vec![CheckResult::new(
+                Status::Fail,
+                "scenario ran",
+                format!("{error:#}"),
+            )];
         }
     }
     result.duration = started.elapsed();
     result
 }
 
-type RunOutcome = std::result::Result<(Vec<CheckResult>, Vec<String>), (anyhow::Error, Vec<String>)>;
+type RunOutcome =
+    std::result::Result<(Vec<CheckResult>, Vec<String>), (anyhow::Error, Vec<String>)>;
 
 fn run_scenario_inner(env: &Environment, scenario: &Scenario) -> RunOutcome {
     let slug = scenario.id.replace('/', "-");
@@ -1460,11 +1574,12 @@ fn run_scenario_inner(env: &Environment, scenario: &Scenario) -> RunOutcome {
         copy_project(&scenario.dir.join("project"), &project)?;
         let project = fs::canonicalize(&project)?;
         let open = scenario.spec.open.paths();
-        let (mut process, socket) = launch(env, &dir, Some(&project), &open, &scenario.spec.env, &slug)?;
+        let (mut process, socket) =
+            launch(env, &dir, Some(&project), &open, &scenario.spec.env, &slug)?;
         let client = connect(&socket, &mut process.0, &dir)?;
         Ok((project, process, client))
     };
-    let (project, _process, client) = setup().map_err(|e| (e, Vec::new()))?;
+    let (project, process, client) = setup().map_err(|e| (e, Vec::new()))?;
     let mut session = Session {
         client,
         project,
@@ -1502,12 +1617,30 @@ fn run_scenario_inner(env: &Environment, scenario: &Scenario) -> RunOutcome {
     let open = scenario.spec.open.paths();
     // Whatever was observed before a step failed still counts: the failed step is one more
     // failing check next to the ones that passed.
-    let mut checks = evaluate(scenario, &mut session, &observed, open.first().map(String::as_str))
-        .map_err(|e| (e, observed.notes.clone()))?;
+    let mut checks = evaluate(
+        scenario,
+        &mut session,
+        &observed,
+        open.first().map(String::as_str),
+    )
+    .map_err(|e| (e, observed.notes.clone()))?;
+    drop(session);
+    drop(process);
+    // Language-server workspaces and build output are large; the log and what was
+    // observed are what a report needs.
+    if std::env::var_os("ARCHIPEL_SCENARIO_KEEP_WORK").is_none() {
+        for heavy in ["project", "cache", "xdg-cache", "xdg-config"] {
+            let _ = fs::remove_dir_all(dir.join(heavy));
+        }
+    }
     let mut notes = observed.notes;
     if let Err(error) = outcome {
         notes.push(format!("{error:#}"));
-        checks.push(CheckResult::new(Status::Fail, "scenario steps ran", format!("{error:#}")));
+        checks.push(CheckResult::new(
+            Status::Fail,
+            "scenario steps ran",
+            format!("{error:#}"),
+        ));
     }
     Ok((checks, notes))
 }
@@ -1532,7 +1665,11 @@ fn play(scenario: &Scenario, session: &mut Session<'_>) -> Result<()> {
 // ---------------------------------------------------------------------------
 
 /// Which of `needs` are available on this machine; asks a bare IDE for toolchains.
-fn probe(env: &Environment, needs: &BTreeSet<String>, install: bool) -> Result<BTreeMap<String, bool>> {
+fn probe(
+    env: &Environment,
+    needs: &BTreeSet<String>,
+    install: bool,
+) -> Result<BTreeMap<String, bool>> {
     let dir = env.work.join("probe");
     if dir.exists() {
         fs::remove_dir_all(&dir)?;
@@ -1549,7 +1686,9 @@ fn probe(env: &Environment, needs: &BTreeSet<String>, install: bool) -> Result<B
             timeout_ms: Some(10_000),
         },
     )
-    .context("the IDE binary does not support `wait analysis`; touch the changed crates and rebuild")?;
+    .context(
+        "the IDE binary does not support `wait analysis`; touch the changed crates and rebuild",
+    )?;
     let mut available = BTreeMap::new();
     for need in needs {
         let have = if need == "network" {
@@ -1628,7 +1767,14 @@ fn runs(need: &str, located: &Value) -> bool {
 
 fn network_available() -> bool {
     Command::new("curl")
-        .args(["-sSI", "-m", "15", "-o", "/dev/null", "https://repo.maven.apache.org/maven2/"])
+        .args([
+            "-sSI",
+            "-m",
+            "15",
+            "-o",
+            "/dev/null",
+            "https://repo.maven.apache.org/maven2/",
+        ])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -1649,7 +1795,12 @@ fn managed_java_home() -> Option<PathBuf> {
         .collect();
     versions.sort_by_key(|path| {
         path.file_name()
-            .map(|n| n.to_string_lossy().split(['.', '+']).filter_map(|p| p.parse::<u64>().ok()).collect::<Vec<_>>())
+            .map(|n| {
+                n.to_string_lossy()
+                    .split(['.', '+'])
+                    .filter_map(|p| p.parse::<u64>().ok())
+                    .collect::<Vec<_>>()
+            })
             .unwrap_or_default()
     });
     versions.pop()
@@ -1776,7 +1927,11 @@ pub fn render_report(results: &[ScenarioResult], context: &str) -> String {
                     "- **{}** {}{}: {}",
                     check.status.label(),
                     check.what,
-                    if check.unverified { " (unverified)" } else { "" },
+                    if check.unverified {
+                        " (unverified)"
+                    } else {
+                        ""
+                    },
                     check.detail
                 );
             }
@@ -1919,7 +2074,11 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
                 checks: Vec::new(),
                 notes: vec![format!(
                     "requires {} (not available)",
-                    missing.iter().map(|m| m.as_str()).collect::<Vec<_>>().join(", ")
+                    missing
+                        .iter()
+                        .map(|m| m.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 )],
                 duration: Duration::ZERO,
                 known_gap: None,
@@ -1941,7 +2100,11 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
         commit.trim()
     );
     let report = render_report(&results, &context);
-    if let Some(parent) = options.report.parent().filter(|p| !p.as_os_str().is_empty()) {
+    if let Some(parent) = options
+        .report
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+    {
         fs::create_dir_all(parent)?;
     }
     fs::write(&options.report, &report)?;
@@ -2005,7 +2168,12 @@ mod tests {
     fn ranges_parse_in_both_forms() {
         assert_eq!(
             Range::parse("9:9-9:19").unwrap(),
-            Range { line: 9, column: 9, end_line: 9, end_column: 19 }
+            Range {
+                line: 9,
+                column: 9,
+                end_line: 9,
+                end_column: 19
+            }
         );
         assert_eq!(Range::parse("3:1-12").unwrap().end_line, 3);
         assert!(Range::parse("3-4").is_err());
@@ -2014,10 +2182,20 @@ mod tests {
 
     #[test]
     fn markup_passes_partially_or_fails() {
-        let observed = markup(json!([item("error", (9, 9, 9, 19), "The method is undefined")]));
-        let exact = check_markup(&expect("9:9-9:19", "error", Some("The method is undefined")), Some(&observed));
+        let observed = markup(json!([item(
+            "error",
+            (9, 9, 9, 19),
+            "The method is undefined"
+        )]));
+        let exact = check_markup(
+            &expect("9:9-9:19", "error", Some("The method is undefined")),
+            Some(&observed),
+        );
         assert_eq!(exact.status, Status::Pass);
-        let other_message = check_markup(&expect("9:9-9:19", "error", Some("Cannot resolve method")), Some(&observed));
+        let other_message = check_markup(
+            &expect("9:9-9:19", "error", Some("Cannot resolve method")),
+            Some(&observed),
+        );
         assert_eq!(other_message.status, Status::Partial);
         assert!(other_message.detail.contains("The method is undefined"));
         let no_message = check_markup(&expect("9:9-9:19", "error", None), Some(&observed));
@@ -2026,23 +2204,40 @@ mod tests {
         assert_eq!(wrong_range.status, Status::Fail);
         let wrong_severity = check_markup(&expect("9:9-9:19", "warning", None), Some(&observed));
         assert_eq!(wrong_severity.status, Status::Fail);
-        assert_eq!(check_markup(&expect("9:9-9:19", "error", None), None).status, Status::Fail);
+        assert_eq!(
+            check_markup(&expect("9:9-9:19", "error", None), None).status,
+            Status::Fail
+        );
     }
 
     #[test]
     fn unused_code_is_a_partial_warning() {
         let mut unused = item("hint", (3, 1, 3, 20), "The import is never used");
         unused["unnecessary"] = json!(true);
-        let result = check_markup(&expect("3:1-3:20", "warning", Some("Unused import statement")), Some(&markup(json!([unused]))));
+        let result = check_markup(
+            &expect("3:1-3:20", "warning", Some("Unused import statement")),
+            Some(&markup(json!([unused]))),
+        );
         assert_eq!(result.status, Status::Partial);
     }
 
     #[test]
     fn no_markup_lists_offenders() {
-        let observed = markup(json!([item("error", (1, 1, 1, 2), "bad"), item("warning", (2, 1, 2, 2), "meh")]));
-        let none = NoMarkupExpect { when: None, severity: None, confidence: None };
+        let observed = markup(json!([
+            item("error", (1, 1, 1, 2), "bad"),
+            item("warning", (2, 1, 2, 2), "meh")
+        ]));
+        let none = NoMarkupExpect {
+            when: None,
+            severity: None,
+            confidence: None,
+        };
         assert_eq!(check_no_markup(&none, Some(&observed)).status, Status::Fail);
-        let weak = NoMarkupExpect { when: None, severity: Some("weak warning".into()), confidence: None };
+        let weak = NoMarkupExpect {
+            when: None,
+            severity: Some("weak warning".into()),
+            confidence: None,
+        };
         assert_eq!(check_no_markup(&weak, Some(&observed)).status, Status::Pass);
     }
 
@@ -2061,14 +2256,50 @@ mod tests {
             .iter()
             .map(|s| s.to_string())
             .collect();
-        assert_eq!(check_intentions(&intentions("contains", &["Import class"]), Some(&popup)).status, Status::Pass);
-        assert_eq!(check_intentions(&intentions("contains", &["Import class", "Add library"]), Some(&popup)).status, Status::Partial);
-        assert_eq!(check_intentions(&intentions("contains", &["Add library"]), Some(&popup)).status, Status::Fail);
-        assert_eq!(check_intentions(&intentions("ordered", &["Import class", "Rename reference"]), Some(&popup)).status, Status::Pass);
-        assert_eq!(check_intentions(&intentions("ordered", &["Rename reference", "Import class"]), Some(&popup)).status, Status::Partial);
-        assert_eq!(check_intentions(&intentions("exact", &["Import class"]), Some(&popup)).status, Status::Partial);
-        assert_eq!(check_intentions(&intentions("contains", &["re:^Create class"]), Some(&popup)).status, Status::Pass);
-        assert_eq!(check_intentions(&intentions("contains", &["x"]), None).status, Status::Fail);
+        assert_eq!(
+            check_intentions(&intentions("contains", &["Import class"]), Some(&popup)).status,
+            Status::Pass
+        );
+        assert_eq!(
+            check_intentions(
+                &intentions("contains", &["Import class", "Add library"]),
+                Some(&popup)
+            )
+            .status,
+            Status::Partial
+        );
+        assert_eq!(
+            check_intentions(&intentions("contains", &["Add library"]), Some(&popup)).status,
+            Status::Fail
+        );
+        assert_eq!(
+            check_intentions(
+                &intentions("ordered", &["Import class", "Rename reference"]),
+                Some(&popup)
+            )
+            .status,
+            Status::Pass
+        );
+        assert_eq!(
+            check_intentions(
+                &intentions("ordered", &["Rename reference", "Import class"]),
+                Some(&popup)
+            )
+            .status,
+            Status::Partial
+        );
+        assert_eq!(
+            check_intentions(&intentions("exact", &["Import class"]), Some(&popup)).status,
+            Status::Partial
+        );
+        assert_eq!(
+            check_intentions(&intentions("contains", &["re:^Create class"]), Some(&popup)).status,
+            Status::Pass
+        );
+        assert_eq!(
+            check_intentions(&intentions("contains", &["x"]), None).status,
+            Status::Fail
+        );
     }
 
     #[test]
@@ -2081,11 +2312,17 @@ mod tests {
             regex: Some(r"(?m)^import static".into()),
             confidence: None,
         };
-        assert_eq!(check_file(&expect, "A.java", Ok("import static a.B.c;\n")).status, Status::Pass);
+        assert_eq!(
+            check_file(&expect, "A.java", Ok("import static a.B.c;\n")).status,
+            Status::Pass
+        );
         let failed = check_file(&expect, "A.java", Ok("TODO\n"));
         assert_eq!(failed.status, Status::Fail);
         assert!(failed.detail.contains("missing"));
-        assert_eq!(check_file(&expect, "A.java", Err("gone")).status, Status::Fail);
+        assert_eq!(
+            check_file(&expect, "A.java", Err("gone")).status,
+            Status::Fail
+        );
     }
 
     #[test]
@@ -2101,7 +2338,10 @@ mod tests {
         let right = json!({"path": "A.java", "line": 3, "column": 5});
         assert_eq!(check_navigation(&expect, Some(&right)).status, Status::Pass);
         let line = json!({"path": "A.java", "line": 4, "column": 5});
-        assert_eq!(check_navigation(&expect, Some(&line)).status, Status::Partial);
+        assert_eq!(
+            check_navigation(&expect, Some(&line)).status,
+            Status::Partial
+        );
         let file = json!({"path": "B.java", "line": 3, "column": 5});
         assert_eq!(check_navigation(&expect, Some(&file)).status, Status::Fail);
     }
@@ -2109,22 +2349,52 @@ mod tests {
     #[test]
     fn usages_and_completion() {
         let usages = json!({"items": [{"path": "src/A.java"}, {"path": "src/B.java"}]});
-        let ok = UsagesExpect { when: None, count: Some(2), at_least: None, paths: vec!["B.java".into()], confidence: None };
+        let ok = UsagesExpect {
+            when: None,
+            count: Some(2),
+            at_least: None,
+            paths: vec!["B.java".into()],
+            confidence: None,
+        };
         assert_eq!(check_usages(&ok, Some(&usages)).status, Status::Pass);
-        let few = UsagesExpect { when: None, count: Some(3), at_least: None, paths: vec![], confidence: None };
+        let few = UsagesExpect {
+            when: None,
+            count: Some(3),
+            at_least: None,
+            paths: vec![],
+            confidence: None,
+        };
         assert_eq!(check_usages(&few, Some(&usages)).status, Status::Partial);
         let popup = json!({"items": [{"label": "toUpperCase()"}, {"label": "toLowerCase()"}]});
-        let wanted = CompletionExpect { when: None, contains: vec!["toUpperCase".into()], first: None, confidence: None };
+        let wanted = CompletionExpect {
+            when: None,
+            contains: vec!["toUpperCase".into()],
+            first: None,
+            confidence: None,
+        };
         assert_eq!(check_completion(&wanted, Some(&popup)).status, Status::Pass);
-        let missing = CompletionExpect { when: None, contains: vec!["isEmpty".into()], first: None, confidence: None };
-        assert_eq!(check_completion(&missing, Some(&popup)).status, Status::Fail);
+        let missing = CompletionExpect {
+            when: None,
+            contains: vec!["isEmpty".into()],
+            first: None,
+            confidence: None,
+        };
+        assert_eq!(
+            check_completion(&missing, Some(&popup)).status,
+            Status::Fail
+        );
     }
 
     #[test]
     fn steps_parse_ide_operations_and_scene_steps() {
         assert_eq!(
-            ScenarioStep::parse(&json!({"op": "typeAt", "line": 9, "column": 9, "text": "x"})).unwrap(),
-            ScenarioStep::TypeAt { line: 9, column: 9, text: "x".into() }
+            ScenarioStep::parse(&json!({"op": "typeAt", "line": 9, "column": 9, "text": "x"}))
+                .unwrap(),
+            ScenarioStep::TypeAt {
+                line: 9,
+                column: 9,
+                text: "x".into()
+            }
         );
         assert!(matches!(
             ScenarioStep::parse(&json!({"op": "key", "chord": "Escape"})).unwrap(),
@@ -2132,7 +2402,10 @@ mod tests {
         ));
         assert!(ScenarioStep::parse(&json!({"op": "caret", "line": 0, "column": 1})).is_err());
         assert!(ScenarioStep::parse(&json!({"op": "applyIntention"})).is_err());
-        assert!(ScenarioStep::parse(&json!({"op": "applyIntention", "title": "a", "index": 1})).is_err());
+        assert!(
+            ScenarioStep::parse(&json!({"op": "applyIntention", "title": "a", "index": 1}))
+                .is_err()
+        );
     }
 
     #[test]
@@ -2147,9 +2420,17 @@ mod tests {
             known_gap: None,
             intellij: "IntelliJ".into(),
         };
-        let results = vec![result(Status::Pass), result(Status::Partial), result(Status::Fail), result(Status::Skipped)];
+        let results = vec![
+            result(Status::Pass),
+            result(Status::Partial),
+            result(Status::Fail),
+            result(Status::Skipped),
+        ];
         let totals = Totals::of(&results);
-        assert_eq!((totals.pass, totals.partial, totals.fail, totals.skipped), (1, 1, 1, 1));
+        assert_eq!(
+            (totals.pass, totals.partial, totals.fail, totals.skipped),
+            (1, 1, 1, 1)
+        );
         assert!((totals.score() - 50.0).abs() < 1e-9);
         let report = render_report(&results, "context");
         assert!(report.contains("| `a/b` t | PARTIAL |"));
@@ -2170,13 +2451,18 @@ mod tests {
         assert!(selected(&scenario, &[]));
         assert!(selected(&scenario, &["java".into()]));
         assert!(selected(&scenario, &["unresolved-static-import".into()]));
-        assert!(selected(&scenario, &["java/unresolved-static-import".into()]));
+        assert!(selected(
+            &scenario,
+            &["java/unresolved-static-import".into()]
+        ));
         assert!(!selected(&scenario, &["kotlin".into()]));
     }
 
     #[test]
     fn checked_in_scenarios_are_valid() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(SCENARIOS_DIR);
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join(SCENARIOS_DIR);
         let scenarios = load_scenarios(&root).unwrap();
         assert!(scenarios.len() >= 30, "{} scenarios", scenarios.len());
         let mut ids = BTreeSet::new();
@@ -2199,7 +2485,8 @@ mod tests {
             for e in &expect.file {
                 if let Some(path) = &e.path {
                     assert!(
-                        scenario.dir.join("project").join(path).exists() || e.contains.len() + e.not_contains.len() > 0,
+                        scenario.dir.join("project").join(path).exists()
+                            || e.contains.len() + e.not_contains.len() > 0,
                         "{}: {path}",
                         scenario.id
                     );
@@ -2207,8 +2494,17 @@ mod tests {
             }
             for need in &scenario.spec.requires {
                 assert!(
-                    ["jdk", "jdtls", "gradle", "maven", "kotlin-lsp", "rust-analyzer", "bazelisk", "network"]
-                        .contains(&need.as_str()),
+                    [
+                        "jdk",
+                        "jdtls",
+                        "gradle",
+                        "maven",
+                        "kotlin-lsp",
+                        "rust-analyzer",
+                        "bazelisk",
+                        "network"
+                    ]
+                    .contains(&need.as_str()),
                     "{}: unknown requirement {need}",
                     scenario.id
                 );

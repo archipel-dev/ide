@@ -435,12 +435,20 @@ fn scenario_section(dir: &Path) -> String {
         return String::new();
     };
     let count = |key: &str| report["totals"][key].as_u64().unwrap_or(0);
-    let (pass, partial, fail, skipped) = (count("pass"), count("partial"), count("fail"), count("skipped"));
+    let (pass, partial, fail, skipped) = (
+        count("pass"),
+        count("partial"),
+        count("fail"),
+        count("skipped"),
+    );
     let ran = pass + partial + fail;
     let score = if ran == 0 {
         "-".to_owned()
     } else {
-        format!("{:.0}%", (pass as f64 + partial as f64 / 2.0) / ran as f64 * 100.0)
+        format!(
+            "{:.0}%",
+            (pass as f64 + partial as f64 / 2.0) / ran as f64 * 100.0
+        )
     };
     format!(
         "\n## Behavior scenarios\n\n\
@@ -744,7 +752,10 @@ mod tests {
         .unwrap();
         let section = scenario_section(&dir);
         assert!(section.contains("## Behavior scenarios"));
-        assert!(section.contains("| 9 | 2 | 2 | 4 | 1 | **38%** |"), "{section}");
+        assert!(
+            section.contains("| 9 | 2 | 2 | 4 | 1 | **38%** |"),
+            "{section}"
+        );
         let _ = fs::remove_dir_all(&root);
     }
 

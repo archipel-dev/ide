@@ -24,12 +24,27 @@
       "op": "waitAnalysis",
       "name": "typed",
       "timeoutMs": 120000
+    },
+    {
+      "op": "save"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "saved",
+      "timeoutMs": 60000
     }
   ],
   "expect": {
     "markup": [
       {
         "when": "typed",
+        "range": "1:23-1:31",
+        "severity": "error",
+        "message": "Unresolved reference: `HashMapp`",
+        "confidence": "unverified"
+      },
+      {
+        "when": "saved",
         "range": "1:23-1:31",
         "severity": "error",
         "message": "Unresolved reference: `HashMapp`",
@@ -42,5 +57,5 @@
     "action": "type use std::collections::HashMapp; at the top of the file",
     "notes": "the unresolved last path segment is marked"
   },
-  "knownGap": "rust-analyzer's own diagnostics are not shown while typing; errors appear only after a save (cargo check), IntelliJ marks them at once"
+  "knownGap": "the server's diagnostics appear only after a save (no pull diagnostics, no markup while typing); IntelliJ marks the error at once"
 }

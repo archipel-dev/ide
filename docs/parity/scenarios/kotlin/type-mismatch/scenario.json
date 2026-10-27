@@ -27,12 +27,27 @@
       "op": "waitAnalysis",
       "name": "typed",
       "timeoutMs": 120000
+    },
+    {
+      "op": "save"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "saved",
+      "timeoutMs": 60000
     }
   ],
   "expect": {
     "markup": [
       {
         "when": "typed",
+        "range": "5:18-5:24",
+        "severity": "error",
+        "message": "Initializer type mismatch: expected 'Int', actual 'String'.",
+        "confidence": "unverified"
+      },
+      {
+        "when": "saved",
         "range": "5:18-5:24",
         "severity": "error",
         "message": "Initializer type mismatch: expected 'Int', actual 'String'.",
@@ -44,5 +59,6 @@
     "version": "IntelliJ IDEA 2025.2 (Kotlin K2 mode)",
     "action": "type val n: Int = \"text\"",
     "notes": "K2 wording; K1 says 'Type mismatch: inferred type is String but Int was expected'"
-  }
+  },
+  "knownGap": "the server's diagnostics appear only after a save (no pull diagnostics, no markup while typing); IntelliJ marks the error at once"
 }

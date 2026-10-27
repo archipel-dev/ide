@@ -19,7 +19,7 @@
     },
     {
       "op": "typeAt",
-      "line": 8,
+      "line": 9,
       "column": 19,
       "text": "\nAssertions.assertThat(x).isEq"
     },

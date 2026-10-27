@@ -26,6 +26,14 @@
       "timeoutMs": 120000
     },
     {
+      "op": "save"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "saved",
+      "timeoutMs": 60000
+    },
+    {
       "op": "caret",
       "line": 3,
       "column": 14
@@ -47,6 +55,13 @@
     "markup": [
       {
         "when": "typed",
+        "range": "3:12-3:19",
+        "severity": "error",
+        "message": "Unresolved reference: `HashMap`",
+        "confidence": "unverified"
+      },
+      {
+        "when": "saved",
         "range": "3:12-3:19",
         "severity": "error",
         "message": "Unresolved reference: `HashMap`",
@@ -74,5 +89,5 @@
     "action": "type a HashMap declaration without a use, Alt+Enter on HashMap",
     "notes": "IntelliJ Rust reports an unresolved reference and offers the import; wording recalled"
   },
-  "knownGap": "rust-analyzer's own diagnostics are not shown while typing; errors appear only after a save (cargo check), IntelliJ marks them at once"
+  "knownGap": "the server's diagnostics appear only after a save (no pull diagnostics, no markup while typing); IntelliJ marks the error at once"
 }

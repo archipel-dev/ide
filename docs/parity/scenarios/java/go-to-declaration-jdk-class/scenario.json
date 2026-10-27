@@ -38,5 +38,6 @@
     "version": "IntelliJ IDEA 2025.2",
     "action": "Ctrl+B on String in the main signature",
     "notes": "opens String.java from the JDK sources, or the decompiled class when there is no src.zip; the tab name is recalled"
-  }
+  },
+  "knownGap": "jdtls resolves the declaration but the IDE opens only files of the project; classes of libraries and the JDK are not opened"
 }

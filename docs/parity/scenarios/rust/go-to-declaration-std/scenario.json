@@ -35,5 +35,6 @@
     "version": "RustRover 2025.2",
     "action": "Ctrl+B on String",
     "notes": "opens library/alloc/src/string.rs of the standard library sources (needs the rust-src component)"
-  }
+  },
+  "knownGap": "the IDE refuses to open library sources ('is outside the project; opening library sources is not supported yet')"
 }

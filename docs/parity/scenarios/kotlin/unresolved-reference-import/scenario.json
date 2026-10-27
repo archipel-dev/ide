@@ -29,6 +29,14 @@
       "timeoutMs": 120000
     },
     {
+      "op": "save"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "saved",
+      "timeoutMs": 60000
+    },
+    {
       "op": "caret",
       "line": 5,
       "column": 20
@@ -50,6 +58,13 @@
     "markup": [
       {
         "when": "typed",
+        "range": "5:17-5:26",
+        "severity": "error",
+        "message": "Unresolved reference 'LocalDate'.",
+        "confidence": "unverified"
+      },
+      {
+        "when": "saved",
         "range": "5:17-5:26",
         "severity": "error",
         "message": "Unresolved reference 'LocalDate'.",
@@ -82,5 +97,6 @@
     "version": "IntelliJ IDEA 2025.2 (Kotlin K2 mode)",
     "action": "type val today = LocalDate.now() without the import, Alt+Enter on LocalDate",
     "notes": "Kotlin K2 mode wording (K1 says 'Unresolved reference: LocalDate'); the quick fix text is recalled"
-  }
+  },
+  "knownGap": "the server's diagnostics appear only after a save (no pull diagnostics, no markup while typing); IntelliJ marks the error at once"
 }

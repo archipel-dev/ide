@@ -58,16 +58,8 @@ impl ToolchainServerResolver {
                 env: self.environment(&["jdk"]),
             });
         };
-        let java = self.toolchains.locate("jdk")?;
-        // jdtls needs Java 21+; known-older managed JDKs cannot run it.
-        if java
-            .version
-            .as_ref()
-            .and_then(|v| v.as_str().split(['.', '+']).next()?.parse::<u32>().ok())
-            .is_some_and(|major| major < 21)
-        {
-            return None;
-        }
+        // jdtls needs the highest Java its bundles declare (21 up to 1.62, 25 since 1.63).
+        let (java, java_home) = jdk_for(&self.toolchains, jdtls_required_java(home))?;
         let platform = self.toolchains.platform();
         let os = match platform.os {
             Os::Linux => "config_linux",
@@ -101,12 +93,80 @@ impl ToolchainServerResolver {
         ]
         .map(str::to_owned)
         .to_vec();
+        let mut env = self.environment(&["jdk"]);
+        env.retain(|(key, _)| key != "JAVA_HOME");
+        env.push(("JAVA_HOME".into(), java_home.display().to_string()));
         Some(ResolvedProgram {
-            program: java.executable,
+            program: java,
             args,
-            env: self.environment(&["jdk"]),
+            env,
         })
     }
+}
+
+/// Oldest Java the jdtls install at `home` runs on.
+fn jdtls_required_java(home: &Path) -> u32 {
+    archipel_ide_toolchains::osgi::required_java_major(&home.join("plugins"))
+        .unwrap_or(21)
+        .max(21)
+}
+
+/// Java major version of a JDK: managed installs record it, others have a `release` file.
+fn jdk_major(home: &Path, version: Option<&str>) -> Option<u32> {
+    let text = match version {
+        Some(version) => version.to_owned(),
+        None => {
+            let release = std::fs::read_to_string(home.join("release")).ok()?;
+            release
+                .lines()
+                .find_map(|line| line.strip_prefix("JAVA_VERSION="))?
+                .trim_matches('"')
+                .to_owned()
+        }
+    };
+    let mut parts = text.split(['.', '+', '-', '_']);
+    let first: u32 = parts.next()?.parse().ok()?;
+    if first == 1 {
+        return parts.next()?.parse().ok();
+    }
+    Some(first)
+}
+
+/// `java` and its home for a JDK of at least `required`: the located JDK when it is new
+/// enough (or its version is unknown), else the newest managed JDK that is.
+fn jdk_for(toolchains: &Toolchains, required: u32) -> Option<(PathBuf, PathBuf)> {
+    let located = toolchains.locate("jdk");
+    if let Some(java) = &located {
+        let major = jdk_major(&java.home, java.version.as_ref().map(|v| v.as_str()));
+        if major.is_none_or(|major| major >= required) {
+            return Some((java.executable.clone(), java.home.clone()));
+        }
+    }
+    let spec = toolchains.catalog().get("jdk")?.spec().clone();
+    let platform = toolchains.platform();
+    toolchains
+        .store()
+        .installed("jdk")
+        .into_iter()
+        .filter(|installed| {
+            jdk_major(&installed.path, Some(installed.version.as_str()))
+                .is_some_and(|major| major >= required)
+        })
+        .max_by(|a, b| a.version.cmp(&b.version))
+        .and_then(|installed| {
+            let java =
+                archipel_ide_toolchains::store::find_executable(&installed.path, &spec, &platform)?;
+            Some((java, installed.path))
+        })
+}
+
+/// The Java version a managed jdtls needs when no JDK at hand can run it, so setup can
+/// install one: jdtls 1.63 needs Java 25 while many systems still have a JDK 21.
+pub fn jdtls_needs_jdk(toolchains: &Toolchains) -> Option<u32> {
+    let jdtls = toolchains.locate("jdtls")?;
+    equinox_launcher(&jdtls.home.join("plugins"))?;
+    let required = jdtls_required_java(&jdtls.home);
+    jdk_for(toolchains, required).is_none().then_some(required)
 }
 
 /// `plugins/org.eclipse.equinox.launcher_<version>.jar` (not the per-OS fragments).
@@ -268,6 +328,85 @@ mod tests {
         assert_eq!(resolver.setup_component(taplo).as_deref(), Some("taplo"));
         let kotlin = registry.get("kotlin").unwrap().spec();
         assert_eq!(resolver.setup_component(kotlin), None);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn jdtls_needs_a_jdk_as_new_as_its_bundles_require() {
+        let dir =
+            std::env::temp_dir().join(format!("archipel-ide-tc-jdk25-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let jdtls = dir.join("jdtls");
+        std::fs::create_dir_all(jdtls.join("plugins")).unwrap();
+        std::fs::create_dir_all(jdtls.join("bin")).unwrap();
+        std::fs::create_dir_all(jdtls.join("config_linux")).unwrap();
+        std::fs::write(jdtls.join("bin/jdtls"), "").unwrap();
+        std::fs::write(
+            jdtls.join("plugins/org.eclipse.equinox.launcher_1.8.0.v1.jar"),
+            "",
+        )
+        .unwrap();
+        // jdtls 1.63: the main bundle still says 21, a platform bundle needs 25.
+        for (name, java) in [
+            ("org.eclipse.jdt.ls.core.jar", 21),
+            ("org.eclipse.core.resources.jar", 25),
+        ] {
+            let file = std::fs::File::create(jdtls.join("plugins").join(name)).unwrap();
+            let mut zip = zip::ZipWriter::new(file);
+            zip.start_file(
+                "META-INF/MANIFEST.MF",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+            let manifest = format!("Bundle-RequiredExecutionEnvironment: JavaSE-{java}\n");
+            std::io::Write::write_all(&mut zip, manifest.as_bytes()).unwrap();
+            zip.finish().unwrap();
+        }
+        let jdk = |name: &str, version: &str| {
+            let home = dir.join(name);
+            std::fs::create_dir_all(home.join("bin")).unwrap();
+            std::fs::write(home.join("bin/java"), "").unwrap();
+            std::fs::write(
+                home.join("release"),
+                format!("JAVA_VERSION=\"{version}\"\n"),
+            )
+            .unwrap();
+            home
+        };
+        let jdk21 = jdk("jdk21", "21.0.5");
+        let jdk25 = jdk("jdk25", "25.0.1");
+        let toolchains_with = |jdk: &Path| {
+            let mut catalog = Catalog::new();
+            catalog.register(provider(archipel_ide_toolchains::providers::jdtls::spec()));
+            catalog.register(provider(archipel_ide_toolchains::providers::jdk::spec()));
+            let mut toolchains = Toolchains::new(catalog, ToolchainStore::new(dir.join("store")))
+                .with_platform(Platform::parse("linux", "x86_64").unwrap())
+                .with_environment(Default::default(), BTreeMap::new());
+            let settings = ToolchainSettings::parse(
+                &format!(
+                    "[components.jdtls]\npath = {:?}\n[components.jdk]\npath = {:?}\n",
+                    jdtls.display().to_string(),
+                    jdk.display().to_string()
+                ),
+                Path::new("toolchains.toml"),
+            )
+            .unwrap();
+            toolchains.apply_project(None, settings);
+            toolchains
+        };
+        let registry = ServerRegistry::default();
+        let spec = registry.get("jdtls").unwrap().spec();
+
+        // A JDK 21 cannot start it: nothing is launched, and setup asks for a JDK 25.
+        let old = toolchains_with(&jdk21);
+        assert_eq!(jdtls_needs_jdk(&old), Some(25));
+        assert!(ToolchainServerResolver::new(old).resolve(spec).is_none());
+
+        // A JDK 25 runs it.
+        let new = toolchains_with(&jdk25);
+        assert_eq!(jdtls_needs_jdk(&new), None);
+        let resolved = ToolchainServerResolver::new(new).resolve(spec).unwrap();
+        assert_eq!(resolved.program, jdk25.join("bin/java"));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

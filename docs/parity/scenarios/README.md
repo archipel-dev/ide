@@ -75,9 +75,14 @@ Toolchain component ids (`jdk`, `jdtls`, `gradle`, `maven`, `kotlin-lsp`, `rust-
 A scenario whose requirements are missing is `skipped`, not failed. `--install-toolchains`
 installs what is missing through the same store the IDE uses (`toolchain.install`).
 
-When `jdtls` is required the runner starts the IDEs with `JAVA_HOME` set to the newest JDK of
-the toolchain store (or `$ARCHIPEL_SCENARIO_JAVA_HOME`): the IDE prefers `JAVA_HOME` over its
-managed JDK and a current jdtls needs a newer JDK than most machines have.
+Environment of the runner: `ARCHIPEL_SCENARIO_JAVA_HOME` sets the JDK the IDEs run on (the IDE
+prefers `JAVA_HOME` over its managed JDK; set it when the machine's JDK is older than the
+language server needs), `ARCHIPEL_SCENARIO_<COMPONENT>_VERSION` (for example
+`ARCHIPEL_SCENARIO_JDTLS_VERSION=1.53.0`) picks the version `--install-toolchains` installs,
+`ARCHIPEL_SCENARIO_HOLD_SECS=600` keeps each IDE alive after its scenario so it can be
+inspected with `archipel-cli ui --socket …` (the socket is printed), and
+`ARCHIPEL_SCENARIO_KEEP_WORK=1` keeps the fixture copy and language-server workspace (they are
+deleted after each scenario to save disk; the app log and `observed.json` stay).
 
 ### steps
 

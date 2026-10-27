@@ -1711,7 +1711,11 @@ fn probe(
                         &mut client,
                         &Request::Execute {
                             command: "toolchain.install".into(),
-                            args: json!({"component": need, "wait": true}),
+                            args: json!({
+                                "component": need,
+                                "version": install_version(need),
+                                "wait": true
+                            }),
                         },
                     );
                     match installed {
@@ -1730,21 +1734,6 @@ fn probe(
             }
         };
         available.insert(need.clone(), have);
-    }
-    // A current jdtls needs a newer JDK than most machines have, and the IDE prefers
-    // `JAVA_HOME` over its managed JDK: make sure the store has one to point `JAVA_HOME` at.
-    if install && needs.contains("jdtls") && managed_java_home().is_none() {
-        println!("installing a managed JDK for jdtls …");
-        let installed = send(
-            &mut client,
-            &Request::Execute {
-                command: "toolchain.install".into(),
-                args: json!({"component": "jdk", "wait": true}),
-            },
-        );
-        if let Err(error) = installed {
-            println!("  could not install a JDK: {error:#}");
-        }
     }
     Ok(available)
 }
@@ -1781,29 +1770,20 @@ fn network_available() -> bool {
         .is_ok_and(|status| status.success())
 }
 
-/// The newest JDK the toolchain store installed. The IDE prefers `JAVA_HOME` over its
-/// managed JDK, and a language server release may need a newer JDK than the machine's.
-fn managed_java_home() -> Option<PathBuf> {
-    if let Some(home) = std::env::var_os("ARCHIPEL_SCENARIO_JAVA_HOME") {
-        return Some(PathBuf::from(home));
-    }
-    let root = archipel_ide_toolchains::default_root().join("jdk");
-    let mut versions: Vec<PathBuf> = fs::read_dir(root)
-        .ok()?
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.join("bin").is_dir())
-        .collect();
-    versions.sort_by_key(|path| {
-        path.file_name()
-            .map(|n| {
-                n.to_string_lossy()
-                    .split(['.', '+'])
-                    .filter_map(|p| p.parse::<u64>().ok())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default()
-    });
-    versions.pop()
+/// `$ARCHIPEL_SCENARIO_JAVA_HOME`: the JDK the IDEs run on. The IDE prefers `JAVA_HOME` over
+/// its managed JDK, so set it when the machine's JDK is older than the language server needs.
+fn java_home_override() -> Option<PathBuf> {
+    std::env::var_os("ARCHIPEL_SCENARIO_JAVA_HOME").map(PathBuf::from)
+}
+
+/// `$ARCHIPEL_SCENARIO_<COMPONENT>_VERSION` (`ARCHIPEL_SCENARIO_JDTLS_VERSION=1.53.0`): the
+/// version `--install-toolchains` installs instead of the latest.
+fn install_version(component: &str) -> Option<String> {
+    let key = format!(
+        "ARCHIPEL_SCENARIO_{}_VERSION",
+        component.to_ascii_uppercase().replace('-', "_")
+    );
+    std::env::var(key).ok().filter(|v| !v.is_empty())
 }
 
 // ---------------------------------------------------------------------------
@@ -2050,9 +2030,7 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
     } else {
         probe(&env, &needs, options.install)?
     };
-    if needs.contains("jdtls") {
-        env.java_home = managed_java_home();
-    }
+    env.java_home = java_home_override();
 
     let mut results = Vec::new();
     for scenario in scenarios {

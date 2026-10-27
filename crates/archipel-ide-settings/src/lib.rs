@@ -18,7 +18,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 
 pub use draft::SettingsDraft;
-pub use intellij::{ADVANCED_SETTINGS_PAGE, TOP_LEVEL_ORDER, ids};
+pub use intellij::{
+    ADVANCED_SETTINGS_PAGE, AUTOSAVE_IDLE_DEFAULT, AUTOSAVE_IDLE_MAX, AUTOSAVE_IDLE_MIN,
+    TOP_LEVEL_ORDER, ids,
+};
 pub use store::{SettingsStore, default_config_dir};
 
 /// Where a setting (or page) is stored.
@@ -136,6 +139,9 @@ pub struct SettingDef {
     pub scope: Scope,
     /// Changing the value only takes effect after a restart.
     pub requires_restart: bool,
+    /// An integer outside its range is clamped into it instead of being rejected (the idle
+    /// autosave timeout, PLAT-SAVE-010).
+    pub clamps: bool,
 }
 
 impl SettingDef {
@@ -156,7 +162,14 @@ impl SettingDef {
             default,
             scope: Scope::Application,
             requires_restart: false,
+            clamps: false,
         }
+    }
+
+    /// Clamps out-of-range integers into the range instead of rejecting them.
+    pub fn clamped(mut self) -> Self {
+        self.clamps = true;
+        self
     }
 
     pub fn group(mut self, group: impl Into<String>) -> Self {
@@ -188,7 +201,9 @@ impl SettingDef {
         match (&self.kind, value) {
             (SettingKind::Bool, SettingValue::Bool(_)) => Ok(value.clone()),
             (SettingKind::Int { min, max }, SettingValue::Int(number)) => {
-                if number < min || number > max {
+                if self.clamps {
+                    Ok(SettingValue::Int((*number).clamp(*min, *max)))
+                } else if number < min || number > max {
                     Err(invalid(format!("must be between {min} and {max}")))
                 } else {
                     Ok(value.clone())

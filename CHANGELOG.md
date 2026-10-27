@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.3](https://github.com/archipel-dev/ide/compare/v0.2.2...v0.2.3) (2026-10-27)
+
+
+### Features
+
+* **core:** save all documents before run, build and VCS operations; idle autosave and safe write ([#66](https://github.com/archipel-dev/ide/issues/66)) ([9d5d2e4](https://github.com/archipel-dev/ide/commit/9d5d2e4a61e8fba008ff8c8ea3ccf23f5c2c4bee))
+
+
+### Bug Fixes
+
+* **core:** "libraries" in the project import status ([#67](https://github.com/archipel-dev/ide/issues/67)) ([e14c0e6](https://github.com/archipel-dev/ide/commit/e14c0e641adc51c19780f38c53e393b693d30c6a))
+
 ## [0.2.2](https://github.com/archipel-dev/ide/compare/v0.2.1...v0.2.2) (2026-10-27)
 
 

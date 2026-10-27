@@ -104,7 +104,7 @@ impl IdeState {
     /// Per-frame daemon driver; returns true when highlights changed.
     pub fn poll_daemon(&mut self, events: &[AnalysisEvent]) -> bool {
         self.ensure_inspection_settings();
-        self.poll_java();
+        self.poll_language_activities();
         let Some(service) = self.daemon_service() else {
             return false;
         };

@@ -248,6 +248,9 @@ fn register_core_services(application: &Application) {
         application.register_service(ServiceDescriptor::of_default::<ActionManager>()),
         application.register_service(ServiceDescriptor::of_default::<SearchEverywhereManager>()),
         application.register_service(ServiceDescriptor::new(|application: &Application| {
+            archipel_ide_langpacks::LanguagePacks::new(application)
+        })),
+        application.register_service(ServiceDescriptor::new(|application: &Application| {
             Notifications::new(application.message_bus().clone())
         })),
         application.register_project_service(ServiceDescriptor::of_default::<
@@ -342,6 +345,8 @@ pub struct Platform {
     project: Option<Project>,
     reactions: Reactions,
     detached: Detached,
+    /// Language extensions changed since the last `IdeState::sync_language_packs`.
+    packs_dirty: crate::language_packs::PacksDirty,
 }
 
 impl Default for Platform {
@@ -377,11 +382,14 @@ impl Default for Platform {
             }),
         );
         let detached = Detached::new(&application, &reactions);
+        // The built-in language packs, installed once at start (static registration).
+        let packs_dirty = crate::language_packs::install_language_packs(&application);
         Self {
             application,
             project: None,
             reactions,
             detached,
+            packs_dirty,
         }
     }
 }
@@ -399,6 +407,10 @@ impl Platform {
 
     pub fn project(&self) -> Option<&Project> {
         self.project.as_ref()
+    }
+
+    pub(crate) fn packs_dirty(&self) -> &crate::language_packs::PacksDirty {
+        &self.packs_dirty
     }
 
     /// Closes the current project (`project_closing`, dispose, `project_closed`) and opens
@@ -585,7 +597,9 @@ impl IdeState {
         let mut tools = tools.write();
         tools.reload(project_root);
         if let (Some(root), Some(requirements)) = (project_root, self.toolchain_requirements()) {
-            requirements.write().reload(root, &tools);
+            let detected =
+                crate::language_packs::detect_requirements(self.application().extensions(), root);
+            requirements.write().reload(detected, &tools);
         }
     }
 

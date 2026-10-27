@@ -8,13 +8,7 @@ use std::path::{Path, PathBuf};
 
 /// The toolchain component providing a language server, by server id.
 pub fn component_for_server(server: &str) -> Option<&'static str> {
-    match server {
-        "rust-analyzer" => Some("rust-analyzer"),
-        "jdtls" => Some("jdtls"),
-        "kotlin" => Some("kotlin-lsp"),
-        "taplo" => Some("taplo"),
-        _ => None,
-    }
+    archipel_ide_lsp::server_component(server)
 }
 
 /// [`ProgramResolver`] over a snapshot of the toolchain settings and pins.

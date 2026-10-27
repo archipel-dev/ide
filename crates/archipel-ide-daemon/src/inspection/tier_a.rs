@@ -1140,19 +1140,26 @@ pub fn register(registry: &mut ServiceRegistry) {
         any("comment-suppressor"),
         Arc::new(CommentSuppressor),
     );
-    registry.register::<dyn InspectionSuppressor>(
-        Registration::new(
-            "java-suppress-warnings",
-            archipel_ide_language::LanguageId("java"),
-        )
-        .dumb_aware(true)
-        .order(Order::First),
-        Arc::new(JavaSuppressor),
-    );
-    registry.register::<dyn InspectionSuppressor>(
-        Registration::new("rust-allow", archipel_ide_language::LanguageId("rust"))
-            .dumb_aware(true)
-            .order(Order::First),
-        Arc::new(RustSuppressor),
-    );
+}
+
+/// The language-native suppressors (Java `@SuppressWarnings`, Rust `#[allow]`) the way their
+/// language packs register them (`archipel-ide-langpacks`). The daemon's own test harness has
+/// no packs, so it calls this to get the same registrations.
+pub fn register_native_suppressors(registry: &mut ServiceRegistry) {
+    for (id, language, suppressor) in native_suppressors() {
+        registry.register::<dyn InspectionSuppressor>(
+            Registration::new(id, archipel_ide_language::LanguageId(language))
+                .dumb_aware(true)
+                .order(Order::First),
+            suppressor,
+        );
+    }
+}
+
+/// `(registration id, language id, suppressor)` of the language-native suppressors.
+pub fn native_suppressors() -> Vec<(&'static str, &'static str, Arc<dyn InspectionSuppressor>)> {
+    vec![
+        ("java-suppress-warnings", "java", Arc::new(JavaSuppressor)),
+        ("rust-allow", "rust", Arc::new(RustSuppressor)),
+    ]
 }

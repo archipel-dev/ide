@@ -58,6 +58,9 @@ type Subscriber = Box<dyn FnMut(&AnalysisEvent) + Send>;
 /// The analysis host plus its synchronization with `IdeState::documents`.
 pub struct AnalysisServices {
     pub host: AnalysisHost,
+    /// The platform's own services (daemon, indexes); the host's registry is this plus what the
+    /// language packs register ([`AnalysisServices::apply_extensions`]).
+    base_registry: archipel_ide_analysis::ServiceRegistry,
     /// Indexes, dumb mode and the TODO index (WP2); driven by `poll_analysis`.
     pub index: archipel_ide_index::IndexService,
     /// Directory the persistent indexes live in (`None`: memory only); set by
@@ -81,12 +84,14 @@ impl Default for AnalysisServices {
 
 impl AnalysisServices {
     pub fn new(config: HostConfig) -> Self {
+        let base_registry = crate::analysis_modules::service_registry();
         Self {
             host: AnalysisHost::new(
                 config,
                 Arc::new(archipel_ide_analysis::vfs::DiskVfs),
-                crate::analysis_modules::service_registry(),
+                base_registry.clone(),
             ),
+            base_registry,
             synced: HashMap::new(),
             index: archipel_ide_index::IndexService::new(archipel_ide_index::IndexConfig::default()),
             index_cache_dir: None,
@@ -95,6 +100,20 @@ impl AnalysisServices {
             subscribers: Vec::new(),
             last_events: 0,
         }
+    }
+
+    /// Rebuilds the host's service registry from the base services and the language
+    /// extensions (a pack was installed or removed, PLAT-LANG-005).
+    pub(crate) fn apply_extensions(
+        &mut self,
+        extensions: &archipel_ide_platform::ExtensionRegistry,
+    ) {
+        let registry = archipel_ide_analysis::langext::registry_from_extensions(
+            extensions,
+            self.base_registry.clone(),
+        );
+        self.host.set_registry(registry);
+        self.host.apply(Change::SettingsChanged);
     }
 
     /// Calls `f` for every analysis event (daemon, indexes, code vision).
@@ -114,6 +133,7 @@ impl IdeState {
     /// changed. Cheap when nothing was typed.
     pub fn poll_analysis(&mut self) -> bool {
         let now = Instant::now();
+        self.sync_language_packs();
         self.sync_index_project();
         let services = &mut self.analysis;
         let mut open: HashSet<FileId> = HashSet::with_capacity(self.documents.len());

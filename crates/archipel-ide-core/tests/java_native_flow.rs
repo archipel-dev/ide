@@ -120,11 +120,8 @@ fn unimported_assert_that_gets_the_native_error_and_the_static_import() {
         .execute("code.applyAlert", &mut state, json!({"index": 0}))
         .unwrap();
     // Several candidates: the chooser.
-    let chooser = state
-        .java_service()
-        .unwrap()
-        .chooser()
-        .expect("the chooser opened");
+    let (provider, chooser) = state.import_chooser().expect("the chooser opened");
+    assert_eq!(provider, "java");
     assert_eq!(chooser.title, "Method to Import");
     assert_eq!(chooser.rows[0].label, "Assertions.assertThat");
     assert_eq!(

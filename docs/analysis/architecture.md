@@ -83,7 +83,11 @@ through the traits of `archipel-ide-analysis`.
    registration order). Registrations carry `dumb_aware`; `all_available(lang, dumb)` filters
    while indexes are not ready. Every `LanguageDef` has a `services` hook; generic tree-sitter
    services (folding, structure, extend selection, braces, interface hash) are registered for
-   "any".
+   "any". Languages contribute through the platform's `ExtensionRegistry` instead
+   (`analysis::langext`: one language-bound extension point per trait, `LanguagePack`s in
+   `archipel-ide-langpacks`); the host rebuilds this registry from the extensions whenever a pack
+   is installed or removed (`registry_from_extensions`), see
+   `docs/architecture/language-packs.md`. The `LanguageDef::services` hook is unused.
 10. **Edits as data.** Fixes, intentions and refactorings return a `ModCommand` (sealed enum:
     `UpdateFile { file, edits, expected_rev }` with optimistic concurrency, create/delete/move,
     navigate, rename, template, conflicts, choose, message, ...). `preview` applies the edits to a

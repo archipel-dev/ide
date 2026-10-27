@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 archipel-ide-compat = { path = "../archipel-ide-compat" }
+archipel-ide-platform = { path = "../archipel-ide-platform" }
 lsp-types.workspace = true
 serde.workspace = true
 serde_json.workspace = true

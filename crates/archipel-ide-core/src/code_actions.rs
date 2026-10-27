@@ -372,8 +372,7 @@ impl IdeState {
         match command {
             ModCommand::Nothing => Ok(String::new()),
             ModCommand::ChooseFrom { title, rows } => {
-                let service = self.java_service().ok_or("no chooser available")?;
-                service.open_chooser(title.clone(), rows.clone());
+                self.open_import_chooser(title.clone(), rows.clone())?;
                 Ok(String::new())
             }
             ModCommand::Composite(parts) => {

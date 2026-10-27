@@ -1,0 +1,22 @@
+[package]
+name = "archipel-ide-langpacks"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Language packs: the built-in languages (Java, Rust, Kotlin, TOML, Markdown, Bazel) as bundles of extensions registered on the language extension points"
+
+[dependencies]
+archipel-ide-analysis = { path = "../archipel-ide-analysis" }
+archipel-ide-daemon = { path = "../archipel-ide-daemon" }
+archipel-ide-java = { path = "../archipel-ide-java" }
+archipel-ide-language = { path = "../archipel-ide-language" }
+archipel-ide-lsp = { path = "../archipel-ide-lsp" }
+archipel-ide-platform = { path = "../archipel-ide-platform" }
+archipel-ide-projectmodel = { path = "../archipel-ide-projectmodel" }
+archipel-ide-toolchains = { path = "../archipel-ide-toolchains" }
+parking_lot.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+tree-sitter.workspace = true

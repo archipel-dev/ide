@@ -32,6 +32,7 @@ pub mod inspect;
 pub mod intention;
 pub mod interface;
 pub mod job;
+pub mod langext;
 pub mod modcommand;
 pub mod provider;
 pub mod refactor;

@@ -249,6 +249,14 @@ mod tests {
             }
         );
         assert_eq!(
+            parse(&["wait", "analysis", "--timeout", "90000"]).unwrap(),
+            Request::Wait {
+                until: WaitCondition::Analysis,
+                text: None,
+                timeout_ms: Some(90_000)
+            }
+        );
+        assert_eq!(
             parse(&["raw", r#"{"op":"key","chord":"Escape"}"#]).unwrap(),
             Request::Key {
                 chord: "Escape".into()

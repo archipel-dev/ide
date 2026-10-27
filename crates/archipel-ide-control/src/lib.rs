@@ -501,6 +501,16 @@ mod tests {
             serde_json::from_str(r#"{"op":"wait","until":"text","text":"fn","timeoutMs":250}"#)
                 .unwrap();
         assert_eq!(wait.wait_timeout(), Duration::from_millis(250));
+        let analysis: Request =
+            serde_json::from_str(r#"{"op":"wait","until":"analysis","timeoutMs":90000}"#).unwrap();
+        assert_eq!(
+            analysis,
+            Request::Wait {
+                until: WaitCondition::Analysis,
+                text: None,
+                timeout_ms: Some(90_000)
+            }
+        );
         assert_eq!(
             serde_json::to_value(Request::Key {
                 chord: "Escape".into()

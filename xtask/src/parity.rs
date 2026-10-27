@@ -732,6 +732,23 @@ mod tests {
     }
 
     #[test]
+    fn dashboard_summarizes_the_scenario_baseline_when_there_is_one() {
+        let root = temp_root("scenarios");
+        let dir = root.join("docs/parity");
+        assert_eq!(scenario_section(&dir), "");
+        fs::create_dir_all(dir.join("scenarios")).unwrap();
+        fs::write(
+            dir.join("scenarios/REPORT.json"),
+            r#"{"totals": {"pass": 2, "partial": 2, "fail": 4, "skipped": 1}}"#,
+        )
+        .unwrap();
+        let section = scenario_section(&dir);
+        assert!(section.contains("## Behavior scenarios"));
+        assert!(section.contains("| 9 | 2 | 2 | 4 | 1 | **38%** |"), "{section}");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn repository_inventory_is_valid() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
         let areas = load_areas(&root.join("docs/parity")).unwrap();

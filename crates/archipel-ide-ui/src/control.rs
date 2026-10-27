@@ -689,7 +689,19 @@ mod tests {
         assert_eq!(state["project"], Value::Null);
         assert_eq!(state["tabs"], json!([]));
         assert_eq!(state["popups"]["searchEverywhere"], Value::Null);
+        assert_eq!(state["popups"]["intentions"], false);
+        assert_eq!(state["popups"]["rename"], false);
         assert_eq!(state["focus"], Value::Null);
+    }
+
+    #[test]
+    fn intention_popup_and_rename_count_as_popups() {
+        let mut app = IdeApp::with_update_check(None, Vec::new(), false);
+        let ctx = egui::Context::default();
+        assert!(!app.popup_visible(&ctx));
+        app.state.code_actions.popup = true;
+        assert!(app.popup_visible(&ctx));
+        assert_eq!(app.control_state(&ctx)["popups"]["intentions"], true);
     }
 
     #[test]

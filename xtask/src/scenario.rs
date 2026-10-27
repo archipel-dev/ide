@@ -1592,6 +1592,21 @@ fn probe(env: &Environment, needs: &BTreeSet<String>, install: bool) -> Result<B
         };
         available.insert(need.clone(), have);
     }
+    // A current jdtls needs a newer JDK than most machines have, and the IDE prefers
+    // `JAVA_HOME` over its managed JDK: make sure the store has one to point `JAVA_HOME` at.
+    if install && needs.contains("jdtls") && managed_java_home().is_none() {
+        println!("installing a managed JDK for jdtls …");
+        let installed = send(
+            &mut client,
+            &Request::Execute {
+                command: "toolchain.install".into(),
+                args: json!({"component": "jdk", "wait": true}),
+            },
+        );
+        if let Err(error) = installed {
+            println!("  could not install a JDK: {error:#}");
+        }
+    }
     Ok(available)
 }
 

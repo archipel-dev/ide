@@ -1,0 +1,93 @@
+{
+  "title": "Import suggested for an unresolved HashMap",
+  "requires": [
+    "rust-analyzer"
+  ],
+  "open": "src/main.rs",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 240000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 240000
+    },
+    {
+      "op": "typeAt",
+      "line": 2,
+      "column": 19,
+      "text": "\nlet m: HashMap<String, i32> = HashMap::new();"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "typed",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "save"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "saved",
+      "timeoutMs": 60000
+    },
+    {
+      "op": "caret",
+      "line": 3,
+      "column": 14
+    },
+    {
+      "op": "altEnter"
+    },
+    {
+      "op": "applyIntention",
+      "title": "re:^Import `std::collections::HashMap`"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "fixed",
+      "timeoutMs": 20000
+    }
+  ],
+  "expect": {
+    "markup": [
+      {
+        "when": "typed",
+        "range": "3:12-3:19",
+        "severity": "error",
+        "message": "Unresolved reference: `HashMap`",
+        "confidence": "unverified"
+      },
+      {
+        "when": "saved",
+        "range": "3:12-3:19",
+        "severity": "error",
+        "message": "Unresolved reference: `HashMap`",
+        "confidence": "unverified"
+      }
+    ],
+    "intentions": [
+      {
+        "items": [
+          "Import `std::collections::HashMap`"
+        ],
+        "confidence": "unverified"
+      }
+    ],
+    "file": [
+      {
+        "contains": [
+          "use std::collections::HashMap;"
+        ]
+      }
+    ]
+  },
+  "intellij": {
+    "version": "RustRover 2025.2",
+    "action": "type a HashMap declaration without a use, Alt+Enter on HashMap",
+    "notes": "IntelliJ Rust reports an unresolved reference and offers the import; wording recalled"
+  },
+  "knownGap": "the server's diagnostics appear only after a save (no pull diagnostics, no markup while typing); IntelliJ marks the error at once"
+}

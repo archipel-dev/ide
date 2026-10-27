@@ -1,0 +1,653 @@
+{
+  "scenarios": [
+    {
+      "checks": [],
+      "id": "bazel/spring-boot-open-sync",
+      "seconds": 0,
+      "status": "skipped"
+    },
+    {
+      "checks": [
+        {
+          "detail": "popup: subSequence, substring, substring",
+          "status": "partial",
+          "unverified": true,
+          "what": "completion substring, subSequence"
+        }
+      ],
+      "id": "java/completion-jdk-method",
+      "seconds": 30,
+      "status": "partial"
+    },
+    {
+      "checks": [
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "completion isEqualTo, isEqualByComparingTo"
+        }
+      ],
+      "id": "java/completion-library-method",
+      "seconds": 30,
+      "status": "pass"
+    },
+    {
+      "checks": [
+        {
+          "detail": "right range and severity, message is \"Helper cannot be resolved to a type\"",
+          "status": "partial",
+          "unverified": false,
+          "what": "markup error 6:9-6:15 \"Cannot resolve symbol 'Helper'\""
+        },
+        {
+          "detail": "right range and severity, message is \"Helper cannot be resolved to a type\"",
+          "status": "partial",
+          "unverified": false,
+          "what": "markup error 6:29-6:35 \"Cannot resolve symbol 'Helper'\""
+        },
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "Alt+Enter contains: Create class 'Helper'"
+        }
+      ],
+      "id": "java/create-class-quickfix",
+      "seconds": 29,
+      "status": "partial"
+    },
+    {
+      "checks": [
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "find usages"
+        }
+      ],
+      "id": "java/find-usages-method",
+      "seconds": 25,
+      "status": "pass"
+    },
+    {
+      "checks": [
+        {
+          "detail": "landed in src/main/java/demo/Main.java at 4:31; wrong file",
+          "status": "fail",
+          "unverified": true,
+          "what": "go to declaration String"
+        }
+      ],
+      "id": "java/go-to-declaration-jdk-class",
+      "seconds": 70,
+      "status": "fail"
+    },
+    {
+      "checks": [
+        {
+          "detail": "landed in src/test/java/demo/LibTest.java at 9:11; wrong file",
+          "status": "fail",
+          "unverified": true,
+          "what": "go to declaration Assertions"
+        }
+      ],
+      "id": "java/go-to-declaration-library-class",
+      "seconds": 73,
+      "status": "fail"
+    },
+    {
+      "checks": [
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "go to declaration src/main/java/demo/Greeter.java"
+        }
+      ],
+      "id": "java/go-to-declaration-project-class",
+      "seconds": 24,
+      "status": "pass"
+    },
+    {
+      "checks": [
+        {
+          "detail": "no markup at 6:5-6:6; markup seen: error 4:9-4:21 \"This method must return a result of type int\"",
+          "status": "fail",
+          "unverified": false,
+          "what": "markup error 6:5-6:6 \"Missing return statement\""
+        },
+        {
+          "detail": "popup: Add Javadoc comment | Change modifiers to final where possible | Generate toString() | Organize imports",
+          "status": "fail",
+          "unverified": true,
+          "what": "Alt+Enter contains: Add return statement | re:^Make 'twice\\(\\)' return 'void'"
+        }
+      ],
+      "id": "java/missing-return",
+      "seconds": 24,
+      "status": "fail"
+    },
+    {
+      "checks": [
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "no warning markup"
+        },
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "file src/main/java/demo/Holder.java"
+        }
+      ],
+      "id": "java/optimize-imports",
+      "seconds": 23,
+      "status": "pass"
+    },
+    {
+      "checks": [
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "file src/main/java/demo/Total.java"
+        }
+      ],
+      "id": "java/rename-local-variable",
+      "seconds": 26,
+      "status": "pass"
+    },
+    {
+      "checks": [
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "file src/main/java/demo/Greeter.java"
+        },
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "file src/main/java/demo/Main.java"
+        }
+      ],
+      "id": "java/rename-method",
+      "seconds": 22,
+      "status": "pass"
+    },
+    {
+      "checks": [
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "no error markup"
+        },
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "no error markup"
+        },
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": true,
+          "what": "gradle.refresh /tasks"
+        }
+      ],
+      "id": "java/spring-gradle-open-sync",
+      "seconds": 164,
+      "status": "pass"
+    },
+    {
+      "checks": [
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "no error markup"
+        }
+      ],
+      "id": "java/spring-maven-open-sync",
+      "seconds": 49,
+      "status": "pass"
+    },
+    {
+      "checks": [
+        {
+          "detail": "right range and severity, message is \"Syntax error, insert \";\" to complete LocalVariableDeclarationStatement\"",
+          "status": "partial",
+          "unverified": true,
+          "what": "markup error 6:17-6:18 \"';' expected\""
+        }
+      ],
+      "id": "java/syntax-error-missing-semicolon",
+      "seconds": 28,
+      "status": "partial"
+    },
+    {
+      "checks": [
+        {
+          "detail": "right range and severity, message is \"Type mismatch: cannot convert from String to int\"",
+          "status": "partial",
+          "unverified": true,
+          "what": "markup error 6:21-6:28 \"Incompatible types. Found: 'java.lang.String', required: 'int'\""
+        },
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "no error markup"
+        },
+        {
+          "detail": "popup: Change type of 'count' to 'String' | Add Javadoc comment | Add final modifier for 'count' | Change modifiers to final where possible | Generate toString() | Organize imports",
+          "status": "fail",
+          "unverified": true,
+          "what": "Alt+Enter contains: Change variable 'count' type to 'String'"
+        },
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "file src/main/java/demo/Counter.java"
+        }
+      ],
+      "id": "java/type-mismatch",
+      "seconds": 33,
+      "status": "fail"
+    },
+    {
+      "checks": [
+        {
+          "detail": "right range and severity, message is \"Unhandled exception type FileNotFoundException\"",
+          "status": "partial",
+          "unverified": false,
+          "what": "markup error 8:9-8:32 \"Unhandled exception: java.io.FileNotFoundException\""
+        },
+        {
+          "detail": "1 of 2 items; popup: Add @SuppressWarnings 'resource' to 'open()' | Add throws declaration | Ignore compiler problem(s) | Surround with try/catch | Add Javadoc comment | Generate toString() | Organize imports",
+          "status": "partial",
+          "unverified": false,
+          "what": "Alt+Enter contains: Add exception to method signature | Surround with try/catch"
+        },
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "file src/main/java/demo/Opener.java"
+        }
+      ],
+      "id": "java/unhandled-exception",
+      "seconds": 27,
+      "status": "partial"
+    },
+    {
+      "checks": [
+        {
+          "detail": "right range and severity, message is \"List cannot be resolved to a type\"",
+          "status": "partial",
+          "unverified": false,
+          "what": "markup error 6:9-6:13 \"Cannot resolve symbol 'List'\""
+        },
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "no error markup"
+        },
+        {
+          "detail": "popup: Add all missing imports | Change to 'LCONST' (com.sun.org.apache.bcel.internal.generic) | Change to 'Line' (javax.sound.sampled) | Change to 'Link' (jdk.javadoc.internal.doclets.toolkit.taglets.snippet.Style) | Change to 'Link' (sun.awt.image.ImageWatched) | Change to 'Lint' (com.sun.tools.javac.code) | Change to 'ListDV' (com.sun.org.apache.xerces.internal.impl.dv.xs) | Change to 'ListNode' (jdk.internal.classfile.components.ClassPrinter) | Change to 'ListPeer' (java.awt.peer) | Change to 'ListUI' (javax.swing.plaf) | Change to 'ListView' (javax.swing.text.html) | Change to 'Listener' (java.net.http.WebSocket) | Change to 'Listener' (sun.jvm.hotspot.ui.ObjectHistogramPanel) | Change to 'Lt' (com.sun.org.apache.xpath.internal.operations) | Create class 'List<T>' | Create interface 'List<T>' | Create record 'List' | Import 'List' (com.sun.tools.javac.util) | Import 'List' (java.awt) | Import 'List' (java.util) | Add Javadoc comment | Generate toString() | Organize imports",
+          "status": "fail",
+          "unverified": true,
+          "what": "Alt+Enter contains: re:^Import class"
+        },
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "file src/main/java/demo/Names.java"
+        }
+      ],
+      "id": "java/unresolved-class-import-list",
+      "seconds": 25,
+      "status": "fail"
+    },
+    {
+      "checks": [
+        {
+          "detail": "markup was never observed",
+          "status": "fail",
+          "unverified": false,
+          "what": "markup error 2:2-2:16 \"Cannot resolve symbol 'RestController'\""
+        },
+        {
+          "detail": "markup was never observed",
+          "status": "fail",
+          "unverified": false,
+          "what": "no error markup"
+        },
+        {
+          "detail": "Alt+Enter was never pressed",
+          "status": "fail",
+          "unverified": true,
+          "what": "Alt+Enter contains: re:^Import class"
+        },
+        {
+          "detail": "missing \"import org.springframework.web.bind.annotation.RestController;\"",
+          "status": "fail",
+          "unverified": false,
+          "what": "file src/main/java/demo/HelloController.java"
+        },
+        {
+          "detail": "timed out waiting until \"idle\"",
+          "status": "fail",
+          "unverified": false,
+          "what": "scenario steps ran"
+        }
+      ],
+      "id": "java/unresolved-class-spring-annotation",
+      "seconds": 61,
+      "status": "fail"
+    },
+    {
+      "checks": [
+        {
+          "detail": "right range and severity, message is \"The method lenght() is undefined for the type String\"",
+          "status": "partial",
+          "unverified": true,
+          "what": "markup error 6:19-6:25 \"Cannot resolve method 'lenght' in 'String'\""
+        }
+      ],
+      "id": "java/unresolved-method-typo",
+      "seconds": 26,
+      "status": "partial"
+    },
+    {
+      "checks": [
+        {
+          "detail": "right range and severity, message is \"The method assertThat(int) is undefined for the type FooTest\"",
+          "status": "partial",
+          "unverified": false,
+          "what": "markup error 9:9-9:19 \"Cannot resolve method 'assertThat' in 'FooTest'\""
+        },
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "no error markup"
+        },
+        {
+          "detail": "popup: Add static import for 'Assertions.assertThat' | Create method 'assertThat(int)' | Add Javadoc comment | Change modifiers to final where possible | Generate toString() | Organize imports",
+          "status": "fail",
+          "unverified": false,
+          "what": "Alt+Enter contains: re:^(Static import method|Import static method)"
+        },
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "file src/test/java/demo/FooTest.java"
+        },
+        {
+          "detail": "does not match /import org\\.junit\\.jupiter\\.api\\.Test;\\n\\nimport static org\\.assertj\\.core\\.api\\.Assertions\\.assertThat;\\n/",
+          "status": "fail",
+          "unverified": true,
+          "what": "file src/test/java/demo/FooTest.java"
+        }
+      ],
+      "id": "java/unresolved-static-import",
+      "seconds": 36,
+      "status": "fail"
+    },
+    {
+      "checks": [
+        {
+          "detail": "right range and severity, message is \"missing cannot be resolved to a variable\"",
+          "status": "partial",
+          "unverified": false,
+          "what": "markup error 6:28-6:35 \"Cannot resolve symbol 'missing'\""
+        },
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "Alt+Enter contains: Create local variable 'missing' | Create field 'missing' | Create parameter 'missing'"
+        },
+        {
+          "detail": "all items present in a different order; popup: Create constant 'missing' | Create field 'missing' | Create local variable 'missing' | Create parameter 'missing' | Add Javadoc comment | Generate toString() | Organize imports",
+          "status": "partial",
+          "unverified": true,
+          "what": "Alt+Enter ordered: Create local variable 'missing' | Create field 'missing' | Create parameter 'missing'"
+        }
+      ],
+      "id": "java/unresolved-variable",
+      "seconds": 43,
+      "status": "partial"
+    },
+    {
+      "checks": [
+        {
+          "detail": "no markup at 3:1-3:23; markup seen: warning 3:8-3:22 \"The import java.util.List is never used\"",
+          "status": "fail",
+          "unverified": true,
+          "what": "markup warning 3:1-3:23 \"Unused import statement\""
+        },
+        {
+          "detail": "popup: Add @SuppressWarnings 'unused' to 'Main' | Ignore compiler problem(s) | Remove all unused imports | Remove unused import | Generate Getters | Generate Getters and Setters | Generate Setters | Organize imports",
+          "status": "fail",
+          "unverified": true,
+          "what": "Alt+Enter contains: Optimize imports"
+        },
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "file src/main/java/demo/Main.java"
+        }
+      ],
+      "id": "java/unused-import-warning",
+      "seconds": 28,
+      "status": "fail"
+    },
+    {
+      "checks": [
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "file src/main/kotlin/demo/Main.kt"
+        }
+      ],
+      "id": "kotlin/rename-function",
+      "seconds": 65,
+      "status": "pass"
+    },
+    {
+      "checks": [
+        {
+          "detail": "no markup at 5:18-5:24; markup seen: error 5:16-5:17 \"Initializer type mismatch: expected 'Int', actual 'String'.\"",
+          "status": "fail",
+          "unverified": true,
+          "what": "markup error 5:18-5:24 \"Initializer type mismatch: expected 'Int', actual 'String'.\""
+        },
+        {
+          "detail": "no markup at 5:18-5:24; markup seen: error 5:16-5:17 \"Initializer type mismatch: expected 'Int', actual 'String'.\"",
+          "status": "fail",
+          "unverified": true,
+          "what": "markup error 5:18-5:24 \"Initializer type mismatch: expected 'Int', actual 'String'.\""
+        }
+      ],
+      "id": "kotlin/type-mismatch",
+      "seconds": 36,
+      "status": "fail"
+    },
+    {
+      "checks": [
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": true,
+          "what": "markup error 5:17-5:26 \"Unresolved reference 'LocalDate'.\""
+        },
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": true,
+          "what": "markup error 5:17-5:26 \"Unresolved reference 'LocalDate'.\""
+        },
+        {
+          "detail": "markup was never observed",
+          "status": "fail",
+          "unverified": false,
+          "what": "no error markup"
+        },
+        {
+          "detail": "no popup or no items",
+          "status": "fail",
+          "unverified": true,
+          "what": "Alt+Enter contains: re:^Import"
+        },
+        {
+          "detail": "missing \"import java.time.LocalDate\"",
+          "status": "fail",
+          "unverified": false,
+          "what": "file src/main/kotlin/demo/Main.kt"
+        },
+        {
+          "detail": "step 9 (ApplyIntention { title: Some(\"re:^Import\"), index: None }): no Alt+Enter item \"re:^Import\" to apply",
+          "status": "fail",
+          "unverified": false,
+          "what": "scenario steps ran"
+        }
+      ],
+      "id": "kotlin/unresolved-reference-import",
+      "seconds": 55,
+      "status": "fail"
+    },
+    {
+      "checks": [
+        {
+          "detail": "landed in src/main.rs at 2:12; wrong file",
+          "status": "fail",
+          "unverified": true,
+          "what": "go to declaration string.rs"
+        }
+      ],
+      "id": "rust/go-to-declaration-std",
+      "seconds": 53,
+      "status": "fail"
+    },
+    {
+      "checks": [
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "file src/main.rs"
+        }
+      ],
+      "id": "rust/rename-function",
+      "seconds": 11,
+      "status": "pass"
+    },
+    {
+      "checks": [
+        {
+          "detail": "no markup at 3:18-3:24; no markup",
+          "status": "fail",
+          "unverified": true,
+          "what": "markup error 3:18-3:24 \"Mismatched types [E0308]: expected `i32`, found `&str`\""
+        },
+        {
+          "detail": "no markup at 3:18-3:24; no markup",
+          "status": "fail",
+          "unverified": true,
+          "what": "markup error 3:18-3:24 \"Mismatched types [E0308]: expected `i32`, found `&str`\""
+        }
+      ],
+      "id": "rust/type-mismatch",
+      "seconds": 11,
+      "status": "fail"
+    },
+    {
+      "checks": [
+        {
+          "detail": "no markup at 3:12-3:19; no markup",
+          "status": "fail",
+          "unverified": true,
+          "what": "markup error 3:12-3:19 \"Unresolved reference: `HashMap`\""
+        },
+        {
+          "detail": "no markup at 3:12-3:19; no markup",
+          "status": "fail",
+          "unverified": true,
+          "what": "markup error 3:12-3:19 \"Unresolved reference: `HashMap`\""
+        },
+        {
+          "detail": "no popup or no items",
+          "status": "fail",
+          "unverified": true,
+          "what": "Alt+Enter contains: Import `std::collections::HashMap`"
+        },
+        {
+          "detail": "missing \"use std::collections::HashMap;\"",
+          "status": "fail",
+          "unverified": false,
+          "what": "file src/main.rs"
+        },
+        {
+          "detail": "step 9 (ApplyIntention { title: Some(\"re:^Import `std::collections::HashMap`\"), index: None }): no Alt+Enter item \"re:^Import `std::collections::HashMap`\" to apply",
+          "status": "fail",
+          "unverified": false,
+          "what": "scenario steps ran"
+        }
+      ],
+      "id": "rust/unresolved-type-import",
+      "seconds": 32,
+      "status": "fail"
+    },
+    {
+      "checks": [
+        {
+          "detail": "no markup at 1:23-1:31; no markup",
+          "status": "fail",
+          "unverified": true,
+          "what": "markup error 1:23-1:31 \"Unresolved reference: `HashMapp`\""
+        },
+        {
+          "detail": "no markup at 1:23-1:31; no markup",
+          "status": "fail",
+          "unverified": true,
+          "what": "markup error 1:23-1:31 \"Unresolved reference: `HashMapp`\""
+        }
+      ],
+      "id": "rust/unresolved-use-statement",
+      "seconds": 11,
+      "status": "fail"
+    },
+    {
+      "checks": [
+        {
+          "detail": "",
+          "status": "pass",
+          "unverified": false,
+          "what": "state /findInFiles/results"
+        }
+      ],
+      "id": "search/find-in-files",
+      "seconds": 3,
+      "status": "pass"
+    }
+  ],
+  "totals": {
+    "fail": 14,
+    "partial": 6,
+    "pass": 11,
+    "skipped": 1
+  }
+}

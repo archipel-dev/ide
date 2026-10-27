@@ -1,0 +1,43 @@
+{
+  "title": "Go to declaration of a JDK class",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/demo/Main.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "caret",
+      "line": 4,
+      "column": 31
+    },
+    {
+      "op": "declaration"
+    }
+  ],
+  "expect": {
+    "navigation": [
+      {
+        "pathContains": "String",
+        "confidence": "unverified"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "Ctrl+B on String in the main signature",
+    "notes": "opens String.java from the JDK sources, or the decompiled class when there is no src.zip; the tab name is recalled"
+  },
+  "knownGap": "jdtls resolves the declaration but the IDE opens only files of the project; classes of libraries and the JDK are not opened"
+}

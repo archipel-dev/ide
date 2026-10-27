@@ -1,0 +1,74 @@
+{
+  "title": "Unresolved variable offers Create local variable",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/demo/Printer.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "typeAt",
+      "line": 5,
+      "column": 37,
+      "text": "\nSystem.out.println(missing);"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "typed",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "caret",
+      "line": 6,
+      "column": 30
+    },
+    {
+      "op": "altEnter"
+    }
+  ],
+  "expect": {
+    "markup": [
+      {
+        "when": "typed",
+        "range": "6:28-6:35",
+        "severity": "error",
+        "message": "Cannot resolve symbol 'missing'"
+      }
+    ],
+    "intentions": [
+      {
+        "mode": "contains",
+        "items": [
+          "Create local variable 'missing'",
+          "Create field 'missing'",
+          "Create parameter 'missing'"
+        ]
+      },
+      {
+        "mode": "ordered",
+        "items": [
+          "Create local variable 'missing'",
+          "Create field 'missing'",
+          "Create parameter 'missing'"
+        ],
+        "confidence": "unverified"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "type System.out.println(missing); Alt+Enter on missing",
+    "notes": "documented fix family: create local variable, field, parameter"
+  }
+}

@@ -1,0 +1,54 @@
+name: Behavior scenarios
+
+# Replays docs/parity/scenarios/**/scenario.json headless (Xvfb + glow) against the real IDE
+# and reports how close it is to IntelliJ. Failures are expected while the platform refactor
+# is under way, so the job never blocks: the report is the result.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
+  pull_request:
+    paths:
+      - "docs/parity/scenarios/**"
+      - "xtask/src/scenario.rs"
+      - ".github/workflows/scenarios.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  scenarios:
+    name: scenarios (Xvfb, glow)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Xvfb and Mesa
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libxkbcommon-x11-0 libgl1-mesa-dri libegl1 libgl1
+      # Starts its own Xvfb, installs the toolchains the scenarios require through the
+      # IDE's toolchain store (scenarios whose tools stay missing are reported as skipped)
+      # and writes the report.
+      - name: Run scenarios
+        run: cargo run -p xtask -- scenario --install-toolchains --strict --report target/scenarios/report.md
+        env:
+          ARCHIPEL_RENDERER: glow
+          LIBGL_ALWAYS_SOFTWARE: "1"
+      - name: Job summary
+        if: always()
+        run: |
+          if [ -f target/scenarios/report.md ]; then cat target/scenarios/report.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scenario-report
+          path: |
+            target/scenarios/report.md
+            target/scenarios/report.json
+            target/scenarios/work/*/app.log
+            target/scenarios/work/*/observed.json
+          if-no-files-found: warn

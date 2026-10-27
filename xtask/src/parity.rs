@@ -425,6 +425,43 @@ pub fn render_dashboard(areas: &[Area]) -> String {
     out
 }
 
+/// The "Behavior scenarios" section: the baseline of `cargo xtask scenario`, committed as
+/// `docs/parity/scenarios/REPORT.json`. Empty when there is no report yet.
+fn scenario_section(dir: &Path) -> String {
+    let Ok(text) = fs::read_to_string(dir.join("scenarios/REPORT.json")) else {
+        return String::new();
+    };
+    let Ok(report) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return String::new();
+    };
+    let count = |key: &str| report["totals"][key].as_u64().unwrap_or(0);
+    let (pass, partial, fail, skipped) = (
+        count("pass"),
+        count("partial"),
+        count("fail"),
+        count("skipped"),
+    );
+    let ran = pass + partial + fail;
+    let score = if ran == 0 {
+        "-".to_owned()
+    } else {
+        format!(
+            "{:.0}%",
+            (pass as f64 + partial as f64 / 2.0) / ran as f64 * 100.0
+        )
+    };
+    format!(
+        "\n## Behavior scenarios\n\n\
+         Recorded IntelliJ behavior replayed against the real IDE (`cargo run -p xtask -- scenario`,\n\
+         corpus and baseline in [`scenarios/`](scenarios/README.md), per scenario in\n\
+         [`scenarios/REPORT.md`](scenarios/REPORT.md)). Pass counts 1, partial one half, over the\n\
+         scenarios that ran.\n\n\
+         | Scenarios | Pass | Partial | Fail | Skipped | **Score** |\n|---:|---:|---:|---:|---:|---:|\n\
+         | {} | {pass} | {partial} | {fail} | {skipped} | **{score}** |\n",
+        pass + partial + fail + skipped
+    )
+}
+
 pub fn render_readme_block(areas: &[Area]) -> String {
     let all = Stats::of(areas.iter().flat_map(|a| &a.rows));
     format!(
@@ -507,7 +544,8 @@ pub fn run(root: &Path, check: bool) -> Result<Outcome, Box<dyn std::error::Erro
     }
     let dashboard_path = dir.join(DASHBOARD_FILE);
     let readme_path = root.join("README.md");
-    let dashboard = render_dashboard(&areas);
+    let mut dashboard = render_dashboard(&areas);
+    dashboard.push_str(&scenario_section(&dir));
     let readme_current = fs::read_to_string(&readme_path).unwrap_or_default();
     let readme = update_readme(&readme_current, &render_readme_block(&areas))?;
     let dashboard_current = fs::read_to_string(&dashboard_path).unwrap_or_default();
@@ -698,6 +736,26 @@ mod tests {
         )
         .unwrap();
         assert!(run(&root, true).is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn dashboard_summarizes_the_scenario_baseline_when_there_is_one() {
+        let root = temp_root("scenarios");
+        let dir = root.join("docs/parity");
+        assert_eq!(scenario_section(&dir), "");
+        fs::create_dir_all(dir.join("scenarios")).unwrap();
+        fs::write(
+            dir.join("scenarios/REPORT.json"),
+            r#"{"totals": {"pass": 2, "partial": 2, "fail": 4, "skipped": 1}}"#,
+        )
+        .unwrap();
+        let section = scenario_section(&dir);
+        assert!(section.contains("## Behavior scenarios"));
+        assert!(
+            section.contains("| 9 | 2 | 2 | 4 | 1 | **38%** |"),
+            "{section}"
+        );
         let _ = fs::remove_dir_all(&root);
     }
 

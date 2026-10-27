@@ -205,7 +205,7 @@ impl IdeApp {
     /// Directory (project-relative) that New entries go into: the selected directory,
     /// or the parent of the selected file, like the Project view's New group.
     fn new_entry_parent(&self) -> Option<PathBuf> {
-        let root = self.state.project.as_ref()?.root().to_owned();
+        let root = self.state.project_root()?;
         Some(
             self.tree_selection
                 .as_ref()
@@ -357,20 +357,20 @@ impl IdeApp {
                 }
                 // Only modified strokes start chords, so plain typing is never swallowed.
                 Lookup::Prefix if modified && !terminal_focused => {
-                    self.state.status = format!(
+                    self.state.set_status(format!(
                         "{} was pressed. Waiting for the second stroke…",
                         stroke.label(Notation::current())
-                    );
+                    ));
                     self.pending_chord = Some(stroke);
                     true
                 }
                 Lookup::Prefix | Lookup::None => {
                     if let Some(first) = &pending {
-                        self.state.status = format!(
+                        self.state.set_status(format!(
                             "No action is bound to {}, {}",
                             first.label(Notation::current()),
                             stroke.label(Notation::current())
-                        );
+                        ));
                     }
                     pending.is_some()
                 }

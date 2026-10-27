@@ -56,7 +56,7 @@ pub fn rows(
 }
 
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
-    if !app.state.tool_windows.is_visible(ToolWindow::Bazel) {
+    if !app.state.tool_windows().is_visible(ToolWindow::Bazel) {
         return;
     }
     egui::SidePanel::right("right_tool_window_bazel")
@@ -83,7 +83,7 @@ fn content(app: &mut IdeApp, ui: &mut egui::Ui) {
     let selected = view
         .selected
         .as_ref()
-        .and_then(|label| app.state.bazel_targets.as_ref()?.get(label).cloned());
+        .and_then(|label| app.state.bazel_targets().as_ref()?.get(label).cloned());
     widgets::toolbar_row(ui, |ui| {
         ui.add_space(theme::layout::TOOLBAR_LEAD);
         ui.spacing_mut().item_spacing.x = 2.0;
@@ -133,14 +133,14 @@ fn content(app: &mut IdeApp, ui: &mut egui::Ui) {
             }
         }
     });
-    let Some(targets) = app.state.bazel_targets.clone() else {
+    let Some(targets) = app.state.bazel_targets().clone() else {
         ui.add_space(16.0);
         ui.vertical_centered(|ui| {
             if syncing {
                 ui.label(RichText::new("Querying Bazel targets…").color(theme::TEXT_SECONDARY));
                 return;
             }
-            match &app.state.bazel_error {
+            match &app.state.bazel_error() {
                 Some(error) => {
                     ui.label(RichText::new(error).color(theme::ERROR));
                 }

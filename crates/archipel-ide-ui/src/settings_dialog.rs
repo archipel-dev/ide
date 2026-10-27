@@ -97,7 +97,7 @@ impl SettingsDialog {
 
 /// Opens the dialog when a `settings.open` command asked for it.
 pub fn take_request(app: &mut IdeApp) {
-    if let Some(page) = app.state.settings_request.take() {
+    if let Some(page) = app.state.take_settings_request() {
         let search = app.keymap_search.take();
         let settings = app.state.settings();
         match app.settings_dialog.as_mut() {

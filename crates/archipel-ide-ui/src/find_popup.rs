@@ -57,7 +57,7 @@ impl IdeApp {
     /// Ctrl+Shift+F: opens the popup with the editor selection (or the previous
     /// query) fully selected, and searches right away.
     pub(crate) fn open_find_popup(&mut self, selection: Option<String>) {
-        if self.state.project.is_none() {
+        if !self.state.has_project() {
             return;
         }
         if let Some(selection) = selection.filter(|s| !s.is_empty() && !s.contains('\n')) {
@@ -80,7 +80,7 @@ fn run_search(app: &mut IdeApp) {
     if app.search_input.is_empty() {
         return;
     }
-    let scope = app.state.project_view.search_scope.clone();
+    let scope = app.state.project_view().search_scope.clone();
     let kind = app.state.search_scope_kind();
     let options = &app.find_options;
     let params = json!({
@@ -356,7 +356,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                             )
                             .changed()
                             {
-                                app.state.project_view.search_scope =
+                                app.state.project_view_mut().search_scope =
                                     (!text.is_empty()).then(|| PathBuf::from(text));
                                 changed = true;
                             }

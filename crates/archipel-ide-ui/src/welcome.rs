@@ -33,7 +33,7 @@ pub struct State {
 
 /// Whether the welcome window replaces the IDE chrome.
 pub fn active(app: &IdeApp) -> bool {
-    app.state.project.is_none() && app.state.plugin_host.app_mode.is_none()
+    !app.state.has_project() && app.state.plugin_host().app_mode.is_none()
 }
 
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
@@ -74,7 +74,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     if let Some(path) = open
         && let Err(message) = app.open_project_path(&path.to_string_lossy(), ctx)
     {
-        app.state.status = message;
+        app.state.set_status(message);
     }
 }
 
@@ -246,9 +246,9 @@ fn projects_page(
                 }
             });
     }
-    if !app.state.status.is_empty() {
+    if !app.state.status().is_empty() {
         ui.add_space(12.0);
-        ui.label(RichText::new(&app.state.status).color(theme::TEXT_SECONDARY));
+        ui.label(RichText::new(app.state.status()).color(theme::TEXT_SECONDARY));
     }
 }
 

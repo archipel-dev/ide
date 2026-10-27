@@ -48,6 +48,9 @@ New feature state is a service of the platform kernel (`archipel-ide-platform`, 
 `docs/architecture/platform-kernel.md`), not a field of `IdeState`. `cargo test -p archipel-ide-core`
 fails when `IdeState` grows beyond the baseline in `tests/ide_state_size.rs`; moving fields out
 lowers it. Features talk through topics and extension points, and the UI reads through services.
+`cargo test -p archipel-ide-ui` fails when `archipel-ide-ui` reads `state.<field>` (tests/no_subsystem_reads.rs);
+menus, toolbars, context menus, Find Action and shortcuts ask the action registry for a
+`Presentation` computed from a `DataContext` (see "DataContext and actions" in the kernel doc).
 
 ## Layering
 

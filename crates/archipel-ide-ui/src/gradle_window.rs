@@ -191,7 +191,7 @@ fn project_rows(
 }
 
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
-    if !app.state.tool_windows.is_visible(ToolWindow::Gradle) {
+    if !app.state.tool_windows().is_visible(ToolWindow::Gradle) {
         return;
     }
     egui::SidePanel::right("right_tool_window")
@@ -285,7 +285,7 @@ fn content(app: &mut IdeApp, ui: &mut egui::Ui) {
         }
         ui.add_space(6.0);
         if icons::button(ui, Icon::ExpandAll, "Expand All").clicked()
-            && let Some(model) = &app.state.gradle_model
+            && let Some(model) = &app.state.gradle_model()
         {
             view.expanded = all_ids(model);
         }
@@ -325,7 +325,7 @@ fn content(app: &mut IdeApp, ui: &mut egui::Ui) {
         }
     }
 
-    let Some(model) = app.state.gradle_model.clone() else {
+    let Some(model) = app.state.gradle_model().clone() else {
         empty_state(app, ui, syncing);
         ui.data_mut(|data| data.insert_temp(view_id(), view));
         return;
@@ -410,7 +410,7 @@ fn empty_state(app: &mut IdeApp, ui: &mut egui::Ui, syncing: bool) {
             ui.label(RichText::new("Syncing Gradle project…").color(theme::TEXT_SECONDARY));
             return;
         }
-        if let Some(error) = &app.state.gradle_error {
+        if let Some(error) = &app.state.gradle_error() {
             ui.label(RichText::new(error).color(theme::ERROR));
         } else {
             ui.label(

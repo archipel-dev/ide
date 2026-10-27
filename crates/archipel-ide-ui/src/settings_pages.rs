@@ -108,7 +108,7 @@ fn vcs_mappings(root: &Path) -> Vec<(String, &'static str)> {
 
 /// Version Control: the directory/VCS mapping table (read-only).
 pub fn version_control(ui: &mut egui::Ui, state: &IdeState) {
-    let Some(project) = state.project.as_ref() else {
+    let Some(project) = state.project() else {
         ui.label(
             RichText::new("Open a project to see its VCS mappings.").color(theme::TEXT_SECONDARY),
         );

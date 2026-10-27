@@ -138,8 +138,8 @@ fn items(app: &mut IdeApp) -> Vec<Ranked<Hit>> {
     let manager = app.state.search_everywhere();
     let navigation = manager.read();
     let sources = SearchSources {
-        files: &app.state.files,
-        recent: &app.state.recent_files,
+        files: app.state.files(),
+        recent: app.state.recent_files(),
         symbols: navigation.index.all().collect(),
         server_symbols: &navigation.server.results,
         actions: &actions,

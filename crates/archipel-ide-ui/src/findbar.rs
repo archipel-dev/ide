@@ -118,11 +118,11 @@ fn toggle(ui: &mut egui::Ui, label: &str, on: &mut bool, tooltip: &str) -> bool 
 }
 
 pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let Some(index) = app.state.active_document else {
+    let Some(index) = app.state.active_index() else {
         return;
     };
-    let matches = app.find.matches(&app.state.documents[index]);
-    let primary = app.state.documents[index].selections.primary();
+    let matches = app.find.matches(&app.state.documents()[index]);
+    let primary = app.state.documents()[index].selections.primary();
     let current = matches
         .iter()
         .position(|&(s, e)| s == primary.start() && e == primary.end());

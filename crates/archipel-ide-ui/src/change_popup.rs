@@ -112,7 +112,11 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     let Some(popup) = app.change_popup.as_ref() else {
         return;
     };
-    let Some(index) = app.state.active_document.filter(|_| !app.state.diff_active) else {
+    let Some(index) = app
+        .state
+        .active_index()
+        .filter(|_| !app.state.diff_active())
+    else {
         app.change_popup = None;
         return;
     };

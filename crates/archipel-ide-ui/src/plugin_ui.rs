@@ -35,7 +35,7 @@ pub fn sync(app: &mut IdeApp, ctx: &egui::Context) {
     if app.state.take_plugin_repaint() {
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
     }
-    let generation = app.state.plugin_host.registry.generation();
+    let generation = app.state.plugin_host().registry.generation();
     if generation != app.plugin_generation {
         archipel_ide_core::sync_plugin_commands(
             &mut app.commands,
@@ -43,11 +43,11 @@ pub fn sync(app: &mut IdeApp, ctx: &egui::Context) {
             &mut app.state,
         );
         app.sync_command_actions();
-        app.plugin_generation = app.state.plugin_host.registry.generation();
+        app.plugin_generation = app.state.plugin_host().registry.generation();
     }
     // Commands queued while running these may queue more; bound the loop.
     for _ in 0..8 {
-        let queued = std::mem::take(&mut app.state.plugin_host.queued_commands);
+        let queued = std::mem::take(&mut app.state.plugin_host_mut().queued_commands);
         if queued.is_empty() {
             break;
         }
@@ -211,7 +211,7 @@ pub fn right_side(app: &mut IdeApp, ctx: &egui::Context) {
                 }
                 chrome::stripe_button(app, ui, archipel_ide_core::ToolWindow::AiChat, Icon::Ai);
                 for (plugin, id, title, icon) in &windows {
-                    let selected = app.state.plugin_host.tool_window.as_ref()
+                    let selected = app.state.plugin_host().tool_window.as_ref()
                         == Some(&(plugin.clone(), id.clone()));
                     let (rect, response) = ui.allocate_exact_size(vec2(32.0, 32.0), Sense::click());
                     let fill = if selected {
@@ -242,7 +242,7 @@ pub fn right_side(app: &mut IdeApp, ctx: &egui::Context) {
                 }
             });
         });
-    let Some((plugin, id)) = app.state.plugin_host.tool_window.clone() else {
+    let Some((plugin, id)) = app.state.plugin_host().tool_window.clone() else {
         return;
     };
     let Some((_, _, title, _)) = windows
@@ -295,9 +295,9 @@ pub fn editor_tabs(app: &mut IdeApp, ui: &mut egui::Ui, bar: Rect, mut x: f32) -
     let font = egui::FontId::proportional(theme::UI_FONT_SIZE);
     let mut activate = None;
     let mut close = None;
-    for index in 0..app.state.plugin_host.tabs.len() {
-        let title = app.state.plugin_host.tabs[index].title.clone();
-        let active = app.state.plugin_host.active_tab == Some(index);
+    for index in 0..app.state.plugin_host().tabs.len() {
+        let title = app.state.plugin_host().tabs[index].title.clone();
+        let active = app.state.plugin_host().active_tab == Some(index);
         let color = if active {
             *theme::TEXT_BRIGHT
         } else {
@@ -575,7 +575,7 @@ pub fn app_window(app: &mut IdeApp, ctx: &egui::Context, plugin: &str) {
             ui.horizontal_centered(|ui| {
                 let font = egui::FontId::proportional(theme::UI_FONT_SIZE - 1.0);
                 ui.label(
-                    RichText::new(&app.state.status)
+                    RichText::new(app.state.status())
                         .font(font.clone())
                         .color(theme::TEXT_INFO),
                 );
@@ -588,10 +588,10 @@ pub fn app_window(app: &mut IdeApp, ctx: &egui::Context, plugin: &str) {
         .frame(island_frame(ctx))
         .show(ctx, |ui| {
             // Editor tabs opened by the app share the window with its main view.
-            if !app.state.plugin_host.tabs.is_empty() {
+            if !app.state.plugin_host().tabs.is_empty() {
                 app_tab_bar(app, ui, &title);
             }
-            if app.state.plugin_host.active_tab.is_some() {
+            if app.state.plugin_host().active_tab.is_some() {
                 active_tab_body(app, ui);
                 return;
             }
@@ -616,7 +616,7 @@ pub fn app_window(app: &mut IdeApp, ctx: &egui::Context, plugin: &str) {
 fn app_tab_bar(app: &mut IdeApp, ui: &mut egui::Ui, title: &str) {
     let (bar, _) = ui.allocate_exact_size(vec2(ui.available_width(), 38.0), Sense::hover());
     let font = egui::FontId::proportional(theme::UI_FONT_SIZE);
-    let active = app.state.plugin_host.active_tab.is_none();
+    let active = app.state.plugin_host().active_tab.is_none();
     let color = if active {
         theme::TEXT_BRIGHT
     } else {

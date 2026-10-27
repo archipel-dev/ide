@@ -334,10 +334,7 @@ pub fn inspection_widget(
 /// Opens `path` (project-relative) and puts the caret on the problem.
 pub fn jump_to(app: &mut IdeApp, ctx: &egui::Context, path: &Path, line: usize, column: usize) {
     app.dispatch("editor.openFile", json!({"path": path}));
-    let active = app
-        .state
-        .active_document
-        .and_then(|index| app.state.documents.get(index));
+    let active = app.state.active_doc();
     if active.is_some_and(|document| document.path == path) {
         crate::editor::move_caret_to(app, line, column);
         ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
@@ -355,11 +352,7 @@ pub fn tool_window(app: &mut IdeApp, ui: &mut egui::Ui) {
     let tab_id = egui::Id::new("problems_tab");
     let mut tab: Tab = ui.data(|data| data.get_temp(tab_id).unwrap_or_default());
     app.state.refresh_problems();
-    let active_path = app
-        .state
-        .active_document
-        .and_then(|index| app.state.documents.get(index))
-        .map(|document| document.path.clone());
+    let active_path = app.state.active_doc().map(|document| document.path.clone());
     let file_problems: Vec<Problem> = app
         .state
         .active_problems()
@@ -539,7 +532,7 @@ pub fn tool_window(app: &mut IdeApp, ui: &mut egui::Ui) {
             .filter_map(|(path, problems)| Some((path?, problems)))
             .chain(project_errors.iter().cloned())
         {
-            if let Some(document) = app.state.documents.iter().find(|doc| doc.path == path) {
+            if let Some(document) = app.state.documents().iter().find(|doc| doc.path == path) {
                 for problem in &problems {
                     if let Some(line) = document.text.line(problem.line) {
                         previews.insert(

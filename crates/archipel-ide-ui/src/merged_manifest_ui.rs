@@ -21,21 +21,17 @@ fn tint(index: usize) -> Color32 {
 /// Whether the active editor file is an Android manifest that gets the
 /// `Text | Merged Manifest` tab bar.
 pub fn applies(app: &IdeApp) -> bool {
-    app.state.android.project.is_some()
-        && app
-            .state
-            .active_document
-            .and_then(|i| app.state.documents.get(i))
-            .is_some_and(|d| {
-                d.path
-                    .file_name()
-                    .is_some_and(|n| n == "AndroidManifest.xml")
-            })
+    app.state.is_android_project()
+        && app.state.active_doc().is_some_and(|d| {
+            d.path
+                .file_name()
+                .is_some_and(|n| n == "AndroidManifest.xml")
+        })
 }
 
 /// Bottom tab bar of the manifest editor.
 pub fn tab_bar(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let merged = app.state.android.merged_manifest.open;
+    let merged = app.state.android().merged_manifest.open;
     let mut choice = None;
     egui::TopBottomPanel::bottom("manifest_tabs")
         .exact_height(26.0)
@@ -78,7 +74,7 @@ pub fn body(app: &mut IdeApp, ui: &mut egui::Ui) {
     let mut close = ui.input(|i| i.key_pressed(egui::Key::Escape));
     let mut open: Option<(std::path::PathBuf, usize)> = None;
     let mut build: Option<String> = None;
-    let view = &app.state.android.merged_manifest;
+    let view = &app.state.android().merged_manifest;
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         ui.add_space(8.0);

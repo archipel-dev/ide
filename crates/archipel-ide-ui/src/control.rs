@@ -94,7 +94,7 @@ impl IdeApp {
                     PathBuf::from(path).display()
                 );
                 eprintln!("archipel-ide: {message}");
-                self.state.status = message;
+                self.state.set_status(message);
             }
         }
     }
@@ -283,9 +283,9 @@ impl IdeApp {
             }
             return Response::ok(Value::Null);
         }
-        let root_before = self.state.project.as_ref().map(|p| p.root().to_owned());
+        let root_before = self.state.project_root();
         let result = self.commands.execute(command, &mut self.state, args);
-        let root_after = self.state.project.as_ref().map(|p| p.root().to_owned());
+        let root_after = self.state.project_root();
         if root_after.is_some() && root_after != root_before {
             self.project_opened(ctx);
         }
@@ -293,7 +293,7 @@ impl IdeApp {
             Ok(value) => Response::ok(value),
             Err(error) => {
                 if !matches!(error, CommandError::Unknown(_)) {
-                    self.state.status = error.to_string();
+                    self.state.set_status(error.to_string());
                 }
                 Response::error(error.to_string())
             }
@@ -306,7 +306,7 @@ impl IdeApp {
             && !self.find_popup.pending()
             && !self.state.execution().is_running()
             && !self.state.updates().is_busy()
-            && self.state.analysis.index.is_idle()
+            && self.state.analysis().index.is_idle()
             && !self.state.project_model().is_some_and(|m| m.is_busy())
     }
 
@@ -314,15 +314,15 @@ impl IdeApp {
         self.palette.open
             || self.find_popup.open
             || self.dialog.is_some()
-            || self.state.analysis.history.dialog.is_some()
-            || self.state.about_open
-            || self.state.first_run_open
+            || self.state.analysis().history.dialog.is_some()
+            || self.state.about_open()
+            || self.state.first_run_open()
             || self.completion_visible()
-            || self.state.code_actions.popup
-            || self.state.refactor.rename.is_some()
+            || self.state.code_actions().popup
+            || self.state.refactor().rename.is_some()
             || egui::Popup::is_any_open(ctx)
-            || self.state.docs.popup.is_some()
-            || self.state.code_actions.popup
+            || self.state.docs().popup.is_some()
+            || self.state.code_actions().popup
     }
 
     fn completion_visible(&self) -> bool {
@@ -341,20 +341,19 @@ impl IdeApp {
     }
 
     fn shows_text(&self, text: &str) -> bool {
-        self.state.status.contains(text)
+        self.state.status().contains(text)
             || self
                 .terminal_text()
                 .is_some_and(|screen| screen.contains(text))
             || self
                 .state
-                .active_document
-                .and_then(|index| self.state.documents.get(index))
+                .active_doc()
                 .is_some_and(|document| document.text.text().contains(text))
     }
 
     /// Workbench snapshot returned by the `state` request.
     pub(crate) fn control_state(&self, ctx: &egui::Context) -> Value {
-        let root = self.state.project.as_ref().map(|p| p.root().to_owned());
+        let root = self.state.project_root();
         let relative = |path: &std::path::Path| {
             root.as_deref()
                 .and_then(|root| path.strip_prefix(root).ok())
@@ -377,10 +376,7 @@ impl IdeApp {
                 })
             })
             .collect();
-        let active = self
-            .state
-            .active_document
-            .and_then(|index| self.state.documents.get(index));
+        let active = self.state.active_doc();
         let editor = active.map(|document| {
             let caret = document.selections.primary().end();
             let (line, column) = document.text.char_to_line_column(caret).unwrap_or((0, 0));
@@ -391,7 +387,12 @@ impl IdeApp {
                 "selections": document.selections.selections().len(),
             })
         });
-        let tool_window = |anchor| self.state.tool_windows.visible(anchor).map(ToolWindow::id);
+        let tool_window = |anchor| {
+            self.state
+                .tool_windows()
+                .visible(anchor)
+                .map(ToolWindow::id)
+        };
         let focused = ctx.memory(|memory| memory.focused());
         let focus = focused.map(|id| {
             if id == editor::editor_id() {
@@ -427,13 +428,13 @@ impl IdeApp {
                 "bottom": tool_window(Anchor::Bottom),
             },
             "focus": focus,
-            "mode": self.state.workbench_mode.id(),
+            "mode": self.state.workbench_mode().id(),
             "agents": {
-                "screen": format!("{:?}", self.state.agents.screen).to_lowercase(),
-                "selected": self.state.agents.selected,
-                "returnTo": self.state.agents.return_to,
+                "screen": format!("{:?}", self.state.agents().screen).to_lowercase(),
+                "selected": self.state.agents().selected,
+                "returnTo": self.state.agents().return_to,
                 "statusText": crate::agents_ui::status_text(self),
-                "sessions": self.state.agents.sessions().iter().map(|s| json!({
+                "sessions": self.state.agents().sessions().iter().map(|s| json!({
                     "id": s.id,
                     "name": s.name,
                     "profile": s.profile.id(),
@@ -441,13 +442,13 @@ impl IdeApp {
                     "parent": s.parent,
                     "unread": s.unread,
                 })).collect::<Vec<_>>(),
-                "threads": self.state.agents.threads,
-                "newThread": self.state.agents.new_thread,
-                "notices": self.state.agents.notices.len(),
+                "threads": self.state.agents().threads,
+                "newThread": self.state.agents().new_thread,
+                "notices": self.state.agents().notices.len(),
             },
             "projectTree": {
                 "selected": self.tree_selection.as_deref().map(relative),
-                "expanded": self.state.expanded_dirs.iter().map(|path| relative(path.as_path())).collect::<Vec<_>>(),
+                "expanded": self.state.expanded_dirs().iter().map(|path| relative(path.as_path())).collect::<Vec<_>>(),
             },
             "editor": editor,
             "terminal": self.terminal_text(),
@@ -461,13 +462,13 @@ impl IdeApp {
                 "dialog": self.dialog.as_ref().map(|dialog| dialog.kind()),
                 "findBar": self.find.open,
                 "completion": self.completion_visible(),
-                "intentions": self.state.code_actions.popup,
-                "rename": self.state.refactor.rename.is_some(),
+                "intentions": self.state.code_actions().popup,
+                "rename": self.state.refactor().rename.is_some(),
                 "notification": self.state.notifications().update_balloon(),
-                "about": self.state.about_open,
-                "history": self.state.analysis.history.dialog.is_some(),
-                "customize": self.state.first_run_open,
-                "crashReport": self.state.crash_report.is_some(),
+                "about": self.state.about_open(),
+                "history": self.state.analysis().history.dialog.is_some(),
+                "customize": self.state.first_run_open(),
+                "crashReport": self.state.crash_report().is_some(),
                 "menu": egui::Popup::is_any_open(ctx),
                 "settings": self.settings_dialog.is_some(),
             },
@@ -493,7 +494,7 @@ impl IdeApp {
             // The Alt+Enter list (native fixes and the language server's
             // actions in one) and the language servers' import state.
             "intentions": {
-                "popup": self.state.code_actions.popup,
+                "popup": self.state.code_actions().popup,
                 "rows": self.state.alert_texts(),
             },
             // The import chooser (`Method to Import`) opened by an Alt+Enter import fix.
@@ -508,21 +509,21 @@ impl IdeApp {
             // The state of every language pack's native intelligence (indexes), by pack id.
             "languages": languages,
             "lsp": {
-                "importing": self.state.lsp.servers().iter().any(|server| server.importing),
-                "servers": self.state.lsp.servers().iter().map(|server| json!({
+                "importing": self.state.lsp().servers().iter().any(|server| server.importing),
+                "servers": self.state.lsp().servers().iter().map(|server| json!({
                     "id": server.id,
                     "importing": server.importing,
                     "progress": server.progress.iter().map(archipel_ide_lsp::describe_progress).collect::<Vec<_>>(),
                 })).collect::<Vec<_>>(),
             },
             "history": {
-                "enabled": self.state.analysis.history.is_enabled(),
-                "revisions": self.state.analysis.history.dialog.as_ref().map(|d| d.revisions.len()),
-                "selected": self.state.analysis.history.dialog.as_ref().and_then(|d| d.selected),
+                "enabled": self.state.analysis().history.is_enabled(),
+                "revisions": self.state.analysis().history.dialog.as_ref().map(|d| d.revisions.len()),
+                "selected": self.state.analysis().history.dialog.as_ref().and_then(|d| d.selected),
             },
             "todo": {
-                "rows": self.state.analysis.todo.cached_count(),
-                "scope": self.state.analysis.todo.scope.id(),
+                "rows": self.state.analysis().todo.cached_count(),
+                "scope": self.state.analysis().todo.scope.id(),
             },
             "index": {
                 "phase": index_status.phase.label(),
@@ -540,7 +541,7 @@ impl IdeApp {
                 "task": self.state.execution().runner().plan().map(|plan| plan.name.clone()),
                 "running": self.state.execution().is_running(),
             },
-            "status": self.state.status,
+            "status": self.state.status(),
             "busy": !self.background_idle(),
         })
     }

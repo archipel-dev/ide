@@ -111,6 +111,7 @@ mod toolchain_commands;
 mod toolchain_lsp;
 mod toolwindow;
 mod update_commands;
+mod views;
 pub use android_commands::AndroidState;
 pub use android_deploy::{DeployPhase, DeployState};
 pub use android_devices::DeviceHub;

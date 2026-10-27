@@ -132,6 +132,81 @@ calls `notify_changed()` after a set, reset, apply or load. The keymap and the G
 Left alone on purpose, because another change is working there: the LSP registry (`lsp`), the
 daemon and the problems model (`problems`, `analysis`, `code_actions`).
 
+## DataContext and actions (Phase 5)
+
+Menus, the toolbar, tool window buttons, context menus, Find Action and keyboard shortcuts no
+longer decide for themselves whether a command applies. They ask one registry of actions, and an
+action answers from a `DataContext`.
+
+| Here | IntelliJ | Where |
+|---|---|---|
+| `DataKey<T>`, `DataProvider`, `DataContext` | `DataKey`, `DataProvider`, `DataContext` | `archipel-ide-platform` (`data.rs`; the common keys are `data_keys::*`) |
+| `AnAction`, `AnActionEvent`, `Presentation`, `ActionPlace`, `ActionEffect` | `AnAction`, `AnActionEvent`, `Presentation`, `ActionPlaces` | `archipel-ide-actions` (`anaction.rs`) |
+| `ACTIONS`, `ActionRegistry` | the `<action>` extension point, `ActionManager` | the same: actions are extensions of `dev.archipel.action`, id = action id |
+
+- **A `DataContext` is a stack of providers.** `IdeDataProvider` (`archipel-ide-core/src/ide_actions.rs`)
+  answers the project root, the active file, caret, selected text, "has unsaved changes", Git,
+  debug session, Android project and "command X is enabled". `UiDataProvider`
+  (`archipel-ide-ui/src/actions.rs`) adds what only the window knows: Find bar text, Project view
+  selection, editor focus (a key press), the target of a context menu. The innermost provider
+  answers first; values are computed only when a key is asked for. Building a context copies
+  nothing (`IdeApp::with_data`).
+- **`update(&AnActionEvent) -> Presentation`** returns `enabled`, `visible`, `text`,
+  `description` and `icon` from the context. It must be cheap: an open menu calls it every frame.
+  `perform` returns an `ActionEffect` (dispatch a command, or a host request such as "open the Go
+  to Line dialog"), so an action needs no `&mut` access to the IDE; `IdeApp::apply_effect` runs it.
+- **Every typed command and every reference action id the keymap maps to one is an action**
+  (`CommandAction`; `CommandActions::sync` registers them and follows plugin commands that come
+  and go). The window's own actions (Find, Go to Line, New File, clipboard, ...) are `UiActionImpl`
+  in the UI crate and register first, so they own their ids.
+- **Places.** `ActionPlace::Keymap` is where shortcuts differ from menus: menu-only bindings and
+  editor-only bindings stay with the focused widget, diff keys apply to the diff tab, debugger keys
+  stay free outside a debug session, and Android redirects (Run deploys `app`, Go to Declaration
+  resolves `R.x.y`) apply. All of it is in `CommandAction::update`/`perform`, not in the dispatcher.
+- **Context menus** put their per-target rules (`CloseAllToTheLeft` needs a tab to the left, Paste
+  needs a clipboard) in front of an action (`ContextMenuAction`), fed by a `ContextFacts` value in
+  the data context.
+
+### Adding an action
+
+```rust
+struct CloseFile;
+impl AnAction for CloseFile {
+    fn update(&self, e: &AnActionEvent) -> Presentation {
+        Presentation::when(e.data().has(&data_keys::ACTIVE_FILE))
+    }
+    fn perform(&self, _: &AnActionEvent) -> ActionEffect {
+        ActionEffect::command("editor.close", Value::Null)
+    }
+}
+ActionRegistry::new(app.extensions()).register("CloseContent", Arc::new(CloseFile), None)?;
+```
+
+Prefer a command (`archipel_ide_core`, registered in `built_in_commands`) when the action changes
+state: it is then an action automatically, with `enabled` from the command's own predicate. Write
+an `AnAction` for what only needs to ask the window to do something. A new fact for `update` is a
+`DataKey` that `IdeDataProvider` (state) or `UiDataProvider` (window) answers; do not read
+`state.<field>` in the UI.
+
+### The UI reads through handles, and a lint counts what is left
+
+`crates/archipel-ide-ui/tests/no_subsystem_reads.rs` has two ratchets, like
+`IDE_STATE_FIELD_BASELINE`:
+
+1. `SUBSYSTEM_READ_BASELINE` counts `state.<field>` for every `pub` field of `IdeState` in
+   `archipel-ide-ui/src` (test modules and comments excluded). It is **0**: the UI does not name
+   a field of `IdeState`. Methods (`state.settings()`, `state.active_doc()`,
+   `state.project_root()`) are accessors and do not count.
+2. `HANDLE_BASELINE` counts calls of the *transitional handles* in
+   `archipel-ide-core/src/views.rs` (`state.android()`, `state.agents_mut()`, ...). A handle hands
+   out a whole subsystem that still lives on `IdeState`; it is the seam where the subsystem
+   becomes a service (the handle then returns the service's guard and call sites do not change).
+   Each call is a read left to migrate to a `DataKey`, a narrower accessor or a service call.
+   Lower the baseline when calls go; never raise it. Adding a handle for a new subsystem is a
+   sign the subsystem should be a service instead (see "How to add a service").
+
+Both failure messages say what to lower the baseline to.
+
 ## How to add a service
 
 1. **Decide the scope.** One per process (settings, toolchains, keymap) is an application
@@ -226,8 +301,8 @@ Do one feature at a time; every step keeps the tests green.
    through the service (never `state.<feature>.<internal>`); for data that is read every frame,
    return an `Arc` snapshot (`git_status()`) instead of cloning.
 5. Delete the field, lower `IDE_STATE_FIELD_BASELINE`, tick the checklist.
-6. Phase 5 turns the remaining accessors into `DataContext` reads; do not add new `state.*`
-   reaches in `archipel-ide-ui`.
+6. The UI reads through service accessors, handles (`views.rs`) and `DataContext` keys; do not
+   add `state.<field>` reaches in `archipel-ide-ui` (a lint fails; see "DataContext and actions").
 
 Pitfalls seen while moving the first four:
 

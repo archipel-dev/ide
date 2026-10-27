@@ -322,7 +322,7 @@ fn copy_selection(app: &mut IdeApp, ctx: &egui::Context) {
                     ctx.copy_text(text.to_owned());
                 }
             }
-            Err(error) => app.state.status = error.to_string(),
+            Err(error) => app.state.set_status(error.to_string()),
         }
     }
 }

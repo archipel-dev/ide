@@ -506,7 +506,7 @@ pub(super) fn composer(
             None => {
                 let profiles: Vec<&'static str> = c.profiles().iter().map(|p| p.id()).collect();
                 if profiles.is_empty() {
-                    app.state.status = "Choose at least one agent".into();
+                    app.state.set_status("Choose at least one agent".into());
                 } else {
                     actions.push(Action::Launch(prompt.clone(), profiles));
                     app.agents_ui.history.push(prompt);

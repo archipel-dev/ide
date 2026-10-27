@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 
 /// Label of the toolbar device selector.
 pub fn selector_label(app: &IdeApp) -> (String, bool) {
-    let hub = &app.state.android.devices;
+    let hub = &app.state.android().devices;
     match hub.selected_device() {
         Some(device) => (device.display_name(), true),
         None if hub.devices.is_empty() => ("No Devices".into(), false),
@@ -19,7 +19,7 @@ pub fn selector_label(app: &IdeApp) -> (String, bool) {
 
 /// Device selector shown left of the run configuration for Android projects.
 pub fn device_selector(app: &mut IdeApp, ui: &mut egui::Ui) {
-    if app.state.android.project.is_none() {
+    if !app.state.is_android_project() {
         return;
     }
     let (label, active) = selector_label(app);
@@ -43,7 +43,7 @@ pub fn device_selector(app: &mut IdeApp, ui: &mut egui::Ui) {
     );
     egui::Popup::menu(&response).show(|ui| {
         ui.set_min_width(260.0);
-        let hub = &app.state.android.devices;
+        let hub = &app.state.android().devices;
         let mut select = None;
         let mut start = None;
         ui.label(RichText::new("Running devices").color(theme::TEXT_INFO));
@@ -139,7 +139,7 @@ struct Row {
 }
 
 fn rows(app: &IdeApp) -> Vec<Row> {
-    let hub = &app.state.android.devices;
+    let hub = &app.state.android().devices;
     let mut rows: Vec<Row> = hub
         .avds
         .iter()
@@ -213,7 +213,7 @@ fn rows(app: &IdeApp) -> Vec<Row> {
 
 /// Right-anchored Device Manager tool window.
 pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
-    let Some(window) = app.state.tool_windows.visible(Anchor::Right) else {
+    let Some(window) = app.state.tool_windows().visible(Anchor::Right) else {
         return;
     };
     if window != ToolWindow::DeviceManager {
@@ -229,7 +229,7 @@ pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
             let hide = widgets::tool_window_header(ui, window.title(), |ui| {
                 if icons::button(ui, Icon::Refresh, "Refresh devices").clicked() {
                     app.dispatch("android.avd.list", Value::Null);
-                    if !app.state.android.devices.is_tracking() {
+                    if !app.state.android().devices.is_tracking() {
                         app.dispatch("android.devices.track", Value::Null);
                     }
                 }
@@ -449,7 +449,7 @@ fn device_table(app: &mut IdeApp, ui: &mut egui::Ui, dm: &mut DmState) {
         header.bottom(),
         egui::Stroke::new(1.0_f32, theme::BORDER),
     );
-    if let Some(error) = &app.state.android.devices.error {
+    if let Some(error) = &app.state.android().devices.error {
         let error = error.split_whitespace().collect::<Vec<_>>().join(" ");
         egui::Frame::new()
             .inner_margin(egui::Margin::symmetric(12, 6))

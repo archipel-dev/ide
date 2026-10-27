@@ -28,7 +28,7 @@ impl Draft {
 }
 
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
-    if !app.state.first_run_open {
+    if !app.state.first_run_open() {
         app.customize = None;
         app.first_run_skip = None;
         return;

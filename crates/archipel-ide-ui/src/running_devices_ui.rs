@@ -10,7 +10,7 @@ use std::time::Duration;
 
 /// Right-anchored Running Devices tool window.
 pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
-    if app.state.tool_windows.visible(Anchor::Right) != Some(ToolWindow::RunningDevices) {
+    if app.state.tool_windows().visible(Anchor::Right) != Some(ToolWindow::RunningDevices) {
         return;
     }
     egui::SidePanel::right("right_tool_window")
@@ -20,7 +20,7 @@ pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
         .show_separator_line(false)
         .frame(widgets::island_frame(ctx))
         .show(ctx, |ui| {
-            let mirroring = app.state.android.mirror.is_running();
+            let mirroring = app.state.android().mirror.is_running();
             let mut toggle = false;
             let hide = widgets::tool_window_header(ui, ToolWindow::RunningDevices.title(), |ui| {
                 let (icon, tip) = if mirroring {
@@ -41,7 +41,7 @@ pub fn right(app: &mut IdeApp, ctx: &egui::Context) {
                 };
                 app.dispatch(command, Value::Null);
             }
-            if app.state.android.mirror.frame.is_some() && mirroring {
+            if app.state.android().mirror.frame.is_some() && mirroring {
                 mirror(app, ui);
                 ctx.request_repaint_after(Duration::from_millis(100));
             } else {
@@ -69,7 +69,7 @@ fn empty_state(app: &mut IdeApp, ui: &mut egui::Ui) {
             .wrap(),
         );
         ui.add_space(8.0);
-        if let Some(error) = &app.state.android.mirror.error {
+        if let Some(error) = &app.state.android().mirror.error {
             ui.label(RichText::new(error).color(theme::TEXT_INFO));
             ui.add_space(8.0);
         }
@@ -83,7 +83,7 @@ fn empty_state(app: &mut IdeApp, ui: &mut egui::Ui) {
 }
 
 fn mirror(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let mirror = &app.state.android.mirror;
+    let mirror = &app.state.android().mirror;
     let Some(png) = mirror.frame.clone() else {
         return;
     };

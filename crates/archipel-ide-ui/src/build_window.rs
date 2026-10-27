@@ -168,12 +168,12 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
                 "Nothing has run yet".to_owned()
             };
             ui.label(RichText::new(empty).color(*theme::TEXT_SECONDARY));
-            let hint = match &app.state.detected_build {
+            let hint = match &app.state.detected_build() {
                 Some(build) => format!(
                     "{} project · Build Project or Run from the toolbar",
                     build.kind.display_name()
                 ),
-                None if app.state.project.is_some() => {
+                None if app.state.has_project() => {
                     "No supported build system (Cargo, Gradle, Maven, Bazel, npm, Go) was detected"
                         .into()
                 }

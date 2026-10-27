@@ -7,9 +7,9 @@
 //! [`DataContext`] made of the IDE's provider (`archipel_ide_core::ide_actions`) and
 //! [`UiDataProvider`]. Nothing here reads another subsystem's fields.
 
+use crate::IdeApp;
 use crate::context_menus::Target;
 use crate::keybindings::{UiAction, ui_action_ids};
-use crate::{IdeApp, keybindings};
 use archipel_ide_actions::{
     ActionEffect, ActionPlace, ActionRegistry, AnAction, AnActionEvent, Presentation,
 };
@@ -375,6 +375,7 @@ pub(crate) fn switcher_params(ctx: &egui::Context) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::keybindings;
 
     fn facts(kind: ContextKind) -> ContextFacts {
         ContextFacts {

@@ -291,7 +291,7 @@ fn recent_projects(app: &mut IdeApp, ui: &mut egui::Ui) {
             let ctx = ui.ctx().clone();
             let path = entry.path.display().to_string();
             if let Err(error) = app.open_project_path(&path, &ctx) {
-                app.state.status = error;
+                app.state.set_status(error);
             }
             ui.close();
         }

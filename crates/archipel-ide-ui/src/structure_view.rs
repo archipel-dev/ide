@@ -143,11 +143,7 @@ pub fn navigate(app: &mut IdeApp, ctx: &egui::Context, item: &StructureItem) {
 /// Moves the caret to the item's name, leaving keyboard focus where it is (arrow keys in
 /// the Structure window follow the caret without stealing focus).
 fn goto(app: &mut IdeApp, item: &StructureItem) {
-    let Some(document) = app
-        .state
-        .active_document
-        .and_then(|i| app.state.documents.get(i))
-    else {
+    let Some(document) = app.state.active_doc() else {
         return;
     };
     let line_start = document.text.line_to_char(item.line).unwrap_or(0);
@@ -210,11 +206,7 @@ enum Choice {
 /// Structure tool window body: the kit's virtualized list of `ListRow`s, with a context
 /// menu on every row. Expanding and collapsing is kept per file.
 pub fn tool_window(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let Some(document) = app
-        .state
-        .active_document
-        .and_then(|i| app.state.documents.get(i))
-    else {
+    let Some(document) = app.state.active_doc() else {
         ui.label(egui::RichText::new("No file open").color(theme::TEXT_SECONDARY));
         return;
     };

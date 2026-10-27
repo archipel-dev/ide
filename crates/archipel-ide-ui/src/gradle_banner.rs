@@ -4,7 +4,7 @@ use crate::{IdeApp, theme};
 use eframe::egui::{self, RichText};
 
 pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
-    if !app.state.gradle_changes_pending || !app.state.is_gradle_project() {
+    if !app.state.gradle_changes_pending() || !app.state.is_gradle_project() {
         return;
     }
     let busy = app.state.execution().is_running();

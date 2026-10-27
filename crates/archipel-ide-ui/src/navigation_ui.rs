@@ -32,7 +32,7 @@ pub fn handle_shortcuts(app: &mut IdeApp, ctx: &egui::Context) {
             input.events.len() != before
         })
     };
-    if app.state.navigation.choices.is_some() {
+    if app.state.navigation().choices.is_some() {
         choices_keys(app, ctx, &consume);
     }
     // Go to Declaration/Type/Implementation, Find/Show Usages and keyboard
@@ -44,11 +44,11 @@ pub fn handle_shortcuts(app: &mut IdeApp, ctx: &egui::Context) {
             input.pointer.button_pressed(egui::PointerButton::Extra2),
         )
     });
-    if back && app.state.navigation.can_go_back() {
+    if back && app.state.navigation().can_go_back() {
         app.dispatch("navigate.back", Value::Null);
         ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
     }
-    if forward && app.state.navigation.can_go_forward() {
+    if forward && app.state.navigation().can_go_forward() {
         app.dispatch("navigate.forward", Value::Null);
         ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
     }
@@ -70,7 +70,7 @@ fn choices_keys(app: &mut IdeApp, ctx: &egui::Context, consume: &dyn Fn(Modifier
     }
     ctx.data_mut(|data| data.insert_temp(selected_id(), selected));
     if consume(Modifiers::NONE, Key::Escape) {
-        app.state.navigation.choices = None;
+        app.state.navigation_mut().choices = None;
         return;
     }
     if consume(Modifiers::NONE, Key::Enter) {
@@ -89,7 +89,7 @@ fn open_choice(app: &mut IdeApp, ctx: &egui::Context, index: usize) {
     else {
         return;
     };
-    app.state.navigation.choices = None;
+    app.state.navigation_mut().choices = None;
     goto(app, ctx, &item);
 }
 
@@ -104,7 +104,7 @@ fn goto(app: &mut IdeApp, ctx: &egui::Context, item: &NavigationItem) {
 /// The chooser (several declarations or implementations) and Show Usages popup,
 /// anchored below the caret.
 pub fn choices_popup(app: &mut IdeApp, ctx: &egui::Context) {
-    let Some(list) = app.state.navigation.choices.clone() else {
+    let Some(list) = app.state.navigation().choices.clone() else {
         ctx.data_mut(|data| data.remove::<usize>(selected_id()));
         return;
     };
@@ -173,7 +173,7 @@ pub fn choices_popup(app: &mut IdeApp, ctx: &egui::Context) {
     if let Some(index) = open {
         open_choice(app, ctx, index);
     } else if close {
-        app.state.navigation.choices = None;
+        app.state.navigation_mut().choices = None;
     }
 }
 
@@ -309,7 +309,7 @@ pub fn find_header(app: &mut IdeApp, ui: &mut egui::Ui) -> bool {
                 .rect_filled(rect.shrink2(vec2(0.0, 4.0)), 4.0, theme::HOVER);
         }
         row_text(ui, rect, x + 8.0, &label, font.clone(), theme::TEXT_BRIGHT);
-        if app.state.navigation.usages_selected == usages {
+        if app.state.navigation().usages_selected == usages {
             ui.painter().line_segment(
                 [
                     egui::pos2(rect.left() + 2.0, rect.bottom() - 1.0),
@@ -319,7 +319,7 @@ pub fn find_header(app: &mut IdeApp, ui: &mut egui::Ui) -> bool {
             );
         }
         if response.clicked() {
-            app.state.navigation.usages_selected = usages;
+            app.state.navigation_mut().usages_selected = usages;
         }
         x = rect.right() + 4.0;
     }
@@ -345,11 +345,11 @@ pub fn find_header(app: &mut IdeApp, ui: &mut egui::Ui) -> bool {
         app.toggle_tool_window(ToolWindow::Find);
     }
     let usages_selected =
-        app.state.navigation.usages_selected && app.state.navigation.usages.is_some();
+        app.state.navigation().usages_selected && app.state.navigation().usages.is_some();
     if usages_selected {
         if button(ui, Icon::Close, *icons::ICON, "Close Usages Tab") {
-            app.state.navigation.usages = None;
-            app.state.navigation.usages_selected = false;
+            app.state.navigation_mut().usages = None;
+            app.state.navigation_mut().usages_selected = false;
         }
     } else if app.state.search_running() && button(ui, Icon::Stop, *theme::STOP_RED, "Cancel") {
         app.dispatch("search.cancel", Value::Null);
@@ -359,7 +359,7 @@ pub fn find_header(app: &mut IdeApp, ui: &mut egui::Ui) -> bool {
 
 /// Usages grouped by file, like the reference Find tool window.
 pub fn usages_view(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let Some(list) = app.state.navigation.usages.clone() else {
+    let Some(list) = app.state.navigation().usages.clone() else {
         return;
     };
     let mut groups: Vec<(&std::path::Path, Vec<&NavigationItem>)> = Vec::new();

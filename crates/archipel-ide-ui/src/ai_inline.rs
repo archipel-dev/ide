@@ -25,11 +25,7 @@ pub struct InlineUi {
 /// document and starts a request after a typing pause.
 pub fn tick(app: &mut IdeApp, ctx: &egui::Context) {
     app.state.ai_inline_sync();
-    let Some(document) = app
-        .state
-        .active_document
-        .and_then(|i| app.state.documents.get(i))
-    else {
+    let Some(document) = app.state.active_doc() else {
         app.ai_ui.inline = InlineUi::default();
         return;
     };
@@ -54,7 +50,7 @@ pub fn tick(app: &mut IdeApp, ctx: &egui::Context) {
         return;
     }
     app.ai_ui.inline.due = None;
-    if app.state.ai.inline.is_none() {
+    if app.state.ai().inline.is_none() {
         app.dispatch("ai.inline.request", Value::Null);
     }
 }
@@ -62,7 +58,7 @@ pub fn tick(app: &mut IdeApp, ctx: &egui::Context) {
 /// Tab accepts, ⌥→ (Ctrl+→ off macOS) accepts a word, Esc dismisses. Must run
 /// before the general shortcut handler so Tab does not indent.
 pub fn handle_keys(app: &mut IdeApp, ctx: &egui::Context) {
-    if app.state.ai.inline.is_none()
+    if app.state.ai().inline.is_none()
         || !app.editor_focused(ctx)
         || app
             .state
@@ -89,11 +85,7 @@ pub fn handle_keys(app: &mut IdeApp, ctx: &egui::Context) {
         return;
     }
     // Accepting is an edit, but not typing: it must not trigger a new request.
-    if let Some(document) = app
-        .state
-        .active_document
-        .and_then(|i| app.state.documents.get(i))
-    {
+    if let Some(document) = app.state.active_doc() {
         app.ai_ui.inline.seen = Some((document.path.clone(), document.text.revision()));
         app.ai_ui.inline.due = None;
     }
@@ -104,15 +96,11 @@ pub fn handle_keys(app: &mut IdeApp, ctx: &egui::Context) {
 /// the suggestion, as it will be once the suggestion is inserted.
 pub fn paint(app: &mut IdeApp, ui: &egui::Ui) {
     app.state.ai_inline_sync();
-    let (Some(suggestion), Some(caret_bottom)) = (&app.state.ai.inline, app.caret_screen_pos)
+    let (Some(suggestion), Some(caret_bottom)) = (&app.state.ai().inline, app.caret_screen_pos)
     else {
         return;
     };
-    let Some(document) = app
-        .state
-        .active_document
-        .and_then(|i| app.state.documents.get(i))
-    else {
+    let Some(document) = app.state.active_doc() else {
         return;
     };
     if document.path != suggestion.path {

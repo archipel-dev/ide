@@ -203,7 +203,7 @@ impl IdeApp {
                 .iter()
                 .map(|mark| action(&format!("jt.mark.{}", mark.id()), mark.label()))
                 .collect();
-            if self.state.project_view.marks.contains_key(path) {
+            if self.state.project_view().marks.contains_key(path) {
                 marks.push(MenuItem::Separator(None));
                 marks.push(action("jt.mark.none", "Unmark"));
             }
@@ -228,13 +228,13 @@ impl IdeApp {
 
     /// Absolute path of a target, if it has one.
     fn target_path(&self, target: &Target) -> Option<(PathBuf, PathBuf)> {
-        let root = self.state.project.as_ref()?.root().to_owned();
+        let root = self.state.project_root()?;
         let relative = match target {
             Target::Tree { path, .. } => path.clone(),
-            Target::Tab(index) => self.state.documents.get(*index)?.path.clone(),
+            Target::Tab(index) => self.state.document(*index)?.path.clone(),
             Target::Editor => {
-                let index = self.state.active_document?;
-                self.state.documents.get(index)?.path.clone()
+                let index = self.state.active_index()?;
+                self.state.document(index)?.path.clone()
             }
         };
         Some((root.join(&relative), relative))
@@ -259,7 +259,7 @@ impl IdeApp {
                         "CopyFileName" => IdeApp::file_name(&relative),
                         _ => relative.display().to_string(),
                     };
-                    self.state.status = format!("Copied {text}");
+                    self.state.set_status(format!("Copied {text}"));
                     ctx.copy_text(text);
                 }
             }
@@ -286,10 +286,10 @@ impl IdeApp {
             "FindInPath" if matches!(target, Target::Tree { .. }) => {
                 if let Target::Tree { path, .. } = target {
                     // Scoped to the clicked directory (or file); the project root is everything.
-                    self.state.project_view.search_scope =
+                    self.state.project_view_mut().search_scope =
                         (!path.as_os_str().is_empty()).then(|| path.clone());
                     self.state.set_search_scope_kind(
-                        if self.state.project_view.search_scope.is_some() {
+                        if self.state.project_view().search_scope.is_some() {
                             archipel_ide_core::SearchScopeKind::Directory
                         } else {
                             archipel_ide_core::SearchScopeKind::Project

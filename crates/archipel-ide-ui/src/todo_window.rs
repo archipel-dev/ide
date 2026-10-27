@@ -62,7 +62,7 @@ fn file_name(path: &Path) -> String {
 pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
     let view = app.state.todo_view();
     let (scope, group, filter, selected) = {
-        let todo = &app.state.analysis.todo;
+        let todo = &app.state.analysis().todo;
         (todo.scope, todo.group, todo.filter, todo.selected)
     };
     let count = view.rows.len();
@@ -114,7 +114,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         }
     });
     crate::index_status::banner(ui, &app.state);
-    if view.indexing && !app.state.analysis.index.is_attached() {
+    if view.indexing && !app.state.analysis().index.is_attached() {
         ui.label(
             egui::RichText::new("Open a project to list TODO items").color(theme::TEXT_SECONDARY),
         );
@@ -124,7 +124,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
             ui.label(egui::RichText::new("No TODO items found").color(theme::TEXT_SECONDARY));
         });
     }
-    let lines = entries(&view.rows, group, &app.state.analysis.todo.collapsed);
+    let lines = entries(&view.rows, group, &app.state.analysis().todo.collapsed);
     let font = egui::FontId::proportional(theme::UI_FONT_SIZE);
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])

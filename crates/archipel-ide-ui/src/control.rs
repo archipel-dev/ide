@@ -460,6 +460,19 @@ impl IdeApp {
                 "popup": self.state.code_actions.popup,
                 "rows": self.state.alert_texts(),
             },
+            // The import chooser (`Method to Import`) opened by an Alt+Enter import fix.
+            "chooser": {
+                "open": self.state.java_service().is_some_and(|s| s.chooser().is_some()),
+                "title": self.state.java_service().and_then(|s| s.chooser()).map(|c| c.title),
+                "rows": self.state.java_service().and_then(|s| s.chooser()).map(|c| c.rows.iter().map(|r| match &r.detail {
+                    Some(d) => format!("{} {d}", r.label),
+                    None => r.label.clone(),
+                }).collect::<Vec<_>>()),
+            },
+            // Native Java indexes and the problem count of the Java pass.
+            "java": {
+                "state": self.state.java_service().map(|s| format!("{:?}", s.status().state)),
+            },
             "lsp": {
                 "importing": self.state.lsp.servers().iter().any(|server| server.importing),
                 "servers": self.state.lsp.servers().iter().map(|server| json!({

@@ -118,6 +118,10 @@ pub trait QuickFix: Send + Sync {
     fn batch_ok(&self) -> bool {
         true
     }
+    /// Alt+Enter priority band of this fix among the fixes of the same problem.
+    fn priority(&self) -> Priority {
+        Priority::Normal
+    }
 }
 
 #[cfg(test)]

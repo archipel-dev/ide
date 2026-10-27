@@ -1,0 +1,72 @@
+{
+  "title": "Unused import is reported and optimized away",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/demo/Main.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "caret",
+      "line": 3,
+      "column": 10
+    },
+    {
+      "op": "altEnter"
+    },
+    {
+      "op": "applyIntention",
+      "title": "re:^(Optimize imports|Remove unused import)"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "fixed",
+      "timeoutMs": 20000
+    }
+  ],
+  "expect": {
+    "markup": [
+      {
+        "when": "initial",
+        "range": "3:1-3:23",
+        "severity": "warning",
+        "message": "Unused import statement",
+        "confidence": "unverified"
+      }
+    ],
+    "intentions": [
+      {
+        "items": [
+          "Optimize imports"
+        ],
+        "confidence": "unverified"
+      }
+    ],
+    "file": [
+      {
+        "contains": [
+          "import java.util.Map;"
+        ],
+        "notContains": [
+          "import java.util.List;"
+        ]
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "open a file with an unused import, Alt+Enter on it, Optimize imports",
+    "notes": "the message is from the 'Unused import' inspection; its highlight range (the whole statement) and the quick fix text are recalled"
+  }
+}

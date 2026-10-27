@@ -48,3 +48,12 @@ IntelliJ IDEA Ultimate-only feature; the dashboard reports these separately.
 `% implemented` = (weight of Implemented + Verified rows + half the weight of Partial
 rows) / total weight. `% verified` = weight of Verified rows / total weight. Both are
 reported overall, per area, and per edition scope.
+
+## Behavior scenarios
+
+The tables above say what exists; `docs/parity/scenarios/` says whether it behaves like IntelliJ.
+Each scenario types real input into the IDE and compares markup, Alt+Enter items, completion,
+navigation and resulting files with recorded IntelliJ results. `cargo run -p xtask -- scenario`
+runs them; the committed baseline (`scenarios/REPORT.md`, `REPORT.json`) feeds the "Behavior
+scenarios" section of the dashboard. A feature row may cite a scenario as its evidence; a
+`Verified` row should have a passing scenario.

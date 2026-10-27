@@ -18,11 +18,13 @@ pub mod agents_mock;
 mod ai_actions;
 mod analysis_host;
 mod analysis_modules;
+mod automation_commands;
 mod history_commands;
 mod indexing_commands;
 mod todo_commands;
 pub use analysis_host::AnalysisServices;
 mod inspection_commands;
+mod java_commands;
 /// Alt+Enter model types for the UI.
 pub mod intentions {
     pub use archipel_ide_analysis::inspect::Level;
@@ -1171,6 +1173,7 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
     vcs::register(&mut registry);
     plugin_host::register(&mut registry);
     problems::register(&mut registry);
+    automation_commands::register(&mut registry);
     toolchain_commands::register(&mut registry);
     line_changes::register(&mut registry);
     git_log::register(&mut registry);

@@ -56,7 +56,7 @@ pub use index::{IndexNotReady, IndexState};
 pub use intention::Priority as IntentionPriority;
 pub use interface::InterfaceSummarizer;
 pub use job::{Executor, JobHandle, JobSpec, Priority as JobPriority, Revoke, RevokeScope};
-pub use modcommand::{ModCommand, TextEdit};
+pub use modcommand::{ChoiceRow, ModCommand, TextEdit};
 pub use stamps::{Dep, IndexId, IndexStamp, InterfaceEpoch, Stamps};
 pub use target::{Confidence, Provenance, Target};
 pub use vfs::{DocumentOverlay, Vfs, VfsChange, VfsError};

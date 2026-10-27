@@ -1,0 +1,48 @@
+{
+  "title": "Spring Boot Bazel project opens and syncs",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "bazelisk",
+    "network"
+  ],
+  "open": "src/main/java/com/example/demo/DemoApplication.java",
+  "steps": [
+    {
+      "op": "sync",
+      "command": "bazel.sync",
+      "timeoutMs": 600000
+    },
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "synced",
+      "timeoutMs": 300000
+    }
+  ],
+  "expect": {
+    "query": [
+      {
+        "command": "bazel.targets",
+        "pointer": "/targets",
+        "contains": "//:demo",
+        "confidence": "unverified"
+      }
+    ],
+    "noMarkup": [
+      {
+        "when": "synced",
+        "severity": "error",
+        "confidence": "unverified"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2 with the Bazel plugin",
+    "action": "open the folder with the Bazel plugin, run Sync Project with BUILD Files",
+    "notes": "the //:demo target appears in the Bazel tool window; the Spring classes resolve through rules_jvm_external"
+  }
+}

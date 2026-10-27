@@ -1,0 +1,86 @@
+{
+  "title": "String assigned to int",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/demo/Counter.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "typeAt",
+      "line": 5,
+      "column": 23,
+      "text": "\nint count = \"three\";"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "typed",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "caret",
+      "line": 6,
+      "column": 23
+    },
+    {
+      "op": "altEnter"
+    },
+    {
+      "op": "applyIntention",
+      "title": "re:^(Change variable 'count' type to 'String'|Change type of 'count' to 'String')"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "fixed",
+      "timeoutMs": 20000
+    }
+  ],
+  "expect": {
+    "markup": [
+      {
+        "when": "typed",
+        "range": "6:21-6:28",
+        "severity": "error",
+        "message": "Incompatible types. Found: 'java.lang.String', required: 'int'",
+        "confidence": "unverified"
+      }
+    ],
+    "intentions": [
+      {
+        "items": [
+          "Change variable 'count' type to 'String'"
+        ],
+        "confidence": "unverified"
+      }
+    ],
+    "file": [
+      {
+        "contains": [
+          "String count = \"three\";"
+        ]
+      }
+    ],
+    "noMarkup": [
+      {
+        "when": "fixed",
+        "severity": "error"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "type int count = \"three\";, Alt+Enter on the literal",
+    "notes": "message wording changed between releases; the range (the literal) is stable"
+  }
+}

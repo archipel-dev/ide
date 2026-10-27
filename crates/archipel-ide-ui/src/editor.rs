@@ -2185,7 +2185,13 @@ fn editor_surface(
             },
         )
     });
-    let events = ui.input(|input| input.events.clone());
+    // The import chooser popup owns the keyboard while it is open (it is drawn after the editor).
+    let chooser_open = crate::import_chooser::is_open(ui.ctx());
+    let events: Vec<egui::Event> = ui
+        .input(|input| input.events.clone())
+        .into_iter()
+        .filter(|e| !(chooser_open && matches!(e, egui::Event::Key { .. } | egui::Event::Text(_))))
+        .collect();
     let initial_revision = document.text.revision();
     let page = (ui.available_height() / row_height).max(1.0) as isize;
     let mac = cfg!(target_os = "macos");

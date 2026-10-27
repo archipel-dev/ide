@@ -475,9 +475,10 @@ impl Daemon {
     /// Deduplicates the native and language-server highlights of `file` (see
     /// [`FileMarkup::reconcile`]); the language's tier decides who wins.
     fn reconcile(&mut self, snap: &Snapshot, file: FileId) {
-        let graduated = snap
-            .syntax(file)
-            .is_some_and(|syntax| syntax.lang().tier >= CompletenessTier::G2);
+        let graduated = snap.syntax(file).is_some_and(|syntax| {
+            syntax.lang().tier >= CompletenessTier::G2
+                || self.shared.native_wins.read().contains(syntax.lang().id)
+        });
         let external_published = snap
             .path(file)
             .is_some_and(|path| self.shared.external.is_published(path));

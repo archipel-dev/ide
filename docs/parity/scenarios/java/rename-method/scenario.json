@@ -1,0 +1,61 @@
+{
+  "title": "Rename a method across files",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/demo/Greeter.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "caret",
+      "line": 4,
+      "column": 21
+    },
+    {
+      "op": "rename",
+      "to": "welcome"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "renamed",
+      "timeoutMs": 20000
+    },
+    {
+      "op": "save"
+    }
+  ],
+  "expect": {
+    "file": [
+      {
+        "contains": [
+          "public String welcome(String name)"
+        ],
+        "notContains": [
+          "greet("
+        ]
+      },
+      {
+        "path": "src/main/java/demo/Main.java",
+        "contains": [
+          "new Greeter().welcome(\"x\")"
+        ]
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "Shift+F6 on the method name, type the new name, Enter",
+    "notes": "usages in other files are updated without a preview"
+  }
+}

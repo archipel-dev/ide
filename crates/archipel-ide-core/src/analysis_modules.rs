@@ -84,8 +84,8 @@ pub(crate) const MODULES: &[AnalysisModule] = &[
     // WP9 language tiers (`archipel-ide-lang-*`).
     AnalysisModule {
         id: "lang-java",
-        services: none,
-        commands: no_commands,
+        services: crate::java_commands::java_services,
+        commands: crate::java_commands::register_commands,
     },
     AnalysisModule {
         id: "lang-rust",

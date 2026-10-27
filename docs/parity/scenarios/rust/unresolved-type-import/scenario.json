@@ -73,5 +73,6 @@
     "version": "RustRover 2025.2",
     "action": "type a HashMap declaration without a use, Alt+Enter on HashMap",
     "notes": "IntelliJ Rust reports an unresolved reference and offers the import; wording recalled"
-  }
+  },
+  "knownGap": "rust-analyzer's own diagnostics are not shown while typing; errors appear only after a save (cargo check), IntelliJ marks them at once"
 }

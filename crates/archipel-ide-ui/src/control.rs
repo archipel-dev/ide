@@ -223,7 +223,9 @@ impl IdeApp {
         };
         control.frames_since_input = control.frames_since_input.saturating_add(1);
         let stamp = self.state.markup_stamp();
-        if stamp != control.markup_stamp.0 {
+        let (native_ready, lsp_pending) = self.state.analysis_readiness();
+        if stamp != control.markup_stamp.0 || !native_ready || lsp_pending {
+            // The quiet period starts when the markup inputs last changed or a server was last busy.
             control.markup_stamp = (stamp, Instant::now());
         }
         for (pending, response) in control.after_frame.drain(..) {
@@ -242,7 +244,6 @@ impl IdeApp {
                         && self.background_idle()
                 }
                 WaitCondition::Analysis => {
-                    let (native_ready, lsp_pending) = self.state.analysis_readiness();
                     let quiet = if self.state.active_has_language_server() {
                         ANALYSIS_QUIET_LSP
                     } else {
@@ -251,8 +252,6 @@ impl IdeApp {
                     control.screenshots.is_empty()
                         && control.frames_since_input >= SETTLE_FRAMES
                         && self.background_idle()
-                        && native_ready
-                        && !lsp_pending
                         && control.markup_stamp.1.elapsed() >= quiet
                 }
                 WaitCondition::Popup => self.popup_visible(ctx),

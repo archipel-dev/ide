@@ -41,5 +41,6 @@
     "version": "RustRover 2025.2",
     "action": "type use std::collections::HashMapp; at the top of the file",
     "notes": "the unresolved last path segment is marked"
-  }
+  },
+  "knownGap": "rust-analyzer's own diagnostics are not shown while typing; errors appear only after a save (cargo check), IntelliJ marks them at once"
 }

@@ -41,5 +41,6 @@
     "version": "RustRover 2025.2",
     "action": "type let n: i32 = \"text\";",
     "notes": "IntelliJ Rust quotes the rustc error code; wording recalled"
-  }
+  },
+  "knownGap": "rust-analyzer's own diagnostics are not shown while typing; errors appear only after a save (cargo check), IntelliJ marks them at once"
 }

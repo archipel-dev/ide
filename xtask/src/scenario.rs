@@ -1208,7 +1208,11 @@ impl Session<'_> {
                 }
             }
             ScenarioStep::WaitServer { timeout } => {
+                // Servers report progress in bursts (importing, indexing, checking): ready
+                // means ready and silent for a few seconds.
+                const SILENT: Duration = Duration::from_secs(4);
                 let started = Instant::now();
+                let mut quiet_since: Option<Instant> = None;
                 loop {
                     let servers = self.execute("language.servers", Value::Null)?;
                     let list = servers["servers"].as_array().cloned().unwrap_or_default();
@@ -1218,7 +1222,12 @@ impl Session<'_> {
                                 && s["progress"].as_array().is_none_or(|p| p.is_empty())
                         });
                     if ready {
-                        break;
+                        let since = *quiet_since.get_or_insert_with(Instant::now);
+                        if since.elapsed() >= SILENT {
+                            break;
+                        }
+                    } else {
+                        quiet_since = None;
                     }
                     if started.elapsed() > *timeout {
                         self.observed.notes.push(format!(
@@ -1517,6 +1526,16 @@ fn probe(env: &Environment, needs: &BTreeSet<String>, install: bool) -> Result<B
     fs::create_dir_all(&dir)?;
     let (mut process, socket) = launch(env, &dir, None, &[], &BTreeMap::new(), "probe")?;
     let mut client = connect(&socket, &mut process.0, &dir)?;
+    // A binary built from another checkout (shared target directory) lacks `wait analysis`.
+    send(
+        &mut client,
+        &Request::Wait {
+            until: WaitCondition::Analysis,
+            text: None,
+            timeout_ms: Some(10_000),
+        },
+    )
+    .context("the IDE binary does not support `wait analysis`; touch the changed crates and rebuild")?;
     let mut available = BTreeMap::new();
     for need in needs {
         let have = if need == "network" {
@@ -1532,7 +1551,7 @@ fn probe(env: &Environment, needs: &BTreeSet<String>, install: bool) -> Result<B
                 )
             };
             match locate(&mut client) {
-                Ok(value) if !value.is_null() => true,
+                Ok(value) if !value.is_null() && runs(need, &value) => true,
                 Ok(_) if install => {
                     println!("installing toolchain component {need} …");
                     let installed = send(
@@ -1560,6 +1579,22 @@ fn probe(env: &Environment, needs: &BTreeSet<String>, install: bool) -> Result<B
         available.insert(need.clone(), have);
     }
     Ok(available)
+}
+
+/// A located component is usable: rustup's `rust-analyzer` shim exists even when the
+/// component is not installed, so it has to answer `--version`.
+fn runs(need: &str, located: &Value) -> bool {
+    if need != "rust-analyzer" {
+        return true;
+    }
+    located["path"].as_str().is_some_and(|path| {
+        Command::new(path)
+            .arg("--version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+    })
 }
 
 fn network_available() -> bool {
@@ -1804,11 +1839,15 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
     if scenarios.is_empty() {
         bail!("no scenarios selected");
     }
-    let app = build_app(options.release)?;
+    let built = build_app(options.release)?;
     let display = Display::acquire()?;
     let cwd = std::env::current_dir()?;
     let work = cwd.join(&options.work);
     fs::create_dir_all(&work)?;
+    // The target directory may be shared with other checkouts that overwrite the binary
+    // while the scenarios run: run a private copy.
+    let app = work.join(format!("archipel-ide{}", std::env::consts::EXE_SUFFIX));
+    fs::copy(&built, &app).with_context(|| format!("copy {}", built.display()))?;
     let mut env = Environment {
         app,
         display,

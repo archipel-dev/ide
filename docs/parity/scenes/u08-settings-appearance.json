@@ -49,6 +49,11 @@
       "ms": 500
     },
     {
+      "op": "assert",
+      "pointer": "/activeTab",
+      "equals": "src/main/java/com/example/App.java"
+    },
+    {
       "op": "screenshot",
       "name": "u08-settings-appearance.png"
     }

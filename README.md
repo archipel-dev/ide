@@ -19,6 +19,7 @@ window islands, Search Everywhere, and a status bar with navigation breadcrumbs.
 cargo run -p archipel-ide-app                           # welcome screen, Open Project
 cargo run -p archipel-ide-app -- .                      # open a project
 cargo run -p archipel-ide-app -- . src/main.rs          # open a project and files
+cargo run -p archipel-ide-app -- --tui .                # the IDE in the terminal, no window
 cargo run -p archipel-ide-app --features example-plugins -- --app dev.archipel.hello
                                                     # a plugin as a standalone app
 cargo run -p archipel-ide-cli -- commands               # headless command discovery
@@ -28,6 +29,10 @@ cargo run -p xtask -- parity                        # regenerate the parity dash
 
 If wgpu finds no usable adapter (VMs, old drivers) the app falls back to OpenGL
 automatically; `ARCHIPEL_RENDERER=glow` forces it.
+
+`--tui [PROJECT_DIR] [FILE...]` starts the same IDE in the terminal (project tree, editor with
+tabs, Run, Problems, Find, Commit and Terminal windows) from the same binary; it needs no
+display and no GPU. Keys, features and limits are in [docs/tui.md](docs/tui.md).
 
 On Linux the window needs the X11/Wayland client libraries, for example on Debian/Ubuntu
 `libxkbcommon-x11-0` (X11) or `libwayland-client0` (Wayland), plus OpenGL/Vulkan drivers.

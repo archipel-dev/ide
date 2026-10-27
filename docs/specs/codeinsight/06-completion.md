@@ -380,8 +380,9 @@ leading wildcard `*`, and each `.` is followed by an implicit wildcard word boun
 | `a` | `_a` | yes (leading underscore skipped) | yes |
 
 With `Match case` off every "no" caused by case becomes "yes". The implementation must agree with
-the reference matcher on a **golden table** of at least 200 pattern/name pairs, generated from the
-IntelliJ matcher and committed as data; the table above is its seed.
+the reference matcher on a **golden table** of at least 200 pattern/name pairs, produced by the
+specification team (from observed IntelliJ behavior) and committed under `docs/specs/` as data; the
+table above is its seed. Implementers only consume the table.
 
 ### 6.3 Prefix and replacement ranges
 

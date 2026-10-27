@@ -50,5 +50,5 @@ identifier highlighting is not a pass; the trailing suppress comment is not an I
 - Default shortcuts of a few actions; intention-preview toggle shortcut on non-macOS.
 - Whether F3 steps through highlighted usages; Find Usages excess-results threshold.
 - Feature-usage advertisement threshold (3 uses is an Archipel proposal); statistics store bound.
-- The matcher golden table (CI-CMP) must be generated from the reference matcher by the
-  implementation team.
+- The matcher golden table (CI-CMP) must be produced by the specification team from observed
+  IntelliJ behavior and committed as data under `docs/specs/`; implementers only consume it.

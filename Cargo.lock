@@ -549,6 +549,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "archipel-ide-platform"
+version = "0.2.0"
+dependencies = [
+ "parking_lot",
+]
+
+[[package]]
 name = "archipel-ide-plugin-api"
 version = "0.2.0"
 dependencies = [

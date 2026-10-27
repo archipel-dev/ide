@@ -1,0 +1,12 @@
+[package]
+name = "archipel-ide-projectmodel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Project model: modules, content and source roots, SDKs, libraries, order entries, ProjectFileIndex and search scopes."
+
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

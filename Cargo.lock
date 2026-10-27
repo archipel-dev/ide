@@ -627,6 +627,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "archipel-ide-projectmodel"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "archipel-ide-runnables"
 version = "0.2.0"
 dependencies = [

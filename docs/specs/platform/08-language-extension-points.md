@@ -72,7 +72,7 @@ Every language-keyed extension point is a **language extension**: a collection k
 | PLAT-LANG-033 | MUST | **Element types**: each language declares its element and token types as interned values with the language attached; token sets are built once. A lazy-parseable type (chameleon) supplies a parse function; a reparseable type supplies `is_reparseable(node, new_text)` and `is_valid_reparse(old, new)`. | See PLAT-PSI-044, 050. |
 | PLAT-LANG-034 | SHOULD | **View provider factory** (per file type or language): produces a custom provider for multi-tree/template files. | See PLAT-PSI-029. |
 | PLAT-LANG-035 | MUST | **Language substitutor** (for a language, or for any language): pure function (file, project) to language or none; first non-null wins; the "any" substitutors run first; substituting to the "any language" value is an error. | See PLAT-VFS-077/078. |
-| PLAT-LANG-036 | SHOULD | Languages that embed or are embedded (templates, markdown with code fences, JSON in strings) declare **injection** relations through injector contributions (below), not through special parser hacks. | Markdown fence with ```` ```java ```` produces a Java fragment. |
+| PLAT-LANG-036 | SHOULD | Languages that embed or are embedded (templates, markdown with code fences, JSON in strings) declare **injection** relations through injector contributions (below), not through special parser hacks. | A Markdown fenced block tagged `java` produces a Java fragment. |
 
 ## 3. Editing-time language services
 

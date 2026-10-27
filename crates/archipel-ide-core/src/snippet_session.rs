@@ -84,14 +84,13 @@ impl IdeState {
             return;
         };
         let len = document.text.len_chars();
-        let selections = ranges
-            .iter()
-            .map(|&(start, end)| Selection {
-                anchor: start.min(len),
-                head: end.min(len),
-            })
-            .collect();
-        document.selections.set_all(selections);
+        // The caret sits in the first occurrence of the field; the mirrors follow it
+        // (ED-TMPL-002).
+        let first = ranges.iter().copied().min().unwrap_or((0, 0));
+        document.selections.set_single(Selection {
+            anchor: first.0.min(len),
+            head: first.1.min(len),
+        });
         if finishing {
             // `$0` is where the caret ends; the session is over.
             let caret = document.selections.primary().head;
@@ -138,73 +137,142 @@ impl IdeState {
         }
     }
 
-    /// Re-maps stop ranges after the user edited the active document. Edits
-    /// are expected at the current stop's selections (one per mirror); any
-    /// other change, or a caret outside the stop, ends the session.
+    /// Re-maps stop ranges after the user edited the active document and copies the edited field
+    /// into its mirrors. Edits are expected inside the first occurrence of the current stop; any
+    /// other change, or a caret outside it, ends the session (ED-TMPL-033).
     pub fn snippet_after_change(&mut self) {
         let Some(session) = self.snippet.as_ref() else {
             return;
         };
         let Some(document) = self
             .active_document
-            .and_then(|index| self.documents.get(index))
+            .and_then(|index| self.documents.get_mut(index))
             .filter(|document| document.path == session.path)
         else {
             self.snippet = None;
             return;
         };
         let len = document.text.len_chars();
+        let delta = len as isize - session.len as isize;
         let mut current: Vec<(usize, usize)> = session.stops[session.current].clone();
         current.sort_unstable();
-        let selections = document.selections.selections();
-        let delta = len as isize - session.len as isize;
-        let count = current.len() as isize;
-        let valid = delta % count == 0 && selections.len() == current.len();
-        if !valid {
-            self.snippet = None;
-            return;
-        }
-        let per = delta / count;
-        let shift = |position: usize, hits: isize| position.saturating_add_signed(per * hits);
-        let ends: Vec<usize> = current.iter().map(|&(_, end)| end).collect();
-        let before = |position: usize| ends.iter().filter(|&&end| end <= position).count() as isize;
-        let mut remapped = Vec::with_capacity(session.stops.len());
-        for (index, ranges) in session.stops.iter().enumerate() {
-            if index == session.current {
-                let mut updated = Vec::with_capacity(ranges.len());
-                for &(start, end) in ranges {
-                    let order = current
-                        .iter()
-                        .position(|&range| range == (start, end))
-                        .unwrap_or(0) as isize;
-                    updated.push((shift(start, order), shift(end, order + 1)));
-                }
-                remapped.push(updated);
-            } else {
-                remapped.push(
-                    ranges
-                        .iter()
-                        .map(|&(start, end)| (shift(start, before(start)), shift(end, before(end))))
-                        .collect(),
-                );
-            }
-        }
-        // Every selection must still be inside its stop range.
-        let mut current_ranges = remapped[session.current].clone();
-        current_ranges.sort_unstable();
-        let inside = selections
-            .iter()
-            .zip(&current_ranges)
-            .all(|(selection, &(start, end))| {
-                (start..=end).contains(&selection.start())
-                    && (start..=end).contains(&selection.end())
-            });
+        let primary = current[0];
+        let primary_end = primary.1.saturating_add_signed(delta);
+        let selections = document.selections.selections().to_vec();
+        let inside = selections.len() == 1
+            && primary_end >= primary.0
+            && (primary.0..=primary_end).contains(&selections[0].start())
+            && (primary.0..=primary_end).contains(&selections[0].end());
         if !inside {
             self.snippet = None;
             return;
         }
+        // Ranges after the edited field move with it.
+        let shift = |position: usize| {
+            if position >= primary.1 && delta != 0 {
+                position.saturating_add_signed(delta)
+            } else {
+                position
+            }
+        };
+        let mut stops: Vec<Vec<(usize, usize)>> = session
+            .stops
+            .iter()
+            .enumerate()
+            .map(|(index, ranges)| {
+                ranges
+                    .iter()
+                    .map(|&range| {
+                        if index == session.current && range == primary {
+                            (primary.0, primary_end)
+                        } else {
+                            (shift(range.0), shift(range.1))
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
+        // The mirrors of the current field show the same text.
+        let text = document
+            .text
+            .slice(primary.0, primary_end)
+            .unwrap_or_default();
+        let mut changes = Vec::new();
+        for &(start, end) in stops[session.current]
+            .iter()
+            .filter(|r| **r != (primary.0, primary_end))
+        {
+            if document.text.slice(start, end).unwrap_or_default() != text {
+                changes.push(archipel_ide_text::TextChange {
+                    start_char: start,
+                    end_char: end,
+                    inserted: text.clone(),
+                });
+            }
+        }
+        if !changes.is_empty() {
+            changes.sort_by_key(|change| change.start_char);
+            let before = document.selections.selections().to_vec();
+            let result = crate::editor_input::apply_changes(
+                document,
+                archipel_ide_text::UndoKind::Typing,
+                changes.clone(),
+                |changes, _| {
+                    before
+                        .iter()
+                        .map(|s| Selection {
+                            anchor: crate::editor_input::map_through(
+                                changes,
+                                s.anchor,
+                                crate::editor_input::Bias::Right,
+                            ),
+                            head: crate::editor_input::map_through(
+                                changes,
+                                s.head,
+                                crate::editor_input::Bias::Right,
+                            ),
+                        })
+                        .collect()
+                },
+            );
+            if result.is_err() {
+                self.snippet = None;
+                return;
+            }
+            let mirrors: std::collections::HashSet<(usize, usize)> =
+                changes.iter().map(|c| (c.start_char, c.end_char)).collect();
+            for ranges in stops.iter_mut() {
+                for range in ranges.iter_mut() {
+                    if let Some(change) = changes
+                        .iter()
+                        .find(|c| mirrors.contains(range) && (c.start_char, c.end_char) == *range)
+                    {
+                        let start = crate::editor_input::map_through(
+                            &changes,
+                            range.0,
+                            crate::editor_input::Bias::Left,
+                        );
+                        *range = (start, start + change.inserted.chars().count());
+                    } else {
+                        *range = (
+                            crate::editor_input::map_through(
+                                &changes,
+                                range.0,
+                                crate::editor_input::Bias::Right,
+                            ),
+                            crate::editor_input::map_through(
+                                &changes,
+                                range.1,
+                                crate::editor_input::Bias::Right,
+                            ),
+                        );
+                    }
+                }
+            }
+        }
+        let len = document.text.len_chars();
         if let Some(session) = self.snippet.as_mut() {
-            session.stops = remapped;
+            session.stops = stops;
             session.len = len;
         }
     }
@@ -307,7 +375,8 @@ mod tests {
         let (mut state, root) = state_with("", "mirror");
         insert_snippet(&mut state, 0, "let ${1:x} = 1; use($1);");
         assert_eq!(state.documents[0].text.text(), "let x = 1; use(x);");
-        assert_eq!(state.documents[0].selections.selections().len(), 2);
+        // One caret in the first occurrence; the mirror follows it (ED-TMPL-002).
+        assert_eq!(state.documents[0].selections.selections().len(), 1);
         type_text(&mut state, "total");
         assert_eq!(state.documents[0].text.text(), "let total = 1; use(total);");
         assert!(state.snippet.is_some());

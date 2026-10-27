@@ -60,6 +60,7 @@ fn expansion_context(path: &Path, text: &str, offset: usize) -> ExpansionContext
         indent_unit: "\t".into(),
         selection: None,
         expression: None,
+        argument: None,
         surrounding: text[from..to].to_owned(),
         class_name: scanned.class_name(),
         method_name: method.as_ref().map(|(name, _)| name.clone()),
@@ -105,6 +106,53 @@ fn word_start(text: &TextDocument, caret: usize) -> usize {
         start -= 1;
     }
     start
+}
+
+/// The statement surrounders Java offers in Surround With (ED-TMPL-042).
+fn java_surrounders() -> Vec<Template> {
+    [
+        ("if", "if ($END$) {\n    $SELECTION$\n}"),
+        ("if / else", "if ($END$) {\n    $SELECTION$\n} else {\n}"),
+        ("while", "while ($END$) {\n    $SELECTION$\n}"),
+        ("do / while", "do {\n    $SELECTION$\n} while ($END$);"),
+        ("for", "for ($END$) {\n    $SELECTION$\n}"),
+        (
+            "try / catch",
+            "try {\n    $SELECTION$\n} catch (Exception e) {\n    $END$\n}",
+        ),
+        (
+            "try / finally",
+            "try {\n    $SELECTION$\n} finally {\n    $END$\n}",
+        ),
+        (
+            "try / catch / finally",
+            "try {\n    $SELECTION$\n} catch (Exception e) {\n    $END$\n} finally {\n}",
+        ),
+        ("synchronized", "synchronized ($END$) {\n    $SELECTION$\n}"),
+        (
+            "Runnable",
+            "Runnable runnable = () -> {\n    $SELECTION$\n};",
+        ),
+        ("{ }", "{\n    $SELECTION$\n}"),
+    ]
+    .into_iter()
+    .map(|(name, text)| Template {
+        abbreviation: name.to_owned(),
+        description: name.to_owned(),
+        text: text.to_owned(),
+        ..Default::default()
+    })
+    .collect()
+}
+
+/// The word before `anchor`, separated by at most one blank, and where it starts.
+fn argument_before(text: &TextDocument, anchor: usize) -> Option<(String, usize)> {
+    let mut end = anchor;
+    if end > 0 && text.char_at(end - 1) == Some(' ') {
+        end -= 1;
+    }
+    let start = word_start(text, end);
+    (start < end).then(|| (text.slice(start, end).unwrap_or_default(), start))
 }
 
 impl IdeState {
@@ -170,12 +218,21 @@ impl IdeState {
         let context = expansion_context(path, &text, anchor);
         for template in registry.templates_for(path) {
             if template.applies_in(&contexts) {
+                // A template with `$ARG$` takes the word before its abbreviation (ED-TMPL-012).
+                let (context, start) = match argument_before(&document.text, anchor) {
+                    Some((word, from)) if template.text.contains("$ARG$") => {
+                        let mut with_argument = context.clone();
+                        with_argument.argument = Some(word);
+                        (with_argument, from)
+                    }
+                    _ => (context.clone(), anchor),
+                };
                 items.extend(template_item(
                     &document.text,
                     template,
                     &context,
                     false,
-                    (anchor, caret),
+                    (start, caret),
                 ));
             }
         }
@@ -238,6 +295,16 @@ impl IdeState {
     /// Surround With Live Template: lists templates that wrap the selection
     /// (or the current line when nothing is selected).
     pub fn surround_with_live_template(&mut self) -> Result<(), String> {
+        self.surround_with_popup(false)
+    }
+
+    /// Surround With (Ctrl+Alt+T): the language's surrounders, then the live templates that
+    /// contain `$SELECTION$` (ED-TMPL-040).
+    pub fn surround_with(&mut self) -> Result<(), String> {
+        self.surround_with_popup(true)
+    }
+
+    fn surround_with_popup(&mut self, surrounders: bool) -> Result<(), String> {
         let index = self.active_document.ok_or("no active document")?;
         let registry = self.live_templates();
         let document = self
@@ -267,12 +334,19 @@ impl IdeState {
         let contexts = contexts_at(&document.path, &text, start);
         let mut context = expansion_context(&document.path, &text, start);
         context.selection = Some(selection);
-        let items: Vec<_> = registry
-            .surround_templates(&document.path, &contexts)
-            .filter_map(|template| {
+        let mut items: Vec<_> = Vec::new();
+        if surrounders && document.path.extension().is_some_and(|ext| ext == "java") {
+            items.extend(java_surrounders().iter().filter_map(|template| {
                 template_item(&document.text, template, &context, false, (start, end))
-            })
-            .collect();
+            }));
+        }
+        items.extend(
+            registry
+                .surround_templates(&document.path, &contexts)
+                .filter_map(|template| {
+                    template_item(&document.text, template, &context, false, (start, end))
+                }),
+        );
         if items.is_empty() {
             self.status = "No surround templates apply here".into();
             return Ok(());
@@ -492,6 +566,22 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
     registry
         .register(Command::new(
             spec(
+                "template.surroundWith",
+                "Surround With…",
+                "Code",
+                Some("Ctrl+Alt+T"),
+                "{}",
+            ),
+            has_document,
+            |state: &mut IdeState, _| {
+                state.surround_with().map_err(CommandError::Failed)?;
+                Ok(Value::Null)
+            },
+        ))
+        .expect("unique built-in id");
+    registry
+        .register(Command::new(
+            spec(
                 "template.save",
                 "Save Live Template",
                 "Settings",
@@ -698,7 +788,8 @@ mod tests {
                 .map(|s| document.text.slice(s.start(), s.end()).unwrap())
                 .collect::<Vec<_>>()
         };
-        assert_eq!(selected(&state), ["i", "i", "i"], "the index is mirrored");
+        // One caret in the first occurrence; the others are mirrors (ED-TMPL-002).
+        assert_eq!(selected(&state), ["i"]);
         type_text(&mut state, "k");
         state.snippet_after_change();
         assert!(

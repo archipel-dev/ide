@@ -109,7 +109,7 @@ boxes for the other fields that may stop), and the following keys apply.
 |---|---|---|---|
 | ED-TMPL-040 | MUST | **Surround With** (`Ctrl+Alt+T`, `Surround With...`): enabled when there is a selection (or, for languages that allow it, the caret in a surroundable element). Shows a chooser titled `Surround With` that lists the *surrounders* the language offers for the selected fragment (each with a one-line template description), numbered by mnemonics (digits then letters), followed by the live templates that contain `$SELECTION$` for the current context; choosing one applies it as one command. Surrounders are tried per kind of selection: statements, an expression, or text (languages differ). | Java: selecting two statements lists `if`, `if / else`, `while`, `do / while`, `for`, `try / catch`, `try / finally`, `try / catch / finally`, `synchronized`, `Runnable`, `{ }`. |
 | ED-TMPL-041 | MUST | **Surround with Live Template** (`Ctrl+Alt+J`): shows only the live templates with `$SELECTION$` applicable at the selection; choosing one expands it with the selected text substituted and the selection removed (the originally selected text appears at `$SELECTION$` inside the template, indented as the template text). | `par` = `($SELECTION$)`: selecting `abc` gives `(abc)`. |
-| ED-TMPL-042 | MUST | Java surrounder chooser texts: for statements `if`, `if / else`, `while`, `do / while`, `for`, `try / catch`, `try / finally`, `try / catch / finally`, `synchronized`, `Runnable`, `{ }`; for an expression `(expr)`, `((Type)expr)`, `!(expr)`, `if (expr) {...}`, `if / else`, null check, not-instanceof. Statement surrounders place the selected statements inside the construct (declarations used afterwards are moved out before it) and leave the caret right after the opening parenthesis of the condition when there is one. | Select `a();`, choose `if`: `if (|) { a(); }` with the caret between the parentheses. |
+| ED-TMPL-042 | MUST | Java surrounder chooser texts: for statements `if`, `if / else`, `while`, `do / while`, `for`, `try / catch`, `try / finally`, `try / catch / finally`, `synchronized`, `Runnable`, `{ }`; for an expression `(expr)`, `((Type)expr)`, `!(expr)`, `if (expr) {...}`, `if / else`, null check, not-instanceof. Statement surrounders place the selected statements inside the construct (declarations used afterwards are moved out before it) and leave the caret right after the opening parenthesis of the condition when there is one. | Select `a();`, choose `if`: `if (\|) { a(); }` with the caret between the parentheses. |
 | ED-TMPL-043 | SHOULD | Typing a quote or bracket with a selection also surrounds (`ED-TYPE-035`); the two features are independent. | Both work. |
 | ED-TMPL-044 | MUST | `Code, Surround With, region...endregion` and the tag surround for XML (`Surround with <tag></tag>`, `Surround with CDATA section`) are live-template based and use `$SELECTION$`. | Surround two methods in a region (see `ED-FOLD-042`). |
 
@@ -135,34 +135,34 @@ apply in a Java statement context, declaration templates at class level.
 
 | Abbreviation | Produces | Context |
 |---|---|---|
-| `sout` | `System.out.println(|);` | statement |
-| `serr` | `System.err.println(|);` | statement |
-| `souf` | `System.out.printf("|");` | statement |
+| `sout` | `System.out.println(\|);` | statement |
+| `serr` | `System.err.println(\|);` | statement |
+| `souf` | `System.out.printf("\|");` | statement |
 | `soutv` | `System.out.println("[expr] = " + [expr]);` where `[expr]` is a variable in scope (the quoted copy is the escaped expression text) | statement |
 | `soutm` | prints `ClassName.methodName` | statement |
 | `soutp` | prints the method parameters (`parameterInfo()`) | statement |
-| `iop`, `ior` | `IO.println(|);`, `IO.readln(|);` (only in files where `IO` is available) | statement |
-| `fori` | `for (int [i] = 0; [i] < [limit]; i++) { | }` (index name suggested) | statement |
+| `iop`, `ior` | `IO.println(\|);`, `IO.readln(\|);` (only in files where `IO` is available) | statement |
+| `fori` | `for (int [i] = 0; [i] < [limit]; i++) { \| }` (index name suggested) | statement |
 | `forr`, `ritar` | reverse loops | statement |
-| `itar` | loop over an array variable: `for (int [i] = 0; i < [array].length; i++) { T v = array[i]; | }` | statement |
-| `iter` | enhanced for: `for ([T] [var] : [iterable]) { | }` | statement |
+| `itar` | loop over an array variable: `for (int [i] = 0; i < [array].length; i++) { T v = array[i]; \| }` | statement |
+| `iter` | enhanced for: `for ([T] [var] : [iterable]) { \| }` | statement |
 | `itli`, `itco`, `itit`, `iten`, `itm` | index loop over a list; iterator loop over a collection; while loop over an iterator; over an enumeration; loop over map entries (`Map.Entry`, with `key` and `value` locals) | statement |
 | `ittok` | loop over a `StringTokenizer` | statement |
-| `inst` | `if (x instanceof T) { T v = (T) x; | }` | statement |
-| `inn`, `ifn` | `if (v != null) { | }`, `if (v == null) { | }` | statement |
-| `lazy` | `if (v == null) { v = new T(|); }` | statement |
-| `else-if` | `else if ([cond]) { | }` | after an if branch |
-| `mn`, `mx` | `v = Math.min(v, |);`, `v = Math.max(v, |);` | statement |
+| `inst` | `if (x instanceof T) { T v = (T) x; \| }` | statement |
+| `inn`, `ifn` | `if (v != null) { \| }`, `if (v == null) { \| }` | statement |
+| `lazy` | `if (v == null) { v = new T(\|); }` | statement |
+| `else-if` | `else if ([cond]) { \| }` | after an if branch |
+| `mn`, `mx` | `v = Math.min(v, \|);`, `v = Math.max(v, \|);` | statement |
 | `lst` | `array[array.length - 1]` | expression |
 | `toar` | `collection.toArray(new T[0])` | expression |
-| `psvm`, `main` | `public static void main(String[] args) { | }` | class level without an instance main |
+| `psvm`, `main` | `public static void main(String[] args) { \| }` | class level without an instance main |
 | `geti` | `public static C getInstance() { return [value]; }` | declaration |
 | `St` | `String ` | statement and declaration (no reformat) |
 | `psf`, `prsf`, `psfi`, `psfs` | `public static final `, `private static final `, `... int `, `... String ` | declaration (no reformat) |
 | `thr` | `throw new ` | statement (no reformat) |
 | `soutc`, `serrc` | `System.out::println`, `System.err::println` | consumer |
 | `C`, `RL`, `WL`, `I` | surround templates: `Callable` wrapper, read lock and write lock try/finally, a for-each over the selection | statement, with `$SELECTION$` |
-| `sts` | `try (var scope = StructuredTaskScope.open()) { | scope.join(); } catch ...` | statement (feature gated) |
+| `sts` | `try (var scope = StructuredTaskScope.open()) { \| scope.join(); } catch ...` | statement (feature gated) |
 
 | ID | Pri | Requirement | Acceptance |
 |---|---|---|---|

@@ -16,7 +16,8 @@
 //! data.
 
 use crate::clock::Clock;
-use crate::markup::{FileMarkup, MarkupLimits, MarkupStore, shift_infos};
+use crate::external::STALE_OWNER;
+use crate::markup::{Coexistence, FileMarkup, MarkupLimits, MarkupStore, shift_infos};
 use crate::passes::{Shared, spec_of};
 use crate::problem_files::ProblemFiles;
 use crate::scheduler::{
@@ -28,7 +29,7 @@ use archipel_ide_analysis::{
     AnalysisEvent, AnalysisHost, CancelToken, Cancelled, FileId, FileRev, LanguageId, Snapshot,
     ToolId,
 };
-use archipel_ide_language::EditMap;
+use archipel_ide_language::{CompletenessTier, EditMap};
 use parking_lot::Mutex;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -457,12 +458,35 @@ impl Daemon {
         if markup.rev() != current {
             return false;
         }
-        markup.replace(&out.tool, range, infos);
+        if out.tool.is_lsp() && out.tool.as_str() == format!("lsp:{STALE_OWNER}") {
+            // Nothing is published for the file any more.
+            markup.retain(|owner, _| !owner.is_lsp());
+        } else {
+            markup.replace(&out.tool, range, infos);
+        }
         self.applied.insert(key, out.rev);
         self.applied_count += 1;
+        self.reconcile(snap, file);
         let markup = self.store.get(file);
         self.problem_files.update(file, markup);
         true
+    }
+
+    /// Deduplicates the native and language-server highlights of `file` (see
+    /// [`FileMarkup::reconcile`]); the language's tier decides who wins.
+    fn reconcile(&mut self, snap: &Snapshot, file: FileId) {
+        let graduated = snap
+            .syntax(file)
+            .is_some_and(|syntax| syntax.lang().tier >= CompletenessTier::G2);
+        let external_published = snap
+            .path(file)
+            .is_some_and(|path| self.shared.external.is_published(path));
+        if let Some(markup) = self.store.get_mut(file) {
+            markup.reconcile(Coexistence {
+                graduated,
+                external_published,
+            });
+        }
     }
 
     fn launch(&mut self, host: &mut AnalysisHost, snap: &Snapshot, request: RunRequest) -> bool {

@@ -7,8 +7,10 @@
 - UI controls dispatch commands; they do not own filesystem or project policy.
 - Prefer complete vertical slices with tests over empty crates or decorative controls.
 - Never claim parity without reproducible evidence recorded in `docs/parity/`.
-- Preserve clean-room boundaries: use public documentation, public source with compatible
-  licensing, and observable behavior; do not copy JetBrains code, artwork, or branding.
+- Preserve clean-room boundaries: do not copy JetBrains code, artwork, or branding. IntelliJ
+  behavior reaches the code only through the specifications in `docs/specs/`, written by a
+  separate specification team; implementers never read JetBrains source. See
+  `docs/specs/README.md`.
 - No new ad-hoc egui painting in `archipel-ide-ui`: use `archipel-kit` components, parts and
   behaviours; if the kit lacks something, add it there. See `docs/ui-migration.md`.
   `cargo xtask design-lint` fails on new `Color32::from_rgb*`, hex palettes, rounded

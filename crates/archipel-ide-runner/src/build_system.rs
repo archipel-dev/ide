@@ -375,7 +375,7 @@ fn cargo_has_binary(root: &Path) -> bool {
 pub struct Maven;
 
 impl Maven {
-    fn program(root: &Path) -> Result<String, RunnerError> {
+    pub fn program(root: &Path) -> Result<String, RunnerError> {
         let wrapper = if cfg!(windows) { "mvnw.cmd" } else { "mvnw" };
         if root.join(wrapper).is_file() {
             return Ok(if cfg!(windows) {

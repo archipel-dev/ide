@@ -12,6 +12,11 @@
 //! - **Budget.** A tool may own at most `per_tool` entries and a file
 //!   `per_file`; the rest collapses into one file-level "too many problems"
 //!   info.
+//! - **Coexistence.** Native and language-server (`lsp:*`) highlights of the
+//!   same file are deduplicated by [`FileMarkup::reconcile`] (spec 1.10): the
+//!   losing entry stays stored but is *shadowed*, and every query, iterator
+//!   and counter skips it, so the Problems view, the error stripe, F2 and the
+//!   squiggles all see the same merged result.
 
 use archipel_ide_analysis::daemon::HighlightMarkup;
 use archipel_ide_analysis::{FileId, FileRev, HighlightInfo, HighlightKind, Severity, ToolId};
@@ -44,6 +49,18 @@ struct Entry {
     id: HighlightId,
     owner: ToolId,
     info: HighlightInfo,
+    /// Lost a dedupe against another tool's entry ([`FileMarkup::reconcile`]).
+    shadowed: bool,
+}
+
+/// What [`FileMarkup::reconcile`] needs to know about the file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Coexistence {
+    /// The language's native analysis is exact enough to win a dedupe
+    /// (`CompletenessTier >= G2`).
+    pub graduated: bool,
+    /// A language server has published for this file (even an empty list).
+    pub external_published: bool,
 }
 
 /// What a `replace` did.
@@ -67,6 +84,26 @@ pub struct MarkupCounts {
 impl MarkupCounts {
     pub fn total(self) -> usize {
         self.errors + self.warnings + self.weak_warnings
+    }
+}
+
+/// The owner of the parse errors (`passes::SyntaxPass`).
+const SYNTAX_OWNER: &str = "native:syntax";
+
+/// Kinds that mean the same problem to a user: an unresolved reference is an
+/// error however the tool classified it.
+fn kind_class(kind: HighlightKind) -> u8 {
+    match kind {
+        HighlightKind::Error | HighlightKind::Unresolved => 0,
+        HighlightKind::Warning => 1,
+        HighlightKind::WeakWarning => 2,
+        HighlightKind::Information => 3,
+        HighlightKind::Unused => 4,
+        HighlightKind::Deprecated | HighlightKind::MarkedForRemoval => 5,
+        HighlightKind::Typo => 6,
+        HighlightKind::Semantic(_) => 7,
+        HighlightKind::TextAttributes(_) => 8,
+        _ => 9,
     }
 }
 
@@ -194,6 +231,7 @@ impl FileMarkup {
                         id: HighlightId(next_id),
                         owner: owner.clone(),
                         info,
+                        shadowed: false,
                     });
                     next_id += 1;
                     stats.added += 1;
@@ -287,16 +325,84 @@ impl FileMarkup {
         let q = range;
         self.entries[lo.min(hi)..hi]
             .iter()
-            .filter(move |e| overlaps(&e.info.range, &q))
+            .filter(move |e| !e.shadowed && overlaps(&e.info.range, &q))
     }
 
     /// Every highlight, ordered by start.
     pub fn iter(&self) -> impl Iterator<Item = &HighlightInfo> {
-        self.entries.iter().map(|e| &e.info)
+        self.entries.iter().filter(|e| !e.shadowed).map(|e| &e.info)
     }
 
     pub fn iter_with_ids(&self) -> impl Iterator<Item = (HighlightId, &ToolId, &HighlightInfo)> {
-        self.entries.iter().map(|e| (e.id, &e.owner, &e.info))
+        self.entries
+            .iter()
+            .filter(|e| !e.shadowed)
+            .map(|e| (e.id, &e.owner, &e.info))
+    }
+
+    /// Entries hidden by [`FileMarkup::reconcile`] (diagnostics, tests).
+    pub fn shadowed(&self) -> impl Iterator<Item = (&ToolId, &HighlightInfo)> {
+        self.entries
+            .iter()
+            .filter(|e| e.shadowed)
+            .map(|e| (&e.owner, &e.info))
+    }
+
+    /// Deduplicates native and language-server entries (spec 1.10); returns
+    /// true when the set of visible entries changed.
+    ///
+    /// - An LSP entry and a native entry with the same range and kind are
+    ///   one problem: the native one wins when the language graduated, the
+    ///   language server's otherwise (native results of an ungraduated
+    ///   language are heuristic).
+    /// - Native syntax errors give way once a language server has published
+    ///   for the file, unless the language graduated (servers report syntax
+    ///   errors themselves).
+    pub fn reconcile(&mut self, how: Coexistence) -> bool {
+        let mut natives: HashMap<(u32, u32, u8), Vec<usize>> = HashMap::new();
+        for (index, entry) in self.entries.iter().enumerate() {
+            if !entry.owner.is_lsp() {
+                natives
+                    .entry((
+                        entry.info.range.start,
+                        entry.info.range.end,
+                        kind_class(entry.info.kind),
+                    ))
+                    .or_default()
+                    .push(index);
+            }
+        }
+        let mut shadowed = vec![false; self.entries.len()];
+        for (index, entry) in self.entries.iter().enumerate() {
+            if entry.owner.is_lsp() {
+                let key = (
+                    entry.info.range.start,
+                    entry.info.range.end,
+                    kind_class(entry.info.kind),
+                );
+                if let Some(twins) = natives.get(&key) {
+                    if how.graduated {
+                        shadowed[index] = true;
+                    } else {
+                        for twin in twins {
+                            shadowed[*twin] = true;
+                        }
+                    }
+                }
+            } else if how.external_published
+                && !how.graduated
+                && entry.owner.as_str() == SYNTAX_OWNER
+                && entry.info.kind == HighlightKind::Error
+            {
+                shadowed[index] = true;
+            }
+        }
+        let mut changed = false;
+        for (entry, hide) in self.entries.iter_mut().zip(shadowed) {
+            changed |= entry.shadowed != hide;
+            entry.shadowed = hide;
+        }
+        changed
     }
 
     /// Highlights with severity at least `WEAK_WARNING` (the listed problems).

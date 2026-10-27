@@ -88,12 +88,43 @@ impl IdeState {
                 .map(str::to_owned)
                 .collect()
         };
-        if components.is_empty() {
-            return;
+        if !components.is_empty() {
+            let ids: Vec<&str> = components.iter().map(String::as_str).collect();
+            if let Err(error) = self.setup_toolchains(&ids) {
+                self.status = error;
+            }
         }
-        let ids: Vec<&str> = components.iter().map(String::as_str).collect();
-        if let Err(error) = self.setup_toolchains(&ids) {
-            self.status = error;
+        self.ensure_jdk_for_jdtls();
+    }
+
+    /// Installs a JDK new enough for the managed jdtls when the one at hand is too old
+    /// (jdtls 1.63 needs Java 25; a system JDK 21 cannot start it). Only with automatic
+    /// setup on, and once: a JDK install that is already running is left alone.
+    pub(crate) fn ensure_jdk_for_jdtls(&mut self) {
+        let tools = self.toolchains();
+        let required = {
+            let tools = tools.read();
+            if !tools.auto_setup
+                || tools
+                    .service
+                    .jobs()
+                    .iter()
+                    .any(|job| job.component == "jdk")
+            {
+                return;
+            }
+            crate::toolchain_lsp::jdtls_needs_jdk(&tools.toolchains)
+        };
+        let Some(required) = required else {
+            return;
+        };
+        match self.install_toolchain("jdk", Some(VersionRequest::Version(required.to_string()))) {
+            Ok(_) => {
+                self.status = format!("Installing JDK {required} for the Java language server…")
+            }
+            Err(error) => {
+                self.status = format!("The Java language server needs JDK {required}: {error}")
+            }
         }
     }
 
@@ -143,12 +174,21 @@ impl IdeState {
         if self.toolchains().read().service.is_busy() {
             return;
         }
+        // A freshly installed jdtls may need a newer JDK than the one at hand.
+        self.ensure_jdk_for_jdtls();
+        if self.toolchains().read().service.is_busy() {
+            return;
+        }
         // Language servers that were missing can start now; wait until the
         // whole setup (e.g. jdtls and its JDK) has finished.
         if self.lsp.missing_servers().next().is_some() {
             let status = std::mem::take(&mut self.status);
             self.restart_language_servers();
             self.status = status;
+        }
+        // The project model is imported once the tools the build needs are there.
+        if self.project_model().is_some_and(|m| m.read().auto_import) {
+            let _ = self.start_external_import(crate::project_model::ImportReason::Open);
         }
         // A Gradle project imports itself once its JDK (and Gradle) are there.
         if self.is_gradle_project() && !self.runner.is_running() {

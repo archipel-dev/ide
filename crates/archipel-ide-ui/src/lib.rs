@@ -607,10 +607,53 @@ impl IdeApp {
         document.text.slice(primary.start(), primary.end()).ok()
     }
 
-    /// Saves modified files silently (autosave); nothing to save is not an error.
+    /// Save All (PLAT-SAVE-024): an explicit save of everything unsaved; nothing to save is not
+    /// an error.
     fn autosave(&mut self) {
-        if self.state.documents.iter().any(|d| d.text.is_dirty()) {
+        if !self.state.unsaved_documents().is_empty() {
             self.dispatch("editor.saveAll", Value::Null);
+        }
+    }
+
+    /// Whether a modal dialog or page is open: no autosave runs then (PLAT-SAVE-020).
+    fn modal_open(&self) -> bool {
+        self.dialog.is_some()
+            || self.modal_page_open()
+            || self.push_dialog.is_some()
+            || self.git_dialog.is_some()
+    }
+
+    /// The autosave triggers of one frame (PLAT-SAVE-020, 021): frame deactivation, the idle
+    /// timeout, which editor holds the caret, and the "Cannot Save Files" dialog of a failed
+    /// save. Settings are read on every frame, so changes apply at once (PLAT-SAVE-015).
+    fn autosave_triggers(&mut self, ctx: &egui::Context, focused: bool) {
+        let now = std::time::Instant::now();
+        let saving = self.state.saving();
+        if ctx.input(|input| !input.events.is_empty() || input.pointer.any_down()) {
+            saving.note_input(now);
+        }
+        let editor_focus = focused && self.editor_focused(ctx);
+        let path = editor_focus
+            .then(|| {
+                self.state
+                    .active_doc()
+                    .map(|document| document.path.clone())
+            })
+            .flatten();
+        saving.set_focused_document(path.as_deref());
+        let modal = self.modal_open();
+        if self.window_focused && !focused {
+            saving.set_focused_document(None);
+            self.state.autosave_on_deactivation(modal);
+        }
+        self.state.autosave_idle_tick(now, modal);
+        if let Some(wait) = self.state.autosave_idle_remaining(now) {
+            ctx.request_repaint_after(wait + Duration::from_millis(50));
+        }
+        if self.dialog.is_none()
+            && let Some(report) = saving.take_failure()
+        {
+            self.open_dialog(popups::Dialog::SaveFailure(report));
         }
     }
 
@@ -962,7 +1005,8 @@ impl eframe::App for IdeApp {
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.state.shutdown_plugins();
         if self.state.project.is_some() {
-            self.autosave();
+            // PLAT-SAVE-051: everything is written before exit; a failure is only reported.
+            let _ = self.state.save_all_at(archipel_ide_core::SavePoint::Exit);
             self.dispatch("workspace.save", Value::Null);
         }
     }
@@ -1064,19 +1108,10 @@ impl IdeApp {
         if self.state.poll_terminals() {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
-        // Like the reference IDE, save all files when the window loses focus.
+        // Like the reference IDE, save all files when the window loses focus, or when the IDE
+        // has been idle for the configured time.
         let focused = ctx.input(|input| input.focused);
-        if self.window_focused
-            && !focused
-            && self
-                .state
-                .settings()
-                .read()
-                .bool(ids::AUTOSAVE_FOCUS)
-                .unwrap_or(true)
-        {
-            self.autosave();
-        }
+        self.autosave_triggers(ctx, focused);
         if !self.window_focused && focused {
             // Pick up changes made in other applications right away.
             self.state.request_git_refresh();

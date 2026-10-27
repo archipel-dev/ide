@@ -279,6 +279,11 @@ impl IdeState {
     /// Starts (or queues) an import of the open project's build systems.
     pub fn start_external_import(&mut self, reason: ImportReason) -> Result<(), String> {
         let root = self.project_root().ok_or("no project is open")?;
+        if reason == ImportReason::Refresh {
+            // PLAT-SAVE-034: the import reads the build files from disk, so the edit of
+            // `build.gradle` must be there ("Reload" buttons, "Refresh all").
+            self.save_before(crate::SavePoint::ExternalSystem);
+        }
         let service = self.project_model().ok_or("no project is open")?;
         let registry = {
             let mut state = service.write();

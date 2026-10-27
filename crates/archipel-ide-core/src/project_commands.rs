@@ -153,7 +153,7 @@ impl IdeState {
             })
             .collect();
         // Commits include what is in the editor, like the reference IDE.
-        let _ = self.save_all();
+        self.save_before(crate::SavePoint::Commit);
         let hash = self
             .git_status()
             .ok_or("the project is not a Git repository")?
@@ -171,30 +171,6 @@ impl IdeState {
             if paths.len() == 1 { "" } else { "s" }
         );
         Ok(hash)
-    }
-
-    /// Saves every modified document except those with an unresolved outside
-    /// change, which are reported instead of being overwritten.
-    pub fn save_all(&mut self) -> Result<(), String> {
-        let mut blocked = Vec::new();
-        for index in 0..self.documents.len() {
-            if !self.documents[index].text.is_dirty() {
-                continue;
-            }
-            if self.documents[index].conflict.is_some() {
-                blocked.push(self.documents[index].path.display().to_string());
-                continue;
-            }
-            self.save(index)?;
-        }
-        if blocked.is_empty() {
-            Ok(())
-        } else {
-            Err(format!(
-                "Not saved, changed on disk: {} (load the disk version or keep yours)",
-                blocked.join(", ")
-            ))
-        }
     }
 
     pub fn workspace(&self) -> Workspace {

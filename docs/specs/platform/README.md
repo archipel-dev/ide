@@ -20,7 +20,8 @@ disagreements are listed in section 5.
 | [06-concurrency-and-cancellation.md](06-concurrency-and-cancellation.md) | Read/write sections, cancellation, non-blocking read actions, progress, parallel read work, mapping to the snapshot model | `PLAT-CONC` | 35 | 7 | 0 | 42 |
 | [07-project-structure-and-scopes.md](07-project-structure-and-scopes.md) | File index semantics, order enumeration, every search scope exactly, test vs production, library classes vs sources, SDK | `PLAT-SCOPE` | 57 | 15 | 0 | 72 |
 | [08-language-extension-points.md](08-language-extension-points.md) | Language identity, extension lookup rules, parser definition, lexer, highlighter, annotator, folding, editing helpers, navigation services, JVM contributions | `PLAT-LANG` | 48 | 16 | 0 | 64 |
-| **Total** | | | **451** | **102** | **6** | **559** |
+| [09-saving-and-autosave.md](09-saving-and-autosave.md) | Autosave triggers and settings, save points before run/build/VCS/close, save algorithm, vetoes, failures, read-only and conflicts, trailing spaces and caret line, why analysis does not need saving | `PLAT-SAVE` | 42 | 17 | 2 | 61 |
+| **Total** | | | **493** | **119** | **8** | **620** |
 
 (Counts are of requirement rows with an explicit priority; they are regenerated from the files, not by hand.)
 

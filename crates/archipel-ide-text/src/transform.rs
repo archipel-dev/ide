@@ -206,6 +206,17 @@ pub fn reverse_lines(
     rewrite_lines(doc, selections, |lines| lines.reverse())
 }
 
+/// Delete Duplicate Lines (ED-LINE-052): keeps the first of equal target lines.
+pub fn unique_lines(
+    doc: &mut TextDocument,
+    selections: &mut SelectionSet,
+) -> Result<(), TextError> {
+    rewrite_lines(doc, selections, |lines| {
+        let mut seen = std::collections::HashSet::new();
+        lines.retain(|line| seen.insert(line.clone()));
+    })
+}
+
 /// Split Line (Ctrl+Enter / ⌘↩): breaks the line at each caret, indenting the
 /// new line like the current one, while the caret stays before the break.
 pub fn split_line(doc: &mut TextDocument, selections: &mut SelectionSet) -> Result<(), TextError> {

@@ -3,7 +3,7 @@
 use crate::{IdeState, spec, string_param, usize_param};
 use archipel_ide_command::{Command, CommandError, CommandRegistry};
 use archipel_ide_text::ops::{self, FindOptions};
-use archipel_ide_text::{Selection, TextError, multicaret, transform};
+use archipel_ide_text::{Selection, TextError, UndoKind, multicaret, transform};
 use serde_json::{Value, json};
 use std::path::Path;
 
@@ -58,7 +58,11 @@ fn action(
             |state: &IdeState| state.active_document.is_some(),
             move |state: &mut IdeState, _| {
                 state
-                    .edit_active(|document| run(document).map_err(text_error))
+                    .edit_active(|document| {
+                        crate::editor_input::recorded(document, UndoKind::Other, |document| {
+                            run(document).map_err(text_error)
+                        })
+                    })
                     .map_err(CommandError::Failed)?;
                 Ok(Value::Null)
             },
@@ -228,26 +232,6 @@ pub fn extend_selection(document: &mut crate::Document) -> bool {
     true
 }
 
-/// Shrink Selection: steps back through Extend Selection history, as long as
-/// each remembered selection still lies inside the current one.
-pub fn shrink_selection(document: &mut crate::Document) -> bool {
-    let current = document.selections.selections().to_vec();
-    let Some(previous) = document.selection_history.pop() else {
-        return false;
-    };
-    let nested = previous.len() == current.len()
-        && previous
-            .iter()
-            .zip(&current)
-            .all(|(inner, outer)| outer.start() <= inner.start() && inner.end() <= outer.end());
-    if !nested {
-        document.selection_history.clear();
-        return false;
-    }
-    document.selections.set_all(previous);
-    true
-}
-
 fn selection_command(
     registry: &mut CommandRegistry<IdeState>,
     id: &str,
@@ -294,24 +278,17 @@ fn register_transforms(registry: &mut CommandRegistry<IdeState>) {
     });
     action(
         registry,
+        "editor.uniqueLines",
+        "Delete Duplicate Lines",
+        None,
+        |d| transform::unique_lines(&mut d.text, &mut d.selections),
+    );
+    action(
+        registry,
         "editor.reverseLines",
         "Reverse Lines",
         None,
         |d| transform::reverse_lines(&mut d.text, &mut d.selections),
-    );
-    action(
-        registry,
-        "editor.splitLine",
-        "Split Line",
-        Some("⌘↩"),
-        |d| transform::split_line(&mut d.text, &mut d.selections),
-    );
-    action(
-        registry,
-        "editor.startNewLineBefore",
-        "Start New Line Before Current",
-        Some("⌥⌘↩"),
-        |d| transform::start_new_line_before(&mut d.text, &mut d.selections),
     );
 }
 
@@ -348,7 +325,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
         "editor.shrinkSelection",
         "Shrink Selection",
         "⌥↓",
-        shrink_selection,
+        crate::editor_input::shrink_selection,
     );
     action(
         registry,
@@ -378,26 +355,6 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
         Some("⌥⇧↓"),
         |d| ops::move_lines(&mut d.text, &mut d.selections, false),
     );
-    action(registry, "editor.indent", "Indent Selection", None, |d| {
-        ops::indent_lines(&mut d.text, &mut d.selections)
-    });
-    action(
-        registry,
-        "editor.unindent",
-        "Unindent Line or Selection",
-        Some("⇧⇥"),
-        |d| ops::unindent_lines(&mut d.text, &mut d.selections),
-    );
-    action(
-        registry,
-        "editor.commentLine",
-        "Comment with Line Comment",
-        Some("⌘/"),
-        |d| {
-            let prefix = line_comment_prefix(&d.path);
-            ops::toggle_line_comment(&mut d.text, &mut d.selections, prefix)
-        },
-    );
     action(
         registry,
         "editor.selectAll",
@@ -416,57 +373,6 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
     register_multicaret(registry);
     register_transforms(registry);
 
-    registry
-        .register(Command::new(
-            spec("editor.copy", "Copy", "Editor", Some("⌘C"), "{}"),
-            |state: &IdeState| state.active_document.is_some(),
-            |state: &mut IdeState, _| {
-                let (text, whole_line) = state
-                    .edit_active(|d| Ok(ops::copy_text(&d.text, &d.selections)))
-                    .map_err(CommandError::Failed)?;
-                Ok(json!({"text": text, "wholeLine": whole_line}))
-            },
-        ))
-        .expect("unique built-in id");
-    registry
-        .register(Command::new(
-            spec("editor.cut", "Cut", "Editor", Some("⌘X"), "{}"),
-            |state: &IdeState| state.active_document.is_some(),
-            |state: &mut IdeState, _| {
-                let (text, whole_line) = state
-                    .edit_active(|d| {
-                        let whole_line = d.selections.selections().iter().all(|s| s.is_caret());
-                        let text = ops::cut(&mut d.text, &mut d.selections).map_err(text_error)?;
-                        Ok((text, whole_line))
-                    })
-                    .map_err(CommandError::Failed)?;
-                Ok(json!({"text": text, "wholeLine": whole_line}))
-            },
-        ))
-        .expect("unique built-in id");
-    registry
-        .register(Command::new(
-            spec(
-                "editor.paste",
-                "Paste",
-                "Editor",
-                Some("⌘V"),
-                r#"{"text":"string","wholeLine":"bool?"}"#,
-            ),
-            |state: &IdeState| state.active_document.is_some(),
-            |state: &mut IdeState, params| {
-                let text = string_param(&params, "text")?;
-                let whole_line = bool_param(&params, "wholeLine");
-                state
-                    .edit_active(|d| {
-                        ops::paste(&mut d.text, &mut d.selections, &text, whole_line)
-                            .map_err(text_error)
-                    })
-                    .map_err(CommandError::Failed)?;
-                Ok(Value::Null)
-            },
-        ))
-        .expect("unique built-in id");
     registry
         .register(Command::new(
             spec(

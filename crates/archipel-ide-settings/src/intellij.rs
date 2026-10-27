@@ -116,8 +116,8 @@ pub mod ids {
     pub const CAMEL_HUMPS: &str = "editor.general.camelHumps";
     /// Caret stop policy of word movement: `idea` or `windows` (ED-CARET-010).
     pub const CARET_STOP: &str = "editor.general.caretStopPolicy";
-    /// Copy or cut the caret line when nothing is selected (ED-CLIP-002).
-    pub const COPY_LINE_WITHOUT_SELECTION: &str = "editor.general.copyLineWithoutSelection";
+    /// Do not copy or cut the caret line when nothing is selected (ED-CLIP-002).
+    pub const NO_COPY_LINE_WITHOUT_SELECTION: &str = "editor.general.noCopyLineWithoutSelection";
     /// Undo treats caret movement as transparent (ED-UNDO-011).
     pub const UNDO_TRANSPARENT_CARET: &str = "editor.general.undoTransparentCaretMovement";
     /// Vertical scroll offset in lines (ED-VIEW-020).
@@ -889,11 +889,11 @@ fn add_editor_definitions(registry: &mut SettingsRegistry) {
         )
         .group("Editor"),
         SettingDef::new(
-            ids::COPY_LINE_WITHOUT_SELECTION,
+            ids::NO_COPY_LINE_WITHOUT_SELECTION,
             general,
-            "Copy or cut the current line when nothing is selected",
+            "Don't copy/cut the current line when invoking the Copy or Cut action with no selection",
             Bool,
-            B(true),
+            B(false),
         )
         .group("Editor"),
         SettingDef::new(

@@ -24,7 +24,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 /// Number of cases that must pass. Never lower it; raise it with every fix.
-const PASS_BASELINE: usize = 56;
+const PASS_BASELINE: usize = 284;
 
 // ---------------------------------------------------------------------------------------------
 // Parsing
@@ -392,7 +392,7 @@ fn setting_id(label: &str) -> Option<&'static str> {
         "Unindent on Backspace" => ids::UNINDENT_ON_BACKSPACE,
         "Reformat on paste" => ids::REFORMAT_ON_PASTE,
         "Don't copy/cut the current line when invoking the Copy or Cut action with no selection" => {
-            ids::COPY_LINE_WITHOUT_SELECTION
+            ids::NO_COPY_LINE_WITHOUT_SELECTION
         }
         "Use undo transparent caret movement" => ids::UNDO_TRANSPARENT_CARET,
         "Vertical scroll offset" => ids::SCROLL_OFFSET,
@@ -505,6 +505,7 @@ impl Runner {
         actions
             .sync(state.application().extensions(), &commands)
             .map_err(|e| e.to_string())?;
+        let mut pages = None;
         let mut runner = Self {
             _root: root,
             state,
@@ -516,6 +517,11 @@ impl Runner {
         };
         runner.set("keymap.active", json!("$default"))?;
         for (label, value) in &case.settings {
+            if label == "viewport-lines" {
+                let lines: usize = value.parse().map_err(|_| "bad viewport-lines".to_owned())?;
+                pages = Some(lines);
+                continue;
+            }
             if RUNNER_SETTINGS.contains(&label.as_str()) {
                 continue;
             }
@@ -536,6 +542,9 @@ impl Runner {
             .run("editor.openFile", json!({"path": runner.path}))
             .map_err(|e| format!("open: {e}"))?;
         runner.state.edit_active(|document| {
+            if let Some(lines) = pages {
+                document.input.page_lines = lines;
+            }
             let len = document.text.len_chars();
             let selections: Vec<archipel_ide_text::Selection> = marked
                 .selections
@@ -593,6 +602,11 @@ impl Runner {
             "$Copy" | "EditorCopy" => return self.copy(false),
             "$Cut" | "EditorCut" => return self.copy(true),
             "$Paste" | "EditorPaste" => return self.paste(),
+            "EditorPasteSimple" => {
+                let text = self.clipboard.replace("\r\n", "\n");
+                self.run("editor.paste", json!({"text": text, "raw": true}))?;
+                return Ok(());
+            }
             _ => {}
         }
         let effect = {
@@ -604,7 +618,11 @@ impl Runner {
         };
         match effect {
             Some(ActionEffect::Command { id, params }) => {
-                self.run(&id, params)?;
+                let result = self.run(&id, params)?;
+                if matches!(id.as_str(), "editor.cutLineEnd" | "editor.cutLineBackward") {
+                    self.clipboard = result["text"].as_str().unwrap_or_default().to_owned();
+                    self.clipboard_line = None;
+                }
                 Ok(())
             }
             Some(_) => Err(format!("action {id} is a window request")),

@@ -63,6 +63,7 @@ mod diagnostic_commands;
 pub mod diagnostics;
 mod disk_sync;
 mod editor_commands;
+pub mod editor_input;
 mod external_diagnostics;
 pub mod first_run;
 mod folds;
@@ -240,6 +241,8 @@ pub struct Document {
     pub(crate) kept_trailing: Vec<String>,
     /// Saves this document even when its text equals the disk text (PLAT-SAVE-075).
     pub force_save: bool,
+    /// Modes and memory of the input layer (overwrite, sticky selection, goal column, tab-out).
+    pub input: editor_input::InputState,
 }
 
 /// What a document is backed by (PLAT-SAVE-003).
@@ -282,6 +285,7 @@ impl Document {
             backing: DocumentBacking::File,
             kept_trailing: Vec::new(),
             force_save: false,
+            input: Default::default(),
         };
         // The analysis already reflects `text`.
         document.text.take_edits();
@@ -681,54 +685,6 @@ impl IdeState {
                     .all(|ancestor| self.expanded_dirs.contains(ancestor))
             })
             .collect()
-    }
-
-    pub fn undo_active(&mut self) -> bool {
-        let Some(document) = self
-            .active_document
-            .and_then(|index| self.documents.get_mut(index))
-        else {
-            return false;
-        };
-        let Some(carets) = document.text.undo_carets() else {
-            return false;
-        };
-        // Put the caret where the change happened, not where it last was.
-        let len = document.text.len_chars();
-        let carets: Vec<Selection> = carets
-            .into_iter()
-            .map(|caret| Selection::caret(caret.min(len)))
-            .collect();
-        if carets.is_empty() {
-            document.selections.clamp(len);
-        } else {
-            document.selections.set_all(carets);
-        }
-        true
-    }
-
-    pub fn redo_active(&mut self) -> bool {
-        let Some(document) = self
-            .active_document
-            .and_then(|index| self.documents.get_mut(index))
-        else {
-            return false;
-        };
-        let Some(carets) = document.text.redo_carets() else {
-            return false;
-        };
-        // Put the caret where the change happened, not where it last was.
-        let len = document.text.len_chars();
-        let carets: Vec<Selection> = carets
-            .into_iter()
-            .map(|caret| Selection::caret(caret.min(len)))
-            .collect();
-        if carets.is_empty() {
-            document.selections.clamp(len);
-        } else {
-            document.selections.set_all(carets);
-        }
-        true
     }
 
     pub fn refresh_active_analysis(&mut self) {
@@ -1161,6 +1117,7 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
     build_commands::register(&mut registry);
     debug_commands::register(&mut registry);
     editor_commands::register(&mut registry);
+    editor_input::register(&mut registry);
     markdown_commands::register(&mut registry);
     disk_sync::register(&mut registry);
     tabs::register(&mut registry);

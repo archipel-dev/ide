@@ -49,6 +49,18 @@ const fn menu(action: &'static str, command: &'static str) -> ActionCommand {
     }
 }
 
+/// A reference editor action the input layer performs itself (`editor.action` with its id).
+macro_rules! editor_action {
+    ($id:literal) => {
+        ActionCommand {
+            action: $id,
+            command: "editor.action",
+            params: concat!(r#"{"action":""#, $id, r#""}"#),
+            scope: BindingScope::Editor,
+        }
+    };
+}
+
 const fn editor(action: &'static str, command: &'static str) -> ActionCommand {
     ActionCommand {
         action,
@@ -219,11 +231,86 @@ pub const ACTION_COMMANDS: &[ActionCommand] = &[
     editor("EditorStartNewLineBefore", "editor.startNewLineBefore"),
     menu("$Copy", "editor.copy"),
     menu("$Cut", "editor.cut"),
-    menu("$SelectAll", "editor.selectAll"),
-    menu("EditorIndentSelection", "editor.indent"),
-    menu("EditorUnindentSelection", "editor.unindent"),
+    editor("$SelectAll", "editor.selectAll"),
+    editor("EditorIndentSelection", "editor.tab"),
+    editor("EditorUnindentSelection", "editor.unindent"),
+    editor_action!("EditorLeft"),
+    editor_action!("EditorLeftWithSelection"),
+    editor_action!("EditorRight"),
+    editor_action!("EditorRightWithSelection"),
+    editor_action!("EditorUp"),
+    editor_action!("EditorUpWithSelection"),
+    editor_action!("EditorDown"),
+    editor_action!("EditorDownWithSelection"),
+    editor_action!("EditorLineStart"),
+    editor_action!("EditorLineStartWithSelection"),
+    editor_action!("EditorLineEnd"),
+    editor_action!("EditorLineEndWithSelection"),
+    editor_action!("EditorTextStart"),
+    editor_action!("EditorTextStartWithSelection"),
+    editor_action!("EditorTextEnd"),
+    editor_action!("EditorTextEndWithSelection"),
+    editor_action!("EditorPageUp"),
+    editor_action!("EditorPageUpWithSelection"),
+    editor_action!("EditorPageDown"),
+    editor_action!("EditorPageDownWithSelection"),
+    editor_action!("EditorMoveToPageTop"),
+    editor_action!("EditorMoveToPageTopWithSelection"),
+    editor_action!("EditorMoveToPageBottom"),
+    editor_action!("EditorMoveToPageBottomWithSelection"),
+    editor_action!("EditorNextWord"),
+    editor_action!("EditorNextWordWithSelection"),
+    editor_action!("EditorPreviousWord"),
+    editor_action!("EditorPreviousWordWithSelection"),
+    editor_action!("EditorCodeBlockStart"),
+    editor_action!("EditorCodeBlockStartWithSelection"),
+    editor_action!("EditorCodeBlockEnd"),
+    editor_action!("EditorCodeBlockEndWithSelection"),
+    editor_action!("EditorMatchBrace"),
+    editor_action!("EditorSelectLine"),
+    editor_action!("EditorToggleInsertState"),
+    editor_action!("EditorToggleStickySelection"),
+    editor_action!("EditorEscape"),
+    editor_action!("EditorBackSpace"),
+    editor_action!("EditorDelete"),
+    editor_action!("EditorDeleteToWordStart"),
+    editor_action!("EditorDeleteToWordEnd"),
+    editor_action!("EditorHungryBackSpace"),
+    editor_action!("EditorStartNewLine"),
+    editor_action!("EditorCompleteStatement"),
+    editor_action!("EditorIndentLineOrSelection"),
+    editor_action!("EditorDuplicateLines"),
+    editor_action!("EditorTranspose"),
+    editor_action!("CommentByBlockComment"),
+    editor_action!("AutoIndentLines"),
+    editor("EditorEnter", "editor.enter"),
+    editor("EditorTab", "editor.tab"),
+    editor("BraceOrQuoteOut", "editor.tab"),
+    editor("ExpandLiveTemplateByTab", "editor.tab"),
+    editor("NextTemplateVariable", "editor.tab"),
+    editor("PreviousTemplateVariable", "editor.unindent"),
+    editor("EditorSortLines", "editor.sortLines"),
+    editor("EditorReverseLines", "editor.reverseLines"),
+    editor("EditorUniqueLines", "editor.uniqueLines"),
+    editor("EditorCutLineEnd", "editor.cutLineEnd"),
+    editor("EditorCutLineBackward", "editor.cutLineBackward"),
     menu("About", "app.about"),
     menu("CheckForUpdate", "app.checkForUpdates"),
+];
+
+/// Editor actions the reference keymaps leave unbound: Find Action runs them and a keymap
+/// override can give them a key.
+pub const UNBOUND_BY_DEFAULT: &[&str] = &[
+    "EditorSelectLine",
+    "EditorToggleStickySelection",
+    "EditorHungryBackSpace",
+    "EditorIndentLineOrSelection",
+    "EditorDuplicateLines",
+    "EditorTranspose",
+    "EditorSortLines",
+    "EditorReverseLines",
+    "EditorUniqueLines",
+    "EditorCutLineBackward",
 ];
 
 /// Archipel-only actions: no reference id, so no bundled shortcut, but a keymap override
@@ -478,7 +565,8 @@ mod tests {
                 binding.action,
                 binding.command
             );
-            if binding.scope != BindingScope::Menu {
+            if binding.scope != BindingScope::Menu && !UNBOUND_BY_DEFAULT.contains(&binding.action)
+            {
                 assert!(
                     windows.bindings.contains_key(binding.action)
                         || mac.bindings.contains_key(binding.action),

@@ -1,0 +1,47 @@
+{
+  "id": "u01",
+  "title": "UI spec capture (New UI Dark, new_ui look): Welcome screen",
+  "reference": "reference/intellij-community/java-gradle/01-welcome.png",
+  "steps": [
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "execute",
+      "command": "settings.apply",
+      "args": {
+        "changes": {
+          "appearance.uiLook": "new_ui",
+          "appearance.theme": "New UI Dark",
+          "appearance.compactMode": false
+        }
+      }
+    },
+    {
+      "op": "execute",
+      "command": "toolchain.dismissBanner",
+      "args": {
+        "language": "Java"
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 800
+    },
+    {
+      "op": "assert",
+      "pointer": "/project",
+      "equals": null
+    },
+    {
+      "op": "assert",
+      "pointer": "/tabs",
+      "equals": []
+    },
+    {
+      "op": "screenshot",
+      "name": "u01-welcome.png"
+    }
+  ]
+}

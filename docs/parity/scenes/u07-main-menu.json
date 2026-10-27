@@ -1,0 +1,64 @@
+{
+  "id": "u07",
+  "title": "UI spec capture (New UI Dark, new_ui look): Main menu (hamburger, Code submenu)",
+  "reference": "reference/intellij-community/java-gradle/07-main-menu.png",
+  "fixture": "java-gradle",
+  "open": [
+    "src/main/java/com/example/App.java"
+  ],
+  "steps": [
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "execute",
+      "command": "settings.apply",
+      "args": {
+        "changes": {
+          "appearance.uiLook": "new_ui",
+          "appearance.theme": "New UI Dark",
+          "appearance.compactMode": false
+        }
+      }
+    },
+    {
+      "op": "execute",
+      "command": "toolchain.dismissBanner",
+      "args": {
+        "language": "Java"
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 800
+    },
+    {
+      "op": "click",
+      "x": 18,
+      "y": 20
+    },
+    {
+      "op": "sleep",
+      "ms": 1500
+    },
+    {
+      "op": "move",
+      "x": 60,
+      "y": 168
+    },
+    {
+      "op": "sleep",
+      "ms": 800
+    },
+    {
+      "op": "assert",
+      "pointer": "/activeTab",
+      "equals": "src/main/java/com/example/App.java"
+    },
+    {
+      "op": "screenshot",
+      "name": "u07-main-menu.png"
+    }
+  ]
+}

@@ -6,8 +6,8 @@
 use archipel_ide_analysis::daemon::{Pass, PassCx, PassId, PassOutput};
 use archipel_ide_analysis::inspect::InspectionSuppressor;
 use archipel_ide_analysis::langext::{
-    self, FILE_TYPE, HIGHLIGHTING_PASS, IMPORT_FIX_PROVIDER, INSPECTION_SUPPRESSOR, LANGUAGE,
-    PARSER_DEFINITION, ParserDefinition, registry_from_extensions,
+    self, FILE_TYPE, HIGHLIGHTING_PASS, IMPORT_FIX_PROVIDER, LANGUAGE, PARSER_DEFINITION,
+    ParserDefinition, registry_from_extensions,
 };
 use archipel_ide_analysis::{Cancelled, ServiceRegistry};
 use archipel_ide_langpacks::{
@@ -15,7 +15,7 @@ use archipel_ide_langpacks::{
 };
 use archipel_ide_language::{LanguageId, Order, Registration};
 use archipel_ide_lsp::{LANGUAGE_SERVER_PROVIDER, ServerRegistry};
-use archipel_ide_platform::{Application, ComponentManager};
+use archipel_ide_platform::Application;
 use archipel_ide_toolchains::providers::{
     TOOLCHAIN_REQUIREMENT_PROVIDER, project_requirements, requirements_from,
 };
@@ -280,11 +280,7 @@ fn every_language_of_a_pack_has_a_parser_that_parses_a_small_corpus() {
         let tree = tree_parser.parse(source, None).unwrap();
         assert!(!tree.root_node().has_error(), "{id}: {}", tree.root_node());
     }
-    assert_eq!(
-        archipel_ide_analysis::langext::PARSER_DEFINITION.spec(),
-        "PLAT-LANG-030, PLAT-LANG-033"
-    );
-    let _ = (PARSER_DEFINITION, INSPECTION_SUPPRESSOR);
+    assert_eq!(PARSER_DEFINITION.spec(), "PLAT-LANG-030, PLAT-LANG-033");
 }
 
 #[test]

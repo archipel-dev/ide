@@ -30,6 +30,7 @@ two-team clean-room process:
 | Platform | `platform/` | VFS, PSI, stubs and indexes, dumb mode, caching, concurrency, scopes, language extension points |
 | Code insight | `codeinsight/` | highlighting daemon, inspections, quick fixes and Alt+Enter, auto-import, completion framework, navigation |
 | Java | `java/` | stubs, resolve, types and inference, error catalog, imports, completion, inspections, Spring notes |
+| Inventory | `inventory/` | feature inventory of IntelliJ IDEA Community (actions, settings, tool windows, inspections, intentions, file types) with spec coverage and ranked gaps; facts only, no requirements |
 
 ## Coverage
 

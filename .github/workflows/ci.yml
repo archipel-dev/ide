@@ -40,5 +40,12 @@ jobs:
       # current runner image when several tests create devices at once. Run them one at a time.
       - run: cargo test -p archipel-ide-ui -- --test-threads=1
       - run: cargo run -p xtask -- parity --check
+      - run: cargo run -p xtask -- spec-coverage --check
+      - name: Spec coverage report
+        run: cargo run -p xtask -- spec-coverage --out spec-coverage/coverage.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spec-coverage
+          path: spec-coverage/coverage.md
       - run: cargo run -p xtask -- design-lint
 

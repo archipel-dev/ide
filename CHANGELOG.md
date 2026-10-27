@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.2](https://github.com/archipel-dev/ide/compare/v0.2.1...v0.2.2) (2026-10-27)
+
+
+### Features
+
+* **java:** native Java resolve, unresolved-symbol errors and IntelliJ-style import fixes ([#57](https://github.com/archipel-dev/ide/issues/57)) ([956fc07](https://github.com/archipel-dev/ide/commit/956fc076c6fb18c1c51dc65e3ed965a7b78696be))
+* **xtask:** behavior scenario runner and a 32-scenario IntelliJ parity corpus ([#58](https://github.com/archipel-dev/ide/issues/58)) ([3aa4430](https://github.com/archipel-dev/ide/commit/3aa4430e5948f606074c1e157f1f9b7f4be59fc8))
+* **xtask:** spec coverage report for the clean-room requirements ([#60](https://github.com/archipel-dev/ide/issues/60)) ([b5ede59](https://github.com/archipel-dev/ide/commit/b5ede59d81076ecf6eabb1e6dcd479e99b2ecbbb))
+
 ## [0.2.1](https://github.com/archipel-dev/ide/compare/v0.2.0...v0.2.1) (2026-10-27)
 
 

@@ -30,3 +30,9 @@ two-team clean-room process:
 | Platform | `platform/` | VFS, PSI, stubs and indexes, dumb mode, caching, concurrency, scopes, language extension points |
 | Code insight | `codeinsight/` | highlighting daemon, inspections, quick fixes and Alt+Enter, auto-import, completion framework, navigation |
 | Java | `java/` | stubs, resolve, types and inference, error catalog, imports, completion, inspections, Spring notes |
+
+## Coverage
+
+`cargo run -p xtask -- spec-coverage` reports how many requirements are implemented
+(`docs/specs/coverage.md`, generated). Reference requirement IDs from code and from tests,
+scenarios or scenes; pre-spec code is credited with evidence in `docs/specs/coverage.toml`.

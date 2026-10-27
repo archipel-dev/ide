@@ -233,10 +233,9 @@ impl Disposer {
 mod tests {
     use super::*;
 
-    fn recorder() -> (
-        Arc<Mutex<Vec<String>>>,
-        impl Fn(&'static str) -> Arc<dyn Disposable>,
-    ) {
+    type Log = Arc<Mutex<Vec<String>>>;
+
+    fn recorder() -> (Log, impl Fn(&'static str) -> Arc<dyn Disposable>) {
         struct Named(&'static str, Arc<Mutex<Vec<String>>>);
         impl Disposable for Named {
             fn dispose(&self) {

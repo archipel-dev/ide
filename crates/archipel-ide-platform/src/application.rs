@@ -323,7 +323,7 @@ mod tests {
         let project = manager.open("/work/demo");
         assert_eq!(project.name(), "demo");
         assert_eq!(project.root(), Path::new("/work/demo"));
-        assert_eq!(manager.open_projects(), [project.clone()]);
+        assert_eq!(manager.open_projects(), std::slice::from_ref(&project));
         assert!(manager.close(&project));
         assert!(!manager.close(&project), "closing twice does nothing");
         assert!(manager.open_projects().is_empty());

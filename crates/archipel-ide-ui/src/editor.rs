@@ -220,8 +220,8 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                         Some(app.context_menu_model(&crate::context_menus::Target::Editor));
                 }
                 let context_model = app.editor_menu.take().expect("built above");
-                let changes = app.state.document_changes(index).to_vec();
-                let blame = app.state.document_annotations(index).map(<[_]>::to_vec);
+                let changes = app.state.document_changes(index);
+                let blame = app.state.document_annotations(index);
                 let (lenses, inlays) = app.state.code_vision(index);
                 let inline_values = app.state.inline_values(&path);
                 let gutter = run_icons(app, ui.ctx());

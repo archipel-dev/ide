@@ -210,7 +210,7 @@ fn projects_page(
         }
     });
     ui.add_space(20.0);
-    if app.state.recent_projects.entries().is_empty() {
+    if app.state.recent_projects().read().entries().is_empty() {
         ui.label(
             RichText::new(format!(
                 "No recent projects. Open Project: {}",
@@ -229,7 +229,8 @@ fn projects_page(
         ui.add_space(8.0);
         let matches: Vec<(PathBuf, String)> = app
             .state
-            .recent_projects
+            .recent_projects()
+            .read()
             .search(&app.welcome.search)
             .into_iter()
             .map(|entry| (entry.path.clone(), entry.name.clone()))

@@ -503,7 +503,8 @@ mod tests {
         assert!(!commands.is_enabled("project.close", &state));
         assert!(
             state
-                .recent_projects
+                .recent_projects()
+                .read()
                 .entries()
                 .iter()
                 .any(|e| e.path.ends_with(root.file_name().unwrap()))
@@ -713,7 +714,7 @@ mod tests {
         let root = parent.join("wiz");
         assert!(root.join(".git").is_dir());
         assert!(root.join("src/main/kotlin/org/example/Main.kt").is_file());
-        assert_eq!(state.recent_projects.entries()[0].name, "wiz");
+        assert_eq!(state.recent_projects().read().entries()[0].name, "wiz");
         let _ = std::fs::remove_dir_all(parent);
     }
 }

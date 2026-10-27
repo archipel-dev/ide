@@ -10,13 +10,17 @@
 //! [`IdeState::dispatch_reactions`] runs them right after the event was published. When a
 //! feature becomes a service, its listener does the work itself and the reaction disappears.
 
+use crate::services::Settings;
 use crate::services::{
-    ActionManager, FIND_TOPIC, FindInProjectService, FindListener, GIT_REPO_CHANGE,
-    GitRepositories, GitRepositoryChangeListener, Notifications, ProjectModelService,
-    SearchEverywhereManager, SearchSummary, SettingsService, TOOLCHAIN_TOPIC, ToolchainBanner,
-    ToolchainListener, ToolchainManager, ToolchainRequirementsService, ToolchainState,
+    ActionManager, BlameAnnotations, CloneManager, FIND_TOPIC, FindInProjectService, FindListener,
+    GIT_REPO_CHANGE, GitLogService, GitRemoteOperations, GitRepositories,
+    GitRepositoryChangeListener, KeymapManager, LineStatusTracker, Notifications,
+    ProjectModelService, REMOTE_TOPIC, RecentProjectsManager, RemoteOperationListener,
+    RemoteOutcome, SETTINGS_TOPIC, SearchEverywhereManager, SearchSummary, SettingsListener,
+    SettingsService, TOOLCHAIN_TOPIC, ToolchainBanner, ToolchainListener, ToolchainManager,
+    ToolchainRequirementsService, ToolchainState, UPDATE_TOPIC, UpdateChecker, UpdateListener,
 };
-use crate::{IdeState, toolchain_commands};
+use crate::{IdeState, UpdateState, settings_commands, toolchain_commands};
 use archipel_ide_git::RepositoryStatus;
 use archipel_ide_platform::{
     Application, ComponentManager, Project, ProjectManager, ProjectManagerListener,
@@ -27,7 +31,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 /// Work a listener asks `IdeState` to do (see the module documentation).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Reaction {
     /// A toolchain component finished installing.
     ToolchainInstalled,
@@ -35,6 +39,10 @@ pub(crate) enum Reaction {
     VcsChanged { structure_changed: bool },
     /// A Find in Files search finished.
     SearchFinished(SearchSummary),
+    /// A fetch, pull or push ended.
+    RemoteFinished(RemoteOutcome),
+    /// The update checker has something to tell the user.
+    UpdateMessage(String),
 }
 
 #[derive(Clone, Default)]
@@ -84,6 +92,42 @@ impl FindListener for FindReactions {
     }
 }
 
+struct RemoteReactions(Reactions);
+
+impl RemoteOperationListener for RemoteReactions {
+    fn remote_operation_finished(&self, outcome: &RemoteOutcome) {
+        self.0.push(Reaction::RemoteFinished(outcome.clone()));
+    }
+}
+
+/// Shows a balloon and a status line when the update checker has news.
+struct UpdateReactions {
+    application: WeakApplication,
+    reactions: Reactions,
+}
+
+impl UpdateListener for UpdateReactions {
+    fn update_state_changed(&self, _state: &UpdateState, message: Option<&str>) {
+        let Some(message) = message else {
+            return;
+        };
+        if let Some(application) = self.application.upgrade() {
+            application.service::<Notifications>().show_update_balloon();
+        }
+        self.reactions
+            .push(Reaction::UpdateMessage(message.to_owned()));
+    }
+}
+
+/// Hands Settings | Build Tools | Gradle to the Gradle integration whenever settings change.
+struct GradleOptions;
+
+impl SettingsListener for GradleOptions {
+    fn settings_changed(&self, settings: &Settings) {
+        settings_commands::apply_gradle_options(settings);
+    }
+}
+
 /// Connects the per-project listeners when a project opens.
 struct CoreProjectListener(Reactions);
 
@@ -99,6 +143,11 @@ impl ProjectManagerListener for CoreProjectListener {
             FIND_TOPIC,
             Arc::new(FindReactions(self.0.clone())),
         );
+        let _ = project.message_bus().subscribe(
+            project.disposable(),
+            REMOTE_TOPIC,
+            Arc::new(RemoteReactions(self.0.clone())),
+        );
     }
 }
 
@@ -107,7 +156,24 @@ fn register_core_services(application: &Application) {
         application.register_service(ServiceDescriptor::new(|_: &Application| {
             ToolchainManager::new(ToolchainState::default())
         })),
-        application.register_service(ServiceDescriptor::of_default::<SettingsService>()),
+        application.register_service(ServiceDescriptor::new(|application: &Application| {
+            SettingsService::new(application.message_bus().clone())
+        })),
+        application.register_service(ServiceDescriptor::new(|application: &Application| {
+            let settings = application.service::<SettingsService>();
+            KeymapManager::connect(
+                application.message_bus(),
+                application.disposable(),
+                &settings.read(),
+            )
+        })),
+        application.register_service(ServiceDescriptor::new(|application: &Application| {
+            UpdateChecker::new(application.message_bus().clone())
+        })),
+        application.register_service(ServiceDescriptor::of_default::<RecentProjectsManager>()),
+        application.register_service(ServiceDescriptor::new(|application: &Application| {
+            CloneManager::new(application.message_bus().clone())
+        })),
         application.register_service(ServiceDescriptor::of_default::<ActionManager>()),
         application.register_service(ServiceDescriptor::new(|application: &Application| {
             Notifications::new(application.message_bus().clone())
@@ -123,6 +189,18 @@ fn register_core_services(application: &Application) {
         })),
         application
             .register_project_service(ServiceDescriptor::of_default::<SearchEverywhereManager>()),
+        application.register_project_service(ServiceDescriptor::new(|project: &Project| {
+            GitLogService::connect(project)
+        })),
+        application.register_project_service(ServiceDescriptor::new(|project: &Project| {
+            BlameAnnotations::connect(project)
+        })),
+        application.register_project_service(ServiceDescriptor::new(|project: &Project| {
+            LineStatusTracker::connect(project)
+        })),
+        application.register_project_service(ServiceDescriptor::disposable(|project: &Project| {
+            GitRemoteOperations::new(project.message_bus().clone())
+        })),
         application.register_project_service(ServiceDescriptor::disposable(|project: &Project| {
             ProjectModelService::new(project.message_bus().clone())
         })),
@@ -155,6 +233,15 @@ impl Default for Platform {
                 reactions: reactions.clone(),
             }),
         );
+        let _ = bus.subscribe(
+            owner,
+            UPDATE_TOPIC,
+            Arc::new(UpdateReactions {
+                application: application.downgrade(),
+                reactions: reactions.clone(),
+            }),
+        );
+        let _ = bus.subscribe(owner, SETTINGS_TOPIC, Arc::new(GradleOptions));
         let _ = bus.subscribe(
             owner,
             ProjectManager::TOPIC,
@@ -213,6 +300,51 @@ impl IdeState {
     /// Settings (application service).
     pub fn settings(&self) -> Arc<SettingsService> {
         self.application().service()
+    }
+
+    /// The effective keymap, kept in step with the settings (application service).
+    pub fn keymap(&self) -> Arc<KeymapManager> {
+        self.application().service()
+    }
+
+    /// Update checking and installation (application service).
+    pub fn updates(&self) -> Arc<UpdateChecker> {
+        self.application().service()
+    }
+
+    /// Recently opened projects (application service).
+    pub fn recent_projects(&self) -> Arc<RecentProjectsManager> {
+        self.application().service()
+    }
+
+    /// Get from Version Control (application service).
+    pub fn clone_manager(&self) -> Arc<CloneManager> {
+        self.application().service()
+    }
+
+    /// The Git Log tab (project service).
+    pub fn git_log(&self) -> Option<Arc<GitLogService>> {
+        self.platform_project()?.get_service()
+    }
+
+    /// The Git Log tab as of now; empty without a project.
+    pub fn git_log_snapshot(&self) -> Arc<crate::GitLogState> {
+        self.git_log().map(|log| log.snapshot()).unwrap_or_default()
+    }
+
+    /// Blame annotations of the open project's documents (project service).
+    pub fn annotations(&self) -> Option<Arc<BlameAnnotations>> {
+        self.platform_project()?.get_service()
+    }
+
+    /// Gutter change markers of the open project's documents (project service).
+    pub fn line_status(&self) -> Option<Arc<LineStatusTracker>> {
+        self.platform_project()?.get_service()
+    }
+
+    /// Fetch, pull and push of the open project (project service).
+    pub fn remote_ops(&self) -> Option<Arc<GitRemoteOperations>> {
+        self.platform_project()?.get_service()
     }
 
     /// Find Action options (application service).
@@ -318,9 +450,6 @@ impl IdeState {
         for reaction in self.platform.reactions.take() {
             match reaction {
                 Reaction::VcsChanged { structure_changed } => {
-                    self.invalidate_line_changes();
-                    self.invalidate_git_log();
-                    self.invalidate_annotations();
                     if structure_changed && let Some(project) = &self.project {
                         // Files created or deleted outside the IDE change the set of
                         // untracked/added/deleted paths; rescan so the project tree shows them.
@@ -329,6 +458,8 @@ impl IdeState {
                     self.refresh_diff();
                 }
                 Reaction::ToolchainInstalled => self.toolchain_installed(),
+                Reaction::UpdateMessage(message) => self.status = message,
+                Reaction::RemoteFinished(outcome) => self.remote_operation_finished(outcome),
                 Reaction::SearchFinished(summary) => {
                     self.status = format!(
                         "Found {} result{} in {} files{}",
@@ -532,6 +663,57 @@ mod tests {
             state.platform.reactions.take().is_empty(),
             "failures need no follow-up"
         );
+    }
+
+    #[test]
+    fn a_finished_search_sets_the_status_line_through_the_topic() {
+        let dir = temp("search-status");
+        std::fs::write(dir.join("a.txt"), "needle\nneedle\n").unwrap();
+        let mut state = IdeState::default();
+        state.open_project(&dir).unwrap();
+        state.start_search("needle".into()).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while state.search_running() && std::time::Instant::now() < deadline {
+            state.poll_search();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        state.poll_search();
+        assert_eq!(state.status, "Found 2 results in 1 files");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn update_news_raises_the_balloon_and_the_status_line_through_the_topic() {
+        let mut state = IdeState::default();
+        assert!(!state.notifications().update_balloon());
+        let (sender, receiver) = std::sync::mpsc::channel();
+        sender
+            .send(archipel_ide_update::UpdateEvent::Checked(Err(
+                "offline".into()
+            )))
+            .unwrap();
+        state
+            .updates()
+            .set_worker(archipel_ide_update::UpdateService::with_receiver(receiver));
+        state.poll_updates();
+        assert_eq!(state.status, "Update check failed: offline");
+        assert!(state.notifications().update_balloon());
+    }
+
+    #[test]
+    fn a_settings_change_reaches_the_keymap_without_a_direct_call() {
+        use archipel_ide_settings::{SettingValue, ids};
+        let state = IdeState::default();
+        let before = state.keymap_state().keymap.id.clone();
+        assert_ne!(before, "Default for KDE");
+        state
+            .settings()
+            .write()
+            .set(ids::KEYMAP, SettingValue::Text("Default for KDE".into()))
+            .unwrap();
+        assert_eq!(state.keymap_state().keymap.id, before, "not announced yet");
+        state.settings().notify_changed();
+        assert_eq!(state.keymap_state().keymap.id, "Default for KDE");
     }
 
     #[test]

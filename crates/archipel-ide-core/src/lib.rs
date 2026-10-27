@@ -93,7 +93,8 @@ mod search_replace;
 pub mod spring_commands;
 mod test_nav;
 mod welcome_commands;
-pub use welcome_commands::{CloneJob, JdkChoice, jdk_major, repository_name};
+pub use services::CloneJob;
+pub use welcome_commands::{JdkChoice, jdk_major, repository_name};
 mod live_templates;
 mod run_config_commands;
 mod search_scopes;
@@ -302,32 +303,14 @@ pub struct IdeState {
     pub terminal: Option<TerminalSession>,
     /// Sessions of the Terminal tool window; the active one lives in `terminal`.
     pub terminal_tabs: terminal_tabs::TerminalTabs,
-    /// Running fetch/pull/push.
-    pub remote_job: Option<archipel_ide_git::RemoteJob>,
-    /// Latest progress line of the running remote operation.
-    pub remote_progress: Option<String>,
-    /// Recently opened projects (welcome screen).
-    pub recent_projects: archipel_ide_project::recent::RecentProjects,
-    /// Running Get from VCS clone.
-    pub clone_job: Option<CloneJob>,
-    pub clone_progress: Option<String>,
-    pub clone_error: Option<String>,
-    /// Message of the last failed remote operation.
-    pub remote_error: Option<String>,
-    /// Blame annotations of documents that have them switched on.
-    annotations: std::collections::HashMap<PathBuf, annotations::Annotation>,
     /// Code vision and inlay hints per document.
     code_vision: code_vision::CodeVisionState,
-    /// Git tool window Log tab.
-    pub git_log: GitLogState,
     /// The diff viewer tab, if open.
     pub diff: Option<DiffTab>,
     /// Whether the diff tab (rather than a document) is the selected editor tab.
     pub diff_active: bool,
     /// Lets background services wake the UI.
     pub repaint: RepaintHook,
-    /// Per-document changed lines against HEAD (gutter markers).
-    line_changes: std::collections::HashMap<PathBuf, line_changes::LineChanges>,
     pub runner: TaskService,
     /// Tabs and console toolbar of the Build tool window.
     pub build_window: build_window::BuildWindowState,
@@ -387,8 +370,6 @@ pub struct IdeState {
     pub project_view: project_view::ProjectView,
     /// Most recently used files, newest first (Recent Files, ⌘E).
     pub recent_files: Vec<PathBuf>,
-    pub updates: archipel_ide_update::UpdateService,
-    pub update_state: UpdateState,
     /// Whether Help → About is showing (`app.about`).
     pub about_open: bool,
     /// Unseen crash report from a previous session (`app.dismissCrashReport`).
@@ -397,15 +378,9 @@ pub struct IdeState {
     pub first_run_open: bool,
     /// Config directory the first-run marker is written to.
     first_run_dir: Option<PathBuf>,
-    update_silent: bool,
-    /// Original install path, retained when the running binary is renamed.
-    update_executable: Option<PathBuf>,
-    pub keymap: keymap_commands::KeymapState,
     /// Settings page the UI should open (set by `settings.open`, taken by the UI).
     pub settings_request: Option<String>,
     pub android: AndroidState,
-    /// Verified installer to run on quit (MSI/DMG/.deb installations).
-    update_installer: Option<(PathBuf, archipel_ide_update::InstallKind)>,
     pub ai: AiState,
     pub status: String,
     watcher: Option<archipel_ide_project::ProjectWatcher>,
@@ -492,9 +467,6 @@ impl IdeState {
         self.lsp.set_project(Some(project.root()));
         self.close_diff();
         self.reload_toolchains(Some(project.root()));
-        self.annotations.clear();
-        self.invalidate_line_changes();
-        self.git_log = GitLogState::default();
         self.refresh_toolchain_resolver();
         self.navigation = NavigationState::default();
         self.code_actions = CodeActionState::default();
@@ -505,7 +477,7 @@ impl IdeState {
         self.recent_files.clear();
         self.tool_windows = ToolWindowLayout::default();
         self.tool_windows.show(ToolWindow::Project);
-        self.recent_projects.record(project.root());
+        self.recent_projects().write().record(project.root());
         self.status = format!("Opened {}", project.root().display());
         self.load_project_settings(project.root());
         self.android.project_opened(project.root());

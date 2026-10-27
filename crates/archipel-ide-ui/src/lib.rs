@@ -1150,7 +1150,7 @@ impl IdeApp {
         }
         // Include operations started by controls in this frame, and keep
         // polling even when their notification balloon is hidden.
-        if self.state.updates.is_busy() {
+        if self.state.updates().is_busy() {
             ctx.request_repaint_after(Duration::from_millis(200));
         }
         self.control_after_frame(ctx);

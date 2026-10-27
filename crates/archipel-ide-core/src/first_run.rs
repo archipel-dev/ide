@@ -247,7 +247,7 @@ mod tests {
             state.settings().read().text(ids::KEYMAP).as_deref(),
             Some("Default for KDE")
         );
-        assert_eq!(state.keymap.keymap.id, "Default for KDE");
+        assert_eq!(state.keymap_state().keymap.id, "Default for KDE");
         assert!(dir.join(FIRST_RUN_MARKER).is_file());
         let saved = std::fs::read_to_string(dir.join("settings.toml")).unwrap();
         assert!(saved.contains("Islands Light"), "{saved}");

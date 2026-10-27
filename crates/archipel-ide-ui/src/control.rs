@@ -281,7 +281,7 @@ impl IdeApp {
             && !self.state.text_search_running()
             && !self.find_popup.pending()
             && !self.state.runner.is_running()
-            && !self.state.updates.is_busy()
+            && !self.state.updates().is_busy()
             && self.state.analysis.index.is_idle()
             && !self.state.project_model().is_some_and(|m| m.is_busy())
     }

@@ -66,10 +66,10 @@ pub fn show(
     let mut keep = true;
     let mut clone = false;
     let busy = app.state.clone_busy();
-    if let Some(error) = app.state.clone_error.take() {
+    if let Some(error) = app.state.take_clone_error() {
         form.error = Some(error);
     }
-    let progress = app.state.clone_progress.clone();
+    let progress = app.state.clone_progress();
     popup_frame(ctx, "dialog_clone", 560.0, |ui| {
         title(ui, "Get from Version Control");
         ui.add_enabled_ui(!busy, |ui| {

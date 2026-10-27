@@ -1,5 +1,6 @@
 //! "Annotate with Git Blame" gutter data and "Show History" for a file.
 
+use crate::services::REBLAME_INTERVAL;
 use crate::{CommandError, IdeState, ToolWindow, spec};
 use archipel_ide_command::{Command, CommandRegistry};
 use archipel_ide_git::BlameLine;
@@ -7,15 +8,20 @@ use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-/// Minimum time between blame runs while a document is being edited.
-const REBLAME_INTERVAL: Duration = Duration::from_millis(800);
-
 #[derive(Debug, Clone)]
-pub(crate) struct Annotation {
+pub struct Annotation {
     /// Document revision the lines were computed for; `None` forces a rerun.
-    revision: Option<u64>,
-    lines: Vec<BlameLine>,
-    computed_at: Instant,
+    pub(crate) revision: Option<u64>,
+    pub(crate) lines: Vec<BlameLine>,
+    pub(crate) computed_at: Instant,
+}
+
+impl Annotation {
+    /// Forces a re-blame at the next opportunity (after commits, checkouts, pulls).
+    pub(crate) fn invalidate(&mut self, interval: Duration) {
+        self.revision = None;
+        self.computed_at = Instant::now() - interval;
+    }
 }
 
 impl IdeState {
@@ -47,11 +53,12 @@ impl IdeState {
     pub fn toggle_annotations(&mut self) -> Result<bool, String> {
         let index = self.active_document.ok_or("no active document")?;
         let path = self.documents[index].path.clone();
-        if self.annotations.remove(&path).is_some() {
+        let annotations = self.annotations().ok_or("no project is open")?;
+        if annotations.write().remove(&path).is_some() {
             return Ok(false);
         }
         let lines = self.blame_document(index)?;
-        self.annotations.insert(
+        annotations.write().insert(
             path,
             Annotation {
                 revision: Some(self.documents[index].text.revision()),
@@ -64,18 +71,20 @@ impl IdeState {
 
     /// Blame lines for document `index` if annotations are on, refreshed
     /// (throttled) after edits and repository changes.
-    pub fn document_annotations(&mut self, index: usize) -> Option<&[BlameLine]> {
+    pub fn document_annotations(&self, index: usize) -> Option<Vec<BlameLine>> {
         let document = self.documents.get(index)?;
         let path = document.path.clone();
         let revision = document.text.revision();
+        let annotations = self.annotations()?;
         let stale = {
-            let annotation = self.annotations.get(&path)?;
+            let files = annotations.read();
+            let annotation = files.get(&path)?;
             annotation.revision != Some(revision)
                 && annotation.computed_at.elapsed() >= REBLAME_INTERVAL
         };
         if stale {
             let lines = self.blame_document(index);
-            if let Some(annotation) = self.annotations.get_mut(&path) {
+            if let Some(annotation) = annotations.write().get_mut(&path) {
                 annotation.computed_at = Instant::now();
                 if let Ok(lines) = lines {
                     annotation.lines = lines;
@@ -83,28 +92,24 @@ impl IdeState {
                 }
             }
         }
-        self.annotations
+        annotations
+            .read()
             .get(&path)
-            .map(|annotation| annotation.lines.as_slice())
-    }
-
-    /// Re-blames annotated documents (after commits, checkouts, pulls).
-    pub(crate) fn invalidate_annotations(&mut self) {
-        for annotation in self.annotations.values_mut() {
-            annotation.revision = None;
-            annotation.computed_at = Instant::now() - REBLAME_INTERVAL;
-        }
+            .map(|annotation| annotation.lines.clone())
     }
 
     /// Shows the Git log limited to the active document's history.
     pub fn show_file_history(&mut self) -> Result<(), String> {
         let index = self.active_document.ok_or("no active document")?;
         let path = self.repo_path_of(&self.documents[index].path.clone())?;
-        if !self.git_log.history_tabs.contains(&path) {
-            self.git_log.history_tabs.push(path.clone());
-        }
-        self.git_log.path = Some(path);
-        self.git_log.filter.clear();
+        self.git_log_update(|log| {
+            if !log.history_tabs.contains(&path) {
+                log.history_tabs.push(path.clone());
+            }
+            log.path = Some(path);
+            log.filter.clear();
+        })
+        .ok_or("no project is open")?;
         self.tool_windows.show(ToolWindow::Git);
         self.refresh_git_log()
     }
@@ -128,7 +133,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             tracked,
             |state: &mut IdeState, _| {
                 state.show_file_history().map_err(CommandError::Failed)?;
-                Ok(json!({ "commits": state.git_log.commits.len() }))
+                Ok(json!({ "commits": state.git_log_snapshot().commits.len() }))
             },
         ))
         .expect("unique built-in id");
@@ -141,9 +146,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.git_log.path.is_some(),
+            |state: &IdeState| state.git_log_snapshot().path.is_some(),
             |state: &mut IdeState, _| {
-                state.git_log.path = None;
+                state.git_log_update(|log| log.path = None);
                 state.refresh_git_log().map_err(CommandError::Failed)?;
                 Ok(Value::Null)
             },
@@ -210,19 +215,19 @@ mod tests {
             .unwrap();
         assert_eq!(result["commits"], 1);
         assert!(state.tool_windows.is_visible(ToolWindow::Git));
-        assert_eq!(state.git_log.commits[0].subject, "First");
+        assert_eq!(state.git_log_snapshot().commits[0].subject, "First");
         // File history is a sibling tab of `Log`: it can be left and reopened.
-        let tab = state.git_log.history_tabs[0].clone();
-        assert_eq!(state.git_log.active_history_tab(), Some(&tab));
+        let tab = state.git_log_snapshot().history_tabs[0].clone();
+        assert_eq!(state.git_log_snapshot().active_history_tab(), Some(&tab));
         commands
             .execute("git.log.selectTab", &mut state, json!({}))
             .unwrap();
-        assert!(state.git_log.active_history_tab().is_none());
-        assert_eq!(state.git_log.commits.len(), 2);
+        assert!(state.git_log_snapshot().active_history_tab().is_none());
+        assert_eq!(state.git_log_snapshot().commits.len(), 2);
         commands
             .execute("git.log.selectTab", &mut state, json!({"path": tab}))
             .unwrap();
-        assert_eq!(state.git_log.commits.len(), 1);
+        assert_eq!(state.git_log_snapshot().commits.len(), 1);
         assert!(
             commands
                 .execute("git.log.selectTab", &mut state, json!({"path": "nope"}))
@@ -231,13 +236,17 @@ mod tests {
         commands
             .execute("git.fileHistory", &mut state, Value::Null)
             .unwrap();
-        assert_eq!(state.git_log.history_tabs.len(), 1, "no duplicate tabs");
+        assert_eq!(
+            state.git_log_snapshot().history_tabs.len(),
+            1,
+            "no duplicate tabs"
+        );
         commands
             .execute("git.log.closeTab", &mut state, json!({"path": tab}))
             .unwrap();
-        assert!(state.git_log.history_tabs.is_empty());
-        assert!(state.git_log.path.is_none());
-        assert_eq!(state.git_log.commits.len(), 2);
+        assert!(state.git_log_snapshot().history_tabs.is_empty());
+        assert!(state.git_log_snapshot().path.is_none());
+        assert_eq!(state.git_log_snapshot().commits.len(), 2);
 
         let result = commands
             .execute("git.annotate", &mut state, Value::Null)

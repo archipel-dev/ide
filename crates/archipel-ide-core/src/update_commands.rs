@@ -2,10 +2,7 @@
 
 use crate::{IdeState, spec};
 use archipel_ide_command::{Command, CommandError, CommandRegistry};
-use archipel_ide_update::{
-    CheckOutcome, InstallKind, Installed, InstalledUpdate, Release, UpdateEvent, UpdateSource,
-    Version,
-};
+use archipel_ide_update::{InstallKind, Release, Version};
 use serde_json::{Value, json};
 
 pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -55,96 +52,44 @@ pub fn installable_executable() -> Result<std::path::PathBuf, String> {
 
 impl IdeState {
     pub fn check_for_updates(&mut self, silent: bool) {
-        if self.updates.is_busy() {
-            return;
-        }
-        self.update_silent = silent;
-        self.update_state = UpdateState::Checking;
-        self.updates
-            .check(UpdateSource::from_env(), current_version());
+        self.updates().check(silent);
     }
 
     pub fn install_update(&mut self) -> Result<(), String> {
-        let UpdateState::Available { version, release } = &self.update_state else {
-            return Err("no update is available".into());
-        };
-        let exe = self
-            .update_executable
-            .clone()
-            .map_or_else(installable_executable, Ok)?;
-        self.update_executable = Some(exe.clone());
-        let version = version.clone();
-        self.updates
-            .install(UpdateSource::from_env(), (**release).clone(), exe);
+        let version = self.updates().install()?;
         self.status = format!("Downloading Archipel IDE {version}…");
-        self.update_state = UpdateState::Installing(version);
         Ok(())
     }
 
+    /// Applies a finished check or installation. The status line and the balloon follow the
+    /// [`crate::services::UPDATE_TOPIC`] event the service publishes.
     pub fn poll_updates(&mut self) {
-        let Some(event) = self.updates.poll() else {
-            return;
-        };
-        self.update_state = match event {
-            UpdateEvent::Checked(Ok(CheckOutcome::Available { version, release })) => {
-                self.status = format!("Archipel IDE {version} is available");
-                self.notifications().show_update_balloon();
-                UpdateState::Available {
-                    version,
-                    release: Box::new(release),
-                }
-            }
-            UpdateEvent::Checked(Ok(CheckOutcome::UpToDate { latest })) => {
-                if !self.update_silent {
-                    self.status = format!("Archipel IDE {CURRENT_VERSION} is up to date");
-                    self.notifications().show_update_balloon();
-                }
-                UpdateState::UpToDate(latest)
-            }
-            UpdateEvent::Checked(Err(error)) => {
-                if !self.update_silent {
-                    self.status = format!("Update check failed: {error}");
-                    self.notifications().show_update_balloon();
-                }
-                UpdateState::Failed(error)
-            }
-            UpdateEvent::Installed(Ok(InstalledUpdate { version, installed })) => {
-                self.update_installer = match installed {
-                    Installed::InPlace => None,
-                    Installed::Installer { path, kind } => Some((path, kind)),
-                };
-                self.status = if self.update_installer.is_some() {
-                    format!("Archipel IDE {version} downloaded; quit to install")
-                } else {
-                    format!("Archipel IDE {version} installed; restart to finish")
-                };
-                self.notifications().show_update_balloon();
-                UpdateState::Installed(version)
-            }
-            UpdateEvent::Installed(Err(error)) => {
-                self.status = format!("Update failed: {error}");
-                self.notifications().show_update_balloon();
-                UpdateState::Failed(error)
-            }
-        };
+        if self.updates().poll() {
+            self.dispatch_reactions();
+        }
+    }
+
+    /// The state of the update check and installation.
+    pub fn update_state(&self) -> UpdateState {
+        self.updates().state()
     }
 
     /// On Linux, current_exe follows the running inode into the `.old` backup.
     /// Use the installation target captured before replacement instead.
-    pub fn update_restart_target(&self) -> Option<&std::path::Path> {
-        self.update_executable.as_deref()
+    pub fn update_restart_target(&self) -> Option<std::path::PathBuf> {
+        self.updates().restart_target()
     }
 
     /// How the downloaded update is applied: `None` for an in-place update
     /// (restart), otherwise the installer kind to run on quit.
     pub fn update_installer_kind(&self) -> Option<InstallKind> {
-        self.update_installer.as_ref().map(|(_, kind)| *kind)
+        self.updates().installer_kind()
     }
 
     /// Saves the session and opens the downloaded installer. The caller quits
     /// the IDE afterwards so the installer can replace its files.
     pub fn run_update_installer(&mut self) -> Result<(), String> {
-        let Some((path, _)) = self.update_installer.clone() else {
+        let Some((path, _)) = self.updates().installer() else {
             return Err("no downloaded installer; check for updates first".into());
         };
         if self.project.is_some() {
@@ -184,7 +129,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"silent":"bool?"}"#,
             ),
-            |state: &IdeState| !state.updates.is_busy(),
+            |state: &IdeState| !state.updates().is_busy(),
             |state: &mut IdeState, params| {
                 let silent = params
                     .get("silent")
@@ -204,7 +149,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| matches!(state.update_state, UpdateState::Available { .. }),
+            |state: &IdeState| state.updates().is_available(),
             |state: &mut IdeState, _| {
                 state.install_update().map_err(CommandError::Failed)?;
                 Ok(Value::Null)
@@ -220,7 +165,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.update_installer.is_some(),
+            |state: &IdeState| state.updates().installer().is_some(),
             |state: &mut IdeState, _| {
                 state.run_update_installer().map_err(CommandError::Failed)?;
                 Ok(json!({"quit": true}))
@@ -274,7 +219,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use archipel_ide_update::parse_release;
+    use archipel_ide_update::{Installed, InstalledUpdate, UpdateEvent, parse_release};
 
     #[test]
     fn restart_preparation_saves_dirty_files_and_propagates_save_errors() {
@@ -369,10 +314,10 @@ mod tests {
                 .execute("app.runUpdateInstaller", &mut state, Value::Null)
                 .is_err()
         );
-        state.update_installer = Some((
+        state.updates().set_installer(Some((
             std::path::PathBuf::from("archipel-ide-9.0.0-windows-x86_64.msi"),
             InstallKind::Msi,
-        ));
+        )));
         assert_eq!(state.update_installer_kind(), Some(InstallKind::Msi));
         let in_place = InstalledUpdate {
             version: Version::parse("9.0.0").unwrap(),
@@ -380,10 +325,12 @@ mod tests {
         };
         let (sender, receiver) = std::sync::mpsc::channel();
         sender.send(UpdateEvent::Installed(Ok(in_place))).unwrap();
-        state.updates = archipel_ide_update::UpdateService::with_receiver(receiver);
+        state
+            .updates()
+            .set_worker(archipel_ide_update::UpdateService::with_receiver(receiver));
         state.poll_updates();
         assert_eq!(state.update_installer_kind(), None);
-        assert!(matches!(state.update_state, UpdateState::Installed(_)));
+        assert!(matches!(state.update_state(), UpdateState::Installed(_)));
         assert!(state.status.contains("restart"));
     }
 
@@ -395,13 +342,16 @@ mod tests {
             r#"{"tag_name":"v99.0.0","html_url":"https://example.invalid","assets":[]}"#,
         )
         .unwrap();
-        state.update_state = UpdateState::Available {
+        state.updates().set_state(UpdateState::Available {
             version: release.version().unwrap(),
             release: Box::new(release),
-        };
+        });
         // Test binaries are not named `archipel-ide`, so they never replace themselves.
         let error = state.install_update().unwrap_err();
         assert!(error.contains("development build"));
-        assert!(matches!(state.update_state, UpdateState::Available { .. }));
+        assert!(matches!(
+            state.update_state(),
+            UpdateState::Available { .. }
+        ));
     }
 }

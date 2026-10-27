@@ -573,7 +573,7 @@ implement; the Java spec owns their precise conditions and messages.
 | Short name | Group | Level (default) | Highlight type / attributes | Notes |
 |---|---|---|---|---|
 | `unused` (Unused declaration) | Declaration redundancy | WARNING | GENERIC with `NOT_USED_ELEMENT_ATTRIBUTES` | global with on-the-fly shared part |
-| `UNUSED_IMPORT` (Unused import) | Imports | WARNING | GENERIC with `NOT_USED_ELEMENT_ATTRIBUTES`; message `Unused import <ref>`; fix `Delete unused import`/`Optimize imports` | enables the optimize-imports flow (`08-...`) |
+| `UNUSED_IMPORT` (Unused import) | Imports | WARNING | GENERIC with `NOT_USED_ELEMENT_ATTRIBUTES`; on the fly: message `Unused import statement`, fixes `Remove unused imports` and, only while the setting is off, `Enable 'Settings \| Editor \| General \| Auto Import \| Optimize imports on the fly'` (LOW); batch (Inspect Code): message `Unused import <ref>`, fix `Delete unnecessary import` | produced by the general-pass visitor, not by a plain local tool; enables the optimize-imports flow (`08-...`) |
 | `MISSORTED_IMPORTS` (Unsorted imports) | Imports | INFORMATION | information with fix `Optimize imports` | on-the-fly optimize trigger |
 | `Deprecation` (suppress id `deprecation`) | Code maturity | WARNING | LIKE_DEPRECATED | |
 | `MarkedForRemoval` | Code maturity | ERROR | LIKE_MARKED_FOR_REMOVAL | |
@@ -589,11 +589,12 @@ lists them with levels.
 ## 11. UX acceptance scenarios
 
 **S-INS-1, unused import.** File has `import java.util.List;` that is not used. Expected: the
-import text is grey (attributes `NOT_USED_ELEMENT_ATTRIBUTES`), tooltip `Unused import 'java.util.List'`,
-stripe mark in the warning colour; Alt+Enter on the import shows `Optimize imports` and a row
-named after the inspection (`Unused import`) with a submenu: `Edit inspection profile setting`,
-`Run inspection on…`, `Disable inspection`, `Fix all 'Unused import' problems in file`,
-`Suppress for ...` rows; choosing `Disable inspection` turns the inspection off in the project
+import text is grey (attributes `NOT_USED_ELEMENT_ATTRIBUTES`), tooltip `Unused import statement`,
+stripe mark in the warning colour; Alt+Enter on the import shows `Remove unused imports`, a LOW
+row `Enable 'Settings | Editor | General | Auto Import | Optimize imports on the fly'` (while that
+setting is off). The submenu of `Remove unused imports` (Right arrow) contains `Edit inspection
+profile setting`, `Run inspection on…`, `Disable highlighting, keep fix`, `Disable inspection`
+and the suppress rows the language offers; choosing `Disable inspection` turns the inspection off in the project
 profile and the grey-out disappears within one cycle.
 
 **S-INS-2, per-scope severity.** Set `Deprecation` to ERROR for scope `Production` and

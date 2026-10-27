@@ -14,11 +14,12 @@ use eframe::egui::{self, Color32, FontFamily};
 // Workbench color tokens; values come from the active theme (see `theme_engine`).
 pub use crate::theme_engine::Token;
 pub use crate::theme_engine::tokens::{
-    ACCENT, ADDED, BANNER_WARNING, BANNER_WARNING_BORDER, BORDER, COMPLETION_SELECTION, ERROR,
-    FIELD, FRAME, HOVER, ICON, ISLAND, LINK, MODIFIED, MUTED, NOTIFICATION, POPUP, POPUP_BORDER,
-    PRESSED, RUN_GREEN, SELECTION, SELECTION_DISABLED, STOP_RED, SUCCESS, TAB_SELECTED,
-    TAB_SELECTED_BORDER, TEXT, TEXT_BRIGHT, TEXT_DISABLED, TEXT_INFO, TEXT_SECONDARY,
-    TOOLBAR_SEPARATOR, UNTRACKED, WARNING,
+    ACCENT, ADDED, BAND, BANNER_WARNING, BANNER_WARNING_BORDER, BORDER, COMPLETION_SELECTION,
+    DIVIDER, ERROR, FIELD, FILE_GREEN, FILE_YELLOW, FRAME, HOVER, ICON, ISLAND, LINK, MODIFIED,
+    MUTED, NOTIFICATION, POPUP, POPUP_BORDER, PRESSED, RUN_GREEN, SEARCH_MATCH, SELECTION,
+    SELECTION_DISABLED, SELECTION_INACTIVE, STOP_RED, SUCCESS, TAB_SELECTED, TAB_SELECTED_BORDER,
+    TEXT, TEXT_BRIGHT, TEXT_DISABLED, TEXT_INFO, TEXT_SECONDARY, TOOLBAR_SEPARATOR, UNTRACKED,
+    WARNING,
 };
 
 /// Corner radius of an island (kit token).
@@ -78,6 +79,23 @@ pub mod layout {
     pub const SECTION_SPACING: f32 = size::SECTION_SPACING;
     /// Padding inside dialog frames.
     pub const DIALOG_PADDING: f32 = size::DIALOG_PADDING;
+}
+
+/// Text color on the search-match background (UI-POP-004): of the frame and bright text
+/// colors, the one that contrasts more with `SEARCH_MATCH` (dark text on the dark theme's
+/// yellow, bright on a dark match).
+pub fn search_match_text() -> Color32 {
+    let luma =
+        |c: Color32| 0.299 * f32::from(c.r()) + 0.587 * f32::from(c.g()) + 0.114 * f32::from(c.b());
+    let background = luma(*SEARCH_MATCH);
+    [*FRAME, *TEXT_BRIGHT]
+        .into_iter()
+        .max_by(|a, b| {
+            (luma(*a) - background)
+                .abs()
+                .total_cmp(&(luma(*b) - background).abs())
+        })
+        .unwrap_or(*TEXT_BRIGHT)
 }
 
 /// Stable avatar color for a project name, like the project widget's badge (the kit's).

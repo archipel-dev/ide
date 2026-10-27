@@ -12,8 +12,11 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// Width of the error stripe right of the editor text.
-pub const STRIPE_WIDTH: f32 = 12.0;
+/// Width of the error stripe right of the editor text (UI-ED-020: 30 px with a 1 px
+/// rule on its left, editor background).
+pub const STRIPE_WIDTH: f32 = 30.0;
+/// Width and height of a problem tick in the stripe (UI-ED-020: 14x2).
+const TICK_SIZE: egui::Vec2 = vec2(14.0, 2.0);
 
 pub fn icon(severity: Severity) -> Icon {
     match severity {
@@ -173,20 +176,26 @@ pub fn error_stripe(
     // Marks line up with their rows until the document is taller than the
     // editor; then the whole document is scaled onto the stripe.
     let usable = (rect.height() - 4.0).max(1.0);
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, 0.0, theme::editor::BACKGROUND);
+    painter.line_segment(
+        [rect.left_top(), rect.left_bottom()],
+        Stroke::new(1.0_f32, theme::BAND),
+    );
     let document_height = (line_count.max(1) as f32 * row_height).max(usable);
     let mark_y = |problem: &Problem| {
-        rect.top() + 2.0 + (problem.line as f32 + 0.5) * row_height * usable / document_height - 1.5
+        rect.top() + 2.0 + (problem.line as f32 + 0.5) * row_height * usable / document_height
+            - TICK_SIZE.y / 2.0
     };
     let mut listed: Vec<&Problem> = problems.iter().filter(|p| p.severity.listed()).collect();
     // Errors are painted last so they stay visible over warnings.
     listed.sort_by_key(|problem| std::cmp::Reverse(problem.severity));
-    let painter = ui.painter_at(rect);
     for problem in &listed {
         let y = mark_y(problem);
         painter.rect_filled(
-            Rect::from_min_max(
-                egui::pos2(rect.left() + 3.0, y),
-                egui::pos2(rect.right() - 3.0, y + 3.0),
+            Rect::from_center_size(
+                egui::pos2(rect.center().x + 0.5, y + TICK_SIZE.y / 2.0),
+                TICK_SIZE,
             ),
             0.0,
             stripe_color(problem.severity),
@@ -196,7 +205,7 @@ pub fn error_stripe(
     let nearest = listed
         .iter()
         .rev()
-        .filter(|problem| (mark_y(problem) + 1.5 - pointer.y).abs() <= 4.0)
+        .filter(|problem| (mark_y(problem) + 1.0 - pointer.y).abs() <= 4.0)
         .min_by(|a, b| {
             let da = (mark_y(a) - pointer.y).abs();
             let db = (mark_y(b) - pointer.y).abs();
@@ -414,24 +423,28 @@ pub fn tool_window(app: &mut IdeApp, ui: &mut egui::Ui) {
             .layout_no_wrap(count_text.clone(), font.clone(), *theme::TEXT)
             .size()
             .x;
-        let width = label_width + if count > 0 { count_width + 6.0 } else { 0.0 } + 16.0;
+        // Text plus 12 px of padding at each end (UI-TW-010).
+        let width = label_width + if count > 0 { count_width + 6.0 } else { 0.0 } + 24.0;
         let rect = Rect::from_min_size(egui::pos2(x, header.top()), vec2(width, header.height()));
         let response = ui.interact(rect, egui::Id::new(("problems_tab", label)), Sense::click());
         if response.hovered() {
             ui.painter()
                 .rect_filled(rect.shrink2(vec2(0.0, 4.0)), 4.0, theme::HOVER);
         }
-        let end = row_text(ui, rect, x + 8.0, label, font.clone(), theme::TEXT_BRIGHT);
+        let end = row_text(ui, rect, x + 12.0, label, font.clone(), theme::TEXT_BRIGHT);
         if count > 0 {
             row_text(ui, rect, end + 6.0, &count_text, font, theme::TEXT_INFO);
         }
         if tab == candidate {
-            ui.painter().line_segment(
-                [
-                    egui::pos2(rect.left() + 2.0, rect.bottom() - 1.0),
-                    egui::pos2(rect.right() - 2.0, rect.bottom() - 1.0),
-                ],
-                Stroke::new(2.0_f32, theme::ACCENT),
+            // UI-TW-010: a 3 px underline across the whole tab (kit token).
+            let thickness = archipel_kit::tokens::tab::HEADER_UNDERLINE;
+            ui.painter().rect_filled(
+                Rect::from_min_max(
+                    egui::pos2(rect.left(), rect.bottom() - thickness),
+                    rect.right_bottom(),
+                ),
+                0.0,
+                theme::ACCENT,
             );
         }
         if response.clicked() {

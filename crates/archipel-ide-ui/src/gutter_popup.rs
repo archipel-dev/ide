@@ -20,7 +20,7 @@ fn state_id() -> egui::Id {
 
 /// Paints a run icon centred at `center` (single test, test class/module or main).
 pub fn paint_icon(painter: &egui::Painter, center: egui::Pos2, kind: RunnableKind) {
-    let rect = egui::Rect::from_center_size(center, vec2(13.0, 13.0));
+    let rect = egui::Rect::from_center_size(center, vec2(16.0, 16.0));
     match kind {
         RunnableKind::Main | RunnableKind::Test => {
             icons::paint(painter, rect, Icon::Run, theme::RUN_GREEN)

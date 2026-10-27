@@ -14,4 +14,5 @@ archipel-ide-compat = { path = "../crates/archipel-ide-compat" }
 archipel-ide-control = { path = "../crates/archipel-ide-control" }
 serde.workspace = true
 serde_json.workspace = true
+toml.workspace = true
 archipel-ide-plugins = { path = "../crates/archipel-ide-plugins" }

@@ -150,6 +150,10 @@ impl IdeState {
             self.restart_language_servers();
             self.status = status;
         }
+        // The project model is imported once the tools the build needs are there.
+        if self.project_model().is_some_and(|m| m.read().auto_import) {
+            let _ = self.start_external_import(crate::project_model::ImportReason::Open);
+        }
         // A Gradle project imports itself once its JDK (and Gradle) are there.
         if self.is_gradle_project() && !self.runner.is_running() {
             let status = std::mem::take(&mut self.status);

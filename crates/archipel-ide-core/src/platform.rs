@@ -11,9 +11,9 @@
 //! feature becomes a service, its listener does the work itself and the reaction disappears.
 
 use crate::services::{
-    GIT_REPO_CHANGE, GitRepositories, GitRepositoryChangeListener, Notifications, SettingsService,
-    TOOLCHAIN_TOPIC, ToolchainBanner, ToolchainListener, ToolchainManager,
-    ToolchainRequirementsService, ToolchainState,
+    GIT_REPO_CHANGE, GitRepositories, GitRepositoryChangeListener, Notifications,
+    ProjectModelService, SettingsService, TOOLCHAIN_TOPIC, ToolchainBanner, ToolchainListener,
+    ToolchainManager, ToolchainRequirementsService, ToolchainState,
 };
 use crate::{IdeState, toolchain_commands};
 use archipel_ide_git::RepositoryStatus;
@@ -100,6 +100,9 @@ fn register_core_services(application: &Application) {
         >()),
         application.register_project_service(ServiceDescriptor::disposable(|project: &Project| {
             GitRepositories::new(project.message_bus().clone())
+        })),
+        application.register_project_service(ServiceDescriptor::disposable(|project: &Project| {
+            ProjectModelService::new(project.message_bus().clone())
         })),
     ];
     debug_assert!(
@@ -202,6 +205,11 @@ impl IdeState {
 
     /// What the open project needs from the toolchains (project service).
     pub fn toolchain_requirements(&self) -> Option<Arc<ToolchainRequirementsService>> {
+        self.platform_project()?.get_service()
+    }
+
+    /// Imported modules, roots and libraries of the open project (project service).
+    pub fn project_model(&self) -> Option<Arc<ProjectModelService>> {
         self.platform_project()?.get_service()
     }
 

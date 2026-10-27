@@ -90,6 +90,7 @@ impl IdeState {
         self.mark_vcs_stale();
         self.request_git_refresh();
         self.index_paths_changed(&changes.paths);
+        self.project_model_files_changed(&changes.paths);
         if self.is_gradle_project()
             && changes
                 .paths

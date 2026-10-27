@@ -81,6 +81,7 @@ pub use new_class::{FileTemplate, JavaKind, KotlinKind, file_templates};
 mod generate;
 mod hierarchy;
 mod project_commands;
+pub mod project_model;
 pub mod project_view;
 mod quick_doc;
 mod refactor;
@@ -379,6 +380,8 @@ pub struct IdeState {
     pub gradle_error: Option<String>,
     /// Build scripts changed on disk since the last sync ("Load Gradle Changes").
     pub gradle_changes_pending: bool,
+    /// Modules, roots, SDKs and libraries imported from the build tools, and the import itself.
+    pub project_model: project_model::ProjectModelState,
     /// Bazel targets from the last sync (cached in `.archipel/bazel/targets.json`).
     pub bazel_targets: Option<archipel_ide_bazel::BazelTargets>,
     pub bazel_error: Option<String>,
@@ -469,6 +472,7 @@ impl IdeState {
         self.search_query.clear();
         self.terminal = None;
         self.runner = TaskService::default();
+        self.project_model.reset();
         self.git = None;
         self.git_watcher = None;
         self.watcher = None;
@@ -543,6 +547,7 @@ impl IdeState {
         self.detect_build();
         self.load_gradle_model();
         self.load_bazel_targets();
+        self.open_project_model();
         self.load_run_configurations();
         self.load_search_scopes();
         self.load_breakpoints();
@@ -1223,6 +1228,7 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
     disk_sync::register(&mut registry);
     tabs::register(&mut registry);
     gradle_commands::register(&mut registry);
+    project_model::register(&mut registry);
     gutter_commands::register(&mut registry);
     run_config_commands::register(&mut registry);
     search_scopes::register(&mut registry);

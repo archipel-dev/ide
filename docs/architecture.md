@@ -101,6 +101,11 @@ show the old product name.
   BUILD-file rule scanning, and per-target run configurations.
 - `archipel-ide-gradle`: static Gradle build detection (settings includes, wrapper, plugin
   ids/aliases including Android) and the Gradle `BuildSystem` provider.
+- `archipel-ide-projectmodel`: the project model (modules, content and source roots, SDKs,
+  libraries, order entries with dependency scopes), `ProjectFileIndex` and `GlobalSearchScope`s;
+  pure data. `archipel-ide-externalsystem`: the Gradle, Maven, Cargo and Bazel importers that
+  produce it (`DataNode` trees, data services, auto-import support). See
+  `docs/architecture/project-model.md`.
 - `archipel-ide-android`: Android SDK discovery (IDE setting, `local.properties`, `ANDROID_HOME`,
   `ANDROID_SDK_ROOT`, OS default), installed-package inventory, and Android Gradle project
   detection; host access goes through the `HostEnvironment` trait so tests use fakes.

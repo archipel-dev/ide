@@ -37,6 +37,7 @@ mod disk_banner;
 mod doc_ui;
 mod editor;
 mod editor_keys;
+mod external_status;
 mod file_icon;
 mod find_popup;
 mod findbar;
@@ -987,6 +988,9 @@ impl IdeApp {
         }
         self.state.poll_git();
         self.state.poll_toolchains();
+        if self.state.poll_project_model() || self.state.project_model.is_busy() {
+            ctx.request_repaint_after(Duration::from_millis(250));
+        }
         if self.state.toolchains.service.is_busy() {
             ctx.request_repaint_after(Duration::from_millis(200));
         }

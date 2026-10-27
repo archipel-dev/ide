@@ -27,7 +27,7 @@ pub struct ToolchainState {
     /// What the open project needs, by language (from marker files).
     pub requirements: Vec<ProjectRequirement>,
     /// Requirements with components that cannot be found, cached for the UI.
-    missing: Vec<(ProjectRequirement, Vec<String>)>,
+    pub(crate) missing: Vec<(ProjectRequirement, Vec<String>)>,
     /// Languages whose "missing toolchain" bar was dismissed this session.
     dismissed: BTreeSet<String>,
     /// Install what an opened project is missing without asking. The app turns this on;
@@ -310,6 +310,10 @@ impl IdeState {
             let status = std::mem::take(&mut self.status);
             self.restart_language_servers();
             self.status = status;
+        }
+        // The project model is imported once the tools the build needs are there.
+        if installed_any && !self.toolchains.service.is_busy() && self.project_model.auto_import {
+            let _ = self.start_external_import(crate::project_model::ImportReason::Open);
         }
         // A Gradle project imports itself once its JDK (and Gradle) are there.
         if installed_any

@@ -1,0 +1,87 @@
+{
+  "id": "u12",
+  "title": "UI spec capture (New UI Dark, new_ui look): Commit tool window (one change, one unversioned file)",
+  "reference": "reference/intellij-community/java-gradle/12-commit.png",
+  "fixture": "java-gradle",
+  "open": [
+    "src/main/java/com/example/App.java"
+  ],
+  "steps": [
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "execute",
+      "command": "settings.apply",
+      "args": {
+        "changes": {
+          "appearance.uiLook": "new_ui",
+          "appearance.theme": "New UI Dark",
+          "appearance.compactMode": false
+        }
+      }
+    },
+    {
+      "op": "execute",
+      "command": "toolchain.dismissBanner",
+      "args": {
+        "language": "Java"
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 800
+    },
+    {
+      "op": "click",
+      "x": 673,
+      "y": 411
+    },
+    {
+      "op": "click",
+      "x": 1357,
+      "y": 107
+    },
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "appendFile",
+      "path": "src/main/java/com/example/App.java",
+      "contents": "// changed outside the IDE\n"
+    },
+    {
+      "op": "writeFile",
+      "path": "notes.txt",
+      "contents": "unversioned\n"
+    },
+    {
+      "op": "execute",
+      "command": "git.refresh"
+    },
+    {
+      "op": "key",
+      "chord": "Alt+0"
+    },
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "assert",
+      "pointer": "/toolWindows/left",
+      "equals": "commit"
+    },
+    {
+      "op": "assert",
+      "pointer": "/status",
+      "contains": "change"
+    },
+    {
+      "op": "screenshot",
+      "name": "u12-commit.png"
+    }
+  ]
+}

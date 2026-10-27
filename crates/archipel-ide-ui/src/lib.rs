@@ -50,6 +50,7 @@ mod gutter_popup;
 mod hierarchy_ui;
 mod history_ui;
 mod icons;
+mod import_chooser;
 mod index_status;
 mod inspections_settings;
 mod intentions_ui;
@@ -118,6 +119,8 @@ pub struct IdeApp {
     terminal_selection: Option<(terminal_ui::GridPoint, terminal_ui::GridPoint)>,
     search_input: String,
     find_popup: find_popup::FindPopup,
+    /// The open import chooser popup (`Method to Import`).
+    import_chooser: Option<import_chooser::ImportChooser>,
     /// Keymap page filter requested by Find Action's Assign Shortcut.
     keymap_search: Option<String>,
     /// Find in Files option toggles and file mask.
@@ -320,6 +323,7 @@ impl IdeApp {
             terminal_selection: None,
             search_input: String::new(),
             find_popup: Default::default(),
+            import_chooser: None,
             keymap_search: None,
             find_options: archipel_ide_core::SearchOptions::default(),
             find_synced: Default::default(),
@@ -1121,6 +1125,7 @@ impl IdeApp {
         doc_ui::show_parameter_info(self, ctx);
         navigation_ui::choices_popup(self, ctx);
         intentions_ui::popup(self, ctx);
+        import_chooser::show(self, ctx);
         refactor_ui::popup(self, ctx);
         switcher::frame(self, ctx);
         palette::show(self, ctx);

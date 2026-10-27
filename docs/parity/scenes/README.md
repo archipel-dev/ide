@@ -71,6 +71,7 @@ Chords use the Linux keymap (`Alt+0`, `Alt+F12`); `Primary` means ⌘ on macOS a
 | 30 Indexing | `30-indexing.json` | while the content indexes build the IDE is in dumb mode with `FileName` ready and `Words` building; afterwards every index is ready |
 | 31 TODO window | `31-todo.json` | an outside change adds a TODO and a FIXME comment (a TODO in a string is ignored): the TODO window lists 2 items for the project and for the current file |
 | 35 LSP static import | `35-lsp-static-import.json` | needs jdtls (`requires`, skipped otherwise) and network: the Gradle import shows as progress; `assertThat` without the import is one error from jdtls; Alt+Enter lists "Add static import for 'Assertions.assertThat'" first; applying it adds the import line and clears the error |
+| 36 Native static import | `36-native-static-import.json` | no language server (`ARCHIPEL_TOOLCHAINS_DIR` points nowhere): the Gradle import shows as progress, the Java indexes become ready, `assertThat` without the import is one native error `Cannot resolve method 'assertThat(String)'`, Alt+Enter lists `Import static method...` first, Enter opens the `Method to Import` chooser with `Assertions.assertThat (org.assertj.core.api)` first, Enter applies it and the error goes away |
 | 32 Local History | `32-history.json` | an outside change to an open file records two revisions (initial and external); Show History lists them and previews the diff of the older one |
 
 Coordinates in `click`/`move` are logical points in the default 1440×900 window.

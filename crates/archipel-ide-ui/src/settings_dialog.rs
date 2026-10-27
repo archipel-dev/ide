@@ -10,8 +10,8 @@ use crate::icons::{self, Icon};
 use crate::widgets::search_field;
 use crate::{IdeApp, theme};
 use archipel_ide_settings::{
-    PageDef, Scope, SearchResult, SettingDef, SettingKind, SettingValue, SettingsDraft,
-    SettingsRegistry, SettingsStore,
+    AUTOSAVE_IDLE_MAX, AUTOSAVE_IDLE_MIN, PageDef, Scope, SearchResult, SettingDef, SettingKind,
+    SettingValue, SettingsDraft, SettingsRegistry, SettingsStore, ids,
 };
 use eframe::egui::{self, Color32, Rect, RichText, Sense, pos2, vec2};
 use serde_json::json;
@@ -661,7 +661,18 @@ fn page(
                     first = false;
                 }
                 let highlight = searching && search.matching_settings.contains(&def.id);
+                if def.id == ids::AUTOSAVE_IDLE {
+                    idle_row(ui, dialog, registry, store, def, highlight);
+                    continue;
+                }
+                if def.id == ids::AUTOSAVE_IDLE_SECONDS {
+                    // Drawn inside the idle row.
+                    continue;
+                }
                 setting_row(ui, dialog, registry, store, def, group.is_some(), highlight);
+                if def.id == ids::SAFE_WRITE {
+                    autosave_comment(ui);
+                }
             }
             if page_id == "AppEditorFontConfigurable" {
                 font_preview(ui, dialog, registry, store);
@@ -852,6 +863,106 @@ fn setting_row(
     }
 }
 
+/// PLAT-SAVE-010: "Save files if the IDE is idle for [ 15 ] seconds" on one line; the field is
+/// enabled only while the box is checked and a typed value outside 1 to 300 is clamped.
+fn idle_row(
+    ui: &mut egui::Ui,
+    dialog: &mut SettingsDialog,
+    registry: &SettingsRegistry,
+    store: &SettingsStore,
+    def: &SettingDef,
+    highlight: bool,
+) {
+    let enabled = dialog
+        .draft
+        .value(registry, store, ids::AUTOSAVE_IDLE)
+        .ok()
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
+    let seconds = dialog
+        .draft
+        .value(registry, store, ids::AUTOSAVE_IDLE_SECONDS)
+        .ok()
+        .and_then(|value| value.as_int())
+        .unwrap_or(archipel_ide_settings::AUTOSAVE_IDLE_DEFAULT);
+    let mut checked = enabled;
+    let mut typed = None;
+    ui.horizontal(|ui| {
+        ui.add_space(18.0);
+        let response = ui.checkbox(&mut checked, RichText::new(&def.label).color(*theme::TEXT));
+        mark(ui, response.rect, highlight);
+        ui.add_enabled_ui(checked, |ui| {
+            let key = egui::Id::new(("setting_number", ids::AUTOSAVE_IDLE_SECONDS));
+            let mut text = ui
+                .data(|data| data.get_temp::<String>(key))
+                .unwrap_or_else(|| seconds.to_string());
+            let response = ui.add(
+                egui::TextEdit::singleline(&mut text)
+                    .id(key)
+                    .desired_width(4.0 * 9.0 + 12.0),
+            );
+            if response.has_focus() {
+                ui.data_mut(|data| data.insert_temp(key, text.clone()));
+            } else {
+                ui.data_mut(|data| data.remove::<String>(key));
+            }
+            if response.changed() {
+                typed = idle_seconds_from_text(&text);
+            }
+        });
+        ui.label(RichText::new(" seconds").color(*theme::TEXT));
+    });
+    ui.add_space(4.0);
+    let mut edits = Vec::new();
+    if checked != enabled {
+        edits.push((ids::AUTOSAVE_IDLE, SettingValue::Bool(checked)));
+    }
+    if let Some(value) = typed {
+        edits.push((ids::AUTOSAVE_IDLE_SECONDS, SettingValue::Int(value)));
+    }
+    for (id, value) in edits {
+        if let Err(error) = dialog.draft.set(registry, store, id, value) {
+            dialog.error = Some(error.to_string());
+        }
+    }
+}
+
+/// The idle timeout a typed text stands for, clamped into 1 to 300 (PLAT-SAVE-010); `None` while
+/// the text is not a number (the field is being edited).
+pub(crate) fn idle_seconds_from_text(text: &str) -> Option<i64> {
+    let text = text.trim();
+    let number = text.parse::<i64>().ok().or_else(|| {
+        // Digits too long for an i64 are beyond the maximum.
+        (!text.is_empty() && text.chars().all(|c| c.is_ascii_digit())).then_some(i64::MAX)
+    })?;
+    Some(number.clamp(AUTOSAVE_IDLE_MIN, AUTOSAVE_IDLE_MAX))
+}
+
+/// PLAT-SAVE-013: the comment under the Files group, with the link to the help topic.
+fn autosave_comment(ui: &mut egui::Ui) {
+    ui.horizontal(|ui| {
+        ui.add_space(18.0);
+        ui.label(
+            RichText::new(archipel_ide_core::saving_texts::AUTOSAVE_COMMENT)
+                .color(theme::TEXT_INFO),
+        );
+        if ui
+            .link(archipel_ide_core::saving_texts::HOW_IT_WORKS)
+            .clicked()
+        {
+            ui.ctx().open_url(egui::OpenUrl::new_tab(help_url(
+                archipel_ide_core::saving_texts::HELP_TOPIC,
+            )));
+        }
+    });
+    ui.add_space(4.0);
+}
+
+/// Where the help topic `topic` is documented.
+pub(crate) fn help_url(topic: &str) -> String {
+    format!("https://github.com/archipel-dev/ide/blob/main/docs/help/{topic}.md")
+}
+
 /// Search hits are highlighted like the reference dialog marks matching options.
 fn mark(ui: &egui::Ui, rect: Rect, highlight: bool) {
     if highlight {
@@ -1015,6 +1126,18 @@ mod tests {
         // Unknown pages are ignored.
         dialog.select(&registry, "no.such.page");
         assert_eq!(dialog.page, "reference.settingsdialog.project.gradle");
+    }
+
+    /// PLAT-SAVE-010: typed values outside 1 to 300 are clamped.
+    #[test]
+    fn plat_save_010_idle_seconds_are_clamped() {
+        assert_eq!(idle_seconds_from_text("999"), Some(300));
+        assert_eq!(idle_seconds_from_text("0"), Some(1));
+        assert_eq!(idle_seconds_from_text("-5"), Some(1));
+        assert_eq!(idle_seconds_from_text(" 42 "), Some(42));
+        assert_eq!(idle_seconds_from_text("99999999999999999999"), Some(300));
+        assert_eq!(idle_seconds_from_text(""), None);
+        assert_eq!(idle_seconds_from_text("abc"), None);
     }
 
     #[test]

@@ -648,3 +648,140 @@ keys: drag docs onto img
 ```after
 drop rejected, no change
 ```
+
+### WB-PV-011 case 1: module with several roots
+settings: default
+language: plain
+```before
+module app with content roots app/ and shared/
+```
+keys: expand the project root
+```after
+[x] app  (module node)
+  [ ] app
+  [ ] shared
+```
+
+### WB-PV-016 case 1: children of a directory
+settings: default
+language: plain
+```before
+demo/ contains src/, README.md, target/ (excluded)
+```
+keys: expand demo
+```after
+src
+target
+README.md
+```
+
+### WB-PV-017 case 1: no content roots
+settings: default
+language: plain
+```before
+project without content roots
+```
+keys: Alt+1
+```after
+Project tree is empty; no error dialog
+```
+
+### WB-PV-022 case 1: toggling an option keeps expansion and selection
+settings: default
+language: java
+```before
+src > com.acme.app expanded, selection Main.java, showMembers=false
+```
+keys: toggle "Show Members" on, toggle it off
+```after
+after toggling on: Main.java expandable (class Main and members as children)
+after toggling off: same expanded paths as before; selection Main.java
+```
+
+### WB-PV-023 case 1: exclusive sort entries
+settings: default
+language: plain
+```before
+Sort by Type checked
+```
+keys: gear > Sort by Modification Time (Newest First)
+```after
+checked: Modification Time (Newest First); unchecked: Name, Type, Modification Time (Oldest First)
+```
+
+### WB-PV-063 case 1: open on single click selection
+settings: autoscrollToSource=true
+language: plain
+```before
+focus: Project tree, selection on docs (directory); A.java not open
+```
+keys: Down (selection moves to A.java)
+```after
+editor tab A.java active; focus: Project tree
+```
+
+### WB-PV-064 case 1: single click expands a directory
+settings: openDirectoriesWithSingleClick=true
+language: plain
+```before
+[ ] src collapsed
+```
+keys: single click on src
+```after
+[x] src
+```
+
+### WB-PV-067 case 1: state restored on reopen
+settings: default
+language: plain
+```before
+expanded: demo, src; selection: src/Main.java; project closed and reopened
+```
+keys: (none)
+```after
+expanded: demo, src; selection: src/Main.java
+```
+
+### WB-PV-072 case 1: Enter opens the match
+settings: default
+language: plain
+```before
+visible nodes: README.md, server.txt; focus tree; speed search "ser"
+```
+keys: Enter
+```after
+server.txt opens in the editor; speed search closed
+```
+
+### WB-PV-092 case 1: marking persists
+settings: default
+language: plain
+```before
+demo/src marked as Sources Root
+```
+keys: close and reopen the project
+```after
+src location text: sources root
+```
+
+### WB-PV-103 case 1: rename clash
+settings: default
+language: plain
+```before
+files: a.txt, b.txt; selection a.txt
+```
+keys: Shift+F6, type "b.txt", Enter
+```after
+error shown (a file with that name exists); both files unchanged
+```
+
+### WB-PV-105 case 1: read-only directory delete
+settings: default
+language: plain
+```before
+old/ contains a read-only file
+```
+keys: select old/, Delete, confirm
+```after
+dialog text: Directory old contains read-only file(s). Delete it anyway?   (Delete it anyway / Cancel behavior as the platform dialog)
+```

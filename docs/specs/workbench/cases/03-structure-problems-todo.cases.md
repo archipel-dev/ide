@@ -575,3 +575,144 @@ keys: action AddAnotherBookmark, choose Q
 ```after
 a.txt:1 listed in P and Q
 ```
+
+### WB-STR-001 case 1: structure follows the editor
+settings: default
+language: java
+```before
+tabs A.java (class A with foo()), B.java (class B with bar()); A.java active; Structure window open
+```
+keys: click tab B.java
+```after
+Structure tree: B > bar()
+```
+
+### WB-STR-003 case 1: hidden window is rebuilt on show
+settings: default
+language: java
+```before
+Structure window hidden; active file switches from A.java to B.java
+```
+keys: Alt+7
+```after
+Structure tree: B > bar()
+```
+
+### WB-STR-006 case 1: Enter navigates and focuses the editor
+settings: default
+language: java
+```before
+--- A.java
+class A { void foo() {} void bar() {} }
+Structure window focused, selection bar()
+```
+keys: Enter
+```after
+caret on bar in A.java; focus: editor
+```
+
+### WB-STR-021 case 1: narrow down default
+settings: default
+language: java
+```before
+popup File Structure open for class with foo(), bar()
+```
+keys: type "fo"
+```after
+visible: class, foo(); bar() hidden (narrow down on typing is on by default)
+```
+
+### WB-STR-025 case 1: unavailable without structure
+settings: default
+language: plain
+```before
+an image file is open
+```
+keys: Ctrl+F12
+```after
+no popup opens
+```
+
+### WB-PRB-001 case 1: tabs and default selection
+settings: default
+language: plain
+```before
+Problems window closed
+```
+keys: Alt+6
+```after
+tabs in order: File, Project Errors; selected: File
+```
+
+### WB-PRB-008 case 1: project errors for an unopened file
+settings: default
+language: java
+```before
+B.java contains an error, is not open; A.java is open and clean
+```
+keys: Alt+6, select tab "Project Errors"
+```after
+tree lists B.java with its error
+```
+
+### WB-TODO-002 case 1: only comments count
+settings: default
+language: java
+```before
+--- A.java
+class A { String s = "TODO x"; // TODO real
+}
+```
+keys: open TODO, tab Project
+```after
+Found 1 TODO item in 1 file
+  TODO real
+```
+
+### WB-TODO-004 case 1: current file tab
+settings: default
+language: java
+```before
+A.java has "// TODO a"; B.java has "// TODO b"; editor shows A.java
+```
+keys: TODO window, tab "Current File"
+```after
+only: TODO a
+```
+
+### WB-TODO-006 case 1: F4 jumps
+settings: default
+language: java
+```before
+--- A.java
+class A {
+  // TODO a
+}
+TODO tree focused, selection "TODO a"
+```
+keys: F4
+```after
+caret at the start of TODO a (line 2), focus: editor
+```
+
+### WB-BKM-015 case 1: edit description
+settings: default
+language: plain
+```before
+bookmark a.txt:1 [-] "one"
+```
+keys: Bookmarks window, select it, F2, type "first", Enter
+```after
+bookmark a.txt:1 [-] "first"
+```
+
+### WB-BKM-021 case 1: deleted file
+settings: default
+language: plain
+```before
+bookmark a.txt:1
+```
+keys: delete a.txt on disk
+```after
+bookmark kept, drawn invalid; navigation disabled
+```

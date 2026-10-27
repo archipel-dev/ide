@@ -369,3 +369,119 @@ keys: Alt+1
 left: [Project], stripes still hidden
 Notifications status widget: available
 ```
+
+### WB-TW-022 case 1: focus-only activation of a visible window
+settings: default
+language: plain
+```before
+left: [Project]
+focus: editor
+```
+keys: Alt+1
+```after
+left: [Project]
+focus: Project
+```
+
+### WB-TW-023 case 1: show is idempotent
+settings: default
+language: plain
+```before
+bottom: [Run]
+focus: editor
+```
+keys: API call show(Run) twice
+```after
+bottom: [Run] (one decorator); focus: editor (show does not move focus)
+```
+
+### WB-TW-026 case 1: floating windows do not share slots
+settings: default
+language: plain
+```before
+left: [Project]; Commit and Bookmarks are floating windows, both hidden
+```
+keys: show Commit (floating), show Bookmarks (floating)
+```after
+left: [Project]; floating: [Commit, Bookmarks] all visible at once
+```
+
+### WB-TW-027 case 1: recently used order
+settings: default
+language: plain
+```before
+recent: []
+```
+keys: Alt+1, Alt+4, Alt+1
+```after
+recent: [Project, Run]
+```
+
+### WB-TW-028 case 1: hiding a window without focus keeps focus
+settings: default
+language: plain
+```before
+bottom: [Run]
+focus: editor
+```
+keys: stripe button menu on Run | Hide
+```after
+bottom: []
+focus: editor
+```
+
+### WB-TW-029 case 1: focus is restored only for the active window
+settings: default
+language: plain
+```before
+project closed while: left: [Project] visible, focus Run (bottom: [Run])
+```
+keys: reopen the project
+```after
+left: [Project]; bottom: [Run]; focus: Run
+```
+
+### WB-TW-029 case 2: visible but not active
+settings: default
+language: plain
+```before
+project closed while: bottom: [Run] visible, focus editor
+```
+keys: reopen the project
+```after
+bottom: [Run]; focus: editor
+```
+
+### WB-TW-083 case 1: toggling split mode swaps slots
+settings: default
+language: plain
+```before
+left: [Project, Structure (split)]
+```
+keys: stripe menu on Structure | Split Mode (off)
+```after
+left: [Structure]   (Structure now occupies the primary slot; Project is hidden and stacked)
+stack: left=[Project]
+```
+
+### WB-TW-091 case 1: restore current layout
+settings: default
+language: plain
+```before
+saved layout: left: [Project]. Current arrangement: Project moved to right, Run floating.
+```
+keys: Shift+F12
+```after
+left: [Project]; right: []; Run docked at bottom hidden as in the saved layout
+```
+
+### WB-TW-080 case 1: side-by-side option
+settings: leftHorizontalSplit=true
+language: plain
+```before
+left: [Project, Structure (split)]
+```
+keys: (none)
+```after
+Project and Structure are shown next to each other (left half / right half of the left anchor area), equal widths
+```

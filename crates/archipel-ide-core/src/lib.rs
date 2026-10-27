@@ -95,10 +95,13 @@ mod search_replace;
 pub mod spring_commands;
 mod test_nav;
 mod welcome_commands;
+pub use saving::{SaveOutcome, SavePoint, texts as saving_texts};
 pub use services::CloneJob;
+pub use services::{DocumentSaveListener, DocumentSaving, SaveFailureReport, SavingVetoer};
 pub use welcome_commands::{JdkChoice, jdk_major, repository_name};
 mod live_templates;
 mod run_config_commands;
+mod saving;
 mod search_scopes;
 mod settings_commands;
 mod signature_help;
@@ -230,6 +233,37 @@ pub struct Document {
     pub folds: FoldState,
     /// Edits not yet seen by the analysis host (see `poll_analysis`).
     pub(crate) analysis_sync: analysis_host::PendingAnalysisSync,
+    /// Whether the document belongs to a file on disk (PLAT-SAVE-003).
+    pub backing: DocumentBacking,
+    /// Lines that kept trailing spaces because a caret was on them at the last save; the next
+    /// save strips them once the caret left (PLAT-SAVE-091).
+    pub(crate) kept_trailing: Vec<String>,
+    /// Saves this document even when its text equals the disk text (PLAT-SAVE-075).
+    pub force_save: bool,
+}
+
+/// What a document is backed by (PLAT-SAVE-003).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DocumentBacking {
+    /// A physical file: tracked, saved.
+    #[default]
+    File,
+    /// A copy, fragment or preview used only for analysis: never unsaved, saving is a no-op.
+    Virtual,
+    /// A virtual document whose file opted into tracking.
+    TrackedVirtual,
+}
+
+impl Document {
+    /// Whether the document takes part in the unsaved set (PLAT-SAVE-003).
+    pub fn is_tracked(&self) -> bool {
+        !matches!(self.backing, DocumentBacking::Virtual)
+    }
+
+    /// Unsaved: tracked and its text differs from the last saved state (PLAT-SAVE-001).
+    pub fn is_unsaved(&self) -> bool {
+        self.is_tracked() && self.text.is_dirty()
+    }
 }
 
 impl Document {
@@ -245,6 +279,9 @@ impl Document {
             selection_history: Vec::new(),
             folds: FoldState::default(),
             analysis_sync: Default::default(),
+            backing: DocumentBacking::File,
+            kept_trailing: Vec::new(),
+            force_save: false,
         };
         // The analysis already reflects `text`.
         document.text.take_edits();
@@ -396,6 +433,7 @@ impl IdeState {
             return Err("no project is open".into());
         }
         self.prepare_project_switch()?;
+        self.saving().clear_parked();
         self.documents.clear();
         self.active_document = None;
         self.splits = Default::default();
@@ -425,13 +463,16 @@ impl IdeState {
             if self.execution().is_running() {
                 return Err("Stop the running task before opening another project.".into());
             }
-            self.save_all()?;
+            // PLAT-SAVE-050: a document that cannot be saved cancels the close or switch.
+            self.save_all_at(SavePoint::ProjectClose).into_result()?;
             self.save_workspace()?;
         }
         Ok(())
     }
 
     pub(crate) fn install_project(&mut self, project: Project) -> Result<(), String> {
+        // Closed-tab text belongs to the previous project (it was saved or the switch refused).
+        self.saving().clear_parked();
         // Closes the previous project and opens this one; the services below belong to it.
         self.platform.open_project(project.root());
         self.set_files(project.entries(20_000));
@@ -493,9 +534,21 @@ impl IdeState {
             self.reveal_in_tree(path);
             return Ok(());
         }
-        let project = self.project.as_ref().ok_or("no project is open")?;
-        let text = project.read_text(path).map_err(|e| e.to_string())?;
-        let mut document = Document::new(path.to_owned(), &text);
+        if self.project.is_none() {
+            return Err("no project is open".into());
+        }
+        let (mut document, text) = match self.take_parked_document(path) {
+            // The text of a tab closed without saving comes back as it was.
+            Some(document) => {
+                let text = document.text.text();
+                (document, text)
+            }
+            None => {
+                let project = self.project.as_ref().ok_or("no project is open")?;
+                let text = project.read_text(path).map_err(|e| e.to_string())?;
+                (Document::new(path.to_owned(), &text), text)
+            }
+        };
         document.collapse_default_regions();
         self.documents.push(document);
         self.active_document = Some(self.documents.len() - 1);
@@ -505,6 +558,11 @@ impl IdeState {
         self.reveal_in_tree(path);
         self.status = format!("Opened {}", path.display());
         self.sync_document_lsp(path, &text, 0);
+        // The disk may have changed since the tab closed with unsaved text.
+        if self.documents.last().is_some_and(|d| d.text.is_dirty()) {
+            let last = self.documents.len() - 1;
+            self.sync_document(last);
+        }
         self.enforce_tab_limit()
     }
 
@@ -517,44 +575,16 @@ impl IdeState {
             }
         }
     }
-    pub fn save(&mut self, index: usize) -> Result<(), String> {
-        disk_sync::ensure_no_conflict(self, index)?;
-        // Local History: keep what the disk held before the first overwrite.
-        let history_path = self.documents.get(index).map(|d| d.path.clone());
-        let history_previous = history_path
-            .as_deref()
-            .and_then(|path| self.history_previous(path));
-        let project = self.project.as_ref().ok_or("no project is open")?;
-        let document = self
-            .documents
-            .get_mut(index)
-            .ok_or("document does not exist")?;
-        let text = document.text.text();
-        project
-            .write_text(&document.path, &text)
-            .map_err(|e| e.to_string())?;
-        document.text.mark_saved();
-        document.disk_hash = content_hash(&text);
-        self.status = format!("Saved {}", document.path.display());
-        let absolute = project.root().join(&document.path);
-        let _ = self.lsp.save_document(&absolute);
-        if let Some(path) = history_path {
-            self.history_saved(&path, history_previous.as_deref(), &text);
-        }
-        Ok(())
-    }
-
-    /// Closes a tab. Like the reference IDE, modified content is saved first
-    /// rather than discarded.
+    /// Closes a tab. Closing does not save and does not ask (PLAT-SAVE-052): modified text
+    /// stays in the unsaved set and the next trigger (deactivation, idle, a save point, Save
+    /// All) writes it.
     pub fn close_document(&mut self, index: usize) -> Result<(), String> {
         // Tabs opened since the last frame must be in their group before one closes.
         self.sync_splits();
-        let document = self.documents.get(index).ok_or("document does not exist")?;
-        if document.text.is_dirty() {
-            self.save(index)?;
-        }
+        self.documents.get(index).ok_or("document does not exist")?;
         self.remember_closed(index);
         let document = self.documents.remove(index);
+        self.park_closed_document(document.clone());
         self.active_document = match self.active_document {
             _ if self.documents.is_empty() => None,
             Some(active) if active > index => Some(active - 1),
@@ -1235,6 +1265,8 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
             spec("git.refresh", "Refresh Git Status", "Git", None, "{}"),
             |state: &IdeState| state.project.is_some(),
             |state: &mut IdeState, _| {
+                // PLAT-SAVE-041: a change-list refresh saves the documents first.
+                state.save_before(SavePoint::Vcs);
                 state.refresh_git().map_err(CommandError::Failed)?;
                 Ok(Value::Null)
             },
@@ -1464,13 +1496,9 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
     registry
         .register(Command::new(
             spec("editor.saveAll", "Save All", "Editor", Some("⌘S"), "{}"),
-            |s: &IdeState| s.documents.iter().any(|d| d.text.is_dirty()),
+            |s: &IdeState| !s.unsaved_documents().is_empty(),
             |state: &mut IdeState, _| {
-                for index in 0..state.documents.len() {
-                    if state.documents[index].text.is_dirty() {
-                        state.save(index).map_err(CommandError::Failed)?;
-                    }
-                }
+                state.save_all().map_err(CommandError::Failed)?;
                 Ok(Value::Null)
             },
         ))
@@ -1987,7 +2015,7 @@ mod tests {
     }
 
     #[test]
-    fn closing_a_tab_saves_and_keeps_a_sensible_active_tab() {
+    fn closing_a_tab_keeps_a_sensible_active_tab_and_does_not_save() {
         let root =
             std::env::temp_dir().join(format!("archipel-ide-core-close-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
@@ -2014,6 +2042,10 @@ mod tests {
         commands
             .execute("editor.close", &mut state, Value::Null)
             .unwrap();
+        // PLAT-SAVE-052: closing a tab does not save; the text waits for the next trigger.
+        assert_eq!(std::fs::read_to_string(root.join("b.txt")).unwrap(), "b");
+        assert_eq!(state.unsaved_documents(), vec![PathBuf::from("b.txt")]);
+        state.save_all().unwrap();
         assert_eq!(std::fs::read_to_string(root.join("b.txt")).unwrap(), "b!");
         assert_eq!(state.documents.len(), 1);
         assert_eq!(state.active_document, Some(0));

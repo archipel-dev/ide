@@ -507,3 +507,69 @@ keys: (none)
 ```after
 right side, left to right: Position, LineSeparator, Encoding, PowerSaveMode, Column, Indentation, git, ReadOnlyAttribute, Memory, settings entry point
 ```
+
+### WB-SB-001 case 1: status bar toggle
+settings: default
+language: plain
+```before
+status bar visible
+```
+keys: View > Appearance > Status Bar, again
+```after
+after first: status bar hidden; after second: visible with the same widgets
+```
+
+### WB-SB-005 case 1: widgets follow the editor
+settings: default
+language: plain
+```before
+a.txt open
+```
+keys: close the editor, reopen a.txt
+```after
+after close: Position, LineSeparator, Encoding hidden; after reopen: shown
+```
+
+### WB-SB-006 case 1: debounce
+settings: default
+language: plain
+```before
+long file, caret line 1
+```
+keys: Down x20 quickly
+```after
+Position shows 21:1 within 100 ms of the last key
+```
+
+### WB-SB-021 case 1: tooltip
+settings: default keymap
+language: plain
+```before
+a.txt open
+```
+keys: hover Position
+```after
+tooltip: Go to Line (Ctrl+G)
+```
+
+### WB-SB-051 case 1: indentation tooltip
+settings: default
+language: java
+```before
+A.java open
+```
+keys: hover Indentation
+```after
+tooltip: Indent: 4 spaces
+```
+
+### WB-SB-012 case 1: internal error widget
+settings: default
+language: plain
+```before
+no internal errors
+```
+keys: raise an internal error
+```after
+Internal Error icon appears right of Notifications slot; absent from the widget menu
+```

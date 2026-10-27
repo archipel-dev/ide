@@ -23,14 +23,14 @@ The status bar is the strip at the bottom of the main frame. Left: the **status 
 
 | ID | Pri | Requirement | Acceptance |
 |---|---|---|---|
-| WB-SB-001 | MUST | The status bar is shown by default (`showStatusBar` = true) and toggled by View | Appearance | Status Bar (`ViewStatusBar`, text "Status Bar"). It is per frame. | Toggle it off: strip gone, no panic; on: restored with the same widgets. |
+| WB-SB-001 | MUST | The status bar is shown by default (`showStatusBar` = true) and toggled by View > Appearance > Status Bar (`ViewStatusBar`, text "Status Bar"). It is per frame. | Toggle it off: strip gone, no panic; on: restored with the same widgets. |
 | WB-SB-002 | MUST | Widgets are registered by id with a **display name** (used in menus), **order constraints** (`first`, `last`, `after X`, `before Y`) and defaults: *available* (is it offered at all for this project/editor), *enabled by default*, *configurable*. Ordering resolves constraints deterministically; unknown ids in constraints are ignored. | Register A `after Position` and B `before A`: order Position, B, A. |
 | WB-SB-003 | MUST | The context menu of the status bar (right click on empty space or on a widget) lists every **configurable and available** widget by display name as a checkbox (menu text of the toggle action: "Toggle '{name}' Widget" in Search Everywhere; "Hide '{name}'" on the widget's own menu). Toggling creates or disposes the widget at once and persists the choice per **application** (not per project). | Right-click, uncheck "Line:Column Number": the position text vanishes; restart: still hidden. |
 | WB-SB-004 | MUST | A widget disabled by the user stays disabled across restarts; a widget never touched by the user follows `enabled by default`. | A widget with default off appears only after the user checks it. |
 | WB-SB-005 | MUST | Editor-based widgets show only while the selected editor is a text file editor of a real file; with no editor (welcome, image, empty), they are hidden (not just empty). They update when the selected file changes, when the caret moves (Position) or when the underlying property changes (encoding, separator, indent settings). | Close the last editor: position, separator, encoding, indent widgets disappear; open a file: they come back. |
 | WB-SB-006 | MUST | Widget text updates are debounced (Position: 100 ms) and never block the UI thread. | Hold Down in a long file: the position text follows within 100 ms of the last caret move. |
 | WB-SB-007 | MUST | Every widget has a tooltip (named per widget below) and an accessible name; widgets with a click action show a hand/pointer cursor; widgets that are not enabled (`action disabled`) do nothing on click. | Hover the position: tooltip "Go to Line (Ctrl+G)". |
-| WB-SB-008 | SHOULD | "Show Status Text" (`StatusTextModeAction`, menu "Status Text" under View | Appearance | Status Bar Widgets) controls whether the left text area shows messages. | Toggle off: hints no longer appear. |
+| WB-SB-008 | SHOULD | "Show Status Text" (`StatusTextModeAction`, menu "Status Text" under View > Appearance > Status Bar Widgets) controls whether the left text area shows messages. | Toggle off: hints no longer appear. |
 
 ## 2. Widget catalog (what exists, defaults)
 

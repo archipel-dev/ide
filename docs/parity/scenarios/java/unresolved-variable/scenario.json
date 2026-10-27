@@ -48,12 +48,21 @@
     ],
     "intentions": [
       {
-        "mode": "ordered",
+        "mode": "contains",
         "items": [
           "Create local variable 'missing'",
           "Create field 'missing'",
           "Create parameter 'missing'"
         ]
+      },
+      {
+        "mode": "ordered",
+        "items": [
+          "Create local variable 'missing'",
+          "Create field 'missing'",
+          "Create parameter 'missing'"
+        ],
+        "confidence": "unverified"
       }
     ]
   },

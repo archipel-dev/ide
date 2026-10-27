@@ -20,7 +20,7 @@
     {
       "op": "typeAt",
       "line": 5,
-      "column": 26,
+      "column": 29,
       "text": "\nint n = s.lenght();"
     },
     {

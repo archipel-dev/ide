@@ -29,7 +29,7 @@
     {
       "op": "waitAnalysis",
       "name": "renamed",
-      "timeoutMs": 120000
+      "timeoutMs": 20000
     }
   ],
   "expect": {

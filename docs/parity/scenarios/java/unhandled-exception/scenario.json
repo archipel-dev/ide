@@ -38,12 +38,12 @@
     },
     {
       "op": "applyIntention",
-      "title": "Add exception to method signature"
+      "title": "re:^(Add exception to method signature|Add throws declaration)"
     },
     {
       "op": "waitAnalysis",
       "name": "fixed",
-      "timeoutMs": 120000
+      "timeoutMs": 20000
     }
   ],
   "expect": {

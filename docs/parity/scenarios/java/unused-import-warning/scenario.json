@@ -27,12 +27,12 @@
     },
     {
       "op": "applyIntention",
-      "title": "re:^Optimize imports"
+      "title": "re:^(Optimize imports|Remove unused import)"
     },
     {
       "op": "waitAnalysis",
       "name": "fixed",
-      "timeoutMs": 120000
+      "timeoutMs": 20000
     }
   ],
   "expect": {

@@ -40,7 +40,7 @@
     {
       "op": "waitAnalysis",
       "name": "fixed",
-      "timeoutMs": 120000
+      "timeoutMs": 20000
     }
   ],
   "expect": {

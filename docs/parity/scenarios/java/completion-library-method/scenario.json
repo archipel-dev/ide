@@ -24,6 +24,11 @@
       "text": "\nAssertions.assertThat(x).isEq"
     },
     {
+      "op": "waitAnalysis",
+      "name": "typed",
+      "timeoutMs": 120000
+    },
+    {
       "op": "complete"
     }
   ],

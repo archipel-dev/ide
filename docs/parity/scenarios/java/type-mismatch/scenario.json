@@ -38,12 +38,12 @@
     },
     {
       "op": "applyIntention",
-      "title": "re:^Change variable 'count' type to 'String'"
+      "title": "re:^(Change variable 'count' type to 'String'|Change type of 'count' to 'String')"
     },
     {
       "op": "waitAnalysis",
       "name": "fixed",
-      "timeoutMs": 120000
+      "timeoutMs": 20000
     }
   ],
   "expect": {

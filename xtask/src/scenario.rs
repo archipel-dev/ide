@@ -1472,6 +1472,20 @@ fn run_scenario_inner(env: &Environment, scenario: &Scenario) -> RunOutcome {
         observed: Observed::default(),
     };
     let outcome = play(scenario, &mut session);
+    // Debugging aid: keep the IDE alive to inspect it with `archipel-cli ui --socket …`.
+    if let Some(seconds) = std::env::var("ARCHIPEL_SCENARIO_HOLD_SECS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+    {
+        eprintln!(
+            "\nholding {} for {seconds}s: control socket {}",
+            scenario.id,
+            std::env::temp_dir()
+                .join(format!("jt-scn-{}-{slug}.sock", std::process::id()))
+                .display()
+        );
+        std::thread::sleep(Duration::from_secs(seconds));
+    }
     let observed = std::mem::take(&mut session.observed);
     let _ = fs::write(
         dir.join("observed.json"),

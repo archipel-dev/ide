@@ -97,6 +97,10 @@ pub struct AlertAction {
     pub submenu: Option<String>,
     pub source: Source,
     pub kind: ActionKind,
+    /// The highlight (its range) the action fixes; `None` for intentions.
+    /// Fixes of a language server's diagnostic are attached the same way as
+    /// the native ones, so both sort into the same groups.
+    pub anchor: Option<Range<u32>>,
 }
 
 impl AlertAction {
@@ -120,7 +124,14 @@ impl AlertAction {
             kind: ActionKind::External {
                 token: token.into(),
             },
+            anchor: None,
         }
+    }
+
+    /// Attaches the action to the highlight `anchor` it fixes.
+    pub fn attached_to(mut self, anchor: Option<Range<u32>>) -> Self {
+        self.anchor = anchor;
+        self
     }
 
     /// `group + priority` weight used for ordering.
@@ -225,6 +236,7 @@ fn fix_row(
         priority: Priority::Normal,
         submenu: None,
         source: Source::Native,
+        anchor: Some(info.range.clone()),
         kind: ActionKind::Fix {
             range: info.range.clone(),
             message: info.message.as_deref().unwrap_or("").to_owned(),
@@ -283,6 +295,7 @@ pub fn assemble(input: &AlertInput<'_>) -> Result<AlertSet, Cancelled> {
             submenu: Some(submenu.clone()),
             source: Source::Native,
             kind,
+            anchor: Some(info.range.clone()),
         };
         for fix in &info.fixes {
             let same = input
@@ -359,6 +372,7 @@ pub fn assemble(input: &AlertInput<'_>) -> Result<AlertSet, Cancelled> {
                 submenu: None,
                 source: Source::Native,
                 kind: ActionKind::Intention(action),
+                anchor: None,
             });
         }
     }
@@ -539,7 +553,9 @@ struct CacheKey {
     caret: u32,
     selection: Option<Range<u32>>,
     markup_version: u64,
-    extra: usize,
+    /// Hash of the caller's rows: a different list under the same count must
+    /// not hit the cache.
+    extra: u64,
 }
 
 impl AlertCache {
@@ -554,7 +570,17 @@ impl AlertCache {
             caret: input.caret,
             selection: input.selection.clone(),
             markup_version,
-            extra: input.extra.len(),
+            extra: {
+                use std::hash::{Hash, Hasher};
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                for row in &input.extra {
+                    row.text.hash(&mut hasher);
+                    row.weight().hash(&mut hasher);
+                    row.anchor.hash(&mut hasher);
+                    format!("{:?}", row.kind).hash(&mut hasher);
+                }
+                hasher.finish()
+            },
         };
         if let Some((cached, set)) = self.entries.get(&input.file)
             && *cached == key

@@ -61,6 +61,16 @@ pub struct ServerInfo {
     pub importing: bool,
 }
 
+/// The diagnostics a server published for one file ([`LspManager::publications`]).
+#[derive(Debug, Clone, Copy)]
+pub struct Publication<'a> {
+    pub server: &'a str,
+    pub path: &'a Path,
+    pub diagnostics: &'a [LspDiagnostic],
+    /// The server is still importing the project.
+    pub importing: bool,
+}
+
 /// A request sent with [`LspManager::request`] or [`LspManager::send_request`],
 /// answered asynchronously.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -601,6 +611,35 @@ impl LspManager {
             .filter_map(|server| server.service.as_ref())
             .flat_map(|service| service.diagnostics().iter())
             .map(|(path, diagnostics)| (path.as_path(), diagnostics.as_slice()))
+    }
+
+    /// Everything the running servers published, with the server's id and
+    /// whether it is still importing its project (its diagnostics are not
+    /// trustworthy yet). Paths are as the servers reported them.
+    pub fn publications(&self) -> Vec<Publication<'_>> {
+        self.servers
+            .iter()
+            .filter_map(|server| Some((server, server.service.as_ref()?)))
+            .flat_map(|(server, service)| {
+                let importing = service.import_pending();
+                service
+                    .diagnostics()
+                    .iter()
+                    .map(move |(path, diagnostics)| Publication {
+                        server: server.key.server.as_str(),
+                        path: path.as_path(),
+                        diagnostics: diagnostics.as_slice(),
+                        importing,
+                    })
+            })
+            .collect()
+    }
+
+    /// Id of the server `path` is open on.
+    pub fn server_id_for(&self, path: &Path) -> Option<&str> {
+        self.documents
+            .get(path)
+            .map(|document| document.server.server.as_str())
     }
 
     /// The running server for `path`, if any.

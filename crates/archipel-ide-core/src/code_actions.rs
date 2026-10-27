@@ -22,6 +22,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+/// The client command jdtls uses to hand a `WorkspaceEdit` to the editor.
+const APPLY_WORKSPACE_EDIT: &str = "java.apply.workspaceEdit";
+
 /// One entry of the intention popup.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -91,7 +94,6 @@ struct PendingList {
     offset: usize,
     line: usize,
     revision: u64,
-    diagnostics: u64,
     popup: bool,
 }
 
@@ -111,28 +113,91 @@ pub struct CodeActionState {
 }
 
 impl IdeState {
-    /// The LSP code actions of the current list as popup rows.
-    fn lsp_alert_rows(&self) -> Vec<AlertAction> {
+    /// The LSP code actions of the current list as popup rows, sorted into
+    /// IntelliJ's groups like the native ones: a quick fix is attached to the
+    /// language server's highlight it fixes (matched by the diagnostic the
+    /// action names, else the one at the caret) and joins the Error group
+    /// (error at the caret), Inspection (lesser problem at the caret) or
+    /// RemoteError (elsewhere on the line); refactorings, source actions and
+    /// quick assists are intentions.
+    fn lsp_alert_rows(
+        &self,
+        document: &crate::Document,
+        markup: &archipel_ide_daemon::FileMarkup,
+        caret: u32,
+        selection: Option<&std::ops::Range<u32>>,
+    ) -> Vec<AlertAction> {
         let Some(list) = self.current_code_actions() else {
             return Vec::new();
         };
+        let byte = |line: u64, character: u64| {
+            let char_index = document
+                .text
+                .char_from_lsp_position(line as usize, character as usize);
+            document.text.char_to_byte(char_index) as u32
+        };
+        let lsp_range = |value: &Value| -> Option<std::ops::Range<u32>> {
+            let position = |name: &str| {
+                let p = value.get("range")?.get(name)?;
+                Some(byte(
+                    p.get("line")?.as_u64()?,
+                    p.get("character")?.as_u64()?,
+                ))
+            };
+            Some(position("start")?..position("end")?)
+        };
+        let at_caret = |range: &std::ops::Range<u32>| {
+            (range.start <= caret && caret <= range.end)
+                || selection.is_some_and(|s| range.start < s.end && s.start < range.end)
+        };
+        let lsp_highlights: Vec<_> = markup
+            .iter()
+            .filter(|info| info.tool.is_lsp() && info.severity.is_problem())
+            .collect();
         list.items
             .iter()
             .enumerate()
             .filter(|(_, item)| item.disabled.is_none())
             .map(|(index, item)| {
-                let error = item
+                let named: Vec<(std::ops::Range<u32>, Option<&str>)> = item
                     .raw
                     .get("diagnostics")
                     .and_then(Value::as_array)
-                    .is_some_and(|d| {
-                        d.iter()
-                            .any(|d| d.get("severity").and_then(Value::as_u64) == Some(1))
-                    });
-                let group = match (item.quick_fix, error) {
-                    (true, true) => IntentionGroup::Error,
-                    (true, false) => IntentionGroup::Inspection,
-                    _ => IntentionGroup::Other,
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|d| Some((lsp_range(d)?, d.get("message").and_then(Value::as_str))))
+                    .collect();
+                // The highlights the action names, else the one at the caret.
+                let mut attached: Vec<&archipel_ide_analysis::HighlightInfo> = lsp_highlights
+                    .iter()
+                    .copied()
+                    .filter(|info| {
+                        named.iter().any(|(range, message)| {
+                            info.range == *range
+                                && message.is_none_or(|m| info.message.as_deref() == Some(m))
+                        })
+                    })
+                    .collect();
+                if attached.is_empty() && item.quick_fix && named.is_empty() {
+                    attached = lsp_highlights
+                        .iter()
+                        .copied()
+                        .filter(|info| at_caret(&info.range))
+                        .collect();
+                }
+                // The nearest to the caret decides the group.
+                attached.sort_by_key(|info| !at_caret(&info.range));
+                let anchor = attached.first().copied();
+                let group = match (item.quick_fix, anchor) {
+                    (false, _) => IntentionGroup::Other,
+                    (true, None) => IntentionGroup::Inspection,
+                    (true, Some(info)) if !at_caret(&info.range) => IntentionGroup::RemoteError,
+                    (true, Some(info))
+                        if info.severity >= archipel_ide_analysis::Severity::ERROR =>
+                    {
+                        IntentionGroup::Error
+                    }
+                    (true, Some(_)) => IntentionGroup::Inspection,
                 };
                 let priority = if item.preferred {
                     archipel_ide_analysis::intention::Priority::High
@@ -146,6 +211,7 @@ impl IdeState {
                     Source::Lsp,
                     format!("lsp:{index}"),
                 )
+                .attached_to(anchor.map(|info| info.range.clone()))
             })
             .collect()
     }
@@ -173,13 +239,13 @@ impl IdeState {
             return None;
         }
         let syntax = snap.syntax(file)?;
-        let extra = self.lsp_alert_rows();
         let names: HashMap<String, String> = catalog::inspections(snap.registry())
             .into_iter()
             .map(|t| (t.id.to_owned(), t.name.to_owned()))
             .collect();
         let daemon = service.lock();
         let markup = daemon.markup(file)?;
+        let extra = self.lsp_alert_rows(document, markup, caret, selection.as_ref());
         let cancel = CancelToken::new();
         let input = AlertInput {
             snap: &snap,
@@ -473,7 +539,6 @@ impl IdeState {
             offset,
             line: caret_line,
             revision,
-            diagnostics: self.lsp.diagnostics_generation(),
             popup,
         });
         Ok(())
@@ -544,6 +609,30 @@ impl IdeState {
         command: &Value,
         path: &std::path::Path,
     ) -> Result<(), String> {
+        // jdtls hands some edits over as a client command; there is nothing
+        // for the server to execute.
+        if command.get("command").and_then(Value::as_str) == Some(APPLY_WORKSPACE_EDIT) {
+            let mut files = 0;
+            for edit in command
+                .get("arguments")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                files += self.apply_workspace_edit(edit)?.files.len();
+            }
+            self.status = format!(
+                "Applied: {}",
+                command
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .unwrap_or("code action")
+            );
+            if files == 0 {
+                self.status = "Nothing to change".into();
+            }
+            return Ok(());
+        }
         let absolute = self
             .project
             .as_ref()
@@ -588,7 +677,10 @@ impl IdeState {
                         offset: pending.offset,
                         line: pending.line,
                         revision: pending.revision,
-                        diagnostics: pending.diagnostics,
+                        // What the server answered matches the diagnostics it
+                        // has now: a publish that raced the request must not
+                        // make the answer stale on arrival.
+                        diagnostics: self.lsp.diagnostics_generation(),
                         items,
                     });
                 }

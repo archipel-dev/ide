@@ -61,6 +61,7 @@ mod diagnostic_commands;
 pub mod diagnostics;
 mod disk_sync;
 mod editor_commands;
+mod external_diagnostics;
 pub mod first_run;
 mod folds;
 mod git_log;
@@ -275,6 +276,8 @@ pub struct IdeState {
     pub(crate) tree_cache: Option<project_view::TreeCache>,
     pub(crate) problems_cache:
         std::collections::HashMap<std::path::PathBuf, problems::ActiveProblemsCache>,
+    /// Mirrors the language servers' diagnostics into the daemon.
+    pub(crate) external_sync: external_diagnostics::ExternalSync,
     pub documents: Vec<Document>,
     pub active_document: Option<usize>,
     /// The native analysis world (host, snapshots, services); synced with
@@ -1028,6 +1031,7 @@ impl IdeState {
     pub fn poll_lsp(&mut self) {
         let restarted = self.lsp.poll();
         self.poll_completion();
+        self.sync_external_diagnostics();
         self.refresh_problems();
         self.poll_navigation();
         self.poll_code_actions();

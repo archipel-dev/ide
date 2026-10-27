@@ -52,7 +52,9 @@ fn release_major(home: &Path) -> Option<u32> {
 impl IdeState {
     /// JDKs known to the toolchain registry: the one in use, then managed installs.
     pub fn jdk_choices(&self) -> Vec<JdkChoice> {
-        let toolchains = &self.toolchains.toolchains;
+        let tools = self.toolchains();
+        let tools = tools.read();
+        let toolchains = &tools.toolchains;
         let mut choices: Vec<JdkChoice> = Vec::new();
         let mut add = |major: Option<u32>, label: String| {
             if let Some(major) = major

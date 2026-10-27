@@ -171,8 +171,7 @@ impl IdeState {
     /// Reloads history and branches, keeping the selection when possible.
     pub fn refresh_git_log(&mut self) -> Result<(), String> {
         let root = self
-            .git
-            .as_ref()
+            .git_status()
             .ok_or("the project is not a Git repository")?
             .root
             .clone();
@@ -223,8 +222,7 @@ impl IdeState {
 
     pub fn select_commit(&mut self, hash: &str) -> Result<(), String> {
         let root = self
-            .git
-            .as_ref()
+            .git_status()
             .ok_or("the project is not a Git repository")?
             .root
             .clone();
@@ -244,7 +242,7 @@ impl IdeState {
 }
 
 pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
-    let has_git = |state: &IdeState| state.git.is_some();
+    let has_git = |state: &IdeState| state.has_git();
     registry
         .register(Command::new(
             spec("git.log.refresh", "Refresh Log", "Git", None, "{}"),

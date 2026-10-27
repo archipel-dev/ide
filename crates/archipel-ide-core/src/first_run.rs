@@ -54,9 +54,10 @@ impl IdeState {
             ))
         })?;
         let mut report = ImportReport::default();
-        let settings = &mut self.settings;
+        let settings = self.settings();
+        let mut settings = settings.write();
         for (id, value) in layer {
-            match settings.store.set(&settings.registry, &id, value) {
+            match settings.set(&id, value) {
                 Ok(()) => report.imported.push(id),
                 Err(error) => report.skipped.push(format!("{id}: {error}")),
             }
@@ -66,7 +67,9 @@ impl IdeState {
 
     /// Option ids and labels of an enum setting (theme, keymap) for the wizard.
     pub fn setting_options(&self, id: &str) -> Vec<(String, String)> {
-        match self.settings.registry.setting(id).map(|def| &def.kind) {
+        let settings = self.settings();
+        let settings = settings.read();
+        match settings.registry.setting(id).map(|def| &def.kind) {
             Some(SettingKind::Enum { options }) => options
                 .iter()
                 .map(|option| (option.id.clone(), option.label.clone()))
@@ -123,7 +126,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 let mut choices = Vec::new();
                 for (id, value) in [(ids::THEME, theme), (ids::KEYMAP, keymap)] {
                     let Some(value) = value else { continue };
-                    let def = state.settings.registry.setting(id).ok_or_else(|| {
+                    let settings = state.settings();
+                    let settings = settings.read();
+                    let def = settings.registry.setting(id).ok_or_else(|| {
                         CommandError::Failed(format!("setting `{id}` is not registered"))
                     })?;
                     let value = def
@@ -136,12 +141,14 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     None => ImportReport::default(),
                 };
                 // Explicit choices win over imported values.
-                let settings = &mut state.settings;
-                for (id, value) in choices {
-                    settings
-                        .store
-                        .set(&settings.registry, id, value)
-                        .map_err(|error| CommandError::InvalidParams(error.to_string()))?;
+                {
+                    let settings = state.settings();
+                    let mut settings = settings.write();
+                    for (id, value) in choices {
+                        settings
+                            .set(id, value)
+                            .map_err(|error| CommandError::InvalidParams(error.to_string()))?;
+                    }
                 }
                 // Saves and rebuilds the keymap engine from the chosen keymap.
                 state.persist_settings()?;
@@ -233,11 +240,11 @@ mod tests {
             .unwrap();
         assert!(!state.first_run_open);
         assert_eq!(
-            state.settings.text(ids::THEME).as_deref(),
+            state.settings().read().text(ids::THEME).as_deref(),
             Some("Islands Light")
         );
         assert_eq!(
-            state.settings.text(ids::KEYMAP).as_deref(),
+            state.settings().read().text(ids::KEYMAP).as_deref(),
             Some("Default for KDE")
         );
         assert_eq!(state.keymap.keymap.id, "Default for KDE");
@@ -278,9 +285,9 @@ mod tests {
                 }),
             )
             .unwrap();
-        assert_eq!(state.settings.int(ids::EDITOR_FONT_SIZE), Some(17));
+        assert_eq!(state.settings().read().int(ids::EDITOR_FONT_SIZE), Some(17));
         assert_eq!(
-            state.settings.text(ids::THEME).as_deref(),
+            state.settings().read().text(ids::THEME).as_deref(),
             Some("Islands Dark"),
             "the explicit choice wins over the imported theme"
         );

@@ -88,7 +88,7 @@ impl IdeState {
         self.update_state = match event {
             UpdateEvent::Checked(Ok(CheckOutcome::Available { version, release })) => {
                 self.status = format!("Archipel IDE {version} is available");
-                self.update_notification = true;
+                self.notifications().show_update_balloon();
                 UpdateState::Available {
                     version,
                     release: Box::new(release),
@@ -97,14 +97,14 @@ impl IdeState {
             UpdateEvent::Checked(Ok(CheckOutcome::UpToDate { latest })) => {
                 if !self.update_silent {
                     self.status = format!("Archipel IDE {CURRENT_VERSION} is up to date");
-                    self.update_notification = true;
+                    self.notifications().show_update_balloon();
                 }
                 UpdateState::UpToDate(latest)
             }
             UpdateEvent::Checked(Err(error)) => {
                 if !self.update_silent {
                     self.status = format!("Update check failed: {error}");
-                    self.update_notification = true;
+                    self.notifications().show_update_balloon();
                 }
                 UpdateState::Failed(error)
             }
@@ -118,12 +118,12 @@ impl IdeState {
                 } else {
                     format!("Archipel IDE {version} installed; restart to finish")
                 };
-                self.update_notification = true;
+                self.notifications().show_update_balloon();
                 UpdateState::Installed(version)
             }
             UpdateEvent::Installed(Err(error)) => {
                 self.status = format!("Update failed: {error}");
-                self.update_notification = true;
+                self.notifications().show_update_balloon();
                 UpdateState::Failed(error)
             }
         };
@@ -236,9 +236,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.update_notification,
+            |state: &IdeState| state.notifications().update_balloon(),
             |state: &mut IdeState, _| {
-                state.update_notification = false;
+                state.notifications().dismiss_update_balloon();
                 Ok(Value::Null)
             },
         ))

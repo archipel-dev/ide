@@ -31,7 +31,7 @@ pub fn restart(app: &mut IdeApp, ctx: &egui::Context) -> Result<(), String> {
 pub const BALLOON_ORDER: egui::Order = egui::Order::Middle;
 
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
-    if !app.state.update_notification {
+    if !app.state.notifications().update_balloon() {
         return;
     }
     let screen = ctx.content_rect();
@@ -163,7 +163,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         app.dispatch(id, Value::Null);
         // Keep the balloon for progress after starting an install.
         if id == "app.installUpdate" {
-            app.state.update_notification = true;
+            app.state.notifications().show_update_balloon();
         }
     }
 }

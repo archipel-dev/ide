@@ -21,8 +21,7 @@ pub(crate) struct Annotation {
 impl IdeState {
     fn repo_path_of(&self, project_path: &std::path::Path) -> Result<PathBuf, String> {
         let git = self
-            .git
-            .as_ref()
+            .git_status()
             .ok_or("the project is not a Git repository")?;
         let project = self.project.as_ref().ok_or("no project is open")?;
         let git_root = git.root.canonicalize().unwrap_or_else(|_| git.root.clone());
@@ -37,8 +36,7 @@ impl IdeState {
     pub(crate) fn blame_document(&self, index: usize) -> Result<Vec<BlameLine>, String> {
         let document = self.documents.get(index).ok_or("document does not exist")?;
         let git = self
-            .git
-            .as_ref()
+            .git_status()
             .ok_or("the project is not a Git repository")?;
         let path = self.repo_path_of(&document.path)?;
         let text = document.text.text();
@@ -113,7 +111,7 @@ impl IdeState {
 }
 
 pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
-    let tracked = |state: &IdeState| state.active_document.is_some() && state.git.is_some();
+    let tracked = |state: &IdeState| state.active_document.is_some() && state.has_git();
     registry
         .register(Command::new(
             spec("git.annotate", "Annotate with Git Blame", "Git", None, "{}"),

@@ -192,14 +192,20 @@ See `05-imports.md` 5.7 (message `Unused import statement`, WARNING, fix `Remove
 
 ### 7.4.4 Nullability annotations (support for JAVA-INS-011 and parameter checks)
 
-Recognized by simple/qualified name, from the project's annotation lists: `@Nullable`, `@NotNull`,
-`@NonNull`, `@CheckForNull`, `@Nonnull`, JetBrains, JSR-305 (`javax.annotation`), Jakarta, Spring
-(`org.springframework.lang.Nullable`/`NonNull`), Android (`androidx.annotation`), Checker Framework,
-Eclipse, JSpecify (`org.jspecify.annotations.Nullable`/`NonNull`/`@NullMarked`), FindBugs/SpotBugs. The
-default pair for generated code is the JetBrains annotations. Contract annotations (`@Contract`) and a
-fixed list of hard-coded contracts for popular libraries (JDK `Objects`, `Optional`, Spring `Assert`,
-Guava `Preconditions`, JUnit/AssertJ assertions) drive the data flow. Extending to full data flow is an
-engine of its own: see Q-INS-1.
+Recognized through *annotation-package support* modules, one per family, each answering "which annotations
+mean nullable / not-null / not-null-by-default in this scope": JetBrains annotations (`org.jetbrains.annotations`
+`@Nullable`, `@NotNull`), JSpecify (`org.jspecify.annotations` `@Nullable`, `@NonNull`, `@NullMarked`,
+`@NullUnmarked`), Checker Framework (`org.checkerframework.checker.nullness.qual.Nullable`/`NonNull`/
+`MonotonicNonNull` and the compat/declaration variants, `@DefaultQualifier`), Eclipse (`org.eclipse.jdt.annotation`
+`@Nullable`, `@NonNull`, `@NonNullByDefault`), SpotBugs/FindBugs (`edu.umd.cs.findbugs.annotations`
+`@Nullable`, `@NonNull`, default-for-parameters annotations), Jakarta (`jakarta.annotation.Nullable`/`Nonnull`,
+`jakarta.validation.constraints.NotNull`), JSR-305 (`javax.annotation.Nullable`/`Nonnull`/`CheckForNull` and
+type-qualifier defaults/nicknames). Android and Spring families are provided by plugins, not Community. The
+default pair used when the IDE generates annotations is the JetBrains pair. Contract annotations (`@Contract`
+of JetBrains and Spring) and a fixed list of hard-coded contracts for popular libraries (JDK `Objects`,
+`Optional`, Spring `Assert`, Apache `Validate`, JUnit/TestNG/Hamcrest assertions) drive the data flow.
+(`ic: java/java-impl/src/com/intellij/codeInsight/annoPackages/`, `ic: java/java-analysis-impl/.../HardcodedContracts.java`.)
+Extending to full data flow is an engine of its own: see Q-INS-1.
 
 - **JAVA-INS-061** `SHOULD` Nullability annotation recognition and the contract list.
 - **JAVA-INS-062** `LATER` Full data-flow engine (nullability, constants, optional presence, ranges).

@@ -30,3 +30,6 @@ Conventions:
 * An optional line `status: unverified (<reason>)` after `settings:` marks a case whose result was
   derived from reading the source but not confirmed in a running IDE (most often caret placement).
   Implementers still implement it; reviewers confirm it first.
+* `template: <abbreviation> = <text>` after `settings:` defines a user live template (context: everywhere,
+  expand with the default key) that exists before the keys are pressed. `choose "<text>"` means pick the
+  popup entry with that text.

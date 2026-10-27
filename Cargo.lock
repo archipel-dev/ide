@@ -451,6 +451,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "archipel-ide-externalsystem"
+version = "0.2.0"
+dependencies = [
+ "archipel-ide-bazel",
+ "archipel-ide-compat",
+ "archipel-ide-gradle",
+ "archipel-ide-projectmodel",
+ "archipel-ide-runner",
+ "quick-xml 0.37.5",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "archipel-ide-git"
 version = "0.2.0"
 dependencies = [

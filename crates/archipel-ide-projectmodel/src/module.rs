@@ -31,10 +31,11 @@ pub struct ExternalProject {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompilerOutput {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub production: Option<PathBuf>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub test: Option<PathBuf>,
+    /// Production output directories (Java and Kotlin classes, resources).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub production: Vec<PathBuf>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub test: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

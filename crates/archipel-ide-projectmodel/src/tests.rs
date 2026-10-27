@@ -43,8 +43,8 @@ fn fixture() -> Arc<ProjectModel> {
             .add_excluded_folder("/w/demo/app/build")
             .add_excluded_folder("/w/demo/app/.gradle");
     }
-    app.compiler_output.production = Some(p("/w/demo/app/build/classes/java/main"));
-    app.compiler_output.test = Some(p("/w/demo/app/build/classes/java/test"));
+    app.compiler_output.production = vec![p("/w/demo/app/build/classes/java/main")];
+    app.compiler_output.test = vec![p("/w/demo/app/build/classes/java/test")];
     app.add_order_entry(OrderEntry::module("lib", DependencyScope::Compile));
     app.add_order_entry(OrderEntry::library("spring", DependencyScope::Compile));
     app.add_order_entry(OrderEntry::library("lombok", DependencyScope::Provided));
@@ -62,7 +62,7 @@ fn fixture() -> Arc<ProjectModel> {
             "/w/demo/lib/src/test/java",
             JpsModuleSourceRootType::TestSource,
         ));
-    lib.compiler_output.production = Some(p("/w/demo/lib/build/classes/java/main"));
+    lib.compiler_output.production = vec![p("/w/demo/lib/build/classes/java/main")];
     lib.add_order_entry(OrderEntry::Library {
         library: "guava".into(),
         scope: DependencyScope::Compile,

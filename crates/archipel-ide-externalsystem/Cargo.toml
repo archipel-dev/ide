@@ -1,0 +1,17 @@
+[package]
+name = "archipel-ide-externalsystem"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "External system import: DataNode trees from Gradle, Maven, Cargo and Bazel resolvers, applied to the project model by data services."
+
+[dependencies]
+archipel-ide-bazel = { path = "../archipel-ide-bazel" }
+archipel-ide-compat = { path = "../archipel-ide-compat" }
+archipel-ide-gradle = { path = "../archipel-ide-gradle" }
+archipel-ide-projectmodel = { path = "../archipel-ide-projectmodel" }
+archipel-ide-runner = { path = "../archipel-ide-runner" }
+quick-xml.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

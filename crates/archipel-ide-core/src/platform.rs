@@ -129,24 +129,34 @@ impl SettingsListener for GradleOptions {
 }
 
 /// Connects the per-project listeners when a project opens.
-struct CoreProjectListener(Reactions);
+struct CoreProjectListener {
+    application: WeakApplication,
+    reactions: Reactions,
+}
 
 impl ProjectManagerListener for CoreProjectListener {
     fn project_opened(&self, project: &Project) {
+        // Search Everywhere survives projects (it works on the welcome screen); what it knows
+        // about the previous project (symbol index, recent locations, Switcher) does not.
+        if let Some(application) = self.application.upgrade() {
+            application
+                .service::<SearchEverywhereManager>()
+                .replace(Default::default());
+        }
         let _ = project.message_bus().subscribe(
             project.disposable(),
             GIT_REPO_CHANGE,
-            Arc::new(VcsReactions(self.0.clone())),
+            Arc::new(VcsReactions(self.reactions.clone())),
         );
         let _ = project.message_bus().subscribe(
             project.disposable(),
             FIND_TOPIC,
-            Arc::new(FindReactions(self.0.clone())),
+            Arc::new(FindReactions(self.reactions.clone())),
         );
         let _ = project.message_bus().subscribe(
             project.disposable(),
             REMOTE_TOPIC,
-            Arc::new(RemoteReactions(self.0.clone())),
+            Arc::new(RemoteReactions(self.reactions.clone())),
         );
     }
 }
@@ -175,6 +185,7 @@ fn register_core_services(application: &Application) {
             CloneManager::new(application.message_bus().clone())
         })),
         application.register_service(ServiceDescriptor::of_default::<ActionManager>()),
+        application.register_service(ServiceDescriptor::of_default::<SearchEverywhereManager>()),
         application.register_service(ServiceDescriptor::new(|application: &Application| {
             Notifications::new(application.message_bus().clone())
         })),
@@ -187,8 +198,6 @@ fn register_core_services(application: &Application) {
         application.register_project_service(ServiceDescriptor::disposable(|project: &Project| {
             FindInProjectService::new(project.message_bus().clone())
         })),
-        application
-            .register_project_service(ServiceDescriptor::of_default::<SearchEverywhereManager>()),
         application.register_project_service(ServiceDescriptor::new(|project: &Project| {
             GitLogService::connect(project)
         })),
@@ -245,7 +254,10 @@ impl Default for Platform {
         let _ = bus.subscribe(
             owner,
             ProjectManager::TOPIC,
-            Arc::new(CoreProjectListener(reactions.clone())),
+            Arc::new(CoreProjectListener {
+                application: application.downgrade(),
+                reactions: reactions.clone(),
+            }),
         );
         Self {
             application,
@@ -362,15 +374,15 @@ impl IdeState {
         self.find().is_some_and(|find| find.is_running())
     }
 
-    /// Search Everywhere, Recent Locations and the Switcher (project service).
-    pub fn search_everywhere(&self) -> Option<Arc<SearchEverywhereManager>> {
-        self.platform_project()?.get_service()
+    /// Search Everywhere, Recent Locations and the Switcher (application service: the popup
+    /// works on the welcome screen, and its project-bound parts reset when a project opens).
+    pub fn search_everywhere(&self) -> Arc<SearchEverywhereManager> {
+        self.application().service()
     }
 
     /// Whether the Switcher popup is open.
     pub fn switcher_open(&self) -> bool {
-        self.search_everywhere()
-            .is_some_and(|nav| nav.read().switcher.is_some())
+        self.search_everywhere().read().switcher.is_some()
     }
 
     /// Toolchain discovery, pins and installs (application service).

@@ -759,9 +759,7 @@ impl IdeState {
     /// the Find in Files results.
     pub fn request_text_search(&mut self, query: &str) {
         let query = query.trim();
-        let Some(nav) = self.search_everywhere() else {
-            return;
-        };
+        let nav = self.search_everywhere();
         if nav.read().text_query == query {
             return;
         }
@@ -847,9 +845,7 @@ impl IdeState {
     }
 
     pub fn poll_text_search(&mut self) {
-        let Some(nav) = self.search_everywhere() else {
-            return;
-        };
+        let nav = self.search_everywhere();
         let mut nav = nav.write();
         let events = nav.text.lock().poll();
         for event in events {

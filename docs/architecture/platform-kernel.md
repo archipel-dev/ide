@@ -54,11 +54,12 @@ IdeState
  └─ platform: Platform                      (crates/archipel-ide-core/src/platform.rs)
      ├─ application: Application
      │   ├─ services    ToolchainManager, SettingsService, Notifications, KeymapManager,
-     │   │            UpdateChecker, RecentProjectsManager, CloneManager, ActionManager
+     │   │            UpdateChecker, RecentProjectsManager, CloneManager, ActionManager,
+     │   │            SearchEverywhereManager
      │   ├─ bus         ProjectManager::TOPIC, TOOLCHAIN_TOPIC, NOTIFICATION_TOPIC, SETTINGS_TOPIC,
      │   │            UPDATE_TOPIC, CLONE_TOPIC
      │   └─ project services declared for every project: ToolchainRequirementsService, GitRepositories,
-    │      FindInProjectService, SearchEverywhereManager, GitLogService, BlameAnnotations,
+    │      FindInProjectService, GitLogService, BlameAnnotations,
     │      LineStatusTracker, GitRemoteOperations
      └─ project: Option<Project>            (None on the welcome screen)
          ├─ services    created lazily, disposed on close
@@ -93,7 +94,7 @@ IdeState
 | `Notifications` | application | `IdeState::update_notification`, `PluginHostState::notifications` | publishes `NOTIFICATION_TOPIC` (`notification_shown`) |
 | `GitRepositories` | project | `IdeState::{git, git_watcher, git_pending, vcs_stale}` | publishes `GIT_REPO_CHANGE` (`repository_changed(status, structure_changed)`) on the project bus |
 | `FindInProjectService` | project | `IdeState::{search, search_results, search_query, search_scope_kind, custom_scopes, search_custom_scope, search_background, search_options, search_files_scanned, search_truncated}`: Find in Files | publishes `FIND_TOPIC` (`search_finished(summary)`); the status line follows |
-| `SearchEverywhereManager` (`ServiceState<QuickNavState>`) | project | `IdeState::quick_nav`: Search Everywhere, Recent Locations, Switcher | |
+| `SearchEverywhereManager` (`ServiceState<QuickNavState>`) | application | `IdeState::quick_nav`: Search Everywhere, Recent Locations, Switcher. Application scope because the popup works on the welcome screen; `project_opened` resets it | |
 | `ActionManager` (`ServiceState<ActionOptions>`) | application | `IdeState::include_disabled_actions` | |
 | `GitLogService` | project | `IdeState::git_log` (snapshots are `Arc<GitLogState>`) | subscribes `GIT_REPO_CHANGE`: marks the log stale |
 | `BlameAnnotations` | project | `IdeState::annotations` | subscribes `GIT_REPO_CHANGE`: re-blame |

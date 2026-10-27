@@ -121,7 +121,7 @@ fn items(app: &mut IdeApp) -> Vec<Ranked<Hit>> {
     } else {
         Vec::new()
     };
-    let manager = app.state.search_everywhere().unwrap_or_default();
+    let manager = app.state.search_everywhere();
     let navigation = manager.read();
     let sources = SearchSources {
         files: &app.state.files,

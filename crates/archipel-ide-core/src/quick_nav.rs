@@ -699,46 +699,39 @@ impl IdeState {
 
     /// The popup a `navigate.*` command asked for; the UI takes it once per frame.
     pub fn take_navigation_request(&self) -> Option<NavigationRequest> {
-        self.search_everywhere()?.write().request.take()
+        self.search_everywhere().write().request.take()
     }
 
     /// The pending popup request, without taking it.
     pub fn navigation_request(&self) -> Option<NavigationRequest> {
-        self.search_everywhere()?.read().request
+        self.search_everywhere().read().request
     }
 
     /// Recent Locations, newest first.
     pub fn recent_locations(&self) -> Vec<RecentLocation> {
-        self.search_everywhere()
-            .map(|nav| nav.read().locations.clone())
-            .unwrap_or_default()
+        self.search_everywhere().read().locations.clone()
     }
 
     /// A copy of the open Switcher.
     pub fn switcher(&self) -> Option<Switcher> {
-        self.search_everywhere()?.read().switcher.clone()
+        self.search_everywhere().read().switcher.clone()
     }
 
     /// Selects `index` in the open Switcher.
     pub fn select_switcher_entry(&self, index: usize) {
-        if let Some(nav) = self.search_everywhere()
-            && let Some(switcher) = nav.write().switcher.as_mut()
-        {
+        if let Some(switcher) = self.search_everywhere().write().switcher.as_mut() {
             switcher.selected = index;
         }
     }
 
     /// Whether the Text tab's background search is running.
     pub fn text_search_running(&self) -> bool {
-        self.search_everywhere()
-            .is_some_and(|nav| nav.read().text.lock().is_running())
+        self.search_everywhere().read().text.lock().is_running()
     }
 
     /// Opens the Switcher, or cycles it when already open.
     pub fn switcher_advance(&mut self, backward: bool) {
-        let Some(nav) = self.search_everywhere() else {
-            return;
-        };
+        let nav = self.search_everywhere();
         let entries = self.switcher_entries();
         let mut nav = nav.write();
         if let Some(switcher) = &mut nav.switcher {
@@ -765,7 +758,8 @@ impl IdeState {
         };
         let preview = document.text.line(line).unwrap_or_default();
         let (path, preview) = (document.path.clone(), preview.trim().to_owned());
-        if let Some(nav) = self.search_everywhere() {
+        {
+            let nav = self.search_everywhere();
             nav.write().note_location(&path, line, &preview);
         }
     }
@@ -781,7 +775,8 @@ impl IdeState {
             .map(|document| (document.path.clone(), document.text.text()))
             .collect();
         let root = project.root().to_owned();
-        if let Some(nav) = self.search_everywhere() {
+        {
+            let nav = self.search_everywhere();
             let mut nav = nav.write();
             nav.index_complete = nav.index.refresh(&root, &self.files, &open, budget);
         }
@@ -790,9 +785,7 @@ impl IdeState {
     /// Starts (or restarts) a `workspace/symbol` request for `query` through
     /// a running language server; a no-op without one.
     pub fn request_server_symbols(&mut self, query: &str) {
-        let Some(nav) = self.search_everywhere() else {
-            return;
-        };
+        let nav = self.search_everywhere();
         let mut nav = nav.write();
         let server = &mut nav.server;
         if query.is_empty() {
@@ -824,9 +817,7 @@ impl IdeState {
 
     /// Collects an arrived `workspace/symbol` answer.
     pub fn poll_server_symbols(&mut self) {
-        let Some(nav) = self.search_everywhere() else {
-            return;
-        };
+        let nav = self.search_everywhere();
         let Some((handle, query)) = nav.read().server.request.clone() else {
             return;
         };
@@ -890,7 +881,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                         })?,
                         None => tab,
                     };
-                    if let Some(nav) = state.search_everywhere() {
+                    {
+                        let nav = state.search_everywhere();
                         nav.write().request = Some(NavigationRequest::SearchEverywhere(tab));
                     }
                     Ok(json!({"tab": tab.id()}))
@@ -909,7 +901,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             |_| true,
             |state: &mut IdeState, _| {
-                if let Some(nav) = state.search_everywhere() {
+                {
+                    let nav = state.search_everywhere();
                     nav.write().request = Some(NavigationRequest::RecentFiles);
                 }
                 Ok(Value::Null)
@@ -927,7 +920,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             |_| true,
             |state: &mut IdeState, _| {
-                if let Some(nav) = state.search_everywhere() {
+                {
+                    let nav = state.search_everywhere();
                     nav.write().request = Some(NavigationRequest::RecentLocations);
                 }
                 Ok(Value::Null)
@@ -952,7 +946,10 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 state.switcher_advance(backward);
                 let selected = state
                     .search_everywhere()
-                    .and_then(|nav| nav.read().switcher.as_ref().map(|s| s.selected));
+                    .read()
+                    .switcher
+                    .as_ref()
+                    .map(|s| s.selected);
                 Ok(json!({ "selected": selected }))
             },
         ))
@@ -968,10 +965,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             |state: &IdeState| state.switcher_open(),
             |state: &mut IdeState, _| {
-                let Some(switcher) = state
-                    .search_everywhere()
-                    .and_then(|nav| nav.write().switcher.take())
-                else {
+                let Some(switcher) = state.search_everywhere().write().switcher.take() else {
                     return Ok(Value::Null);
                 };
                 match switcher.selected_entry() {
@@ -1002,7 +996,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             |state: &IdeState| state.switcher_open(),
             |state: &mut IdeState, _| {
-                if let Some(nav) = state.search_everywhere() {
+                {
+                    let nav = state.search_everywhere();
                     nav.write().switcher = None;
                 }
                 Ok(Value::Null)
@@ -1296,13 +1291,8 @@ mod tests {
 
     #[test]
     fn navigate_commands_request_the_matching_tab() {
-        let root =
-            std::env::temp_dir().join(format!("archipel-ide-nav-request-{}", std::process::id()));
-        std::fs::create_dir_all(&root).unwrap();
         let commands = built_in_commands();
         let mut state = IdeState::default();
-        // The manager is a project service: requests need an open project.
-        state.open_project(&root).unwrap();
         for (id, tab) in [
             ("navigate.gotoClass", SearchTab::Classes),
             ("navigate.gotoFile", SearchTab::Files),

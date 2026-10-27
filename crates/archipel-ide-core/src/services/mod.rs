@@ -10,7 +10,7 @@
 //! | [`ProjectModelService`] | project | `IdeState::project_model` (imported modules, roots, libraries) |
 //! | [`GitRepositories`] | project | `IdeState::{git, git_watcher, git_pending}` |
 //! | [`FindInProjectService`] | project | `IdeState::{search, search_results, search_query, ...}` (Find in Files) |
-//! | [`SearchEverywhereManager`] | project | `IdeState::quick_nav` |
+//! | [`SearchEverywhereManager`] | application | `IdeState::quick_nav` |
 //! | [`ActionManager`] | application | `IdeState::include_disabled_actions` |
 //! | [`GitLogService`], [`BlameAnnotations`], [`LineStatusTracker`] | project | `IdeState::{git_log, annotations, line_changes}` |
 //! | [`GitRemoteOperations`] | project | `IdeState::{remote_job, remote_progress, remote_error}` |

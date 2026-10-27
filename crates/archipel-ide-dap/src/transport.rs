@@ -8,6 +8,7 @@ use std::net::TcpStream;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
+use std::sync::{Mutex, PoisonError};
 use std::thread;
 
 /// Reads one framed message. Returns `Ok(None)` at end of stream.
@@ -82,13 +83,20 @@ fn spawn_reader(
     Ok(incoming)
 }
 
+/// Exclusive access to the value of a mutex that nobody else can lock (`&mut` proves it).
+fn exclusive<T>(mutex: &mut Mutex<T>) -> &mut T {
+    mutex.get_mut().unwrap_or_else(PoisonError::into_inner)
+}
+
 /// A running adapter process.
 pub struct AdapterProcess {
     /// `None` for adapters reached over TCP (java-debug runs inside jdtls).
     child: Option<Child>,
-    stdin: Box<dyn Write + Send>,
-    incoming: Receiver<Result<Value, String>>,
-    stderr: Receiver<String>,
+    // The `Mutex` wrappers only make the process `Sync` (so a service can share the session);
+    // every use has `&mut self` and goes through `get_mut`, so no lock is ever taken.
+    stdin: Mutex<Box<dyn Write + Send>>,
+    incoming: Mutex<Receiver<Result<Value, String>>>,
+    stderr: Mutex<Receiver<String>>,
 }
 
 impl AdapterProcess {
@@ -126,9 +134,9 @@ impl AdapterProcess {
             })?;
         Ok(Self {
             child: Some(child),
-            stdin: Box::new(stdin),
-            incoming,
-            stderr,
+            stdin: Mutex::new(Box::new(stdin)),
+            incoming: Mutex::new(incoming),
+            stderr: Mutex::new(stderr),
         })
     }
 
@@ -142,23 +150,23 @@ impl AdapterProcess {
         let incoming = spawn_reader(stream.try_clone()?)?;
         Ok(Self {
             child: None,
-            stdin: Box::new(stream),
-            incoming,
-            stderr: mpsc::channel().1,
+            stdin: Mutex::new(Box::new(stream)),
+            incoming: Mutex::new(incoming),
+            stderr: Mutex::new(mpsc::channel().1),
         })
     }
 
     pub fn send(&mut self, message: &Value) -> Result<(), DapError> {
-        write_message(&mut self.stdin, message)
+        write_message(exclusive(&mut self.stdin), message)
     }
 
     /// Messages received since the last call; an error ends the stream.
     pub fn receive(&mut self) -> Vec<Result<Value, String>> {
-        self.incoming.try_iter().collect()
+        exclusive(&mut self.incoming).try_iter().collect()
     }
 
     pub fn stderr(&mut self) -> String {
-        self.stderr.try_iter().collect()
+        exclusive(&mut self.stderr).try_iter().collect()
     }
 
     /// Whether the adapter process ended; TCP adapters report end of stream as an

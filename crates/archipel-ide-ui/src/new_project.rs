@@ -271,7 +271,8 @@ pub fn show(
     }
     form.jdk_busy = busy;
     app.state.poll_spring_catalog();
-    form.spring.sync_catalog(&app.state.spring.catalog);
+    form.spring
+        .sync_catalog(&app.state.spring().state().catalog);
     let is_spring = matches!(form.preset(), Preset::Spring);
     let deps_page = is_spring && form.spring.page == Page::Dependencies;
     let mut go_next = false;

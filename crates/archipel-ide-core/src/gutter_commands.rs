@@ -28,7 +28,8 @@ impl IdeState {
     /// Gutter icons of the active document (cached per text revision).
     pub fn gutter_marks(&mut self) -> Vec<GutterMark> {
         self.refresh_runnables();
-        self.runnable_cache
+        self.execution()
+            .runnables()
             .marks
             .iter()
             .map(|(mark, _)| mark.clone())
@@ -41,14 +42,10 @@ impl IdeState {
     /// runnables walks the whole syntax tree.
     pub fn cached_gutter_marks(&self) -> Option<Vec<GutterMark>> {
         let path = &self.documents.get(self.active_document?)?.path;
-        let (cached_path, _) = self.runnable_cache.key.as_ref()?;
-        (cached_path == path).then(|| {
-            self.runnable_cache
-                .marks
-                .iter()
-                .map(|(mark, _)| mark.clone())
-                .collect()
-        })
+        let execution = self.execution();
+        let cache = execution.runnables();
+        let (cached_path, _) = cache.key.as_ref()?;
+        (cached_path == path).then(|| cache.marks.iter().map(|(mark, _)| mark.clone()).collect())
     }
 
     fn refresh_runnables(&mut self) {
@@ -56,17 +53,17 @@ impl IdeState {
             .active_document
             .and_then(|index| self.documents.get(index))
         else {
-            self.runnable_cache = RunnableCache::default();
+            *self.execution().runnables_mut() = RunnableCache::default();
             return;
         };
         let key = (document.path.clone(), document.text.revision());
-        if self.runnable_cache.key.as_ref() == Some(&key) {
+        if self.execution().runnables().key.as_ref() == Some(&key) {
             return;
         }
         let path = document.path.clone();
         let source = document.text.text();
         let marks = self.compute_marks(&path, &source, document);
-        self.runnable_cache = RunnableCache {
+        *self.execution().runnables_mut() = RunnableCache {
             key: Some(key),
             marks,
         };
@@ -389,7 +386,8 @@ impl IdeState {
     pub fn run_gutter(&mut self, line: usize, edit: bool, debug: bool) -> Result<(), String> {
         self.refresh_runnables();
         let config = self
-            .runnable_cache
+            .execution()
+            .runnables()
             .marks
             .iter()
             .find(|(mark, _)| mark.line == line)
@@ -398,13 +396,14 @@ impl IdeState {
         if edit {
             let name = config.name.clone();
             if self
-                .run_configurations
+                .execution()
+                .configurations()
                 .get(&name)
                 .is_none_or(|existing| existing.temporary)
             {
-                self.run_configurations.add_temporary(config);
+                self.execution().configurations_mut().add_temporary(config);
             }
-            self.edit_run_configurations = Some(name);
+            self.execution().request_edit_configurations(name);
             return Ok(());
         }
         if debug {
@@ -413,13 +412,14 @@ impl IdeState {
             }
             let name = config.name.clone();
             if self
-                .run_configurations
+                .execution()
+                .configurations()
                 .get(&name)
                 .is_none_or(|existing| existing.temporary)
             {
-                self.run_configurations.add_temporary(config);
+                self.execution().configurations_mut().add_temporary(config);
             }
-            self.run_configurations.select(&name)?;
+            self.execution().configurations_mut().select(&name)?;
             return self.start_debugging();
         }
         self.run_temporary(config)
@@ -445,7 +445,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 Some("⌃⇧R"),
                 r#"{"line":0,"edit":false,"debug":false}"#,
             ),
-            |state: &IdeState| state.active_document.is_some() && !state.runner.is_running(),
+            |state: &IdeState| state.active_document.is_some() && !state.execution().is_running(),
             |state: &mut IdeState, params| {
                 let line = match params.get("line") {
                     Some(_) => usize_param(&params, "line")?,
@@ -475,7 +475,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"path":"string"}"#,
             ),
-            |state: &IdeState| state.project.is_some() && !state.runner.is_running(),
+            |state: &IdeState| state.project.is_some() && !state.execution().is_running(),
             |state: &mut IdeState, params| {
                 let path = PathBuf::from(crate::string_param(&params, "path")?);
                 let label = state.run_file(&path).map_err(CommandError::Failed)?;
@@ -506,7 +506,8 @@ impl IdeState {
         self.open_file(path)?;
         self.refresh_runnables();
         let pick = |kind: RunnableKind| {
-            self.runnable_cache
+            self.execution()
+                .runnables()
                 .marks
                 .iter()
                 .find(|(mark, _)| mark.kind == kind)
@@ -525,7 +526,8 @@ impl IdeState {
         let document = self.documents.get(self.active_document?)?;
         let line = document.text.char_to_line(caret);
         self.refresh_runnables();
-        self.runnable_cache
+        self.execution()
+            .runnables()
             .marks
             .iter()
             .map(|(mark, _)| mark.line)
@@ -594,10 +596,18 @@ mod tests {
             .execute("run.gutter", &mut state, json!({"line": 3, "edit": true}))
             .unwrap();
         assert_eq!(
-            state.edit_run_configurations.as_deref(),
+            state
+                .execution()
+                .take_edit_configurations_request()
+                .as_deref(),
             Some("AppTest.greets")
         );
-        let config = state.run_configurations.get("AppTest.greets").unwrap();
+        let config = state
+            .execution()
+            .configurations()
+            .get("AppTest.greets")
+            .cloned()
+            .unwrap();
         assert_eq!(
             config.target,
             RunTarget::Gradle {
@@ -620,9 +630,14 @@ mod tests {
         commands
             .execute("run.gutter", &mut state, json!({"line": 0, "edit": true}))
             .unwrap();
-        let RunTarget::Gradle { tasks, options, .. } =
-            &state.run_configurations.get("App").unwrap().target
-        else {
+        let target = state
+            .execution()
+            .configurations()
+            .get("App")
+            .unwrap()
+            .target
+            .clone();
+        let RunTarget::Gradle { tasks, options, .. } = &target else {
             panic!("expected a Gradle configuration");
         };
         assert_eq!(tasks, &[":app:archipelRunMain".to_owned()]);
@@ -675,7 +690,12 @@ mod tests {
         commands
             .execute("run.gutter", &mut state, json!({"line": 3, "edit": true}))
             .unwrap();
-        let config = state.run_configurations.get("ops::tests::adds").unwrap();
+        let config = state
+            .execution()
+            .configurations()
+            .get("ops::tests::adds")
+            .cloned()
+            .unwrap();
         let RunTarget::Cargo {
             command,
             program_arguments,
@@ -699,9 +719,16 @@ mod tests {
         commands
             .execute("run.gutter", &mut state, json!({"line": 0, "edit": true}))
             .unwrap();
+        let target = state
+            .execution()
+            .configurations()
+            .get("tool")
+            .unwrap()
+            .target
+            .clone();
         let RunTarget::Cargo {
             command, options, ..
-        } = &state.run_configurations.get("tool").unwrap().target
+        } = &target
         else {
             panic!("expected a Cargo configuration");
         };
@@ -728,7 +755,9 @@ mod tests {
         commands
             .execute("run.gutter", &mut state, json!({"line": 4, "edit": true}))
             .unwrap();
-        let config = state.run_configurations.get("DemoApplication").unwrap();
+        let execution = state.execution();
+        let configurations = execution.configurations();
+        let config = configurations.get("DemoApplication").unwrap();
         (config.target.clone(), config.name.clone())
     }
 

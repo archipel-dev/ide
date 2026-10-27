@@ -10,28 +10,37 @@
 //! [`IdeState::dispatch_reactions`] runs them right after the event was published. When a
 //! feature becomes a service, its listener does the work itself and the reaction disappears.
 
+use crate::build_window::BuildWindowFollower;
 use crate::services::{
-    GIT_REPO_CHANGE, GitRepositories, GitRepositoryChangeListener, Notifications,
-    ProjectModelService, SettingsService, TOOLCHAIN_TOPIC, ToolchainBanner, ToolchainListener,
-    ToolchainManager, ToolchainRequirementsService, ToolchainState,
+    DEBUG_SESSION_TOPIC, DebugSessionListener, EXECUTION_TOPIC, ExecutionListener,
+    ExecutionManager, GIT_REPO_CHANGE, GitRepositories, GitRepositoryChangeListener, Notifications,
+    ProjectModelService, SettingsService, SpringStarters, TOOLCHAIN_TOPIC, TerminalService,
+    ToolchainBanner, ToolchainListener, ToolchainManager, ToolchainRequirementsService,
+    ToolchainState, XDebuggerManager,
 };
 use crate::{IdeState, toolchain_commands};
+use archipel_ide_dap::StackFrame;
 use archipel_ide_git::RepositoryStatus;
 use archipel_ide_platform::{
-    Application, ComponentManager, Project, ProjectManager, ProjectManagerListener,
-    ServiceDescriptor, WeakApplication,
+    Application, ComponentManager, Disposable, DisposableId, MessageBus, Project, ProjectManager,
+    ProjectManagerListener, ServiceDescriptor, WeakApplication,
 };
+use archipel_ide_runner::{TaskPlan, TaskState};
 use parking_lot::Mutex;
 use std::path::Path;
 use std::sync::Arc;
 
 /// Work a listener asks `IdeState` to do (see the module documentation).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Reaction {
     /// A toolchain component finished installing.
     ToolchainInstalled,
     /// The Git status was replaced.
     VcsChanged { structure_changed: bool },
+    /// A task exited on its own (not cancelled, not failed to start).
+    RunExited,
+    /// The debug session stopped at a new execution point.
+    DebugPaused(StackFrame),
 }
 
 #[derive(Clone, Default)]
@@ -73,6 +82,52 @@ impl GitRepositoryChangeListener for VcsReactions {
     }
 }
 
+/// Asks `IdeState` for what follows a finished task: the pending debug session, the end of a
+/// sync and the status bar text.
+struct RunReactions(Reactions);
+
+impl ExecutionListener for RunReactions {
+    fn process_terminated(&self, _plan: &TaskPlan, state: &TaskState, _run_id: u64) {
+        if matches!(state, TaskState::Exited(_)) {
+            self.0.push(Reaction::RunExited);
+        }
+    }
+}
+
+/// Asks `IdeState` to reveal the execution point in the editor.
+struct DebugReactions(Reactions);
+
+impl DebugSessionListener for DebugReactions {
+    fn session_paused(&self, _name: &str, frame: &StackFrame) {
+        self.0.push(Reaction::DebugPaused(frame.clone()));
+    }
+}
+
+/// Subscribes what follows runs and debug sessions on `bus` until `parent` is disposed: the
+/// Build tool window follows the runner, `IdeState` reacts to finished tasks and stops.
+fn connect_run_listeners(
+    bus: &MessageBus,
+    parent: DisposableId,
+    execution: &Arc<ExecutionManager>,
+    reactions: &Reactions,
+) {
+    let _ = bus.subscribe(
+        parent,
+        EXECUTION_TOPIC,
+        Arc::new(BuildWindowFollower(Arc::downgrade(execution))),
+    );
+    let _ = bus.subscribe(
+        parent,
+        EXECUTION_TOPIC,
+        Arc::new(RunReactions(reactions.clone())),
+    );
+    let _ = bus.subscribe(
+        parent,
+        DEBUG_SESSION_TOPIC,
+        Arc::new(DebugReactions(reactions.clone())),
+    );
+}
+
 /// Connects the per-project listeners when a project opens.
 struct CoreProjectListener(Reactions);
 
@@ -82,6 +137,12 @@ impl ProjectManagerListener for CoreProjectListener {
             project.disposable(),
             GIT_REPO_CHANGE,
             Arc::new(VcsReactions(self.0.clone())),
+        );
+        connect_run_listeners(
+            project.message_bus(),
+            project.disposable(),
+            &project.service::<ExecutionManager>(),
+            &self.0,
         );
     }
 }
@@ -104,6 +165,16 @@ fn register_core_services(application: &Application) {
         application.register_project_service(ServiceDescriptor::disposable(|project: &Project| {
             ProjectModelService::new(project.message_bus().clone())
         })),
+        application.register_project_service(ServiceDescriptor::disposable(|project: &Project| {
+            ExecutionManager::new(project.message_bus().clone())
+        })),
+        application.register_project_service(ServiceDescriptor::disposable(|project: &Project| {
+            XDebuggerManager::new(project.message_bus().clone())
+        })),
+        application.register_project_service(ServiceDescriptor::disposable(|project: &Project| {
+            TerminalService::new(project.message_bus().clone())
+        })),
+        application.register_service(ServiceDescriptor::of_default::<SpringStarters>()),
     ];
     debug_assert!(
         registered.iter().all(Result::is_ok),
@@ -111,11 +182,57 @@ fn register_core_services(application: &Application) {
     );
 }
 
+/// The run, debug and terminal services of a window without a project (the welcome screen).
+///
+/// Those are project services, but their accessors are used all over the UI, which draws before
+/// any project is open. Instead of an `Option` at every call site the accessors fall back to
+/// this set. It never belongs to a project: a project gets fresh services when it opens, and
+/// nothing started here (there is no project to run in) outlives the window.
+struct Detached {
+    execution: Arc<ExecutionManager>,
+    debugger: Arc<XDebuggerManager>,
+    terminal: Arc<TerminalService>,
+}
+
+impl Detached {
+    fn new(application: &Application, reactions: &Reactions) -> Self {
+        let bus = application.message_bus();
+        let detached = Self {
+            execution: Arc::new(ExecutionManager::new(bus.clone())),
+            debugger: Arc::new(XDebuggerManager::new(bus.clone())),
+            terminal: Arc::new(TerminalService::new(bus.clone())),
+        };
+        connect_run_listeners(
+            bus,
+            application.disposable(),
+            &detached.execution,
+            reactions,
+        );
+        detached
+    }
+}
+
+impl Detached {
+    /// Stops what ran without a project (a shell opened on the welcome screen).
+    fn reset(&self) {
+        self.execution.dispose();
+        self.debugger.dispose();
+        self.terminal.dispose();
+    }
+}
+
+impl Drop for Detached {
+    fn drop(&mut self) {
+        self.reset();
+    }
+}
+
 /// The application and the open project of this IDE window.
 pub struct Platform {
     application: Application,
     project: Option<Project>,
     reactions: Reactions,
+    detached: Detached,
 }
 
 impl Default for Platform {
@@ -138,10 +255,12 @@ impl Default for Platform {
             ProjectManager::TOPIC,
             Arc::new(CoreProjectListener(reactions.clone())),
         );
+        let detached = Detached::new(&application, &reactions);
         Self {
             application,
             project: None,
             reactions,
+            detached,
         }
     }
 }
@@ -165,6 +284,7 @@ impl Platform {
     /// `root` (`project_opened`).
     pub(crate) fn open_project(&mut self, root: &Path) -> &Project {
         self.close_project();
+        self.detached.reset();
         self.project
             .insert(self.application.project_manager().open(root))
     }
@@ -211,6 +331,33 @@ impl IdeState {
     /// Imported modules, roots and libraries of the open project (project service).
     pub fn project_model(&self) -> Option<Arc<ProjectModelService>> {
         self.platform_project()?.get_service()
+    }
+
+    /// Runs, builds, run configurations and the Build tool window (project service; a detached
+    /// instance while no project is open).
+    pub fn execution(&self) -> Arc<ExecutionManager> {
+        self.platform_project()
+            .and_then(|project| project.get_service())
+            .unwrap_or_else(|| self.platform.detached.execution.clone())
+    }
+
+    /// Breakpoints and the debug session (project service; detached while no project is open).
+    pub fn debugger(&self) -> Arc<XDebuggerManager> {
+        self.platform_project()
+            .and_then(|project| project.get_service())
+            .unwrap_or_else(|| self.platform.detached.debugger.clone())
+    }
+
+    /// The Terminal tool window's shells (project service; detached while no project is open).
+    pub fn terminal(&self) -> Arc<TerminalService> {
+        self.platform_project()
+            .and_then(|project| project.get_service())
+            .unwrap_or_else(|| self.platform.detached.terminal.clone())
+    }
+
+    /// The Spring Boot starter catalog of the New Project wizard (application service).
+    pub fn spring(&self) -> Arc<SpringStarters> {
+        self.application().service()
     }
 
     /// Git repository state of the open project (project service).
@@ -281,6 +428,8 @@ impl IdeState {
                     self.refresh_diff();
                 }
                 Reaction::ToolchainInstalled => self.toolchain_installed(),
+                Reaction::RunExited => self.run_exited(),
+                Reaction::DebugPaused(frame) => self.debug_paused(&frame),
             }
         }
     }
@@ -471,6 +620,85 @@ mod tests {
             state.platform.reactions.take().is_empty(),
             "failures need no follow-up"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn closing_the_project_stops_its_task_and_shells() {
+        let dir = temp("dispose-run");
+        let mut state = IdeState::default();
+        state.open_project(&dir).unwrap();
+        let execution = state.execution();
+        let terminal = state.terminal();
+        assert!(!Arc::ptr_eq(&execution, &state.platform.detached.execution));
+        execution
+            .start(TaskPlan::new("long", "sleep", ["30"], &dir))
+            .unwrap();
+        terminal.state_mut().set_session(
+            archipel_ide_terminal::TerminalSession::spawn("/bin/sh", &["-c", "sleep 30"], &dir)
+                .unwrap(),
+        );
+        assert!(execution.is_running() && terminal.has_session());
+
+        state.platform.close_project();
+        assert!(
+            !execution.is_running(),
+            "closing the project stops its task"
+        );
+        assert!(!terminal.has_session(), "and kills its shells");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn without_a_project_the_services_are_detached_and_reset_when_one_opens() {
+        let dir = temp("detached");
+        let mut state = IdeState::default();
+        let welcome = state.terminal();
+        welcome.state_mut().set_session(
+            archipel_ide_terminal::TerminalSession::spawn(
+                "/bin/sh",
+                &["-c", "sleep 30"],
+                std::path::Path::new("/tmp"),
+            )
+            .unwrap(),
+        );
+        assert!(state.terminal().has_session());
+        state.open_project(&dir).unwrap();
+        assert!(!welcome.has_session(), "a shell of the welcome screen ends");
+        assert!(!Arc::ptr_eq(&welcome, &state.terminal()));
+        assert!(!state.terminal().has_session(), "the project starts empty");
+        state.close_project().unwrap();
+        assert!(Arc::ptr_eq(&welcome, &state.terminal()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_task_that_exits_drives_the_build_window_and_the_status_bar() {
+        let mut state = IdeState::default();
+        state
+            .execution()
+            .start(
+                TaskPlan::new("job", "sh", ["-c", "echo hello; exit 2"], ".")
+                    .with_kind(archipel_ide_runner::TaskKind::Build),
+            )
+            .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !state.status.contains("failed with exit code 2")
+            && std::time::Instant::now() < deadline
+        {
+            state.poll_runner();
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(state.status, "job failed with exit code 2");
+        let execution = state.execution();
+        let window = execution.build_window();
+        let snapshot = window
+            .snapshot(crate::BuildTab::Output)
+            .expect("the Build tool window kept the finished run");
+        assert_eq!(snapshot.state, TaskState::Exited(2));
+        assert!(snapshot.console.lines().iter().any(|l| l.text == "hello"));
     }
 
     #[test]

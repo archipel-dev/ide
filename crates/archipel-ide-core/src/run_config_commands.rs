@@ -10,20 +10,25 @@ pub const CURRENT_FILE_LABEL: &str = "Current File";
 
 impl IdeState {
     pub(crate) fn load_run_configurations(&mut self) {
-        self.run_configurations = match &self.project {
+        let loaded = match &self.project {
             Some(project) => RunManager::load(project.root()),
             None => RunManager::default(),
         };
+        *self.execution().configurations_mut() = loaded;
     }
 
     /// Runs the named configuration (the selected one when `name` is `None`).
     pub fn run_configuration(&mut self, name: Option<&str>) -> Result<(), String> {
-        let config = match name {
-            Some(name) => self.run_configurations.get(name),
-            None => self.run_configurations.selected(),
-        }
-        .cloned()
-        .ok_or_else(|| "no run configuration is selected".to_owned())?;
+        let config = {
+            let execution = self.execution();
+            let configurations = execution.configurations();
+            match name {
+                Some(name) => configurations.get(name),
+                None => configurations.selected(),
+            }
+            .cloned()
+            .ok_or_else(|| "no run configuration is selected".to_owned())?
+        };
         let root = self
             .project
             .as_ref()
@@ -31,7 +36,7 @@ impl IdeState {
             .root()
             .to_owned();
         if name.is_some() {
-            self.run_configurations.select(&config.name)?;
+            self.execution().configurations_mut().select(&config.name)?;
         }
         let plan = self
             .build_systems
@@ -50,18 +55,20 @@ impl IdeState {
     pub fn run_temporary(&mut self, config: RunConfiguration) -> Result<(), String> {
         let name = config.name.clone();
         if self
-            .run_configurations
+            .execution()
+            .configurations()
             .get(&name)
             .is_none_or(|existing| existing.temporary)
         {
-            self.run_configurations.add_temporary(config);
+            self.execution().configurations_mut().add_temporary(config);
         }
         self.run_configuration(Some(&name))
     }
 
     /// Label of the run widget: the selected configuration, else `Current File`.
     pub fn run_widget_label(&self) -> Option<String> {
-        self.run_configurations
+        self.execution()
+            .configurations()
             .selected()
             .map(|config| config.name.clone())
             .or_else(|| {
@@ -94,12 +101,11 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |state: &IdeState| state.project.is_some(),
             |state: &mut IdeState, params| {
                 // The UI shell opens the Run/Debug Configurations dialog on its next frame.
-                state.edit_run_configurations = Some(
+                state.execution().request_edit_configurations(
                     params
                         .get("name")
                         .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_owned(),
+                        .unwrap_or_default(),
                 );
                 Ok(Value::Null)
             },
@@ -110,7 +116,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             spec("runConfig.list", "List Run Configurations", "Run", None, "{}"),
             |state: &IdeState| state.project.is_some(),
             |state: &mut IdeState, _| {
-                let manager = &state.run_configurations;
+                let execution = state.execution();
+                let manager = execution.configurations();
                 Ok(json!({
                     "configurations": manager.configurations().iter().map(configuration_json).collect::<Vec<_>>(),
                     "selected": manager.selected().map(|config| config.name.clone()),
@@ -129,11 +136,18 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"name":"string"}"#,
             ),
-            |state: &IdeState| !state.run_configurations.configurations().is_empty(),
+            |state: &IdeState| {
+                !state
+                    .execution()
+                    .configurations()
+                    .configurations()
+                    .is_empty()
+            },
             |state: &mut IdeState, params| {
                 let name = string_param(&params, "name")?;
                 state
-                    .run_configurations
+                    .execution()
+                    .configurations_mut()
                     .select(&name)
                     .map_err(CommandError::InvalidParams)?;
                 Ok(Value::Null)
@@ -151,7 +165,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             |state: &IdeState| state.project.is_some(),
             |state: &mut IdeState, _| {
-                state.run_configurations.clear_selection();
+                state.execution().configurations_mut().clear_selection();
                 Ok(Value::Null)
             },
         ))
@@ -167,8 +181,12 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             |state: &IdeState| {
                 state.project.is_some()
-                    && !state.runner.is_running()
-                    && !state.run_configurations.configurations().is_empty()
+                    && !state.execution().is_running()
+                    && !state
+                        .execution()
+                        .configurations()
+                        .configurations()
+                        .is_empty()
             },
             |state: &mut IdeState, params| {
                 let name = params
@@ -205,7 +223,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     .root()
                     .to_owned();
                 state
-                    .run_configurations
+                    .execution()
+                    .configurations_mut()
                     .save(&root, previous, config)
                     .map_err(CommandError::InvalidParams)?;
                 Ok(Value::Null)
@@ -221,7 +240,13 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"name":"string"}"#,
             ),
-            |state: &IdeState| !state.run_configurations.configurations().is_empty(),
+            |state: &IdeState| {
+                !state
+                    .execution()
+                    .configurations()
+                    .configurations()
+                    .is_empty()
+            },
             |state: &mut IdeState, params| {
                 let name = string_param(&params, "name")?;
                 let root = state
@@ -231,7 +256,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     .root()
                     .to_owned();
                 state
-                    .run_configurations
+                    .execution()
+                    .configurations_mut()
                     .delete(&root, &name)
                     .map_err(CommandError::Failed)?;
                 Ok(Value::Null)
@@ -250,7 +276,7 @@ mod tests {
 
     fn wait(state: &mut IdeState) {
         let deadline = Instant::now() + Duration::from_secs(10);
-        while state.runner.is_running() && Instant::now() < deadline {
+        while state.execution().is_running() && Instant::now() < deadline {
             state.poll_runner();
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -291,9 +317,10 @@ mod tests {
             .execute("run.project", &mut state, Value::Null)
             .unwrap();
         wait(&mut state);
-        assert_eq!(state.runner.state(), &TaskState::Exited(0));
+        assert_eq!(state.execution().runner().state(), &TaskState::Exited(0));
         let lines: Vec<_> = state
-            .runner
+            .execution()
+            .runner()
             .console()
             .lines()
             .iter()

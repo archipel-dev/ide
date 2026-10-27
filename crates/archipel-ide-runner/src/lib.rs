@@ -144,7 +144,9 @@ impl TaskPlan {
 
 struct ActiveTask {
     child: Arc<Mutex<Child>>,
-    output: Receiver<OutputChunk>,
+    /// Behind a mutex only so the task service is `Sync` (it can live in a shared service);
+    /// it is read from one thread at a time.
+    output: Mutex<Receiver<OutputChunk>>,
 }
 
 pub struct TaskService {
@@ -276,7 +278,10 @@ impl TaskService {
                 return Err(error.into());
             }
         }
-        Ok(ActiveTask { child, output })
+        Ok(ActiveTask {
+            child,
+            output: Mutex::new(output),
+        })
     }
 
     pub fn poll(&mut self) -> Result<(), RunnerError> {
@@ -284,7 +289,12 @@ impl TaskService {
             return Ok(());
         };
         let now = self.now();
-        let chunks: Vec<OutputChunk> = active.output.try_iter().collect();
+        let chunks: Vec<OutputChunk> = active
+            .output
+            .lock()
+            .map_err(|_| RunnerError::Lock)?
+            .try_iter()
+            .collect();
         let mut exited = None;
         if self.state == TaskState::Running {
             let mut child = active.child.lock().map_err(|_| RunnerError::Lock)?;
@@ -303,7 +313,11 @@ impl TaskService {
                 let mut rest = Vec::new();
                 loop {
                     let remaining = deadline.saturating_duration_since(Instant::now());
-                    match active.output.recv_timeout(remaining) {
+                    let received = match active.output.lock() {
+                        Ok(output) => output.recv_timeout(remaining),
+                        Err(_) => break,
+                    };
+                    match received {
                         Ok(chunk) => rest.push(chunk),
                         Err(_) => break,
                     }

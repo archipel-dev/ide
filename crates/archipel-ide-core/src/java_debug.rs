@@ -121,15 +121,15 @@ impl IdeState {
 
     /// Advances an in-flight Java debug start; called every frame by `poll_debug`.
     pub(crate) fn poll_java_debug(&mut self) {
-        let Some(mut pending) = self.debugger.java.take() else {
+        let Some(mut pending) = self.debugger().state_mut().java.take() else {
             return;
         };
         match self.step_java_debug(&mut pending) {
             Ok(true) => {}
-            Ok(false) => self.debugger.java = Some(pending),
+            Ok(false) => self.debugger().state_mut().java = Some(pending),
             Err(error) => {
                 self.status = error.clone();
-                self.debugger.error = Some(error);
+                self.debugger().state_mut().error = Some(error);
             }
         }
     }
@@ -139,7 +139,7 @@ impl IdeState {
         let anchor = pending.anchor.clone();
         match &pending.stage {
             JavaStage::Build if pending.attach => {
-                if !self.runner.is_running() {
+                if !self.execution().is_running() {
                     return Err(
                         "The Gradle test task ended before the test JVM was listening; see the Build window".into(),
                     );
@@ -148,7 +148,8 @@ impl IdeState {
             }
             JavaStage::AwaitListening => {
                 let port = self
-                    .runner
+                    .execution()
+                    .runner()
                     .output()
                     .iter()
                     .find_map(|chunk| parse_listening_port(&chunk.text));
@@ -174,7 +175,7 @@ impl IdeState {
                             Err(error) => return Err(plugin_hint(&error)),
                         }
                     }
-                    None if !self.runner.is_running() => {
+                    None if !self.execution().is_running() => {
                         return Err(
                             "The Gradle test task ended before the test JVM was listening".into(),
                         );
@@ -273,9 +274,7 @@ impl IdeState {
                     )
                     .map_err(|error| error.to_string())?;
                     self.seed_session(&mut client);
-                    self.debugger.name = pending.name.clone();
-                    self.debugger.client = Some(client);
-                    self.debugger.reset_revealed();
+                    self.debugger().attach_session(&pending.name, client);
                     self.tool_windows.show(crate::ToolWindow::Debug);
                     self.status = format!("Debugging {}", pending.name);
                     return Ok(true);

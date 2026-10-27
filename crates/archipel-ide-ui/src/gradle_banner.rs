@@ -7,7 +7,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
     if !app.state.gradle_changes_pending || !app.state.is_gradle_project() {
         return;
     }
-    let busy = app.state.runner.is_running();
+    let busy = app.state.execution().is_running();
     let mut action = None;
     egui::Frame::new()
         .fill(*theme::BANNER_WARNING)

@@ -77,7 +77,7 @@ struct Data<'a> {
 }
 
 fn data<'a>(
-    state: &'a archipel_ide_core::IdeState,
+    runner: &'a archipel_ide_runner::TaskService,
     snapshot: Option<&'a BuildSnapshot>,
 ) -> Option<Data<'a>> {
     match snapshot {
@@ -89,11 +89,11 @@ fn data<'a>(
             elapsed: snapshot.elapsed,
         }),
         None => Some(Data {
-            plan: state.runner.plan()?,
-            state: state.runner.state(),
-            events: state.runner.events(),
-            console: state.runner.console(),
-            elapsed: state.runner.elapsed(),
+            plan: runner.plan()?,
+            state: runner.state(),
+            events: runner.events(),
+            console: runner.console(),
+            elapsed: runner.elapsed(),
         }),
     }
 }
@@ -102,15 +102,19 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
     // Build and Sync results live in tabs of their own; Run and Test replace
     // the content like before.
     let live_tab = app.state.live_build_tab();
-    let tab = app.state.build_window.tab;
+    let tab = app.state.execution().build_window().tab;
     let tabbed = live_tab.is_some()
-        || (app.state.runner.plan().is_none()
-            && BuildTab::ALL
-                .iter()
-                .any(|tab| app.state.build_window.snapshot(*tab).is_some()));
+        || (app.state.execution().runner().plan().is_none()
+            && BuildTab::ALL.iter().any(|tab| {
+                app.state
+                    .execution()
+                    .build_window()
+                    .snapshot(*tab)
+                    .is_some()
+            }));
     let snapshot: Option<Arc<BuildSnapshot>> =
-        if tabbed && (live_tab != Some(tab) || app.state.runner.plan().is_none()) {
-            app.state.build_window.snapshot(tab)
+        if tabbed && (live_tab != Some(tab) || app.state.execution().runner().plan().is_none()) {
+            app.state.execution().build_window().snapshot(tab)
         } else {
             None
         };
@@ -118,7 +122,9 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
     let plan = if showing_other_tab && snapshot.is_none() {
         None
     } else {
-        data(&app.state, snapshot.as_deref()).map(|data| data.plan.clone())
+        let execution = app.state.execution();
+        let runner = execution.runner();
+        data(&runner, snapshot.as_deref()).map(|data| data.plan.clone())
     };
     let kind = plan.as_ref().map_or(TaskKind::Build, |plan| plan.kind);
     let title = match kind {
@@ -126,7 +132,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         TaskKind::Test => "Test",
         TaskKind::Sync | TaskKind::Build | TaskKind::Custom => "Build",
     };
-    let running = snapshot.is_none() && !showing_other_tab && app.state.runner.is_running();
+    let running = snapshot.is_none() && !showing_other_tab && app.state.execution().is_running();
     let hide = tool_window_header(ui, title, |ui| {
         // "Fix with AI" next to a failed build/run (AI Assistant).
         crate::ai_actions::build_link(app, ui);
@@ -229,7 +235,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
 
     let test_mode = snapshot.is_none()
         && kind == TaskKind::Test
-        && (running || !app.state.runner.tests().is_empty());
+        && (running || !app.state.execution().runner().tests().is_empty());
     if test_mode {
         let failed = app.commands.is_enabled("test.rerunFailed", &app.state);
         if toolbar
@@ -245,7 +251,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
 
     toolbar.add_space(4.0);
     let (wrap, scroll_end, clear) = (
-        app.state.build_window.soft_wrap,
+        app.state.execution().build_window().soft_wrap,
         "build.console.scrollToEnd",
         "build.console.clear",
     );
@@ -291,7 +297,9 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
             .auto_shrink([false, false])
             .show(&mut tree, |ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
-                let Some(shown) = data(&app.state, snapshot.as_deref()) else {
+                let execution = app.state.execution();
+                let runner = execution.runner();
+                let Some(shown) = data(&runner, snapshot.as_deref()) else {
                     return;
                 };
                 let state = shown.state.clone();
@@ -448,7 +456,9 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
             }
             None => {
                 let options = console_options(app);
-                if let Some(shown) = data(&app.state, snapshot.as_deref()) {
+                let execution = app.state.execution();
+                let runner = execution.runner();
+                if let Some(shown) = data(&runner, snapshot.as_deref()) {
                     action = console_view(
                         &mut console,
                         &shown,
@@ -462,7 +472,9 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         }
     } else {
         let options = console_options(app);
-        if let Some(shown) = data(&app.state, snapshot.as_deref()) {
+        let execution = app.state.execution();
+        let runner = execution.runner();
+        if let Some(shown) = data(&runner, snapshot.as_deref()) {
             action = console_view(
                 &mut console,
                 &shown,
@@ -610,7 +622,8 @@ struct ConsoleOptions {
 }
 
 fn console_options(app: &mut IdeApp) -> ConsoleOptions {
-    let window = &mut app.state.build_window;
+    let execution = app.state.execution();
+    let mut window = execution.build_window_mut();
     ConsoleOptions {
         soft_wrap: window.soft_wrap,
         scroll_to_end: window.take_scroll_to_end(),

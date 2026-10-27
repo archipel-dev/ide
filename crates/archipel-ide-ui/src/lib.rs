@@ -739,9 +739,9 @@ impl IdeApp {
                 egui::Popup::close_all(ctx);
             } else if gutter_popup::is_open(ctx) {
                 gutter_popup::close(ctx);
-            } else if self.state.debugger.evaluate_dialog.is_some() {
+            } else if self.state.debugger().state().evaluate_dialog.is_some() {
                 self.dispatch("debug.closeEvaluateDialog", Value::Null);
-            } else if self.state.debugger.editing_breakpoint.is_some() {
+            } else if self.state.debugger().state().editing_breakpoint.is_some() {
                 self.dispatch("debug.closeBreakpointEditor", Value::Null);
             } else if self.menu_bar_open {
                 self.menu_bar_open = false;
@@ -1041,12 +1041,10 @@ impl IdeApp {
             self.control_after_frame(ctx);
             return;
         }
-        if self.state.search.is_running() || self.state.runner.is_running() {
+        if self.state.search.is_running() || self.state.execution().is_running() {
             ctx.request_repaint_after(Duration::from_millis(50));
         }
-        self.state.poll_background_terminals();
-        if let Some(terminal) = self.state.terminal.as_mut() {
-            terminal.poll();
+        if self.state.poll_terminals() {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
         // Like the reference IDE, save all files when the window loses focus.
@@ -1130,7 +1128,7 @@ impl IdeApp {
         settings_dialog::show(self, ctx);
         android_sdk::show(self, ctx);
         ai_chat::diff_preview(self, ctx);
-        if let Some(focus) = self.state.edit_run_configurations.take() {
+        if let Some(focus) = self.state.execution().take_edit_configurations_request() {
             run_config_dialog::open(self, ctx, Some(focus.as_str()).filter(|f| !f.is_empty()));
         }
         run_config_dialog::show(self, ctx);

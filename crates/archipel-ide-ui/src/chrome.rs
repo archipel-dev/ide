@@ -213,7 +213,7 @@ fn vcs_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
 }
 
 fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let running = app.state.runner.is_running();
+    let running = app.state.execution().is_running();
     // Right-to-left layout: rightmost item first.
     if running
         && icons::button_colored(
@@ -287,7 +287,7 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
             "Run 'app' ({})",
             app.action_shortcut("Run").unwrap_or_default()
         ),
-        _ if app.state.run_configurations.selected().is_some() => {
+        _ if app.state.execution().configurations().selected().is_some() => {
             format!(
                 "Run '{}' ({})",
                 app.state.run_widget_label().unwrap_or_default(),
@@ -326,17 +326,19 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
             ui.set_min_width(240.0);
             let selected = app
                 .state
-                .run_configurations
+                .execution()
+                .configurations()
                 .selected()
                 .map(|config| config.name.clone());
             let names: Vec<(String, bool)> = app
                 .state
-                .run_configurations
+                .execution()
+                .configurations()
                 .configurations()
                 .iter()
                 .map(|config| (config.name.clone(), config.temporary))
                 .collect();
-            let idle = !app.state.runner.is_running();
+            let idle = !app.state.execution().is_running();
             // `Current File` runs the entry point or test at the caret.
             let clicked = run_row(ui, "Current File", false, selected.is_none(), false);
             if clicked == RowAction::Select {
@@ -627,7 +629,7 @@ pub(crate) fn stripe_button(app: &mut IdeApp, ui: &mut egui::Ui, window: ToolWin
             badge = Some(theme::WARNING);
         }
     }
-    if window == ToolWindow::Build && app.state.runner.is_running() {
+    if window == ToolWindow::Build && app.state.execution().is_running() {
         badge = Some(theme::RUN_GREEN);
     }
     if window == ToolWindow::Agents {
@@ -988,7 +990,7 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                             app.state.notifications().show_update_balloon();
                         }
                     }
-                    if app.state.runner.is_running() || app.state.search.is_running() {
+                    if app.state.execution().is_running() || app.state.search.is_running() {
                         widgets::busy_spinner(ui, 12.0, *theme::ACCENT);
                         ui.add_space(6.0);
                     }

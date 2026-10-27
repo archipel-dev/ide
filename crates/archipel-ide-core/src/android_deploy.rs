@@ -111,7 +111,7 @@ impl IdeState {
 
     /// Run 'app': builds the debug APK with Gradle, then installs and launches it.
     pub fn run_android_app(&mut self, serial: Option<String>) -> Result<(), String> {
-        if self.runner.is_running() || self.android.deploy.is_busy() {
+        if self.execution().is_running() || self.android.deploy.is_busy() {
             return Err("A build or deploy is already running.".into());
         }
         let serial = self.deploy_target(serial)?;
@@ -133,7 +133,7 @@ impl IdeState {
             env: Vec::new(),
             kind: archipel_ide_runner::TaskKind::Build,
         };
-        self.runner.start(task).map_err(|e| e.to_string())?;
+        self.execution().start(task).map_err(|e| e.to_string())?;
         self.tool_windows.show(ToolWindow::Build);
         let deploy = &mut self.android.deploy;
         deploy.log = vec![format!(
@@ -246,10 +246,10 @@ impl IdeState {
     /// Advances a pending Run after its Gradle build and drains deploy events.
     pub(crate) fn poll_deploy(&mut self) -> bool {
         let mut changed = false;
-        if self.android.deploy.pending.is_some() && !self.runner.is_running() {
+        if self.android.deploy.pending.is_some() && !self.execution().is_running() {
             changed = true;
             let (plan, root) = self.android.deploy.pending.take().expect("pending deploy");
-            match self.runner.state().clone() {
+            match self.execution().runner().state().clone() {
                 TaskState::Exited(0) => {
                     if let Err(error) =
                         self.start_deploy_job(plan, &root, None, Steps::InstallAndLaunch)
@@ -315,7 +315,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"serial":"string?"}"#,
             ),
-            |state: &IdeState| state.android.project.is_some() && !state.runner.is_running(),
+            |state: &IdeState| state.android.project.is_some() && !state.execution().is_running(),
             |state: &mut IdeState, params| {
                 state
                     .run_android_app(serial_param(&params))
@@ -540,7 +540,8 @@ mod tests {
             "{log}"
         );
         let output: String = state
-            .runner
+            .execution()
+            .runner()
             .output()
             .iter()
             .map(|c| c.text.clone())

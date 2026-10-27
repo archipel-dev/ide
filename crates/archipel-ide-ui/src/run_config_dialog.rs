@@ -310,24 +310,21 @@ pub fn is_open(ctx: &egui::Context) -> bool {
 
 /// Opens the dialog with the project's configurations (selecting `focus` if given).
 pub fn open(app: &IdeApp, ctx: &egui::Context, focus: Option<&str>) {
-    let drafts: Vec<Draft> = app
-        .state
-        .run_configurations
+    let execution = app.state.execution();
+    let configurations = execution.configurations();
+    let drafts: Vec<Draft> = configurations
         .configurations()
         .iter()
         .map(Draft::from_config)
         .collect();
-    let focus = focus.or(app
-        .state
-        .run_configurations
-        .selected()
-        .map(|c| c.name.as_str()));
+    let focus = focus.or(configurations.selected().map(|c| c.name.as_str()));
     let selected = focus
         .and_then(|name| drafts.iter().position(|draft| draft.name == name))
         .unwrap_or(0);
     let error = app
         .state
-        .run_configurations
+        .execution()
+        .configurations()
         .errors
         .first()
         .map(|(path, error)| format!("Skipped {}: {error}", path.display()));
@@ -418,7 +415,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                 {
                     outcome = Outcome::Close;
                 }
-                let run_enabled = !state.drafts.is_empty() && !app.state.runner.is_running();
+                let run_enabled = !state.drafts.is_empty() && !app.state.execution().is_running();
                 if ui
                     .add_enabled(run_enabled, egui::Button::new("▶ Run"))
                     .on_hover_text("Save and run the selected configuration")

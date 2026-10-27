@@ -2,11 +2,19 @@ use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system}
 use std::{
     io::{Read, Write},
     path::Path,
-    sync::mpsc::{self, Receiver, SyncSender},
+    sync::{
+        Mutex, PoisonError,
+        mpsc::{self, Receiver, SyncSender},
+    },
     thread,
 };
 use thiserror::Error;
 pub use vt100::{Color, Screen};
+
+/// Exclusive access to the value of a mutex that nobody else can lock (`&mut` proves it).
+fn exclusive<T>(mutex: &mut Mutex<T>) -> &mut T {
+    mutex.get_mut().unwrap_or_else(PoisonError::into_inner)
+}
 
 #[derive(Default)]
 struct Replies(Vec<u8>);
@@ -55,11 +63,13 @@ pub enum TerminalError {
 }
 
 pub struct TerminalSession {
-    master: Box<dyn MasterPty + Send>,
+    /// The `Mutex` wrappers only make the session `Sync` (so a service can share it); every use
+    /// has `&mut self` and goes through `get_mut`, so no lock is ever taken.
+    master: Mutex<Box<dyn MasterPty + Send>>,
     writer: SyncSender<Vec<u8>>,
-    writer_errors: Receiver<String>,
+    writer_errors: Mutex<Receiver<String>>,
     child: Box<dyn Child + Send + Sync>,
-    output: Receiver<Vec<u8>>,
+    output: Mutex<Receiver<Vec<u8>>>,
     transcript: String,
     parser: vt100::Parser<Replies>,
     error: Option<String>,
@@ -141,11 +151,11 @@ impl TerminalSession {
                 TerminalError::Io(error)
             })?;
         Ok(Self {
-            master: pair.master,
+            master: Mutex::new(pair.master),
             writer: input,
-            writer_errors,
+            writer_errors: Mutex::new(writer_errors),
             child,
-            output,
+            output: Mutex::new(output),
             transcript: String::new(),
             parser: vt100::Parser::new_with_callbacks(24, 100, 2000, Replies::default()),
             error: None,
@@ -176,7 +186,7 @@ impl TerminalSession {
         if self.parser.screen().size() == (rows, cols) {
             return Ok(());
         }
-        self.master
+        exclusive(&mut self.master)
             .resize(PtySize {
                 rows: rows.max(1),
                 cols: cols.max(1),
@@ -217,7 +227,7 @@ impl TerminalSession {
 
     pub fn poll(&mut self) -> &str {
         // A continuously producing child must not monopolize the UI frame.
-        for bytes in self.output.try_iter().take(16) {
+        for bytes in exclusive(&mut self.output).try_iter().take(16) {
             self.parser.process(&bytes);
         }
         let replies = std::mem::take(&mut self.parser.callbacks_mut().0);
@@ -226,7 +236,7 @@ impl TerminalSession {
         {
             self.error = Some(error.to_string());
         }
-        if let Ok(error) = self.writer_errors.try_recv() {
+        if let Ok(error) = exclusive(&mut self.writer_errors).try_recv() {
             self.error = Some(error);
         }
         self.transcript = self.parser.screen().contents();

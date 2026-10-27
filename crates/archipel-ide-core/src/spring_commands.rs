@@ -30,7 +30,7 @@ pub enum RefreshStatus {
 impl IdeState {
     /// Starts fetching Boot versions and starters from `url` on a worker thread.
     pub fn refresh_spring_catalog(&mut self, url: &str) -> Result<(), String> {
-        if self.spring.refresh.is_some() {
+        if self.spring().state().refresh.is_some() {
             return Err("a refresh is already running".into());
         }
         let (sender, receiver) = mpsc::channel();
@@ -41,14 +41,18 @@ impl IdeState {
                 let _ = sender.send(spring_catalog::fetch_remote(&url));
             })
             .map_err(|error| format!("cannot start the refresh: {error}"))?;
-        self.spring.refresh = Some(receiver);
-        self.spring.refresh_status = Some(RefreshStatus::Running);
+        let spring = self.spring();
+        let mut state = spring.state();
+        state.refresh = Some(receiver);
+        state.refresh_status = Some(RefreshStatus::Running);
         Ok(())
     }
 
     /// Installs a finished refresh. Returns whether the catalog or status changed.
     pub fn poll_spring_catalog(&mut self) -> bool {
-        let Some(receiver) = &self.spring.refresh else {
+        let spring = self.spring();
+        let mut state = spring.state();
+        let Some(receiver) = &state.refresh else {
             return false;
         };
         let outcome = match receiver.try_recv() {
@@ -56,10 +60,10 @@ impl IdeState {
             Err(mpsc::TryRecvError::Empty) => return false,
             Err(mpsc::TryRecvError::Disconnected) => Err("the refresh was interrupted".into()),
         };
-        self.spring.refresh = None;
-        self.spring.refresh_status = Some(match outcome {
+        state.refresh = None;
+        state.refresh_status = Some(match outcome {
             Ok(remote) => RefreshStatus::Done {
-                added: self.spring.catalog.merge_remote(&remote),
+                added: state.catalog.merge_remote(&remote),
             },
             Err(error) => RefreshStatus::Failed(error),
         });
@@ -79,7 +83,9 @@ fn text(params: &Value, key: &str, default: &str) -> String {
 /// Project kind for `project.create` with `kind = "spring-boot"`.
 pub(crate) fn project_kind(state: &IdeState, params: &Value) -> Result<ProjectKind, CommandError> {
     let invalid = |message: String| CommandError::InvalidParams(message);
-    let catalog = &state.spring.catalog;
+    let spring = state.spring();
+    let spring = spring.state();
+    let catalog = &spring.catalog;
     let language = match text(params, "language", "java").as_str() {
         "java" => Language::Java,
         "kotlin" => Language::Kotlin,
@@ -147,7 +153,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"url":"string?"}"#,
             ),
-            |state: &IdeState| state.spring.refresh.is_none(),
+            |state: &IdeState| state.spring().state().refresh.is_none(),
             |state: &mut IdeState, params| {
                 let url = text(&params, "url", spring_catalog::INITIALIZR_URL);
                 state
@@ -215,7 +221,7 @@ mod tests {
     fn refresh_merges_versions_and_new_starters_from_the_service() {
         let commands = built_in_commands();
         let mut state = IdeState::default();
-        let before = state.spring.catalog.dependencies.len();
+        let before = state.spring().state().catalog.dependencies.len();
         commands
             .execute(
                 "spring.catalog.refresh",
@@ -226,11 +232,17 @@ mod tests {
         assert!(!commands.is_enabled("spring.catalog.refresh", &state));
         wait(&mut state);
         assert_eq!(
-            state.spring.refresh_status,
+            state.spring().state().refresh_status,
             Some(RefreshStatus::Done { added: 1 })
         );
-        assert_eq!(state.spring.catalog.dependencies.len(), before + 1);
-        assert_eq!(state.spring.catalog.boot_versions, ["4.2.0", "4.1.2"]);
+        assert_eq!(
+            state.spring().state().catalog.dependencies.len(),
+            before + 1
+        );
+        assert_eq!(
+            state.spring().state().catalog.boot_versions,
+            ["4.2.0", "4.1.2"]
+        );
         assert!(commands.is_enabled("spring.catalog.refresh", &state));
     }
 
@@ -238,7 +250,7 @@ mod tests {
     fn an_unreachable_service_keeps_the_built_in_catalog() {
         let commands = built_in_commands();
         let mut state = IdeState::default();
-        let before = state.spring.catalog.clone();
+        let before = state.spring().state().catalog.clone();
         commands
             .execute(
                 "spring.catalog.refresh",
@@ -248,10 +260,10 @@ mod tests {
             .unwrap();
         wait(&mut state);
         assert!(matches!(
-            state.spring.refresh_status,
+            state.spring().state().refresh_status,
             Some(RefreshStatus::Failed(_))
         ));
-        assert_eq!(state.spring.catalog, before);
+        assert_eq!(state.spring().state().catalog, before);
     }
 
     #[test]

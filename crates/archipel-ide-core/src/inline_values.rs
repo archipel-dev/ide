@@ -158,7 +158,9 @@ impl IdeState {
     /// Locals of the suspended frame as `(name, value)`, from the first scope that has
     /// variables loaded (Locals before Globals/Registers).
     fn frame_locals(&self) -> Vec<(String, String)> {
-        let Some(client) = self.debugger.client.as_ref() else {
+        let debugger = self.debugger();
+        let state = debugger.state();
+        let Some(client) = state.client.as_ref() else {
             return Vec::new();
         };
         let session = client.session();
@@ -182,10 +184,13 @@ impl IdeState {
     /// Inline value hints for the document at `path` (project-relative) while suspended
     /// in it; empty otherwise.
     pub fn inline_values(&self, path: &Path) -> Vec<InlineValue> {
-        let Some(client) = self.debugger.client.as_ref() else {
-            return Vec::new();
-        };
-        if !matches!(client.session().state(), SessionState::Stopped { .. }) {
+        let stopped = self
+            .debugger()
+            .state()
+            .client
+            .as_ref()
+            .is_some_and(|client| matches!(client.session().state(), SessionState::Stopped { .. }));
+        if !stopped {
             return Vec::new();
         }
         let Some(point) = self.execution_point() else {

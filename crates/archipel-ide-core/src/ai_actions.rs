@@ -43,8 +43,8 @@ impl IdeState {
 
     /// The failed build/run command, if the last task failed.
     fn failed_task(&self) -> Option<String> {
-        match self.runner.state() {
-            TaskState::Exited(code) if *code != 0 => self.runner.plan().map(|plan| {
+        match self.execution().runner().state() {
+            TaskState::Exited(code) if *code != 0 => self.execution().runner().plan().map(|plan| {
                 format!("{} {}", plan.program, plan.args.join(" "))
                     .trim()
                     .to_owned()
@@ -77,7 +77,8 @@ impl IdeState {
                     return Err("this project does not share file contents with AI".into());
                 }
                 let output: String = self
-                    .runner
+                    .execution()
+                    .runner()
                     .output()
                     .iter()
                     .map(|c| c.text.as_str())
@@ -348,7 +349,7 @@ mod tests {
         let script =
             "echo 'error[E0308]: mismatched types' >&2; echo ' --> src/main.rs:1:13' >&2; exit 101";
         state
-            .runner
+            .execution()
             .start(TaskPlan {
                 name: "Cargo Build".into(),
                 program: "sh".into(),
@@ -359,13 +360,19 @@ mod tests {
             })
             .unwrap();
         let deadline = Instant::now() + Duration::from_secs(10);
-        while state.runner.is_running() {
+        while state.execution().is_running() {
             assert!(Instant::now() < deadline);
             state.poll_runner();
             std::thread::sleep(Duration::from_millis(5));
         }
         // Reader threads may deliver output after the exit status.
-        while !state.runner.output().iter().any(|c| c.text.contains("-->")) {
+        while !state
+            .execution()
+            .runner()
+            .output()
+            .iter()
+            .any(|c| c.text.contains("-->"))
+        {
             assert!(Instant::now() < deadline, "output did not arrive");
             state.poll_runner();
             std::thread::sleep(Duration::from_millis(5));

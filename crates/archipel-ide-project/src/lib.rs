@@ -455,6 +455,93 @@ impl Project {
         };
         fs::write(path, text).map_err(ProjectError::from)
     }
+
+    /// The document save path's write (PLAT-SAVE-012, PLAT-SAVE-078): refuses a read-only file
+    /// whatever the user id is, and in [`WriteMode::Safe`] writes a temporary sibling that
+    /// replaces the target only after it was written completely, so a write that fails part way
+    /// leaves the previous content intact.
+    pub fn write_document_text(
+        &self,
+        relative: &Path,
+        text: &str,
+        mode: WriteMode,
+    ) -> Result<(), ProjectError> {
+        self.write_document_with(relative, text.as_bytes(), mode, &mut |file, bytes| {
+            use std::io::Write;
+            file.write_all(bytes)
+        })
+    }
+
+    /// [`Self::write_document_text`] with the byte sink injected, so tests can fail a write at
+    /// 50 percent.
+    pub fn write_document_with(
+        &self,
+        relative: &Path,
+        bytes: &[u8],
+        mode: WriteMode,
+        sink: &mut dyn FnMut(&mut fs::File, &[u8]) -> std::io::Result<()>,
+    ) -> Result<(), ProjectError> {
+        let existing = self.root.join(relative).symlink_metadata().is_ok();
+        let path = if existing {
+            self.checked(relative)?
+        } else {
+            let path = self.checked_new(relative)?;
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            path
+        };
+        let original = fs::metadata(&path).ok();
+        if original
+            .as_ref()
+            .is_some_and(|m| m.permissions().readonly())
+        {
+            return Err(ProjectError::from(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                format!("{} is read-only", relative.display()),
+            )));
+        }
+        match (mode, original) {
+            (WriteMode::Safe, Some(original)) => {
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let temporary = path
+                    .with_file_name(format!(".{name}.archipel-save-{}.tmp", std::process::id()));
+                let written = (|| -> std::io::Result<()> {
+                    let mut file = fs::OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .open(&temporary)?;
+                    sink(&mut file, bytes)?;
+                    file.sync_all()?;
+                    drop(file);
+                    fs::set_permissions(&temporary, original.permissions())?;
+                    fs::rename(&temporary, &path)
+                })();
+                if let Err(error) = written {
+                    let _ = fs::remove_file(&temporary);
+                    return Err(error.into());
+                }
+                Ok(())
+            }
+            _ => {
+                let mut file = fs::File::create(&path)?;
+                sink(&mut file, bytes).map_err(ProjectError::from)
+            }
+        }
+    }
+}
+
+/// How a document save writes a file (PLAT-SAVE-012).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WriteMode {
+    /// Write a temporary sibling, then replace the target ("Back up files before saving").
+    #[default]
+    Safe,
+    /// Overwrite the target in place.
+    InPlace,
 }
 
 /// Recursive copy that skips symlinks (they could point outside the project).
@@ -657,6 +744,71 @@ mod tests {
                 .move_into(Path::new("../x"), Path::new("b"))
                 .is_err()
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// PLAT-SAVE-012: a write that fails at 50 percent leaves the original bytes with the safe
+    /// write and no temporary file behind; the in-place write may truncate.
+    #[test]
+    fn plat_save_012_safe_write_survives_a_failing_writer() {
+        let root = std::env::temp_dir().join(format!("plat-save-012-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("a.txt"), "original content").unwrap();
+        let project = Project::open(&root).unwrap();
+        let half = |file: &mut fs::File, bytes: &[u8]| {
+            use std::io::Write;
+            file.write_all(&bytes[..bytes.len() / 2])?;
+            Err(std::io::Error::other("disk full"))
+        };
+        let new = b"replacement that is longer";
+        let error = project
+            .write_document_with(Path::new("a.txt"), new, WriteMode::Safe, &mut { half })
+            .unwrap_err();
+        assert!(error.to_string().contains("disk full"));
+        assert_eq!(
+            fs::read_to_string(root.join("a.txt")).unwrap(),
+            "original content"
+        );
+        let leftovers = fs::read_dir(&root).unwrap().count();
+        assert_eq!(leftovers, 1, "the temporary sibling is removed");
+        // Without the option the file is overwritten in place and is left truncated.
+        let _ =
+            project.write_document_with(Path::new("a.txt"), new, WriteMode::InPlace, &mut { half });
+        assert_eq!(
+            fs::read_to_string(root.join("a.txt")).unwrap(),
+            "replacement t"
+        );
+        // A complete safe write replaces the content and keeps the permissions.
+        project
+            .write_document_text(Path::new("a.txt"), "done", WriteMode::Safe)
+            .unwrap();
+        assert_eq!(fs::read_to_string(root.join("a.txt")).unwrap(), "done");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// PLAT-SAVE-078: the writable flag is honored for every user id and both modes.
+    #[test]
+    fn plat_save_078_read_only_files_are_refused() {
+        let root = std::env::temp_dir().join(format!("plat-save-078-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let file = root.join("ro.txt");
+        fs::write(&file, "keep").unwrap();
+        let mut permissions = fs::metadata(&file).unwrap().permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(&file, permissions.clone()).unwrap();
+        let project = Project::open(&root).unwrap();
+        for mode in [WriteMode::Safe, WriteMode::InPlace] {
+            let error = project
+                .write_document_text(Path::new("ro.txt"), "new", mode)
+                .unwrap_err();
+            assert!(error.to_string().contains("read-only"), "{error}");
+        }
+        assert_eq!(fs::read_to_string(&file).unwrap(), "keep");
+        #[allow(clippy::permissions_set_readonly_false)]
+        permissions.set_readonly(false);
+        fs::set_permissions(&file, permissions).unwrap();
         fs::remove_dir_all(root).unwrap();
     }
 }

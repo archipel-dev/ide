@@ -29,6 +29,7 @@ const SETS: &[(&str, &str)] = &[
     ("CI", "Code insight"),
     ("BLD", "Build"),
     ("EXE", "Execution"),
+    ("VCS", "Version control"),
     ("WB", "Workbench"),
 ];
 /// Pre-spec ID areas from `docs/spec/features/` that still appear in evidence files.

@@ -1,0 +1,12 @@
+module(name = "demo", version = "0.0.1")
+
+bazel_dep(name = "rules_java", version = "8.6.1")
+bazel_dep(name = "rules_jvm_external", version = "6.4")
+
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.install(
+    artifacts = [
+        "org.springframework.boot:spring-boot-starter-web:3.3.4",
+    ],
+)
+use_repo(maven, "maven")

@@ -1,0 +1,361 @@
+# Evidence for spec requirements implemented before the specs existed (Phases 1-3: platform
+# kernel, project model, daemon, LSP external pass, Alt+Enter list, inspections, index, dumb
+# mode). Code that is written against the specs references IDs directly and needs no entry here.
+#
+# Rules (checked by `cargo run -p xtask -- spec-coverage --check`):
+# - `status` is `implemented` or `partial`; a requirement that is not listed and not referenced
+#   from code is `missing`.
+# - `implemented` means the requirement text and its acceptance criterion are met and a test
+#   exercises that behaviour. Anything weaker, or any known deviation from the spec, is `partial`
+#   with the gap named in `note`. When in doubt, `partial`.
+# - Every entry names at least one `code` path and one `test` path; the tool verifies that they
+#   exist. `ids` may use ranges (`PLAT-SCOPE-010..012`) that expand to the defined IDs.
+# - Each ID may appear in one entry only.
+
+# ---------------------------------------------------------------------------------------------
+# Code insight: daemon (CI-DMN)
+# ---------------------------------------------------------------------------------------------
+
+[[override]]
+ids = ["CI-DMN-020"]
+status = "implemented"
+code = ["crates/archipel-ide-daemon/src/scheduler.rs"]
+test = ["crates/archipel-ide-daemon/tests/daemon_flow.rs"]
+note = "visible-first runs apply before the rest (passes_run_visible_range_first_and_respect_prerequisites); the 20k-line progress figure is not measured"
+
+[[override]]
+ids = ["CI-DMN-032", "CI-INS-092"]
+status = "implemented"
+code = ["crates/archipel-ide-daemon/src/daemon.rs", "crates/archipel-ide-daemon/src/inspection/suppress.rs"]
+test = ["crates/archipel-ide-daemon/tests/alert.rs"]
+note = "every edit re-runs the whole file (a superset of the enclosing scope); adding the comment removes the warning in one cycle (suppression_from_the_popup_silences_the_problem_after_reanalysis)"
+
+[[override]]
+ids = ["CI-DMN-040"]
+status = "implemented"
+code = ["crates/archipel-ide-daemon/src/scheduler.rs", "crates/archipel-ide-analysis/src/cancel.rs"]
+test = ["crates/archipel-ide-daemon/tests/daemon_flow.rs"]
+note = "typing_cancels_in_flight_passes_and_never_blocks_the_edit_thread runs a 10 s pass that polls cancellation"
+
+[[override]]
+ids = ["CI-DMN-042"]
+status = "implemented"
+code = ["crates/archipel-ide-daemon/src/daemon.rs"]
+test = ["crates/archipel-ide-daemon/src/scheduler.rs", "crates/archipel-ide-daemon/tests/daemon_flow.rs"]
+note = "a cancelled run is never applied (Err(Cancelled) in Daemon::finish); stale completions change no scheduler state"
+
+[[override]]
+ids = ["CI-DMN-050", "CI-DMN-051", "CI-DMN-052", "CI-DMN-054", "CI-DMN-055"]
+status = "implemented"
+code = ["crates/archipel-ide-daemon/src/markup.rs"]
+test = ["crates/archipel-ide-daemon/src/markup.rs", "crates/archipel-ide-daemon/tests/markup_props.rs", "crates/archipel-ide-daemon/tests/daemon_flow.rs"]
+note = "per-tool replace, recycled infos, edit shifting, caps of 1000 per tool and 2000 per file with a file-level surplus marker"
+
+[[override]]
+ids = ["CI-DMN-072"]
+status = "implemented"
+code = ["crates/archipel-ide-daemon/src/scheduler.rs"]
+test = ["crates/archipel-ide-daemon/src/scheduler.rs"]
+note = "caret_moves_only_restart_caret_passes_with_a_short_delay"
+
+[[override]]
+ids = ["CI-DMN-001"]
+status = "partial"
+code = ["crates/archipel-ide-daemon/src/scheduler.rs"]
+test = ["crates/archipel-ide-daemon/tests/daemon_flow.rs"]
+note = "only the after-completion relation exists; there is no after-start relation"
+
+[[override]]
+ids = ["CI-DMN-011"]
+status = "partial"
+code = ["crates/archipel-ide-daemon/src/daemon.rs", "crates/archipel-ide-daemon/src/passes.rs"]
+test = ["crates/archipel-ide-daemon/tests/daemon_flow.rs"]
+note = "collect on a worker, apply on the frame tick; no frame-budget assertion on the apply step"
+
+[[override]]
+ids = ["CI-DMN-053", "CI-DMN-095"]
+status = "partial"
+code = ["crates/archipel-ide-daemon/src/daemon.rs", "crates/archipel-ide-daemon/src/markup.rs"]
+test = ["crates/archipel-ide-daemon/src/markup.rs"]
+note = "non-aware passes are dropped while dumb and per-tool markup keeps their old results, but no test enters dumb mode with the daemon running"
+
+[[override]]
+ids = ["CI-DMN-062", "CI-DMN-070"]
+status = "partial"
+code = ["crates/archipel-ide-daemon/src/scheduler.rs"]
+test = ["crates/archipel-ide-daemon/src/scheduler.rs", "crates/archipel-ide-daemon/tests/daemon_flow.rs"]
+note = "300 ms default debounce that every edit restarts, first run of an opened file without delay; the 0-3000 ms setting range and a 1000-requests test are missing"
+
+[[override]]
+ids = ["CI-DMN-096"]
+status = "partial"
+code = ["crates/archipel-ide-daemon/src/external.rs"]
+test = ["crates/archipel-ide-daemon/tests/external_diagnostics.rs"]
+note = "LSP diagnostics enter through the external contract, but results for an older revision are mapped through the edits instead of dropped"
+
+[[override]]
+ids = ["CI-DMN-140"]
+status = "partial"
+code = ["crates/archipel-ide-daemon/src/service.rs"]
+test = ["crates/archipel-ide-daemon/tests/common/mod.rs"]
+note = "markup and pass stats are queryable and the harness settles without sleeping; no pass graph dump and no cancel reasons"
+
+# ---------------------------------------------------------------------------------------------
+# Code insight: highlight info (CI-HLI)
+# ---------------------------------------------------------------------------------------------
+
+[[override]]
+ids = ["CI-HLI-020"]
+status = "implemented"
+code = ["crates/archipel-ide-analysis/src/highlight.rs"]
+test = ["crates/archipel-ide-analysis/src/highlight.rs"]
+note = "severity_are_ordered_like_intellij; values 10/11/100/200/300/400"
+
+[[override]]
+ids = ["CI-HLI-002", "CI-HLI-071"]
+status = "partial"
+code = ["crates/archipel-ide-daemon/src/markup.rs", "crates/archipel-ide-daemon/src/stripe.rs"]
+test = ["crates/archipel-ide-daemon/src/markup.rs", "crates/archipel-ide-daemon/src/stripe.rs"]
+note = "infos follow edits; fix ranges are not separate markers; stripe buckets by worst severity but has no minimum-height setting"
+
+# ---------------------------------------------------------------------------------------------
+# Code insight: inspections (CI-INS)
+# ---------------------------------------------------------------------------------------------
+
+[[override]]
+ids = ["CI-INS-051"]
+status = "implemented"
+code = ["crates/archipel-ide-daemon/src/inspection/profile.rs", "crates/archipel-ide-daemon/src/passes.rs"]
+test = ["crates/archipel-ide-daemon/tests/daemon_flow.rs"]
+note = "profile_changes_reanalyze_open_files"
+
+[[override]]
+ids = ["CI-INS-061"]
+status = "implemented"
+code = ["crates/archipel-ide-daemon/src/inspection/profile.rs"]
+test = ["crates/archipel-ide-daemon/src/inspection/profile.rs"]
+note = "profiles are TOML files holding only overrides of the base; lossless round trip and pruning of empty entries"
+
+[[override]]
+ids = ["CI-INS-060", "CI-INS-062", "CI-INS-070", "CI-INS-071"]
+status = "partial"
+code = ["crates/archipel-ide-daemon/src/inspection/profile.rs"]
+test = ["crates/archipel-ide-daemon/src/inspection/profile.rs"]
+note = "base chain, per-scope enabled/level, first matching scope wins, Default and Project Default; no per-scope option copies, predefined scope names differ (all, production, tests, generated, glob), no end-to-end effective-state test for main vs test files"
+
+[[override]]
+ids = ["CI-INS-090", "CI-INS-091", "CI-INS-093"]
+status = "partial"
+code = ["crates/archipel-ide-daemon/src/inspection/suppress.rs", "crates/archipel-ide-daemon/src/intention/alert.rs"]
+test = ["crates/archipel-ide-daemon/src/inspection/suppress.rs", "crates/archipel-ide-daemon/tests/alert.rs"]
+note = "comment above, @SuppressWarnings and file-level forms with Suppress for statement/declaration/file rows; a trailing comment also suppresses (the spec forbids it); no Kotlin @Suppress; no per-member-kind rows"
+
+[[override]]
+ids = ["CI-INS-054"]
+status = "partial"
+code = ["crates/archipel-ide-daemon/src/inspection/engine.rs", "crates/archipel-ide-daemon/src/inspection/kinds.rs"]
+test = ["crates/archipel-ide-daemon/src/inspection/kinds.rs"]
+note = "tools are dispatched by element kind; no instrumented test that a tool sees only its kinds"
+
+[[override]]
+ids = ["CI-INS-100"]
+status = "partial"
+code = ["crates/archipel-ide-daemon/src/inspection/batch.rs"]
+test = ["crates/archipel-ide-daemon/tests/passes_batch.rs"]
+note = "batch runs local and global tools over a scope; not compared against the daemon's output"
+
+# ---------------------------------------------------------------------------------------------
+# Code insight: quick fixes and Alt+Enter (CI-ALT, CI-FIX)
+# ---------------------------------------------------------------------------------------------
+
+[[override]]
+ids = ["CI-ALT-001", "CI-ALT-021"]
+status = "implemented"
+code = ["crates/archipel-ide-analysis/src/intention.rs"]
+test = ["crates/archipel-ide-analysis/src/intention.rs", "crates/archipel-ide-daemon/tests/alert.rs"]
+note = "weights +20/+3/0/-3/-20, weight = group + priority, descending, then text, stable sort; golden test over all groups; no permutation property test"
+
+[[override]]
+ids = ["CI-ALT-017", "CI-ALT-070", "CI-FIX-010"]
+status = "implemented"
+code = ["crates/archipel-ide-daemon/src/intention/alert.rs"]
+test = ["crates/archipel-ide-daemon/tests/alert.rs"]
+note = "dedupe by (family, text, submenu) preferring native rows over LSP rows; user-disabled intentions are not queried (dedupe_prefers_native_and_disabled_intentions_vanish)"
+
+[[override]]
+ids = ["CI-ALT-032"]
+status = "implemented"
+code = ["crates/archipel-ide-daemon/src/intention/alert.rs"]
+test = ["crates/archipel-ide-daemon/tests/alert.rs"]
+note = "Fix all 'family' problems in file as one command (fix_all_merges_the_fixes_of_every_occurrence)"
+
+[[override]]
+ids = ["CI-ALT-050"]
+status = "implemented"
+code = ["crates/archipel-ide-daemon/src/intention/alert.rs"]
+test = ["crates/archipel-ide-daemon/tests/alert.rs"]
+note = "bulb colour (error fix, intention, none) tested in bulb_and_empty_states and golden_order; bulb position (CI-ALT-051) and the setting (CI-ALT-052) are not covered"
+
+[[override]]
+ids = ["CI-ALT-010", "CI-ALT-011", "CI-ALT-020"]
+status = "partial"
+code = ["crates/archipel-ide-daemon/src/intention/alert.rs", "crates/archipel-ide-analysis/src/intention.rs"]
+test = ["crates/archipel-ide-daemon/tests/alert.rs"]
+note = "groups Error/Inspection/RemoteError by caret position with inclusive end offset; any non-caret problem on the line becomes RemoteError (spec: errors only, first contributing error only); no fix-range test, no table test"
+
+[[override]]
+ids = ["CI-ALT-013", "CI-ALT-030", "CI-ALT-034"]
+status = "partial"
+code = ["crates/archipel-ide-daemon/src/intention/alert.rs"]
+test = ["crates/archipel-ide-daemon/tests/alert.rs"]
+note = "inspection submenu with Disable inspection, Edit inspection profile settings and suppress rows; texts differ from the spec table and dedupe against intentions is not group-aware; daemon restart after Disable is not tested"
+
+[[override]]
+ids = ["CI-FIX-020", "CI-FIX-022", "CI-FIX-026"]
+status = "partial"
+code = ["crates/archipel-ide-analysis/src/modcommand.rs"]
+test = ["crates/archipel-ide-analysis/src/modcommand.rs", "crates/archipel-ide-analysis/tests/contracts.rs"]
+note = "ModCommand covers Nothing, Composite, UpdateFile with expected_rev, CreateFile, DeleteFile, MoveFile, Navigate, StartRename, StartTemplate, ShowConflicts, Choose, DisplayMessage, OpenUrl, CopyToClipboard, Highlight, RegisterTabOut; missing ChooseMembers, EditOptions, UpdateSystemOptions, UpdateReferences; unit tests cover edits and composites, not every variant"
+
+# ---------------------------------------------------------------------------------------------
+# Platform: dumb mode (PLAT-DUMB)
+# ---------------------------------------------------------------------------------------------
+
+[[override]]
+ids = ["PLAT-DUMB-001", "PLAT-DUMB-008"]
+status = "implemented"
+code = ["crates/archipel-ide-analysis/src/host.rs", "crates/archipel-ide-analysis/src/stamps.rs"]
+test = ["crates/archipel-ide-analysis/tests/host.rs", "crates/archipel-ide-index/tests/builtin.rs"]
+note = "a freshly attached project is dumb until the indexes are ready (dumb_mode_is_per_index_and_require_returns_index_not_ready); every change bumps the dumb stamp that cached values depend on and emits DumbModeChanged"
+
+[[override]]
+ids = ["PLAT-DUMB-031"]
+status = "implemented"
+code = ["crates/archipel-ide-language/src/extensions.rs", "crates/archipel-ide-daemon/src/passes.rs", "crates/archipel-ide-daemon/src/intention/alert.rs"]
+test = ["crates/archipel-ide-language/src/extensions.rs"]
+note = "registry lists only dumb-aware services while dumb (all_available); passes, inspections and intentions use it"
+
+[[override]]
+ids = ["PLAT-DUMB-030", "PLAT-DUMB-035", "PLAT-DUMB-036", "PLAT-DUMB-056", "PLAT-DUMB-057", "PLAT-DUMB-020", "PLAT-DUMB-023"]
+status = "partial"
+code = ["crates/archipel-ide-language/src/extensions.rs", "crates/archipel-ide-index/src/service.rs", "crates/archipel-ide-daemon/src/daemon.rs"]
+test = ["crates/archipel-ide-index/tests/builtin.rs", "crates/archipel-ide-index/tests/incremental.rs", "crates/archipel-ide-language/src/extensions.rs"]
+note = "awareness defaults to not aware and can be per instance; IndexNotReady is typed but has no debug-build origin; dumb mode is per index (not a task count); the daemon restarts passes on DumbModeChanged without a daemon-level test; Go to File data is ready while content indexes build; a rebuild command re-indexes but no lint, no task queue, no balloons, no access types, no alternative resolve"
+
+# ---------------------------------------------------------------------------------------------
+# Platform: project structure and scopes (PLAT-SCOPE)
+# ---------------------------------------------------------------------------------------------
+
+[[override]]
+ids = ["PLAT-SCOPE-002", "PLAT-SCOPE-006", "PLAT-SCOPE-010", "PLAT-SCOPE-021", "PLAT-SCOPE-042", "PLAT-SCOPE-050"]
+status = "implemented"
+code = ["crates/archipel-ide-projectmodel/src/file_index.rs", "crates/archipel-ide-projectmodel/src/scope.rs", "crates/archipel-ide-projectmodel/src/order.rs"]
+test = ["crates/archipel-ide-projectmodel/src/tests.rs"]
+note = "content/source/test/production predicates, library or SDK files are in the project but not in content, generated folders, the four-classpath dependency-scope table, module-only scope with tests"
+
+[[override]]
+ids = ["PLAT-SCOPE-001", "PLAT-SCOPE-003", "PLAT-SCOPE-004", "PLAT-SCOPE-005", "PLAT-SCOPE-007", "PLAT-SCOPE-008", "PLAT-SCOPE-009", "PLAT-SCOPE-011"]
+status = "partial"
+code = ["crates/archipel-ide-projectmodel/src/file_index.rs"]
+test = ["crates/archipel-ide-projectmodel/src/tests.rs"]
+note = "nearest-root lookups, exclusion, libraries by jar and jar entry, package names with prefix, order entries per library; no ignored-file list, no modules_for_file for overlapping roots, no identifier validation of package segments, no oracle property test"
+
+[[override]]
+ids = ["PLAT-SCOPE-032", "PLAT-SCOPE-031", "PLAT-SCOPE-040", "PLAT-SCOPE-041", "PLAT-SCOPE-043", "PLAT-SCOPE-045", "PLAT-SCOPE-054", "PLAT-SCOPE-063", "PLAT-SCOPE-065", "PLAT-SCOPE-066", "PLAT-SCOPE-104"]
+status = "partial"
+code = ["crates/archipel-ide-projectmodel/src/scope.rs", "crates/archipel-ide-projectmodel/src/model.rs", "crates/archipel-ide-projectmodel/src/sdk.rs"]
+test = ["crates/archipel-ide-projectmodel/src/tests.rs"]
+note = "scopes are comparable values (no Hash) with union/intersect/not (only the everything absorption is simplified); module-with-libraries scopes use runtime classpaths instead of compile-only so non-exported libraries leak in (the exported rule holds for classpaths only); library scope includes documentation roots; no project-vs-content edge case, no temporary-file everything scope; SDK inheritance and the generated flag exist"
+
+# ---------------------------------------------------------------------------------------------
+# Platform: indexes (PLAT-IDX)
+# ---------------------------------------------------------------------------------------------
+
+[[override]]
+ids = ["PLAT-IDX-008", "PLAT-IDX-009", "PLAT-IDX-030", "PLAT-IDX-042", "PLAT-IDX-054", "PLAT-IDX-055", "PLAT-IDX-083", "PLAT-IDX-085", "PLAT-IDX-086", "PLAT-IDX-087"]
+status = "implemented"
+code = ["crates/archipel-ide-index/src/service.rs", "crates/archipel-ide-index/src/redb_store.rs", "crates/archipel-ide-index/src/readers.rs", "crates/archipel-ide-index/src/indexes.rs", "crates/archipel-ide-index/src/todo.rs"]
+test = ["crates/archipel-ide-index/tests/storage.rs", "crates/archipel-ide-index/tests/incremental.rs", "crates/archipel-ide-index/tests/builtin.rs"]
+note = "per-index version bump rebuilds only that index; truncated or garbage stores rebuild without error; content-hash stamps (same-length rewrite in one mtime tick is picked up, restart re-indexes only changed files); typed IndexNotReady in dumb mode; stub short-name and qualified-name lookups without parsing; no trigrams for words under three characters; file-type index; TODO index rebuild only on pattern change; trigram index"
+
+[[override]]
+ids = ["PLAT-IDX-001", "PLAT-IDX-002", "PLAT-IDX-004", "PLAT-IDX-005", "PLAT-IDX-020", "PLAT-IDX-033", "PLAT-IDX-046", "PLAT-IDX-052", "PLAT-IDX-053", "PLAT-IDX-080", "PLAT-IDX-081", "PLAT-IDX-084"]
+status = "partial"
+code = ["crates/archipel-ide-index/src/indexes.rs", "crates/archipel-ide-index/src/pipeline.rs", "crates/archipel-ide-index/src/service.rs", "crates/archipel-ide-index/src/stubs.rs", "crates/archipel-ide-index/src/codec.rs"]
+test = ["crates/archipel-ide-index/tests/builtin.rs", "crates/archipel-ide-index/tests/incremental.rs", "crates/archipel-ide-analysis/tests/host.rs"]
+note = "FileIndex trait (id, version, accepts, depends_on_content) is enforced at compile time, not at registration; codec round trip tested but no per-value self-check; excluded directories are skipped by name (target/), not by the project model; queue priority open > changed > source > rest; commit stamps per index; stub interface hash ignores bodies and positions but rewriting is not asserted; word contexts code/comment/string only (no foreign/plain-text bits), per-language token sets; file names are stored lower-cased"
+
+# ---------------------------------------------------------------------------------------------
+# Platform: caching and modification tracking (PLAT-CACHE)
+# ---------------------------------------------------------------------------------------------
+
+[[override]]
+ids = ["PLAT-CACHE-010", "PLAT-CACHE-012", "PLAT-CACHE-014", "PLAT-CACHE-023", "PLAT-CACHE-044", "PLAT-CACHE-047", "PLAT-CACHE-049"]
+status = "implemented"
+code = ["crates/archipel-ide-analysis/src/cache.rs", "crates/archipel-ide-analysis/src/stamps.rs"]
+test = ["crates/archipel-ide-analysis/src/cache.rs", "crates/archipel-ide-analysis/src/stamps.rs", "crates/archipel-ide-analysis/tests/host.rs"]
+note = "cached values with recorded dependency stamps; deleted or volatile dependencies never validate; byte-bounded LRU recomputes after eviction; cancelled computations store nothing; file revision, dumb-mode and per-index stamps"
+
+[[override]]
+ids = ["PLAT-CACHE-011", "PLAT-CACHE-016", "PLAT-CACHE-057", "PLAT-CACHE-061", "PLAT-CACHE-070", "PLAT-CACHE-072"]
+status = "partial"
+code = ["crates/archipel-ide-analysis/src/cache.rs", "crates/archipel-ide-analysis/src/stamps.rs", "crates/archipel-ide-analysis/src/host.rs"]
+test = ["crates/archipel-ide-analysis/src/cache.rs", "crates/archipel-ide-analysis/tests/host.rs"]
+note = "dependency kinds are file text, file interface, language interface, index, dumb mode, settings (no tracker or document kinds); stamps come from the snapshot a computation ran on; interface epochs give early cutoff but no 10,000-edit soundness property test; memory-pressure flush polls resident size without a simulated-pressure test; 64 MiB budget is not reported"
+
+# ---------------------------------------------------------------------------------------------
+# Platform: concurrency and cancellation (PLAT-CONC)
+# ---------------------------------------------------------------------------------------------
+
+[[override]]
+ids = ["PLAT-CONC-015", "PLAT-CONC-020", "PLAT-CONC-044", "PLAT-CONC-063"]
+status = "implemented"
+code = ["crates/archipel-ide-analysis/src/cancel.rs", "crates/archipel-ide-analysis/src/job.rs"]
+test = ["crates/archipel-ide-analysis/src/cancel.rs", "crates/archipel-ide-analysis/src/job.rs", "crates/archipel-ide-analysis/tests/host.rs", "crates/archipel-ide-daemon/tests/daemon_flow.rs"]
+note = "Cancelled is a value propagated with ?; checkpoints poll every 64 ticks and workers stop within 256 checks; interactive, daemon and background lanes with a dedicated interactive worker; coalescing keys cancel the predecessor and typing discards superseded results (the 1 ms rule is not implemented)"
+
+[[override]]
+ids = ["PLAT-CONC-025"]
+status = "partial"
+code = ["crates/archipel-ide-analysis/src/cancel.rs"]
+test = ["crates/archipel-ide-analysis/src/cancel.rs"]
+note = "child tokens follow their parent; no owner disposal wiring tested for editors or projects"
+
+# ---------------------------------------------------------------------------------------------
+# Platform: VFS, PSI, language extension points
+# ---------------------------------------------------------------------------------------------
+
+[[override]]
+ids = ["PLAT-VFS-002", "PLAT-VFS-075"]
+status = "implemented"
+code = ["crates/archipel-ide-analysis/src/file.rs", "crates/archipel-ide-language/src/registry.rs"]
+test = ["crates/archipel-ide-analysis/src/file.rs", "crates/archipel-ide-analysis/tests/host.rs", "crates/archipel-ide-language/src/registry.rs"]
+note = "file ids survive rename and move and are never reused; shebang detection for extensionless files"
+
+[[override]]
+ids = ["PLAT-VFS-001", "PLAT-VFS-003", "PLAT-VFS-004", "PLAT-VFS-034", "PLAT-VFS-037", "PLAT-VFS-072", "PLAT-VFS-117"]
+status = "partial"
+code = ["crates/archipel-ide-analysis/src/file.rs", "crates/archipel-ide-analysis/src/vfs.rs", "crates/archipel-ide-language/src/registry.rs", "crates/archipel-ide-language/src/syntax.rs"]
+test = ["crates/archipel-ide-analysis/src/vfs.rs", "crates/archipel-ide-analysis/tests/host.rs", "crates/archipel-ide-language/src/registry.rs", "crates/archipel-ide-language/tests/incremental.rs"]
+note = "dense in-process file ids (not persisted across restarts), deleted files stop being live, disk reads cap size and reject binaries, detection by extension, name and shebang; the incremental-vs-full differential test compares trees only for error-free text"
+
+[[override]]
+ids = ["PLAT-PSI-075", "PLAT-PSI-050", "PLAT-PSI-004"]
+status = "partial"
+code = ["crates/archipel-ide-language/src/anchor.rs", "crates/archipel-ide-language/src/syntax.rs"]
+test = ["crates/archipel-ide-language/tests/anchors.rs", "crates/archipel-ide-language/tests/incremental.rs"]
+note = "anchors survive edits and fail on renames and never resolve to another kind (property tests); trees are tree-sitter trees, equal to a full parse only when error-free, and error nodes have no descriptions"
+
+[[override]]
+ids = ["PLAT-LANG-011"]
+status = "implemented"
+code = ["crates/archipel-ide-language/src/extensions.rs", "crates/archipel-ide-platform/src/extension.rs"]
+test = ["crates/archipel-ide-language/src/extensions.rs", "crates/archipel-ide-platform/src/extension.rs"]
+note = "deterministic order with First, Last, Before(id), After(id) constraints, then specificity, then registration order; cycles and unknown ids fall back to registration order"
+
+[[override]]
+ids = ["PLAT-LANG-001", "PLAT-LANG-010", "PLAT-LANG-014", "PLAT-LANG-052", "PLAT-LANG-100"]
+status = "partial"
+code = ["crates/archipel-ide-language/src/extensions.rs", "crates/archipel-ide-language/src/registry.rs", "crates/archipel-ide-analysis/src/highlight.rs"]
+test = ["crates/archipel-ide-language/src/extensions.rs", "crates/archipel-ide-language/src/registry.rs", "crates/archipel-ide-analysis/src/highlight.rs"]
+note = "language registry with unique ids and base-language fallback, single/all/any lookups, dumb filtering; no caching or invalidation of lookups, no dialect predicates, no report of unaware services while dumb; severity values match but custom levels are only constructible, not registered"

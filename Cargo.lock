@@ -8868,11 +8868,14 @@ dependencies = [
  "archipel-ide-compat",
  "archipel-ide-control",
  "archipel-ide-plugins",
+ "archipel-ide-toolchains",
  "flate2",
+ "regex",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "tar",
+ "toml",
  "zip",
 ]
 

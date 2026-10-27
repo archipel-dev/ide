@@ -24,13 +24,23 @@ JSON line and gets one JSON response line (`{"ok":true,"result":…}` or
 | `{"op":"click","x":18,"y":20,"button":"secondary","count":2}` | pointer move, then press/release per frame (`button` primary/secondary/middle, `count` 1–3) |
 | `{"op":"move","x":60,"y":168}` | pointer move, e.g. to open a submenu on hover |
 | `{"op":"screenshot","path":"out.png"}` | PNG of the window via egui's viewport screenshot (glow and wgpu; no X11 dependency) |
-| `{"op":"wait","until":"idle\|popup\|text","text":"…","timeoutMs":10000}` | blocks until no search/task/update/screenshot is running and input has settled for 3 frames, a popup is visible, or the active editor, terminal screen or status bar contains `text` |
+| `{"op":"wait","until":"idle\|popup\|text\|analysis","text":"…","timeoutMs":10000}` | blocks until no search/task/update/screenshot is running and input has settled for 3 frames, a popup is visible, the active editor, terminal screen or status bar contains `text`, or the analysis of the active file settled (`analysis`: idle, the daemon analyzed the current text, its language server is ready and the markup inputs did not change for 0.4 s, 2.5 s with a language server) |
 
 `archipel-cli ui [--socket PATH] <execute|state|key|type|screenshot|wait|raw> …`
 wraps the socket. Once a client injects input the window counts as focused, so keys reach
 widgets even without a window manager (Xvfb/CI); autosave-on-focus-loss therefore does not
 fire under automation. A stale socket file from a crashed instance is replaced; a
 live one is refused. The socket file is removed on exit.
+
+Read-only queries for scenarios are ordinary commands: `automation.markup` (markup of the
+active file as the editor shows it, with 1-based ranges, severity, message, source),
+`automation.completion` (completion popup rows), `automation.documentText {path}` (text of a
+project file; the open document wins over disk), besides `code.alerts` (Alt+Enter rows),
+`navigate.results`, `language.servers` and `toolchain.locate`. `state.popups` also reports
+`intentions` (Alt+Enter popup) and `rename` (in-place rename).
+
+Behavior scenarios built on this protocol (`cargo run -p xtask -- scenario`, corpus in
+`docs/parity/scenarios/`) compare the IDE with IntelliJ; see the README there.
 
 Scripted scenes built on this protocol live in `docs/parity/scenes/` (`cargo run -p xtask --
 scenes`); see the README there.

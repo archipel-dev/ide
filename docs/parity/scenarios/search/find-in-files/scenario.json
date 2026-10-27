@@ -1,0 +1,40 @@
+{
+  "title": "Find in Files lists every occurrence",
+  "requires": [],
+  "open": "src/main/java/demo/Hello.java",
+  "steps": [
+    {
+      "op": "key",
+      "chord": "Ctrl+Shift+F"
+    },
+    {
+      "op": "type",
+      "text": "greeting"
+    },
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "sleep",
+      "ms": 500
+    },
+    {
+      "op": "wait",
+      "until": "idle"
+    }
+  ],
+  "expect": {
+    "state": [
+      {
+        "pointer": "/findInFiles/results",
+        "equals": 4
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "Ctrl+Shift+F, type greeting",
+    "notes": "four matches: the declaration and three words in comments and calls, case-insensitive"
+  }
+}

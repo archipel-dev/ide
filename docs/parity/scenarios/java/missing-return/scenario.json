@@ -1,0 +1,64 @@
+{
+  "title": "Missing return statement in a method",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/demo/Calc.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "typeAt",
+      "line": 4,
+      "column": 23,
+      "text": "\nint m = n * 2;"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "typed",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "caret",
+      "line": 6,
+      "column": 6
+    },
+    {
+      "op": "altEnter"
+    }
+  ],
+  "expect": {
+    "markup": [
+      {
+        "when": "typed",
+        "range": "6:5-6:6",
+        "severity": "error",
+        "message": "Missing return statement"
+      }
+    ],
+    "intentions": [
+      {
+        "items": [
+          "Add return statement",
+          "re:^Make 'twice\\(\\)' return 'void'"
+        ],
+        "confidence": "unverified"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "type the body of an int method without return, Alt+Enter on the closing brace",
+    "notes": "the error sits on the closing brace; the quick fix texts are recalled"
+  }
+}

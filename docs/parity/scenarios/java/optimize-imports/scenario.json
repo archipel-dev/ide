@@ -1,0 +1,61 @@
+{
+  "title": "Optimize Imports removes unused imports",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/demo/Holder.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "key",
+      "chord": "Ctrl+Alt+O"
+    },
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "sleep",
+      "ms": 1500
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "fixed",
+      "timeoutMs": 20000
+    }
+  ],
+  "expect": {
+    "file": [
+      {
+        "contains": [
+          "import java.util.List;"
+        ],
+        "notContains": [
+          "import java.util.ArrayList;",
+          "import java.util.Map;"
+        ]
+      }
+    ],
+    "noMarkup": [
+      {
+        "when": "fixed",
+        "severity": "warning"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "Code > Optimize Imports (Ctrl+Alt+O) in a file with two unused imports"
+  }
+}

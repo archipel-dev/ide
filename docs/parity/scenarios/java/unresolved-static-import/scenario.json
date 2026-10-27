@@ -1,0 +1,90 @@
+{
+  "title": "Static import of assertThat offered for an unresolved call",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/test/java/demo/FooTest.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "typeAt",
+      "line": 8,
+      "column": 19,
+      "text": "\nassertThat(x).isEqualTo(1);"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "typed",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "caret",
+      "line": 9,
+      "column": 12
+    },
+    {
+      "op": "altEnter"
+    },
+    {
+      "op": "applyIntention",
+      "title": "re:^(Static import method|Import static method|Add static import for .*assertThat)"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "fixed",
+      "timeoutMs": 20000
+    }
+  ],
+  "expect": {
+    "markup": [
+      {
+        "when": "typed",
+        "range": "9:9-9:19",
+        "severity": "error",
+        "message": "Cannot resolve method 'assertThat' in 'FooTest'"
+      }
+    ],
+    "intentions": [
+      {
+        "mode": "contains",
+        "items": [
+          "re:^(Static import method|Import static method)"
+        ]
+      }
+    ],
+    "file": [
+      {
+        "contains": [
+          "import static org.assertj.core.api.Assertions.assertThat;"
+        ]
+      },
+      {
+        "regex": "import org\\.junit\\.jupiter\\.api\\.Test;\\n\\nimport static org\\.assertj\\.core\\.api\\.Assertions\\.assertThat;\\n",
+        "confidence": "unverified"
+      }
+    ],
+    "noMarkup": [
+      {
+        "when": "fixed",
+        "severity": "error"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "type the call without the import, Alt+Enter on assertThat, choose the static import",
+    "notes": "the reported bug; the item text and the import placement (static imports in their own block at the end) are from IntelliJ's default import layout, not re-observed yet"
+  },
+  "knownGap": "the static import is offered since the LSP-as-external-pass work, with the language server's wording (\"Add static import for 'Assertions.assertThat'\") and markup message; IntelliJ's wording and its import block placement differ"
+}

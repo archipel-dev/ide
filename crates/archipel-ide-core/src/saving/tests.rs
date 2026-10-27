@@ -860,6 +860,10 @@ fn git(root: &Path, args: &[&str]) {
 fn plat_save_040_041_commit_and_vcs_operations_save_first() {
     let (root, mut state) = project("040", &[("a.txt", "a\n")]);
     git(&root, &["init", "-q", "-b", "main"]);
+    // The IDE's own commit runs git without `-c`, so the repository needs an identity.
+    git(&root, &["config", "user.name", "t"]);
+    git(&root, &["config", "user.email", "t@example.invalid"]);
+    git(&root, &["config", "commit.gpgsign", "false"]);
     git(&root, &["add", "."]);
     git(&root, &["commit", "-q", "-m", "init"]);
     state.refresh_git().unwrap();

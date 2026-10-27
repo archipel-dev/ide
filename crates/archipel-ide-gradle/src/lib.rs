@@ -9,7 +9,9 @@ mod options;
 
 pub use options::{BuildRunner, Distribution, GradleOptions, options, set_options};
 
-pub use model::{GradleModel, JdkModel, LibraryModel, ProjectModel, TaskModel};
+pub use model::{
+    DependencyModel, GradleModel, JdkModel, LibraryModel, ProjectModel, SourceSetModel, TaskModel,
+};
 
 use archipel_ide_runner::{
     BuildSystem, BuildSystemKind, RunConfiguration, RunTarget, RunnerError, TaskKind, TaskPlan,

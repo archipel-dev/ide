@@ -396,6 +396,7 @@ dependencies = [
  "archipel-ide-compat",
  "archipel-ide-daemon",
  "archipel-ide-dap",
+ "archipel-ide-externalsystem",
  "archipel-ide-git",
  "archipel-ide-gradle",
  "archipel-ide-index",
@@ -406,6 +407,7 @@ dependencies = [
  "archipel-ide-platform",
  "archipel-ide-plugins",
  "archipel-ide-project",
+ "archipel-ide-projectmodel",
  "archipel-ide-runnables",
  "archipel-ide-runner",
  "archipel-ide-search",
@@ -447,6 +449,22 @@ name = "archipel-ide-dap"
 version = "0.2.0"
 dependencies = [
  "archipel-ide-runner",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "archipel-ide-externalsystem"
+version = "0.2.0"
+dependencies = [
+ "archipel-ide-bazel",
+ "archipel-ide-compat",
+ "archipel-ide-gradle",
+ "archipel-ide-project",
+ "archipel-ide-projectmodel",
+ "archipel-ide-runner",
+ "quick-xml 0.37.5",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -633,6 +651,14 @@ dependencies = [
  "tree-sitter",
  "ureq",
  "walkdir",
+]
+
+[[package]]
+name = "archipel-ide-projectmodel"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -1,0 +1,25 @@
+[package]
+name = "archipel-ide-java"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Native Java intelligence: class-file and source stubs, Java stub indexes on the project model, resolve, unresolved-reference errors and import fixes"
+
+[dependencies]
+archipel-ide-analysis = { path = "../archipel-ide-analysis" }
+archipel-ide-index = { path = "../archipel-ide-index" }
+archipel-ide-language = { path = "../archipel-ide-language" }
+archipel-ide-projectmodel = { path = "../archipel-ide-projectmodel" }
+parking_lot.workspace = true
+postcard = { version = "1", default-features = false, features = ["use-std"] }
+serde.workspace = true
+thiserror.workspace = true
+tree-sitter.workspace = true
+tree-sitter-java.workspace = true
+walkdir.workspace = true
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tempfile = "3"
+archipel-ide-project = { path = "../archipel-ide-project" }
+archipel-ide-externalsystem = { path = "../archipel-ide-externalsystem" }

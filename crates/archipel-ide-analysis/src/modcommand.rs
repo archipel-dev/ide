@@ -78,6 +78,14 @@ pub fn apply_edits(text: &str, edits: &[TextEdit]) -> Result<String, EditError> 
 }
 
 /// One conflict found while preparing a refactoring.
+/// One row of [`ModCommand::ChooseFrom`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChoiceRow {
+    pub label: String,
+    pub detail: Option<String>,
+    pub command: ModCommand,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Conflict {
     pub message: String,
@@ -141,6 +149,12 @@ pub enum ModCommand {
     StartTemplate(TemplateSession),
     ShowConflicts(Vec<Conflict>),
     Choose(Vec<(String, ModCommand)>),
+    /// A titled chooser popup with rows (`Method to Import`): label on the left, a detail
+    /// (the package) on the right, speed search on, no auto-select of a lone match.
+    ChooseFrom {
+        title: String,
+        rows: Vec<ChoiceRow>,
+    },
     DisplayMessage {
         message: String,
         error: bool,

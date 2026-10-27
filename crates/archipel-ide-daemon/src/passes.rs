@@ -36,6 +36,10 @@ pub struct Shared {
     /// What external providers (language servers) published; read by
     /// [`crate::external::ExternalDiagnosticsPass`].
     pub external: Arc<ExternalDiagnostics>,
+    /// Language ids whose native analysis wins a dedupe against a language server although the
+    /// language itself has not graduated (`LanguageDef::tier`): a user-facing setting that
+    /// follows the differential test (`docs/analysis/java-differential.md`).
+    pub native_wins: RwLock<std::collections::HashSet<String>>,
 }
 
 /// The scheduling properties of the built-in passes (inline, triggers); any

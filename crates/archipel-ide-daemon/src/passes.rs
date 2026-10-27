@@ -1,7 +1,8 @@
 //! The built-in passes: `Syntax`, `General` (annotators), `LocalInspections`,
-//! `ExternalAnnotators`, `IdentifierHighlighter` and `LineMarkers`.
+//! `ExternalAnnotators`, `ExternalDiagnostics` (language servers), `IdentifierHighlighter` and `LineMarkers`.
 //! (`ProblemFiles` is a model over the markup, see [`crate::problem_files`].)
 
+use crate::external::{ExternalDiagnostics, ExternalDiagnosticsPass};
 use crate::inspection::engine::{LocalRun, run_local, to_highlight, walk_range};
 use crate::inspection::profile::EffectiveProfile;
 use crate::scheduler::{PassSpec, Triggers};
@@ -23,6 +24,7 @@ pub const SYNTAX: PassId = PassId("syntax");
 pub const GENERAL: PassId = PassId("general");
 pub const LOCAL_INSPECTIONS: PassId = PassId("local-inspections");
 pub const EXTERNAL_ANNOTATORS: PassId = PassId("external-annotators");
+pub const EXTERNAL_DIAGNOSTICS: PassId = PassId("external-diagnostics");
 pub const IDENTIFIER_HIGHLIGHTER: PassId = PassId("identifier-highlighter");
 pub const LINE_MARKERS: PassId = PassId("line-markers");
 
@@ -31,6 +33,9 @@ pub const LINE_MARKERS: PassId = PassId("line-markers");
 pub struct Shared {
     pub profile: RwLock<Arc<EffectiveProfile>>,
     pub carets: Mutex<HashMap<FileId, u32>>,
+    /// What external providers (language servers) published; read by
+    /// [`crate::external::ExternalDiagnosticsPass`].
+    pub external: Arc<ExternalDiagnostics>,
 }
 
 /// The scheduling properties of the built-in passes (inline, triggers); any
@@ -44,6 +49,7 @@ pub fn spec_of(pass: &dyn Pass) -> PassSpec {
     match id {
         SYNTAX => spec.inline().listens(Triggers::SYNTAX),
         EXTERNAL_ANNOTATORS => spec.listens(Triggers::CONTENT.union(Triggers::DIAGNOSTICS)),
+        EXTERNAL_DIAGNOSTICS => spec.listens(Triggers::DIAGNOSTICS),
         IDENTIFIER_HIGHLIGHTER => spec.listens(
             Triggers::CARET
                 .union(Triggers::SYNTAX)
@@ -458,6 +464,10 @@ pub fn register_passes(registry: &mut ServiceRegistry, shared: &Arc<Shared>) {
     registry.register::<dyn Pass>(
         any("external-annotators", false),
         Arc::new(ExternalAnnotatorsPass),
+    );
+    registry.register::<dyn Pass>(
+        any("external-diagnostics", true),
+        Arc::new(ExternalDiagnosticsPass::new(shared.external.clone())),
     );
     registry.register::<dyn Pass>(
         any("identifier-highlighter", true),

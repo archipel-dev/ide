@@ -116,6 +116,21 @@ pub struct WorkProgress {
     pub percentage: Option<u32>,
 }
 
+/// Where a server that reports `language/status` (Eclipse JDT LS) is in
+/// loading the project: the build import runs between `Starting` and
+/// `ServiceReady`, and diagnostics published meanwhile are unreliable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportPhase {
+    /// The server does not report a lifecycle (everything but jdtls).
+    NotReported,
+    /// Starting up or importing the build (Gradle/Maven) model.
+    Importing,
+    /// The project is loaded and the language services answer.
+    ServiceReady,
+    /// The server reported a failure while loading.
+    Failed,
+}
+
 /// JSON-RPC error object returned by a server.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResponseError {
@@ -173,6 +188,13 @@ pub struct LspService {
     diagnostics_revision: u64,
     progress: BTreeMap<String, WorkProgress>,
     status_message: Option<String>,
+    /// jdtls-style `language/status` lifecycle: `Starting` ... `ServiceReady`.
+    import: ImportPhase,
+    /// Counts the `ServiceReady` notifications (callers refresh once per change).
+    service_ready_epoch: u64,
+    /// `settings` of the initialization options: sent as configuration and
+    /// answered to `workspace/configuration`.
+    settings: Option<Value>,
     shown_messages: Vec<ServerMessage>,
     apply_edits: Vec<ApplyEditRequest>,
     pending: HashMap<u64, PendingRequest>,
@@ -256,6 +278,13 @@ impl LspService {
             diagnostics_revision: 0,
             progress: BTreeMap::new(),
             status_message: None,
+            import: ImportPhase::NotReported,
+            service_ready_epoch: 0,
+            settings: config
+                .initialization_options
+                .as_ref()
+                .and_then(|options| options.get("settings"))
+                .cloned(),
             shown_messages: Vec::new(),
             apply_edits: Vec::new(),
             pending: HashMap::new(),
@@ -304,6 +333,19 @@ impl LspService {
     /// Latest server status line (`language/status` from jdtls, for example).
     pub fn status_message(&self) -> Option<&str> {
         self.status_message.as_deref()
+    }
+    /// The project import state of servers that report `language/status`.
+    pub fn import_phase(&self) -> ImportPhase {
+        self.import
+    }
+    /// Whether the server is still importing the project, so its diagnostics
+    /// and code actions do not reflect the build yet.
+    pub fn import_pending(&self) -> bool {
+        self.import == ImportPhase::Importing
+    }
+    /// Increases every time the server reports `ServiceReady`.
+    pub fn service_ready_epoch(&self) -> u64 {
+        self.service_ready_epoch
     }
     /// Messages from `window/showMessage` since the last call.
     pub fn take_shown_messages(&mut self) -> Vec<ServerMessage> {
@@ -598,6 +640,13 @@ impl LspService {
         }
         self.state = ServerState::Ready;
         self.notify("initialized", json!({}))?;
+        // jdtls (and others) read most `settings` only from this notification.
+        if let Some(settings) = self.settings.clone() {
+            self.notify(
+                "workspace/didChangeConfiguration",
+                json!({"settings": settings}),
+            )?;
+        }
         let queued = std::mem::take(&mut self.queued_documents);
         for (path, document) in queued {
             self.send_open(
@@ -626,13 +675,18 @@ impl LspService {
             | "workspace/semanticTokens/refresh"
             | "workspace/inlayHint/refresh"
             | "workspace/codeLens/refresh" => Value::Null,
-            "workspace/configuration" => {
-                let count = params
+            "workspace/configuration" => Value::Array(
+                params
                     .get("items")
                     .and_then(Value::as_array)
-                    .map_or(0, Vec::len);
-                Value::Array(vec![Value::Null; count])
-            }
+                    .into_iter()
+                    .flatten()
+                    .map(|item| {
+                        let section = item.get("section").and_then(Value::as_str);
+                        configuration_section(self.settings.as_ref(), section)
+                    })
+                    .collect(),
+            ),
             "workspace/workspaceFolders" => json!([workspace_folder(&self.root)?]),
             "workspace/applyEdit" => {
                 // Answered by the IDE once it applied the edit.
@@ -690,14 +744,32 @@ impl LspService {
                 }
             }
             // Eclipse JDT LS reports its startup phases here.
-            "language/status" => {
-                self.status_message = params
-                    .get("message")
-                    .and_then(Value::as_str)
-                    .map(Into::into);
-            }
+            "language/status" => self.handle_language_status(params),
             _ => {}
         }
+    }
+
+    fn handle_language_status(&mut self, params: &Value) {
+        let kind = params.get("type").and_then(Value::as_str).unwrap_or("");
+        match kind {
+            "Starting" => {
+                if self.import != ImportPhase::ServiceReady {
+                    self.import = ImportPhase::Importing;
+                }
+            }
+            "ServiceReady" => {
+                self.import = ImportPhase::ServiceReady;
+                self.service_ready_epoch += 1;
+            }
+            "Error" => self.import = ImportPhase::Failed,
+            // `ProjectStatus` ("OK", "WARNING") is not a progress line.
+            "ProjectStatus" => return,
+            _ => {}
+        }
+        self.status_message = params
+            .get("message")
+            .and_then(Value::as_str)
+            .map(Into::into);
     }
 
     fn handle_progress(&mut self, params: &Value) {
@@ -913,6 +985,22 @@ fn initialize_params(
         }),
         ..Default::default()
     })
+}
+
+/// The `workspace/configuration` answer for `section` (a dotted path such as
+/// `java.completion`) out of `settings`; `null` when not configured.
+fn configuration_section(settings: Option<&Value>, section: Option<&str>) -> Value {
+    let Some(settings) = settings else {
+        return Value::Null;
+    };
+    let Some(section) = section.filter(|section| !section.is_empty()) else {
+        return settings.clone();
+    };
+    section
+        .split('.')
+        .try_fold(settings, |value, key| value.get(key))
+        .cloned()
+        .unwrap_or(Value::Null)
 }
 
 /// Revisions come from one counter so a restarted server never repeats one.

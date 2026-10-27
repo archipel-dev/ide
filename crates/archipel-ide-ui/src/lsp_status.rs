@@ -38,6 +38,9 @@ fn summary(app: &IdeApp, servers: &[ServerInfo]) -> Option<(String, bool, bool)>
             true,
             false,
         ),
+        ServerStatus::Ready if server.importing => {
+            (format!("{id}: importing the project…"), true, false)
+        }
         // A healthy server needs no text; the widget stays as an icon-only entry.
         ServerStatus::Ready => (String::new(), false, false),
         ServerStatus::Restarting { attempt } => {
@@ -80,6 +83,7 @@ pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::FontId) {
         for server in &servers {
             let state = match &server.status {
                 ServerStatus::Starting => "starting".to_owned(),
+                ServerStatus::Ready if server.importing => "importing the project".to_owned(),
                 ServerStatus::Ready => "ready".to_owned(),
                 ServerStatus::Restarting { attempt } => format!("restarting (attempt {attempt})"),
                 ServerStatus::Failed { reason } => {

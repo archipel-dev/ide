@@ -56,6 +56,9 @@ pub struct ServerInfo {
     pub status: ServerStatus,
     pub progress: Vec<WorkProgress>,
     pub message: Option<String>,
+    /// The server is importing the build (Gradle/Maven) model: diagnostics
+    /// are held back until it reports `ServiceReady`.
+    pub importing: bool,
 }
 
 /// A request sent with [`LspManager::request`] or [`LspManager::send_request`],
@@ -241,6 +244,8 @@ pub struct LspManager {
     /// Diagnostics revisions of the live servers at the last poll.
     diagnostics_seen: Vec<u64>,
     diagnostics_generation: u64,
+    /// `ServiceReady` epochs of the live servers at the last poll.
+    ready_seen: Vec<u64>,
     resolver: Option<Arc<dyn ProgramResolver>>,
 }
 
@@ -283,6 +288,7 @@ impl LspManager {
             completion_result: None,
             diagnostics_seen: Vec::new(),
             diagnostics_generation: 0,
+            ready_seen: Vec::new(),
             resolver: None,
         }
     }
@@ -561,8 +567,21 @@ impl LspManager {
                     .map_or(0, LspService::diagnostics_revision)
             })
             .collect();
-        if seen != self.diagnostics_seen {
+        // A server that finished importing its project (jdtls `ServiceReady`)
+        // changes what its diagnostics mean, even before it republishes them.
+        let ready: Vec<u64> = self
+            .servers
+            .iter()
+            .map(|server| {
+                server
+                    .service
+                    .as_ref()
+                    .map_or(0, LspService::service_ready_epoch)
+            })
+            .collect();
+        if seen != self.diagnostics_seen || ready != self.ready_seen {
             self.diagnostics_seen = seen;
+            self.ready_seen = ready;
             self.diagnostics_generation += 1;
         }
         restarted
@@ -722,6 +741,10 @@ impl LspManager {
                     status,
                     progress,
                     message,
+                    importing: server
+                        .service
+                        .as_ref()
+                        .is_some_and(LspService::import_pending),
                 }
             })
             .collect()
@@ -741,6 +764,20 @@ impl LspManager {
             return Some(describe_progress(progress));
         }
         (service.state() == ServerState::Starting).then(|| format!("{}: starting", service.name()))
+    }
+
+    /// Whether the server of `path` is still importing the build (jdtls
+    /// between `Starting` and `ServiceReady`): its diagnostics and code
+    /// actions do not reflect the project yet.
+    pub fn import_pending_for(&self, path: &Path) -> bool {
+        self.server_for(path)
+            .is_some_and(LspService::import_pending)
+    }
+
+    /// Id of the server of `path` while it imports the project.
+    pub fn importing_server_for(&self, path: &Path) -> Option<&str> {
+        let key = &self.documents.get(path)?.server;
+        self.import_pending_for(path).then_some(key.server.as_str())
     }
 
     /// Whether the server of `path` is ready and has no work in progress.

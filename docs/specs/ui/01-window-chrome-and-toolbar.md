@@ -46,3 +46,15 @@ icon button components.
 - IntelliJ draws the project/VCS/run widgets as split dropdowns: insets 5,10,5,6 (dropdown) and 5,5,5,3 (split) from `JBUI.CurrentTheme.MainToolbar`.
 - Open question: whether Archipel keeps its own title strip on Linux; the reference with a decorated frame shows the title
   only in the OS bar. Decide per platform, and keep the toolbar 40 px either way.
+
+## After the ui-parity pass (`u04`)
+
+| Value | IntelliJ | Archipel now | Remaining diff |
+|---|---|---|---|
+| Right icon pitch | 40 | 40 (centers 1168, 1208, 1248, 1288) | 0 |
+| Button size | 30x30 | 30x30 kit `ActionButton::large` | 0 |
+| Window buttons pitch | OS frame | 40 | 0 (self drawn) |
+| Run / debug / search glyph | 13x14 / 16x14 / 17x17 | 11 / 16 / 16 wide | run glyph about 2 px narrower |
+| Kebab, collaboration, gear | present | missing | missing (no actions behind them) |
+| "Code / Agents" switch | absent | present | product feature, kept |
+| Hammer between Run and Debug | absent | present | kept |

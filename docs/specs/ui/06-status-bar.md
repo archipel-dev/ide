@@ -24,3 +24,10 @@ Reference: `04-editor-project-tree.png`, `09`, `20`. Archipel: `new-ui-dark-u04`
 | Left start | x=14 | x=16 | +2 |
 
 `ic: platform/util/ui/src/com/intellij/util/ui/JBUI.java` (`StatusBar.Widget` insets 6,8; hover insets 3,4,1,4), `IdeStatusBarImpl.kt` (top border width), `expUI_dark.theme.json` (`StatusBar`).
+
+## After the ui-parity pass (`u04`)
+
+| Value | IntelliJ | Archipel now | Remaining diff |
+|---|---|---|---|
+| Height | 29 + 1 border | 29 + 1 line (`#1E1F22`) in the New UI look; 30 in Islands (kit metrics) | 0 |
+| Widgets | position, LF, UTF-8, indent, lock | unchanged | lock missing, extra status items |

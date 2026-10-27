@@ -35,3 +35,27 @@ Facts only. "Where" names the likely responsible place (crates/archipel-ide-ui f
 | 20 | Low | Popup corners/shadow (radius 8 vs square capture) | kit `Popover` | UI-POP-003 |
 | 21 | Low | First-run "Welcome to Archipel IDE" card and notification/banners present in a fresh capture | first-run flow, banners | - |
 | 22 | Low | Code vision hint lacks user glyph | editor inlay | UI-ED-017 |
+
+## Status after the ui-parity pass
+
+Images: `docs/parity/evidence/archipel-ide/ui/after/`. Kit changes: branch `feat/ide-ui-parity`, commit `c7c25cd`.
+
+| # | Status | Remaining |
+|---|---|---|
+| 1 | closed by decision (Islands Dark stays the default) | - |
+| 2, 3, 10, 16 | fixed (22 px pitch, 68 px gutter with rule, 30 px stripe, no scrollbar at rest, indent guides) | run glyph about 1 px narrower |
+| 4 | not touched: look dependent (`new_ui` look has the underline, Islands keeps pills) | - |
+| 5 | pitch 40 and 30 px buttons fixed | kebab, collaboration, gear missing; Code/Agents switch kept |
+| 6 | selection, 573 px width, 28 px footer band | tip text, Next Tip, kebab |
+| 7 | size, position, header band, underline, hint, rows, footer band and link | yellow match needs the kit commit |
+| 8 | content-driven width, icons | 26 px rows (look dependent), mnemonics (kit ready, IDE call missing), attached sub-menu |
+| 9 | tints and root chevron | - |
+| 11 | width 652, UI font | preview header |
+| 12 | 30 px buttons, 40 px pitch | button sets differ |
+| 13 | 30 px with 1 px line in the New UI look | extra widgets, lock |
+| 14 | 3 px bottom underline, kebab button | title chevron, locate/expand/collapse |
+| 15 | fixed (28.8 %) | - |
+| 17 | kit buttons and combos, full-bleed selection, help button | footer strip |
+| 18 | token in place | needs the kit commit |
+| 19 | already `#4B5059` in the kit scheme | - |
+| 20, 21, 22 | not touched | - |

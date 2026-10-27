@@ -42,6 +42,15 @@ picture of the project than its neighbours.
   typing `assertThat(x)` marks `assertThat` red as *Cannot resolve method 'assertThat'*.
   Alt+Enter then lists *Import static method 'org.assertj.core.api.Assertions.assertThat'*
   first, and choosing it adds the import.
+- **All analysis runs in our own engine.** Resolve, types, errors, inspections, quick fixes,
+  completion and refactorings for every language are implemented natively behind the language
+  extension points. jdtls and kotlin-lsp are transitional: they stay only until the native
+  engine for that language passes the differential test against them (no regressions), then
+  they are switched off. Java goes first (started in 0.2.2); Kotlin needs its own frontend.
+- **Every feature has a spec before it is built.** `docs/specs/inventory/` lists what IntelliJ
+  Community registers (actions, settings, tool windows, run types, inspections, intentions,
+  file types); each entry points at a requirement or is marked missing. Interactive behavior
+  is specified with executable before/after cases (text, caret, keys), so parity is measured.
 - **Strangler, not rewrite.** Every phase ships in a release, keeps all tests and ux-smoke
   green, and moves one area behind the new structure. No long-lived branch.
 - **Each phase deletes code.** A phase is done when the old path is gone, not when the new one

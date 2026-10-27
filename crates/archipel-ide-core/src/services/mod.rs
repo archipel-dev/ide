@@ -25,6 +25,7 @@
 //! | [`AgentsManager`] | application | `IdeState::agents` (sessions, thread tabs, review, balloons) |
 //! | [`PluginHostService`] | application | `IdeState::plugin_host` (registry, plugin tabs and tool window) |
 //! | [`AndroidTooling`] | application | `IdeState::android` (SDK, devices, Logcat, deploy, ...) |
+//! | [`DocumentSaving`] | application | (new) save listeners and vetoers, closed tabs with unsaved text, the idle timer, the save failure report |
 
 use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard,
@@ -119,6 +120,7 @@ mod plugins;
 mod project_model;
 mod recent_projects;
 mod remote;
+mod saving;
 mod search_everywhere;
 mod settings;
 mod spring;
@@ -146,6 +148,7 @@ pub use remote::{
     CLONE_TOPIC, CloneJob, CloneListener, CloneManager, CloneOutcome, GitRemoteOperations,
     REMOTE_TOPIC, RemoteOperationListener, RemoteOutcome,
 };
+pub use saving::{DocumentSaveListener, DocumentSaving, SaveFailureReport, SavingVetoer};
 pub use search_everywhere::SearchEverywhereManager;
 pub use settings::{SETTINGS_TOPIC, Settings, SettingsListener, SettingsService};
 pub use spring::SpringStarters;

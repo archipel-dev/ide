@@ -47,4 +47,5 @@ url.workspace = true
 flate2 = "1"
 tar = "0.4"
 tempfile = "3"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 archipel-ide-actions = { path = "../archipel-ide-actions" }

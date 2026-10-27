@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.1](https://github.com/archipel-dev/ide/compare/v0.2.0...v0.2.1) (2026-10-27)
+
+
+### Features
+
+* **projectmodel:** project model and External System import for Gradle, Maven, Cargo and Bazel ([#50](https://github.com/archipel-dev/ide/issues/50)) ([ba7eab5](https://github.com/archipel-dev/ide/commit/ba7eab591ff424bc61d7a7477b00a88067add0b7))
+
+
+### Bug Fixes
+
+* **daemon:** LSP diagnostics as an external pass, one Alt+Enter list, working jdtls static imports ([#52](https://github.com/archipel-dev/ide/issues/52)) ([2fe93df](https://github.com/archipel-dev/ide/commit/2fe93dfbd1c04b215d333777faa48301d42b6e35))
+* **toolchains:** run jdtls on a JDK as new as its bundles need ([#53](https://github.com/archipel-dev/ide/issues/53)) ([54dca44](https://github.com/archipel-dev/ide/commit/54dca44f98af50dabcecf88debd745a66ccb1118))
+
 ## [0.2.0](https://github.com/archipel-dev/ide/compare/v0.1.0...v0.2.0) (2026-10-26)
 
 

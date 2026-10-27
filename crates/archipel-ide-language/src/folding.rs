@@ -20,6 +20,23 @@ pub enum FoldKind {
     OneLineBody,
 }
 
+/// Which setting decides whether a region starts collapsed (Settings | Editor | General |
+/// Code Folding, ED-FOLD-020).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FoldDefault {
+    /// Starts expanded.
+    #[default]
+    Expanded,
+    Imports,
+    MethodBody,
+    OneLineMethod,
+    DocComment,
+    FileHeader,
+    CustomRegion,
+    /// Starts collapsed whatever the settings (a NetBeans `defaultstate="collapsed"`).
+    Collapsed,
+}
+
 /// A foldable region. When collapsed, the editor shows the text before
 /// `start_byte` on `start_line`, then `placeholder`, then the text after
 /// `end_byte` on `end_line`; lines `start_line + 1 ..= end_line` are hidden.
@@ -31,6 +48,11 @@ pub struct FoldRange {
     pub end_line: usize,
     pub placeholder: String,
     pub kind: FoldKind,
+    /// The setting that decides the first-time state.
+    pub default: FoldDefault,
+    /// Regions with the same non-zero group expand and collapse together (the two halves of a
+    /// one-line method).
+    pub group: usize,
 }
 
 fn folds_query(spec: &'static LanguageSpec) -> Option<&'static Query> {
@@ -76,6 +98,8 @@ fn delimited(node: Node<'_>, source: &str) -> Option<FoldRange> {
             end_line: last.start_position().row,
             placeholder: "...".into(),
             kind: FoldKind::Block,
+            default: FoldDefault::Expanded,
+            group: 0,
         });
     }
     if first.is_named() || last.is_named() || !OPENERS.contains(&text(source, first)) {
@@ -89,6 +113,8 @@ fn delimited(node: Node<'_>, source: &str) -> Option<FoldRange> {
             end_line: last.end_position().row,
             placeholder,
             kind: FoldKind::OneLineBody,
+            default: FoldDefault::OneLineMethod,
+            group: 0,
         });
     }
     Some(FoldRange {
@@ -98,6 +124,8 @@ fn delimited(node: Node<'_>, source: &str) -> Option<FoldRange> {
         end_line: last.end_position().row,
         placeholder: format!("{}...{}", text(source, first), text(source, last)),
         kind: FoldKind::Block,
+        default: FoldDefault::Expanded,
+        group: 0,
     })
 }
 
@@ -141,6 +169,8 @@ fn comment(node: Node<'_>, source: &str) -> Option<FoldRange> {
         end_line: node.end_position().row,
         placeholder: format!("{head}...{closing}"),
         kind: FoldKind::Comment,
+        default: FoldDefault::Expanded,
+        group: 0,
     })
 }
 
@@ -176,6 +206,8 @@ fn imports(run: &[Node<'_>], source: &str) -> Option<FoldRange> {
         end_line: last.end_position().row,
         placeholder: "...".into(),
         kind: FoldKind::Imports,
+        default: FoldDefault::Imports,
+        group: 0,
     })
 }
 
@@ -246,6 +278,8 @@ fn from_query(
             end_line: end.row,
             placeholder: "...".into(),
             kind: FoldKind::Block,
+            default: FoldDefault::Expanded,
+            group: 0,
         });
     }
 }
@@ -261,6 +295,12 @@ pub fn fold_ranges(
     range: Range<usize>,
 ) -> Vec<FoldRange> {
     let mut ranges = Vec::new();
+    if spec.id == "java" {
+        let mut regions = crate::folding_java::fold_regions(tree, source);
+        regions
+            .retain(|r| r.start_byte < range.end.max(range.start + 1) && r.end_byte > range.start);
+        return regions;
+    }
     match folds_query(spec) {
         Some(query) => from_query(query, tree, source, &range, &mut ranges),
         None => collect(tree.root_node(), source, &range, &mut ranges),
@@ -288,7 +328,7 @@ mod tests {
 
     #[test]
     fn range_queries_return_enclosing_and_contained_regions() {
-        let source = "class A {\n    void f() {\n        g();\n    }\n    void h() {\n        i();\n    }\n}\n";
+        let source = "class A {\n    void f() {\n        g();\n        g();\n    }\n    void h() {\n        i();\n        j();\n    }\n}\n";
         let spec = registry::by_id("java").expect("java");
         let syntax = SyntaxTree::parse(spec, source).expect("parse");
         let at = source.find("i();").unwrap();
@@ -297,7 +337,7 @@ mod tests {
             .iter()
             .map(|fold| (fold.start_line, fold.end_line))
             .collect();
-        assert_eq!(lines, vec![(0, 7), (4, 6)]);
+        assert_eq!(lines, vec![(5, 8)]);
     }
 
     #[test]
@@ -319,9 +359,9 @@ mod tests {
             summary,
             vec![
                 (2, 3, FoldKind::Imports, "..."),
-                (5, 7, FoldKind::Comment, "/**...*/"),
-                (8, 12, FoldKind::Block, "{...}"),
-                (9, 11, FoldKind::OneLineBody, "{ g(); }"),
+                (5, 7, FoldKind::Comment, "/** Doc. */"),
+                (9, 10, FoldKind::OneLineBody, " { "),
+                (10, 11, FoldKind::OneLineBody, " }"),
             ]
         );
         assert_eq!(

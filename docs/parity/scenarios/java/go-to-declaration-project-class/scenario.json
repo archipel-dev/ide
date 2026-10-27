@@ -1,0 +1,43 @@
+{
+  "title": "Go to declaration of a method in another file",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/demo/Main.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "caret",
+      "line": 5,
+      "column": 44
+    },
+    {
+      "op": "declaration"
+    }
+  ],
+  "expect": {
+    "navigation": [
+      {
+        "path": "src/main/java/demo/Greeter.java",
+        "line": 4,
+        "column": 19
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "Ctrl+B on the call greet(...)",
+    "notes": "the caret lands on the start of the method name"
+  }
+}

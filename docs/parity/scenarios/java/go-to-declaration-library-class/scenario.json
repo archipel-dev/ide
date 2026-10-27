@@ -1,0 +1,43 @@
+{
+  "title": "Go to declaration of a class from a Gradle dependency",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/test/java/demo/LibTest.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "caret",
+      "line": 9,
+      "column": 11
+    },
+    {
+      "op": "declaration"
+    }
+  ],
+  "expect": {
+    "navigation": [
+      {
+        "pathContains": "Assertions",
+        "confidence": "unverified"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "Ctrl+B on Assertions in Assertions.assertThat(x)",
+    "notes": "opens Assertions.java when sources were downloaded, the decompiled Assertions.class otherwise"
+  },
+  "knownGap": "jdtls resolves the declaration but the IDE opens only files of the project; classes of libraries and the JDK are not opened"
+}

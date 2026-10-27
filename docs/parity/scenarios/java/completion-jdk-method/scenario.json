@@ -1,0 +1,52 @@
+{
+  "title": "Completion lists String methods",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/demo/Texts.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "typeAt",
+      "line": 5,
+      "column": 29,
+      "text": "\ns.sub"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "typed",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "complete"
+    }
+  ],
+  "expect": {
+    "completion": [
+      {
+        "contains": [
+          "substring",
+          "subSequence"
+        ],
+        "first": "substring",
+        "confidence": "unverified"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "type s.sub on a String and press Ctrl+Space",
+    "notes": "substring is ranked first (it is far more used than subSequence)"
+  }
+}

@@ -64,6 +64,14 @@ known status, IDs are unique across documents). `docs/parity/dashboard.md` is ge
 `cargo run -p xtask -- parity`; feature PRs should not commit changes to it, so parallel
 PRs that add rows do not conflict. It is regenerated on main.
 
+## Behavior scenarios
+
+Behavior is specified by recorded scenarios in `docs/parity/scenarios/`, not by memory
+(`cargo run -p xtask -- scenario`; format in its README). A fix for a behavior bug starts with
+a scenario that shows it; the expected result is what IntelliJ shows, recorded as text only
+(markup, popup items, resulting files, never JetBrains screenshots). The CI job
+`Behavior scenarios` runs the corpus without blocking and uploads the report.
+
 ## Spec coverage
 
 `cargo run -p xtask -- spec-coverage` parses every requirement of `docs/specs/` and writes

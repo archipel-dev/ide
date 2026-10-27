@@ -446,7 +446,7 @@ pub(crate) fn connect(socket: &Path, app: &mut Child, scene_dir: &Path) -> Resul
     }
 }
 
-fn send(client: &mut ControlClient, request: &Request) -> Result<Value> {
+pub(crate) fn send(client: &mut ControlClient, request: &Request) -> Result<Value> {
     let Response { ok, result, error } = client.send(request)?;
     if !ok {
         bail!("{}", error.unwrap_or_else(|| "request failed".into()));
@@ -454,7 +454,7 @@ fn send(client: &mut ControlClient, request: &Request) -> Result<Value> {
     Ok(result.unwrap_or(Value::Null))
 }
 
-fn run_step(
+pub(crate) fn run_step(
     client: &mut ControlClient,
     step: &Step,
     project: Option<&Path>,
@@ -632,6 +632,13 @@ pub(crate) fn create_fixture(name: &str, dir: &Path) -> Result<PathBuf> {
         }
         fs::write(&target, contents)?;
     }
+    git_init(dir)?;
+    Ok(fs::canonicalize(dir)?)
+}
+
+/// Commits the files of `dir` to a fresh Git repository on `master` (two commits, so
+/// history-based features have something to show).
+pub(crate) fn git_init(dir: &Path) -> Result<()> {
     let git = |args: &[&str]| -> Result<()> {
         let status = Command::new("git")
             .args([
@@ -657,7 +664,7 @@ pub(crate) fn create_fixture(name: &str, dir: &Path) -> Result<PathBuf> {
     git(&["add", "-A"])?;
     git(&["commit", "-q", "-m", "Initial commit"])?;
     git(&["commit", "-q", "--allow-empty", "-m", "Add greeting"])?;
-    Ok(fs::canonicalize(dir)?)
+    Ok(())
 }
 
 #[cfg(test)]

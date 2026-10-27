@@ -120,6 +120,19 @@ pub mod tokens {
         BANNER_WARNING;
         /// `Banner.warningBorderColor`.
         BANNER_WARNING_BORDER;
+        /// `FileColor.Yellow`: excluded and ignored folders in the project tree.
+        FILE_YELLOW;
+        /// `FileColor.Green`: test source roots in the project tree.
+        FILE_GREEN;
+        /// `List.selectionInactiveBackground`: the selected row of a list that has no focus,
+        /// such as the completion list while the editor keeps focus (Gray4 in New UI Dark).
+        SELECTION_INACTIVE;
+        /// Header and footer bands of popups (`Group.separatorColor`, Gray3 in New UI Dark).
+        BAND;
+        /// Hairlines between panels (the kit's `Colors::divider`).
+        DIVIDER;
+        /// Background of the text that matches a search in a list row (the kit's `Colors::search_match`).
+        SEARCH_MATCH;
         /// Editor `TEXT` background.
         EDITOR_BACKGROUND;
         /// Editor `TEXT` foreground.
@@ -215,6 +228,10 @@ fn kit_color(token: &str, c: &archipel_kit::theme::Colors) -> Option<Color32> {
         "TAB_SELECTED_BORDER" => c.tab_selected_border,
         "BANNER_WARNING" => c.banner_warning.background,
         "BANNER_WARNING_BORDER" => c.banner_warning.border,
+        "DIVIDER" => c.divider,
+        "BAND" => c.group_separator,
+        "SELECTION_INACTIVE" => c.selection_inactive,
+        "SEARCH_MATCH" => c.search_match,
         _ => return None,
     })
 }
@@ -223,6 +240,12 @@ fn kit_color(token: &str, c: &archipel_kit::theme::Colors) -> Option<Color32> {
 fn editor_color(token: &str, theme: &Theme) -> Option<Color32> {
     let e = &theme.editor;
     Some(match token {
+        "FILE_YELLOW" => theme
+            .ui_color("FileColor.Yellow")
+            .unwrap_or(theme.colors.banner_warning.background),
+        "FILE_GREEN" => theme
+            .ui_color("FileColor.Green")
+            .unwrap_or(theme.colors.banner_success.background),
         "EDITOR_BACKGROUND" => e.background,
         "EDITOR_TEXT" => e.text,
         "EDITOR_CARET" => e.caret,

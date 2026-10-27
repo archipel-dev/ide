@@ -8,7 +8,9 @@ use eframe::egui::{self, Color32, Rect, Sense, vec2};
 use serde_json::{Value, json};
 
 pub const TOOLBAR_HEIGHT: f32 = 40.0;
-pub const STATUS_BAR_HEIGHT: f32 = 26.0;
+/// Status bar height of the Islands look: 29 px plus a 1 px top border (UI-SB-001); other
+/// looks resolve theirs through the kit's metrics (`status_bar_height`).
+pub const STATUS_BAR_HEIGHT: f32 = 30.0;
 pub const STRIPE_WIDTH: f32 = 40.0;
 
 /// Width reserved at the left of the main toolbar for the macOS traffic-light
@@ -85,12 +87,15 @@ pub fn main_toolbar(app: &mut IdeApp, ctx: &egui::Context) {
             }
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.spacing_mut().item_spacing.x = 2.0;
+                // UI-CHR-003: right cluster on a 40 px pitch (30 px buttons, 10 px gaps).
+                ui.spacing_mut().item_spacing.x = archipel_kit::tokens::toolbar::GAP;
                 if custom_title_bar() {
-                    window_controls(ui);
-                    ui.add_space(8.0);
+                    ui.scope(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        window_controls(ui);
+                    });
                 }
-                if icons::button(
+                if icons::toolbar_button(
                     ui,
                     Icon::Search,
                     &format!(
@@ -102,7 +107,6 @@ pub fn main_toolbar(app: &mut IdeApp, ctx: &egui::Context) {
                 {
                     app.dispatch("navigate.searchEverywhere", serde_json::Value::Null);
                 }
-                ui.add_space(6.0);
                 run_widget(app, ui);
                 crate::device_manager::device_selector(app, ui);
             });
@@ -213,7 +217,7 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
     let running = app.state.execution().is_running();
     // Right-to-left layout: rightmost item first.
     if running
-        && icons::button_colored(
+        && icons::toolbar_button_colored(
             ui,
             Icon::Stop,
             *theme::STOP_RED,
@@ -227,7 +231,8 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
     let detected = app.state.detected_build().clone();
     // Right-to-left: the Debug button sits right of Run, as in the reference.
     if app.state.is_debugging() {
-        if icons::button_colored(ui, Icon::Stop, theme::STOP_RED, "Stop Debugging", false).clicked()
+        if icons::toolbar_button_colored(ui, Icon::Stop, theme::STOP_RED, "Stop Debugging", false)
+            .clicked()
         {
             app.dispatch("debug.stop", Value::Null);
         }
@@ -240,7 +245,7 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
         };
         if ui
             .add_enabled_ui(can_debug, |ui| {
-                icons::button_colored(
+                icons::toolbar_button_colored(
                     ui,
                     Icon::Debug,
                     color,
@@ -262,7 +267,9 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
             app.action_shortcut("CompileDirty").unwrap_or_default()
         ),
     };
-    let build = ui.add_enabled_ui(can_build, |ui| icons::button(ui, Icon::Build, &build_tip));
+    let build = ui.add_enabled_ui(can_build, |ui| {
+        icons::toolbar_button(ui, Icon::Build, &build_tip)
+    });
     if build.inner.clicked() {
         app.dispatch("build.project", Value::Null);
     }
@@ -301,7 +308,7 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
         _ => format!("Run ({})", app.action_shortcut("Run").unwrap_or_default()),
     };
     let run = ui.add_enabled_ui(can_run, |ui| {
-        icons::button_colored(ui, Icon::Run, run_color, &run_tip, false)
+        icons::toolbar_button_colored(ui, Icon::Run, run_color, &run_tip, false)
     });
     // Disabled widgets do not show the normal tooltip; keep the reason discoverable.
     if !can_run {
@@ -595,9 +602,22 @@ pub fn window_resize_handles(ctx: &egui::Context) {
         });
 }
 
+/// Stripe padding: 5 px around the 30 px buttons in the 40 px cell (UI-TW-002).
+fn stripe_margin() -> egui::Margin {
+    let edge = ((STRIPE_WIDTH - archipel_kit::tokens::stripe::BUTTON) / 2.0) as i8;
+    egui::Margin::symmetric(edge, edge)
+}
+
+/// Gap between stripe buttons: 40 px pitch (UI-TW-003).
+pub(crate) fn stripe_gap() -> f32 {
+    archipel_kit::tokens::stripe::PITCH - archipel_kit::tokens::stripe::BUTTON
+}
+
 pub(crate) fn stripe_button(app: &mut IdeApp, ui: &mut egui::Ui, window: ToolWindow, icon: Icon) {
     let selected = app.state.tool_windows().is_visible(window);
-    let (rect, response) = ui.allocate_exact_size(vec2(32.0, 32.0), Sense::click());
+    let button = archipel_kit::tokens::stripe::BUTTON;
+    let icon_edge = archipel_kit::tokens::stripe::ICON;
+    let (rect, response) = ui.allocate_exact_size(vec2(button, button), Sense::click());
     let fill = if selected {
         *theme::ACCENT
     } else if response.hovered() {
@@ -605,7 +625,8 @@ pub(crate) fn stripe_button(app: &mut IdeApp, ui: &mut egui::Ui, window: ToolWin
     } else {
         Color32::TRANSPARENT
     };
-    ui.painter().rect_filled(rect, 6.0, fill);
+    ui.painter()
+        .rect_filled(rect, archipel_kit::tokens::radius::ICON_BUTTON, fill);
     let color = if selected {
         Color32::WHITE
     } else {
@@ -613,7 +634,7 @@ pub(crate) fn stripe_button(app: &mut IdeApp, ui: &mut egui::Ui, window: ToolWin
     };
     icons::paint(
         ui.painter(),
-        Rect::from_center_size(rect.center(), vec2(16.0, 16.0)),
+        Rect::from_center_size(rect.center(), vec2(icon_edge, icon_edge)),
         icon,
         color,
     );
@@ -655,9 +676,9 @@ pub fn left_stripe(app: &mut IdeApp, ctx: &egui::Context) {
         .exact_width(STRIPE_WIDTH)
         .resizable(false)
         .show_separator_line(false)
-        .frame(glow_through_frame().inner_margin(egui::Margin::symmetric(4, 6)))
+        .frame(glow_through_frame().inner_margin(stripe_margin()))
         .show(ctx, |ui| {
-            ui.spacing_mut().item_spacing.y = 6.0;
+            ui.spacing_mut().item_spacing.y = stripe_gap();
             ui.vertical(|ui| {
                 stripe_button(app, ui, ToolWindow::Project, Icon::Project);
                 stripe_button(app, ui, ToolWindow::Commit, Icon::Commit);
@@ -676,7 +697,10 @@ pub fn left_stripe(app: &mut IdeApp, ctx: &egui::Context) {
                     stripe_button(app, ui, ToolWindow::ResourceManager, Icon::Variants);
                     stripe_button(app, ui, ToolWindow::BuildVariants, Icon::Variants);
                 }
-                let (rect, _) = ui.allocate_exact_size(vec2(32.0, 1.0), Sense::hover());
+                let (rect, _) = ui.allocate_exact_size(
+                    vec2(archipel_kit::tokens::stripe::BUTTON, 1.0),
+                    Sense::hover(),
+                );
                 ui.painter().line_segment(
                     [
                         rect.left_center() + vec2(6.0, 0.0),
@@ -740,9 +764,9 @@ pub fn right_stripe(app: &mut IdeApp, ctx: &egui::Context) {
         .exact_width(STRIPE_WIDTH)
         .resizable(false)
         .show_separator_line(false)
-        .frame(chrome_frame(ctx).inner_margin(egui::Margin::symmetric(4, 6)))
+        .frame(chrome_frame(ctx).inner_margin(stripe_margin()))
         .show(ctx, |ui| {
-            ui.spacing_mut().item_spacing.y = 6.0;
+            ui.spacing_mut().item_spacing.y = stripe_gap();
             for (window, icon) in windows {
                 stripe_button(app, ui, window, icon);
             }
@@ -803,11 +827,27 @@ pub fn window_title(project: &str, file: Option<&std::path::Path>) -> String {
 }
 
 pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
+    let metrics = archipel_kit::tokens::metrics(ctx);
+    let line = metrics.status_top_line;
     egui::TopBottomPanel::bottom("status_bar")
-        .exact_height(STATUS_BAR_HEIGHT)
+        .exact_height(metrics.status_bar_height)
         .show_separator_line(false)
-        .frame(chrome_frame(ctx).inner_margin(egui::Margin::symmetric(8, 0)))
+        .frame(chrome_frame(ctx).inner_margin(egui::Margin {
+            left: 8,
+            right: 8,
+            top: line as i8,
+            bottom: 0,
+        }))
         .show(ctx, |ui| {
+            if line > 0.0 {
+                // The 1 px line on top of the status bar (UI-SB-001).
+                let bar = ui.max_rect();
+                ui.painter().hline(
+                    bar.left() - 8.0..=bar.right() + 8.0,
+                    bar.top() - line / 2.0,
+                    egui::Stroke::new(line, theme::DIVIDER),
+                );
+            }
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 let font = egui::FontId::proportional(theme::UI_FONT_SIZE - 1.0);

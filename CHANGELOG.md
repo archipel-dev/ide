@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/archipel-dev/ide/compare/v0.2.3...v0.2.4) (2026-10-27)
+
+
+### Features
+
+* **tui:** terminal frontend on archipel-kit-tui ([#79](https://github.com/archipel-dev/ide/issues/79)) ([78c20a3](https://github.com/archipel-dev/ide/commit/78c20a3c8abed00aec590c11be766db85ffd0fba))
+
 ## [0.2.3](https://github.com/archipel-dev/ide/compare/v0.2.2...v0.2.3) (2026-10-27)
 
 

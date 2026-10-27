@@ -37,3 +37,7 @@ Reference theme "Dark" (New UI). Normative values are the theme/scheme files (`i
 | Hover fills | `#FFFFFF16` (action), Gray3 (list) | not captured | - | live |
 
 Settings-default Islands Dark (fresh config capture): frame `#1A1B1E`, island panels and editor `#111213`, popups `#26282C`, 4 px gaps between islands, selected stripe button `#264E9A`; none of these exist in the IntelliJ 2025.2 Dark reference.
+
+## After the ui-parity pass
+
+Search match, completion selection, status line, tree tints and error stripe rule now resolve from kit tokens (`SEARCH_MATCH`, `SELECTION_INACTIVE`, `DIVIDER`, `FILE_YELLOW`, `FILE_GREEN`, `BAND`) per theme. The yellow dark search match needs kit commit `c7c25cd`.

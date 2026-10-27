@@ -159,6 +159,9 @@ fn preview_job(
     (job, first)
 }
 
+/// Popup width (UI-POP-040: 652 px).
+const FIND_POPUP_WIDTH: f32 = 652.0;
+
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     if !app.find_popup.open {
         return;
@@ -182,7 +185,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     let to_window =
         ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::Enter));
     let screen = ctx.content_rect();
-    let width = 780.0_f32.min(screen.width() - 40.0);
+    let width = FIND_POPUP_WIDTH.min(screen.width() - 40.0);
     let height = (screen.height() * 0.7).max(360.0);
     let mut chosen = enter.then_some(app.find_popup.selected);
     let mut open_window = to_window;
@@ -584,12 +587,10 @@ fn result_row(app: &mut IdeApp, ui: &mut egui::Ui, found: &TextMatch, index: usi
         location,
         *theme::TEXT_SECONDARY,
     );
-    let galley = ui
-        .painter()
-        .layout_job(crate::toolwindows::highlighted_preview(
-            &found.preview,
-            &found.highlights,
-        ));
+    let galley = ui.painter().layout_job(crate::toolwindows::popup_preview(
+        &found.preview,
+        &found.highlights,
+    ));
     ui.painter()
         .with_clip_rect(rect.with_max_x(x - 8.0))
         .galley(

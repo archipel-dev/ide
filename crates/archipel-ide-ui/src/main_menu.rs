@@ -159,7 +159,7 @@ fn with_new_project(mut items: Vec<MenuItem>) -> Vec<MenuItem> {
 /// toolbar (New UI behaviour). Returns whether the menu bar is expanded.
 pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) -> bool {
     if !app.menu_bar_open {
-        if icons::button(ui, icons::Icon::MainMenu, "Main Menu").clicked() {
+        if icons::toolbar_button(ui, icons::Icon::MainMenu, "Main Menu").clicked() {
             app.menu_bar_open = true;
             app.menu_bar_popup_seen = false;
         }

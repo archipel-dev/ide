@@ -55,3 +55,17 @@ Archipel: `new-ui-dark-u04-*.png`, `new-ui-dark-u20-problems.png`. Window pixels
   `expUI_dark.theme.json` (`ToolWindow.Button`, `Tree.rowHeight` 24, `Tree.border`, `List.rowHeight`).
 - Stripe button tooltip shows the tool window name and shortcut after the tooltip delay (`00`).
 - Differences caused by the default Islands look (rounded island panels with 12 px gaps, `Code/Agents` strip) are listed in `gaps.md`, not here.
+
+## After the ui-parity pass (`u04`, `u20`)
+
+| Value | IntelliJ | Archipel now | Remaining diff |
+|---|---|---|---|
+| Stripe button | 30x30, radius 6 | 30x30, radius 6, icon 20 | 0 |
+| Stripe pitch | 40 | 40 (centers 59.5, 99.5, 139.5; bottom 608.5, 648, 688.5, ...) | 0 |
+| First button top | y=46 | y=45 | 1 px (no 1 px toolbar border row) |
+| Project width | 28.8 % | 28.8 % (415 px at 1440) | 0 |
+| Excluded / test row tint | `#3D3223` / `#273828` full width | theme `FileColor.Yellow` / `Green` (banner colors in the hand-measured Islands themes), full width | Islands themes use their own shades |
+| Root chevron | present | present | 0 |
+| Header actions | + locate expand collapse kebab hide | kebab (kit icon button, popup) and hide | + locate, expand all, collapse all missing (no commands yet) |
+| Title chevron | present for view selector | absent | needs a view selector |
+| Bottom tab underline | 3 px, tab text + 12 px each side | 3 px (kit token), 12 px padding | 0 |

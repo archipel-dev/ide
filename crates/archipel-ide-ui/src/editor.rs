@@ -15,8 +15,10 @@ use eframe::egui::{self, Color32, Rect, Sense, Stroke, vec2};
 use serde_json::{Value, json};
 
 const TAB_BAR_HEIGHT: f32 = 38.0;
-pub(crate) const ROW_HEIGHT: f32 = 20.0;
-const TEXT_LEFT_PADDING: f32 = 14.0;
+/// Editor line pitch at 13 pt and the default line height (UI-ED-011: 22 px).
+pub(crate) const ROW_HEIGHT: f32 = 22.0;
+/// The gutter already ends 1 px before the text column (UI-ED-012: text at +68).
+const TEXT_LEFT_PADDING: f32 = 0.0;
 
 /// Work the editor surface hands back to the app: named actions go through the
 /// command registry; clipboard requests need the platform clipboard.
@@ -257,8 +259,10 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                 );
                 app.editor_menu = Some(context_model);
                 let counts = archipel_ide_core::ProblemCounts::of(&problems[..]);
-                let widget_anchor = if md_layout == Some(archipel_ide_markdown::Layout::EditorOnly)
-                {
+                let widget_anchor = if counts.total() == 0 {
+                    // The green check sits in the error stripe's top corner.
+                    available.right_top()
+                } else if md_layout == Some(archipel_ide_markdown::Layout::EditorOnly) {
                     text_rect.right_top() - vec2(MARKDOWN_ISLAND_WIDTH, 0.0)
                 } else {
                     text_rect.right_top()
@@ -1183,22 +1187,27 @@ struct GutterLayout {
 impl GutterLayout {
     const FOLD_COLUMN: f32 = 14.0;
     const RUN_COLUMN: f32 = 16.0;
-    /// Space for the change bar (`change_popup` paints it 7 px inside the edge).
-    const CHANGE_COLUMN: f32 = 14.0;
+    /// UI-ED-012: line numbers end 7 px after their digits start, the run icon (12 px)
+    /// is centered 13 px right of the numbers, the fold chevron 29 px, and the gutter
+    /// ends 44 px after the numbers (text at +67 for two digits, its first ink at +69).
+    const NUMBERS_MARGIN: f32 = 7.0;
+    const RUN_OFFSET: f32 = 12.7;
+    const FOLD_OFFSET: f32 = 29.2;
+    const WIDTH_AFTER_NUMBERS: f32 = 44.0;
 
     fn new(blame_width: f32, numbers_width: f32, run_icons: bool) -> Self {
-        let numbers_right = blame_width + 20.0 + numbers_width;
+        let numbers_right = blame_width + Self::NUMBERS_MARGIN + numbers_width;
+        // The run column is always reserved: lines gain and lose icons while typing
+        // and the text must not jump.
         let run_width = if run_icons { Self::RUN_COLUMN } else { 0.0 };
-        let run_left = numbers_right + 4.0;
-        let fold_left = run_left + run_width;
         Self {
             numbers_left: blame_width,
             breakpoint_center: blame_width + 12.0,
             numbers_right,
-            run_center: run_left + run_width / 2.0,
+            run_center: numbers_right + Self::RUN_OFFSET,
             run_width,
-            fold_center: fold_left + Self::FOLD_COLUMN / 2.0,
-            width: fold_left + Self::FOLD_COLUMN + Self::CHANGE_COLUMN,
+            fold_center: numbers_right + Self::FOLD_OFFSET,
+            width: numbers_right + Self::WIDTH_AFTER_NUMBERS,
         }
     }
 
@@ -1403,8 +1412,23 @@ fn editor_surface(
     if let Some(y) = scroll_to {
         scroll_area = scroll_area.vertical_scroll_offset(y);
     }
+    // The horizontal extent follows the longest line seen so far in this document, so
+    // the horizontal scrollbar only exists when some line is wider than the view
+    // (UI-ED-021: no scrollbar at rest).
+    let longest_id = egui::Id::new(("editor_longest_line", &document.path));
+    let mut longest = ui
+        .data(|data| data.get_temp::<f32>(longest_id))
+        .unwrap_or(0.0);
+    if row_count > 0 {
+        let first_row = seen_first.saturating_sub(60).min(row_count - 1);
+        let last_row = (seen_last + 60).min(row_count - 1);
+        for row in first_row..=last_row {
+            let (start, end, _) = ops::line_bounds(&document.text, folds.row_to_line(row));
+            longest = longest.max((end - start) as f32 + 4.0);
+        }
+        ui.data_mut(|data| data.insert_temp(longest_id, longest));
+    }
     let output = scroll_area.show_viewport(ui, |ui, viewport| {
-        let longest = 400.0_f32;
         let content_size = egui::vec2(
             ui.available_width().max(text_left + longest * char_width),
             row_count as f32 * row_height + ui.available_height() * 0.5,
@@ -1811,9 +1835,16 @@ fn editor_surface(
                     *theme::editor::LINE_NUMBER_CARET,
                 );
             }
-            // Indent guides every four columns of leading whitespace.
+            // Gutter rule 2 px before the text column (UI-ED-012: at +65).
+            let rule_x = rect.left() + gutter_width - 2.0;
+            painter.line_segment(
+                [egui::pos2(rule_x, y), egui::pos2(rule_x, y + row_height)],
+                Stroke::new(1.0_f32, theme::editor::INDENT_GUIDE),
+            );
+            // Indent guides at every indent level (4 columns) inside the leading
+            // whitespace, from the block's own level (UI-ED-015).
             let indent = content.chars().take_while(|c| *c == ' ').count();
-            for level in (4..=indent.saturating_sub(1)).step_by(4) {
+            for level in (0..indent).step_by(4) {
                 let x = rect.left() + text_left + level as f32 * char_width;
                 painter.line_segment(
                     [egui::pos2(x, y), egui::pos2(x, y + row_height)],
@@ -2236,9 +2267,7 @@ mod tests {
         assert!(plain.in_number_column(plain.breakpoint_center));
         assert!(!plain.in_number_column(plain.fold_center));
         assert!(plain.breakpoint_center < plain.numbers_right);
-        assert!(
-            plain.fold_center + super::GutterLayout::FOLD_COLUMN / 2.0 <= plain.width - 7.0 - 4.0
-        );
+        assert!(plain.fold_center + 3.0 <= plain.width - 2.0 - 4.0);
         let full = super::GutterLayout::new(70.0, 20.0, true);
         // blame | line numbers | run icons | folding | change bar | text
         assert!(70.0 < full.numbers_right);
@@ -2248,7 +2277,7 @@ mod tests {
         assert!(!full.in_fold_column(full.run_center));
         assert!(full.in_fold_column(full.fold_center));
         // The change bar (4 px wide, 7 px inside the edge) is right of the fold column.
-        assert!(full.fold_center + super::GutterLayout::FOLD_COLUMN / 2.0 <= full.width - 11.0);
+        assert!(full.fold_center + 3.0 <= full.width - 6.0);
         assert!(!crate::change_popup::in_marker_column(
             full.fold_center,
             full.width
@@ -2256,6 +2285,29 @@ mod tests {
     }
 
     use super::*;
+
+    /// UI-ED-011: 22 px line pitch at the default 13 pt font and line height.
+    #[test]
+    fn ui_ed_011_line_pitch_is_22_px() {
+        let ctx = egui::Context::default();
+        let font = egui::FontId::monospace(theme::EDITOR_FONT_SIZE);
+        assert_eq!(theme::editor_row_height(&ctx, &font, ROW_HEIGHT), 22.0);
+    }
+
+    /// UI-ED-012: numbers end at +23, the run icon sits at +30..41, the fold chevron
+    /// at +50..54 and the text starts at +68 (two digits, no blame annotations).
+    #[test]
+    fn ui_ed_012_gutter_matches_the_reference_columns() {
+        let char_width = 7.9;
+        let layout = super::GutterLayout::new(0.0, 2.0 * char_width, true);
+        assert!((layout.numbers_right - 23.0).abs() <= 1.0, "{layout:?}");
+        assert!((layout.run_center - 36.0).abs() <= 1.0, "{layout:?}");
+        assert!((layout.fold_center - 52.0).abs() <= 1.0, "{layout:?}");
+        assert!(
+            (layout.width + TEXT_LEFT_PADDING - 67.5).abs() <= 1.5,
+            "{layout:?}"
+        );
+    }
 
     #[test]
     fn multi_line_selections_round_only_their_outer_corners() {

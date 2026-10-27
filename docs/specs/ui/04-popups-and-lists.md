@@ -95,3 +95,23 @@ completion popup view; kit `Popover`, `ContextMenu`, `MenuItem`, `MenuSeparator`
 - `ic: platform/platform-resources/src/themes/expUI/expUI_dark.theme.json` (`Popup`, `List`, `CompletionPopup`, `SearchEverywhere`, `Menu`).
 - Menu hover/pressed colors are not visible in the captures (the reference menus show no hovered item); see `00`.
 - The SE underline measured `#2E74E8` is not a theme literal; use Blue6 `#3574F0` unless a live check shows otherwise.
+
+## After the ui-parity pass (`u05`, `u10`, `u19`)
+
+| Value | IntelliJ | Archipel now | Remaining diff |
+|---|---|---|---|
+| SE size | 705x700 | 705 x min(700, 71 % of the window) | height follows small windows |
+| SE position | y = 19 % | y = 19 % | 0 |
+| SE header band / selected tab | 41 px Gray3, 3 px underline | 41 px band (kit group-separator color), 3 px accent underline | 0 |
+| SE search row, hint | 40 px, "Type / to see commands" | 40 px, hint when the field is empty | 0 |
+| SE rows | 24 px, selection 8 px from border | 24 px, 8 px | 0 |
+| SE footer | 29 px band, path, blue link | 29 px band, path, link "Open In Right Split" | 0 |
+| Match highlight | `#BA9752`, dark text | `SEARCH_MATCH` token; Yellow5 with dark text once kit commit `c7c25cd` (branch `feat/ide-ui-parity`) is in main, `#694820` until then | needs kit |
+| Completion selection | Gray4 inactive selection | `selection_inactive` token (Gray4 in New UI Dark) | 0 in New UI Dark |
+| Completion width / footer | 573 / 28 band | min 573 / 28 band, hint text | tip text, Next Tip link, kebab missing |
+| Menu width | content driven (381) | content driven (238 for the project menu, shorter shortcuts) | 0 by rule |
+| Menu icons | Copy, Paste, Run, ... | Copy, Paste, Delete, Find in Files, Rename, Run, Debug, Synchronize | Cut and others have no glyph |
+| Menu row height | 26 | 24 (kit, measured on Android Studio Islands) | look dependent, kept |
+| Mnemonics | underlined | kit `ActionMenuItem::underlined` exists (commit `c7c25cd`); IDE does not use it yet | needs kit |
+| Sub-menu | attached | opens beside the parent with egui's gap, content wide | gap of a few px |
+| FIF width / font / highlight | 652 / UI font / `#BA9752` | 652 / UI font / `SEARCH_MATCH` | preview header missing |

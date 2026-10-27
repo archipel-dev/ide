@@ -51,11 +51,11 @@ mod layout {
     pub const TREE_SRC_CHEVRON: Point = (80, 113);
     /// Second row under `src` of the rust-cargo fixture (`broken.rs` sorts first).
     pub const TREE_MAIN_RS: Point = (150, 161);
-    pub const PROJECT_HIDE_BUTTON: Point = (293, 58);
+    pub const PROJECT_HIDE_BUTTON: Point = (430, 61);
     pub const PROJECT_STRIPE_BUTTON: Point = (19, 62);
-    pub const FIRST_TAB_CLOSE: Point = (419, 61);
+    pub const FIRST_TAB_CLOSE: Point = (554, 61);
     pub const TOOLBAR_SEARCH: Point = (1287, 20);
-    pub const TOOLBAR_RUN: Point = (1210, 20);
+    pub const TOOLBAR_RUN: Point = (1168, 20);
     pub const HAMBURGER: Point = (19, 20);
     pub const MENU_FILE: Point = (18, 20);
     pub const MENU_FILE_SETTINGS: Point = (46, 174);

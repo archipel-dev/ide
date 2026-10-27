@@ -7,11 +7,14 @@ use serde_json::json;
 /// Spinner and the importer's progress line; click to cancel. A queued auto-import shows
 /// "Build files changed" until it starts.
 pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::FontId) {
-    let state = &app.state.project_model;
-    let Some(text) = state
-        .progress_text()
-        .or_else(|| state.is_busy().then(|| "Build files changed…".to_owned()))
-    else {
+    let Some(model) = app.state.project_model() else {
+        return;
+    };
+    let (progress, busy) = {
+        let state = model.read();
+        (state.progress_text(), state.is_busy())
+    };
+    let Some(text) = progress.or_else(|| busy.then(|| "Build files changed…".to_owned())) else {
         return;
     };
     widgets::busy_spinner(ui, 12.0, *theme::TEXT_INFO);

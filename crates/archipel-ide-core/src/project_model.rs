@@ -1,13 +1,14 @@
 //! The project model and the external system import (IntelliJ's `ModuleManager` /
 //! `ExternalSystemManager` roles) as seen by the rest of the IDE.
 //!
-//! `IdeState::project_model` holds the last imported [`ProjectModel`], the running import and the
+//! `IdeState::project_model()` (a project service) holds the last imported [`ProjectModel`], the running import and the
 //! auto-import schedule. The import itself runs on a worker thread
 //! (`archipel-ide-externalsystem`); the UI loop calls [`IdeState::poll_project_model`].
 //! Nothing else reads the model yet: index roots, the runner classpath, Android, toolchain
 //! requirements and jdtls still use their own discovery (see
 //! `docs/architecture/project-model.md` for the call sites to migrate).
 
+use crate::services::ProjectModelService;
 use crate::{IdeState, spec};
 use archipel_ide_command::{Command, CommandError, CommandRegistry};
 use archipel_ide_externalsystem::{
@@ -54,7 +55,7 @@ enum Outcome {
 }
 
 struct ImportJob {
-    receiver: Receiver<Outcome>,
+    receiver: Mutex<Receiver<Outcome>>,
     cancel: CancelToken,
     progress: Arc<Mutex<String>>,
 }
@@ -252,21 +253,24 @@ impl ProjectModelState {
 impl IdeState {
     /// Called when a project is installed: shows the cached model and imports in the background.
     pub(crate) fn open_project_model(&mut self) {
-        self.project_model.reset();
+        let Some(service) = self.project_model() else {
+            return;
+        };
+        service.write().reset();
         let Some(root) = self.project_root() else {
             return;
         };
         if let Some(model) = load_cached_model(&root) {
             let model = Arc::new(model);
-            self.project_model.index = Some(Arc::new(model.file_index()));
-            self.project_model.model = Some(model);
+            let mut state = service.write();
+            state.index = Some(Arc::new(model.file_index()));
+            state.model = Some(model);
         }
         // Missing JDK/Gradle/Maven are installed first; the import starts when that finishes.
+        let requirements = self.toolchain_requirements();
         let waits_for_tools = self.toolchains().read().auto_setup
-            && self
-                .toolchain_requirements()
-                .is_some_and(|requirements| !requirements.read().missing_components().is_empty());
-        if self.project_model.auto_import && !waits_for_tools {
+            && requirements.is_some_and(|r| !r.read().missing_components().is_empty());
+        if service.read().auto_import && !waits_for_tools {
             // No build system, no import: the status stays idle and nothing is shown.
             let _ = self.start_external_import(ImportReason::Open);
         }
@@ -275,13 +279,18 @@ impl IdeState {
     /// Starts (or queues) an import of the open project's build systems.
     pub fn start_external_import(&mut self, reason: ImportReason) -> Result<(), String> {
         let root = self.project_root().ok_or("no project is open")?;
-        if self.project_model.job.is_some() {
-            self.project_model.rerun = true;
-            return Ok(());
-        }
-        let resolvers = self.project_model.registry.detect(&root);
+        let service = self.project_model().ok_or("no project is open")?;
+        let registry = {
+            let mut state = service.write();
+            if state.job.is_some() {
+                state.rerun = true;
+                return Ok(());
+            }
+            state.registry.clone()
+        };
+        let resolvers = registry.detect(&root);
         if resolvers.is_empty() {
-            self.project_model.status = ImportStatus::Idle;
+            service.write().status = ImportStatus::Idle;
             return Err(
                 "No supported build system (Gradle, Maven, Cargo, Bazel) found in the project root"
                     .into(),
@@ -300,7 +309,6 @@ impl IdeState {
             text: Arc::clone(&text),
             waker: waker.clone(),
         });
-        let registry = self.project_model.registry.clone();
         let worker_root = root.clone();
         let spawned = std::thread::Builder::new()
             .name("archipel-ide-import".into())
@@ -324,13 +332,16 @@ impl IdeState {
         if let Err(error) = spawned {
             return Err(format!("could not start the import: {error}"));
         }
-        self.project_model.job = Some(ImportJob {
-            receiver,
-            cancel,
-            progress: text,
-        });
-        self.project_model.status = ImportStatus::Importing;
-        self.project_model.scheduled = None;
+        {
+            let mut state = service.write();
+            state.job = Some(ImportJob {
+                receiver: Mutex::new(receiver),
+                cancel,
+                progress: text,
+            });
+            state.status = ImportStatus::Importing;
+            state.scheduled = None;
+        }
         let names: Vec<&str> = resolvers
             .iter()
             .map(|r| r.system_id().display_name())
@@ -347,59 +358,78 @@ impl IdeState {
     /// Applies a finished import and starts a scheduled one. Call once per frame; returns whether
     /// the status bar changed.
     pub fn poll_project_model(&mut self) -> bool {
+        let Some(service) = self.project_model() else {
+            return false;
+        };
         let mut changed = false;
-        if let Some(job) = &self.project_model.job {
-            match job.receiver.try_recv() {
-                Ok(outcome) => {
-                    self.project_model.job = None;
-                    changed = true;
-                    self.apply_import_outcome(outcome);
+        let received = {
+            let mut state = service.write();
+            let received = state.job.as_ref().map(|job| {
+                job.receiver
+                    .lock()
+                    .ok()
+                    .map(|r| r.try_recv())
+                    .unwrap_or(Err(TryRecvError::Disconnected))
+            });
+            match received {
+                Some(Ok(outcome)) => {
+                    state.job = None;
+                    Some(outcome)
                 }
-                Err(TryRecvError::Disconnected) => {
-                    self.project_model.job = None;
-                    self.project_model.status =
-                        ImportStatus::Failed("the import stopped unexpectedly".into());
+                Some(Err(TryRecvError::Disconnected)) => {
+                    state.job = None;
+                    state.status = ImportStatus::Failed("the import stopped unexpectedly".into());
                     changed = true;
+                    None
                 }
-                Err(TryRecvError::Empty) => {}
+                _ => None,
             }
+        };
+        if let Some(outcome) = received {
+            changed = true;
+            self.apply_import_outcome(&service, outcome);
         }
-        let due = self
-            .project_model
-            .scheduled
-            .is_some_and(|at| Instant::now() >= at);
-        if self.project_model.job.is_none() && (due || self.project_model.rerun) {
-            self.project_model.rerun = false;
-            self.project_model.scheduled = None;
-            if self.start_external_import(ImportReason::AutoImport).is_ok() {
-                changed = true;
+        let start = {
+            let mut state = service.write();
+            let due = state.scheduled.is_some_and(|at| Instant::now() >= at);
+            let start = state.job.is_none() && (due || state.rerun);
+            if start {
+                state.rerun = false;
+                state.scheduled = None;
             }
+            start
+        };
+        if start && self.start_external_import(ImportReason::AutoImport).is_ok() {
+            changed = true;
         }
         changed
     }
 
-    fn apply_import_outcome(&mut self, outcome: Outcome) {
-        self.project_model.ignore_changes_until = Some(Instant::now() + SELF_CHANGE_GRACE);
+    fn apply_import_outcome(&mut self, service: &ProjectModelService, outcome: Outcome) {
+        service.write().ignore_changes_until = Some(Instant::now() + SELF_CHANGE_GRACE);
         match outcome {
             Outcome::Done(result, index, took) => {
                 let result = *result;
                 let modules = result.model.modules.len();
                 let libraries = result.model.library_count();
-                self.project_model.systems = result.systems;
-                self.project_model.diagnostics = result.diagnostics;
-                self.project_model.model = Some(Arc::new(result.model));
-                self.project_model.index = Some(index);
-                self.project_model.status = ImportStatus::Idle;
-                self.project_model.last_duration = Some(took);
-                self.project_model.imports_finished += 1;
-                let plural =
-                    |n: usize, word: &str| format!("{n} {word}{}", if n == 1 { "" } else { "s" });
-                let warnings = self
-                    .project_model
+                let model = Arc::new(result.model);
+                let warnings = result
                     .diagnostics
                     .iter()
                     .filter(|d| d.severity != archipel_ide_externalsystem::Severity::Info)
                     .count();
+                {
+                    let mut state = service.write();
+                    state.systems = result.systems;
+                    state.diagnostics = result.diagnostics;
+                    state.model = Some(Arc::clone(&model));
+                    state.index = Some(index);
+                    state.status = ImportStatus::Idle;
+                    state.last_duration = Some(took);
+                    state.imports_finished += 1;
+                }
+                let plural =
+                    |n: usize, word: &str| format!("{n} {word}{}", if n == 1 { "" } else { "s" });
                 self.status = format!(
                     "Project imported: {}, {}{}",
                     plural(modules, "module"),
@@ -410,14 +440,19 @@ impl IdeState {
                         String::new()
                     }
                 );
+                service.publish_imported(&model);
             }
             Outcome::Failed(error) => {
                 self.status = format!("Project import failed: {error}");
-                self.project_model.status = ImportStatus::Failed(error);
-                self.project_model.imports_finished += 1;
+                {
+                    let mut state = service.write();
+                    state.status = ImportStatus::Failed(error.clone());
+                    state.imports_finished += 1;
+                }
+                service.publish_failed(&error);
             }
             Outcome::Cancelled => {
-                self.project_model.status = ImportStatus::Idle;
+                service.write().status = ImportStatus::Idle;
                 self.status = "Project import cancelled".into();
             }
         }
@@ -428,26 +463,26 @@ impl IdeState {
         &mut self,
         paths: impl IntoIterator<Item = &'a PathBuf>,
     ) {
-        if !self.project_model.auto_import {
+        let Some(service) = self.project_model() else {
             return;
-        }
+        };
         let Some(root) = self.project_root() else {
             return;
         };
-        if self.project_model.job.is_some()
-            || self
-                .project_model
+        let mut state = service.write();
+        if !state.auto_import
+            || state.job.is_some()
+            || state
                 .ignore_changes_until
                 .is_some_and(|until| Instant::now() < until)
         {
             return;
         }
-        let registry = &self.project_model.registry;
         if paths
             .into_iter()
-            .any(|path| registry.is_build_input(&root, path))
+            .any(|path| state.registry.is_build_input(&root, path))
         {
-            self.project_model.scheduled = Some(Instant::now() + AUTO_IMPORT_DEBOUNCE);
+            state.scheduled = Some(Instant::now() + AUTO_IMPORT_DEBOUNCE);
         }
     }
 }
@@ -480,9 +515,11 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.project_model.is_busy(),
+            |state: &IdeState| state.project_model().is_some_and(|m| m.is_busy()),
             |state: &mut IdeState, _| {
-                state.project_model.cancel();
+                if let Some(model) = state.project_model() {
+                    model.cancel();
+                }
                 Ok(Value::Null)
             },
         ))
@@ -499,7 +536,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |state: &IdeState| state.project.is_some(),
             |state: &mut IdeState, _| {
                 let root = state.project_root().unwrap_or_default();
-                Ok(state.project_model.snapshot(&root))
+                Ok(state
+                    .project_model()
+                    .map_or(Value::Null, |m| m.snapshot(&root)))
             },
         ))
         .expect("unique built-in id");
@@ -509,6 +548,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
 mod tests {
     use super::*;
     use crate::built_in_commands;
+    use archipel_ide_platform::ComponentManager;
     use archipel_ide_project::Project;
     use serde_json::json;
 
@@ -532,20 +572,25 @@ mod tests {
         root
     }
 
+    fn pm(state: &IdeState) -> Arc<ProjectModelService> {
+        state.project_model().expect("a project is open")
+    }
+
     fn wait_idle(state: &mut IdeState) {
         let deadline = Instant::now() + Duration::from_secs(60);
-        while state.project_model.is_busy() && Instant::now() < deadline {
+        while pm(state).is_busy() && Instant::now() < deadline {
             state.poll_project_model();
             std::thread::sleep(Duration::from_millis(25));
         }
         state.poll_project_model();
-        assert!(!state.project_model.is_busy(), "import did not finish");
+        assert!(!pm(state).is_busy(), "import did not finish");
     }
 
     fn open(root: &Path) -> IdeState {
         let mut state = IdeState::default();
-        state.project_model.auto_import = true;
         state.install_project(Project::open(root).unwrap()).unwrap();
+        pm(&state).write().auto_import = true;
+        state.open_project_model();
         state
     }
 
@@ -556,13 +601,10 @@ mod tests {
         }
         let root = cargo_project("open");
         let mut state = open(&root);
-        assert!(
-            state.project_model.is_importing(),
-            "the import starts on open"
-        );
-        assert_eq!(state.project_model.snapshot(&root)["state"], "importing");
+        assert!(pm(&state).is_importing(), "the import starts on open");
+        assert_eq!(pm(&state).snapshot(&root)["state"], "importing");
         wait_idle(&mut state);
-        let snapshot = state.project_model.snapshot(&root);
+        let snapshot = pm(&state).snapshot(&root);
         assert_eq!(snapshot["state"], "ready", "{snapshot}");
         assert_eq!(snapshot["systems"], json!(["cargo"]));
         let module = &snapshot["modules"][0];
@@ -589,7 +631,9 @@ mod tests {
                 .iter()
                 .any(|p| p == "target")
         );
-        let index = state.project_model.file_index().unwrap();
+        let service = pm(&state);
+        let guard = service.read();
+        let index = guard.file_index().unwrap();
         assert!(index.is_in_test_source(&root.join("tests/it.rs")));
         assert!(
             state.status.starts_with("Project imported: 1 module"),
@@ -612,10 +656,10 @@ mod tests {
         drop(first);
         let state = open(&root);
         assert!(
-            state.project_model.model.is_some(),
+            pm(&state).read().model.is_some(),
             "cached model is available immediately"
         );
-        assert!(state.project_model.is_importing());
+        assert!(pm(&state).is_importing());
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -626,7 +670,7 @@ mod tests {
         std::fs::create_dir_all(&empty).unwrap();
         let commands = built_in_commands();
         let mut state = open(&empty);
-        assert_eq!(state.project_model.snapshot(&empty)["state"], "idle");
+        assert_eq!(pm(&state).snapshot(&empty)["state"], "idle");
         let error = commands
             .execute("externalSystem.refresh", &mut state, json!({}))
             .unwrap_err();
@@ -642,7 +686,7 @@ mod tests {
         let root = cargo_project("sync");
         let mut state = open(&root);
         wait_idle(&mut state);
-        let before = state.project_model.imports_finished;
+        let before = pm(&state).read().imports_finished;
         commands
             .execute("externalSystem.refresh", &mut state, json!({}))
             .unwrap();
@@ -652,7 +696,7 @@ mod tests {
             state.status
         );
         wait_idle(&mut state);
-        assert_eq!(state.project_model.imports_finished, before + 1);
+        assert_eq!(pm(&state).read().imports_finished, before + 1);
         let model = commands
             .execute("externalSystem.model", &mut state, json!({}))
             .unwrap();
@@ -664,11 +708,11 @@ mod tests {
         commands
             .execute("externalSystem.refresh", &mut state, json!({}))
             .unwrap();
-        assert!(state.project_model.rerun);
+        assert!(pm(&state).read().rerun);
         commands
             .execute("externalSystem.cancel", &mut state, json!({}))
             .unwrap();
-        assert!(!state.project_model.rerun);
+        assert!(!pm(&state).read().rerun);
         wait_idle(&mut state);
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -678,25 +722,22 @@ mod tests {
         let root = cargo_project("auto");
         let mut state = open(&root);
         // Pretend the first import is done and quiet.
-        state.project_model.reset();
+        pm(&state).write().reset();
         state.project_model_files_changed([&root.join("src/main.rs")]);
-        assert!(
-            !state.project_model.is_busy(),
-            "sources are not build inputs"
-        );
+        assert!(!pm(&state).is_busy(), "sources are not build inputs");
         state.project_model_files_changed([&root.join("Cargo.toml")]);
-        assert!(state.project_model.scheduled.is_some());
+        assert!(pm(&state).read().scheduled.is_some());
         // Not due yet: polling does not start it.
         assert!(!state.poll_project_model());
-        assert!(!state.project_model.is_importing());
-        state.project_model.scheduled = Some(Instant::now());
+        assert!(!pm(&state).is_importing());
+        pm(&state).write().scheduled = Some(Instant::now());
         state.poll_project_model();
-        assert!(state.project_model.is_importing() || state.project_model.scheduled.is_none());
-        state.project_model.cancel();
+        assert!(pm(&state).is_importing() || pm(&state).read().scheduled.is_none());
+        pm(&state).cancel();
         wait_idle(&mut state);
         // Changes made by the import itself are ignored.
         state.project_model_files_changed([&root.join("Cargo.lock")]);
-        assert!(state.project_model.scheduled.is_none());
+        assert!(pm(&state).read().scheduled.is_none());
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -704,13 +745,49 @@ mod tests {
     fn auto_import_can_be_turned_off() {
         let root = cargo_project("off");
         let mut state = IdeState::default();
-        assert!(!state.project_model.auto_import);
         state
             .install_project(Project::open(&root).unwrap())
             .unwrap();
-        assert!(!state.project_model.is_busy());
+        assert!(!pm(&state).read().auto_import);
+        assert!(!pm(&state).is_busy());
         state.project_model_files_changed([&root.join("Cargo.toml")]);
-        assert!(!state.project_model.is_busy());
+        assert!(!pm(&state).is_busy());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[derive(Default)]
+    struct Heard(parking_lot::Mutex<Vec<String>>);
+
+    impl crate::services::ProjectModelListener for Heard {
+        fn model_imported(&self, model: &ProjectModel) {
+            self.0
+                .lock()
+                .push(format!("imported {}", model.modules.len()));
+        }
+        fn import_failed(&self, error: &str) {
+            self.0.lock().push(format!("failed {error}"));
+        }
+    }
+
+    #[test]
+    fn a_finished_import_is_announced_on_the_project_bus() {
+        if archipel_ide_runner::find_program("cargo").is_none() {
+            return;
+        }
+        let root = cargo_project("topic");
+        let mut state = open(&root);
+        let heard = Arc::new(Heard::default());
+        let project = state.platform_project().unwrap();
+        project
+            .message_bus()
+            .subscribe(
+                project.disposable(),
+                crate::services::PROJECT_MODEL_TOPIC,
+                heard.clone(),
+            )
+            .unwrap();
+        wait_idle(&mut state);
+        assert_eq!(*heard.0.lock(), ["imported 1"]);
         let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -151,7 +151,7 @@ impl IdeState {
             self.status = status;
         }
         // The project model is imported once the tools the build needs are there.
-        if self.project_model.auto_import {
+        if self.project_model().is_some_and(|m| m.read().auto_import) {
             let _ = self.start_external_import(crate::project_model::ImportReason::Open);
         }
         // A Gradle project imports itself once its JDK (and Gradle) are there.

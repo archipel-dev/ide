@@ -283,7 +283,7 @@ impl IdeApp {
             && !self.state.runner.is_running()
             && !self.state.updates.is_busy()
             && self.state.analysis.index.is_idle()
-            && !self.state.project_model.is_busy()
+            && !self.state.project_model().is_some_and(|m| m.is_busy())
     }
 
     fn popup_visible(&self, ctx: &egui::Context) -> bool {
@@ -473,7 +473,7 @@ impl IdeApp {
                     .map(|info| (info.id.0.to_owned(), json!(archipel_ide_index::progress::state_label(info.state))))
                     .collect::<serde_json::Map<_, _>>(),
             },
-            "projectModel": self.state.project_model.snapshot(root.as_deref().unwrap_or(std::path::Path::new(""))),
+            "projectModel": self.state.project_model().map_or(Value::Null, |m| m.snapshot(root.as_deref().unwrap_or(std::path::Path::new("")))),
             "run": {
                 "task": self.state.runner.plan().map(|plan| plan.name.clone()),
                 "running": self.state.runner.is_running(),
@@ -723,7 +723,7 @@ mod tests {
         std::fs::write(dir.join("tests/it.rs"), "#[test]\nfn t() {}\n").unwrap();
         let mut app = IdeApp::with_update_check(Some(dir.clone()), Vec::new(), false);
         let ctx = egui::Context::default();
-        assert!(app.state.project_model.is_importing());
+        assert!(app.state.project_model().unwrap().is_importing());
         // The harness waits for imports like it waits for indexing.
         assert!(!app.background_idle());
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);

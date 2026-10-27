@@ -379,8 +379,6 @@ pub struct IdeState {
     pub gradle_error: Option<String>,
     /// Build scripts changed on disk since the last sync ("Load Gradle Changes").
     pub gradle_changes_pending: bool,
-    /// Modules, roots, SDKs and libraries imported from the build tools, and the import itself.
-    pub project_model: project_model::ProjectModelState,
     /// Bazel targets from the last sync (cached in `.archipel/bazel/targets.json`).
     pub bazel_targets: Option<archipel_ide_bazel::BazelTargets>,
     pub bazel_error: Option<String>,
@@ -466,7 +464,6 @@ impl IdeState {
         self.search_query.clear();
         self.terminal = None;
         self.runner = TaskService::default();
-        self.project_model.reset();
         self.watcher = None;
         self.lsp.set_project(None);
         self.close_diff();

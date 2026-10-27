@@ -994,7 +994,9 @@ impl IdeApp {
         }
         self.state.poll_git();
         self.state.poll_toolchains();
-        if self.state.poll_project_model() || self.state.project_model.is_busy() {
+        if self.state.poll_project_model()
+            || self.state.project_model().is_some_and(|m| m.is_busy())
+        {
             ctx.request_repaint_after(Duration::from_millis(250));
         }
         if self.state.toolchains().read().service.is_busy() {

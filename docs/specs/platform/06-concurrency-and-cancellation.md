@@ -89,7 +89,7 @@ Semantics:
 
 1. A submission runs the computation when its constraints hold. If a write section starts, the computation is cancelled and **re-queued**, then runs
    again when constraints hold and no write is pending.
-2. Expiry conditions are checked when read access is allowed: before the background computation and again before the finish step.
+2. Expiry conditions are evaluated twice, each time while read access is held: just before the background computation starts and again just before the finish step.
 3. `finish_on_ui_thread`: after the computation, the finish callback runs on the UI thread **in a state where no write happened since the computation
    finished**; if one did, the whole thing re-runs.
 4. Coalescing: submitting with equal keys cancels earlier running or queued computations (typical: one highlighting job per file, one completion per editor).

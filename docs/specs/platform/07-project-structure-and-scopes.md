@@ -64,11 +64,11 @@ an excluded folder *inside* a source folder excludes; a source folder or content
 | PLAT-SCOPE-006 | MUST | `is_in_project(file)` = in content **or** in library/SDK roots (classes or sources) and not ignored. `is_in_source(file)` = source content or library sources. | A jar class is in project but not in content. |
 | PLAT-SCOPE-007 | MUST | **Order entries of a file**: the order entries of all modules whose classes or sources roots contain the file, in order. Use only when entries are needed; use `find_containing_libraries` otherwise. | Libraries shared by two modules appear once per module entry. |
 | PLAT-SCOPE-008 | MUST | `module_for_file(file, honor_exclusion)`: the module whose content owns the file; with `honor_exclusion = false`, excluded files still report their module. `modules_for_file` returns all modules whose content roots contain it (overlapping roots). | A file under two overlapping content roots returns both from `modules_for_file`. |
-| PLAT-SCOPE-009 | MUST | `source_root_for_file(file)` returns the **module source root or library source root** containing it; `content_root_for_file(file[, honor_exclusion])` the containing content root. | n/a |
+| PLAT-SCOPE-009 | MUST | `source_root_for_file(file)` answers with the source root that holds the file, whether it belongs to a module or to a library; `content_root_for_file(file[, honor_exclusion])` the containing content root. | n/a |
 | PLAT-SCOPE-010 | MUST | `source_root_type_for_file(file)`: the folder type that contains the file, none if not in module sources. `is_in_generated_sources(file)`: under a folder flagged generated. | Annotation-processor output folder reports "generated". |
 | PLAT-SCOPE-011 | MUST | **Directory index**: package name by directory (`package_name_by_directory`) is computed from the source root and its *package prefix*: relative path with `/` to `.`, prefixed by the root's prefix; none if not under a source root or library classes/source root, or if a segment is not a valid identifier. Reverse: directories by package name, optionally including library sources. | A source root with prefix `com.acme` and a file at `x/Y.java` is in package `com.acme.x`. |
 | PLAT-SCOPE-012 | MUST | The file index answers a *test-source filter* extension first (so build-tool plugins can mark files as tests that the root types do not), falling back to `is_in_test_source_content`. All feature code uses the **filter**, not the raw root type, for "is this test code". | A Gradle `integrationTest` folder marked as tests by a plugin counts as test code. |
-| PLAT-SCOPE-013 | MUST | Iterate content: all files and directories under content roots (skipping excluded and ignored), optionally under a given directory and with a custom directory filter; usable outside read sections but tolerant of project-model changes during iteration. | Iterate 100k files while adding a module: no crash; consistent subset. |
+| PLAT-SCOPE-013 | MUST | Content iteration: visit every file and directory of the module content, leaving out excluded and ignored ones, optionally starting at a given directory and with a custom directory filter; usable outside read sections but tolerant of project-model changes during iteration. | Iterate 100k files while adding a module: no crash; consistent subset. |
 | PLAT-SCOPE-014 | MUST | Content under symbolic links: the target is part of content iff the link's location is; loops are cut. | n/a |
 | PLAT-SCOPE-015 | SHOULD | **Unloaded modules** (disabled by the user) are not in any scope; scopes can report that unloaded modules *would have been* included so the UI can warn "results may be missing". | Search with an unloaded module shows the warning. |
 | PLAT-SCOPE-016 | MUST | The file index is updated incrementally on project-model changes and VFS events; it never requires a full rebuild for a file create/delete. | Create a file under a source root: `is_in_source_content` true immediately after the event. |
@@ -118,17 +118,17 @@ A **search scope** is a predicate on files with extra structure. It is used by: 
 
 ### 4.2 Project-level scopes (exact)
 
-| Scope | Contains | Search libraries? | ID |
-|---|---|---|---|
-| **All scope** (`all_scope(project)`) | every file in content **plus** every file in library classes and sources and SDK roots (i.e. `is_in_project`), for any module, regardless of module dependencies; for the default/template project: *everything* | yes | PLAT-SCOPE-040 |
-| **Project scope** (`project_scope(project)`) | the **content scope** minus one edge case: a file that is in project content **and also** under a *classes* root of some library, but **not** under any module source root, is **not** in the project scope. Excludes library jars and SDK. Used by default for "Project Files" in searches. | no | PLAT-SCOPE-041 |
-| **Content scope** (`content_scope(project)`) | files for which `is_in_content` holds (module content, including other content entities), not excluded, not ignored; a superset of the project scope by exactly the edge case above. Prefer it unless the edge case matters. | no | PLAT-SCOPE-042 |
-| **Libraries scope** (`libraries_scope(project)`) | files in classes **or** sources of all libraries and SDKs in module dependencies (`is_in_library`) | yes (only) | PLAT-SCOPE-043 |
-| **Library classes scope** | classes (binary) roots of libraries and SDKs only (`is_in_library_classes`) | yes | PLAT-SCOPE-044 |
-| **Everything scope** (`everything_scope(project)`) | all-scope files **plus** temporary and synthetic files (scratches, consoles, in-memory files); for a file with an id: indexable file or in the workspace; hidden scratch types excluded; for files without id: included | yes | PLAT-SCOPE-045 |
-| **Empty scope** | nothing | no | PLAT-SCOPE-046 |
+| ID | Pri | Scope | Contains | Search libraries? |
+|---|---|---|---|---|
+| PLAT-SCOPE-040 | MUST | **All scope** (`all_scope(project)`) | every file in content **plus** every file in library classes and sources and SDK roots (i.e. `is_in_project`), for any module, regardless of module dependencies; for the default/template project: *everything* | yes |
+| PLAT-SCOPE-041 | MUST | **Project scope** (`project_scope(project)`) | the **content scope** minus one edge case: a file that is in project content **and also** under a *classes* root of some library, but **not** under any module source root, is **not** in the project scope. Excludes library jars and SDK. Used by default for "Project Files" in searches. | no |
+| PLAT-SCOPE-042 | MUST | **Content scope** (`content_scope(project)`) | files for which `is_in_content` holds (module content, including other content entities), not excluded, not ignored; a superset of the project scope by exactly the edge case above. Prefer it unless the edge case matters. | no |
+| PLAT-SCOPE-043 | MUST | **Libraries scope** (`libraries_scope(project)`) | files in classes **or** sources of all libraries and SDKs in module dependencies (`is_in_library`) | yes (only) |
+| PLAT-SCOPE-044 | SHOULD | **Library classes scope** | classes (binary) roots of libraries and SDKs only (`is_in_library_classes`) | yes |
+| PLAT-SCOPE-045 | SHOULD | **Everything scope** (`everything_scope(project)`) | all-scope files **plus** temporary and synthetic files (scratches, consoles, in-memory files); for a file with an id: indexable file or in the workspace; hidden scratch types excluded; for files without id: included | yes |
+| PLAT-SCOPE-046 | MUST | **Empty scope** | nothing | no |
 
-All six are MUST except "Everything" and "Library classes" which are SHOULD (PLAT-SCOPE-044, 045).
+The priority column applies (all-scope, project, content, libraries and empty are MUST; library classes and everything are SHOULD).
 
 ### 4.3 Module-level scopes (exact)
 
@@ -141,22 +141,22 @@ All module scopes are built from one function of (module, **options**), cached p
 
 Roots collected: for the module's own entry and dependency-module entries → **source folders**; for library and SDK entries → **classes roots**. A file is in the scope iff its single root (PLAT-SCOPE-034) is one of the collected roots.
 
-| Scope constructor | Options | Meaning | ID |
-|---|---|---|---|
-| `module_scope(m)` | COMPILE_ONLY + TESTS | the module's own source folders, production **and** test; no libraries, no dependency modules | PLAT-SCOPE-050 |
-| `module_scope(m, include_tests)` | COMPILE_ONLY (+ TESTS) | as above, tests optional | PLAT-SCOPE-051 |
-| `module_with_libraries_scope(m)` | COMPILE_ONLY + TESTS + LIBRARIES | own sources (prod + test) + library and SDK classes roots visible to this module (compile classpath); no other modules | PLAT-SCOPE-052 |
-| `module_with_dependencies_scope(m)` | COMPILE_ONLY + TESTS + MODULES | own + dependency-module sources (prod + test); no libraries | PLAT-SCOPE-053 |
-| `module_with_dependencies_and_libraries_scope(m, include_tests)` | COMPILE_ONLY + MODULES + LIBRARIES (+ TESTS) | **the standard resolve scope**: own + dependency modules + libraries + SDK, compile classpath; with `include_tests = false` test source folders, **test-scope libraries and test-scope module entries are excluded** | PLAT-SCOPE-054 |
-| `module_runtime_scope(m, include_tests)` | MODULES + LIBRARIES (+ TESTS) | as 054 but **runtime** classpath (no COMPILE_ONLY): includes runtime-scope entries, excludes provided-only | PLAT-SCOPE-055 |
-| `module_production_source_scope(m)` | none | production source folders of this module only | PLAT-SCOPE-056 |
-| `module_test_source_scope(m)` | TESTS | production **and** test source folders of this module (the name is historical); to get only tests, intersect with a "is test source" filter | PLAT-SCOPE-057 |
-| `module_content_scope(m)` | n/a | all files in the module's content (not only source folders) | PLAT-SCOPE-058 |
-| `module_content_with_dependencies_scope(m)` | n/a | content of the module and of the modules it depends on | PLAT-SCOPE-059 |
-| `module_with_dependents_scope(m)` | n/a | the module plus the modules that use it: its **direct** dependents, plus dependents reached through **re-exporting** modules (a module that depends on a module that exports `m` is reached; a plain `implementation` hop is not). A file belongs iff its **owning module** (by content root, not by source root) is in that set; so it includes the dependents' production code, test code, resources and other content. No libraries. | PLAT-SCOPE-060 |
-| `module_tests_with_dependents_scope(m)` | n/a | as 060 restricted to **test** files: a file qualifies iff its module is in the set **and** (the file is test source per the test-source filter, **or** its module depends on the chain through a *production-on-test* dependency) | PLAT-SCOPE-061 |
+| ID | Pri | Scope constructor | Options | Meaning |
+|---|---|---|---|---|
+| PLAT-SCOPE-050 | MUST | `module_scope(m)` | COMPILE_ONLY + TESTS | the module's own source folders, production **and** test; no libraries, no dependency modules |
+| PLAT-SCOPE-051 | SHOULD | `module_scope(m, include_tests)` | COMPILE_ONLY (+ TESTS) | as above, tests optional |
+| PLAT-SCOPE-052 | SHOULD | `module_with_libraries_scope(m)` | COMPILE_ONLY + TESTS + LIBRARIES | own sources (prod + test) + library and SDK classes roots visible to this module (compile classpath); no other modules |
+| PLAT-SCOPE-053 | SHOULD | `module_with_dependencies_scope(m)` | COMPILE_ONLY + TESTS + MODULES | own + dependency-module sources (prod + test); no libraries |
+| PLAT-SCOPE-054 | MUST | `module_with_dependencies_and_libraries_scope(m, include_tests)` | COMPILE_ONLY + MODULES + LIBRARIES (+ TESTS) | **the standard resolve scope**: own + dependency modules + libraries + SDK, compile classpath; with `include_tests = false` test source folders, **test-scope libraries and test-scope module entries are excluded** |
+| PLAT-SCOPE-055 | SHOULD | `module_runtime_scope(m, include_tests)` | MODULES + LIBRARIES (+ TESTS) | as 054 but **runtime** classpath (no COMPILE_ONLY): includes runtime-scope entries, excludes provided-only |
+| PLAT-SCOPE-056 | MUST | `module_production_source_scope(m)` | none | production source folders of this module only |
+| PLAT-SCOPE-057 | SHOULD | `module_test_source_scope(m)` | TESTS | production **and** test source folders of this module (the name is historical); to get only tests, intersect with a "is test source" filter |
+| PLAT-SCOPE-058 | MUST | `module_content_scope(m)` | n/a | all files in the module's content (not only source folders) |
+| PLAT-SCOPE-059 | SHOULD | `module_content_with_dependencies_scope(m)` | n/a | content of the module and of the modules it depends on |
+| PLAT-SCOPE-060 | MUST | `module_with_dependents_scope(m)` | n/a | the module plus the modules that use it: its **direct** dependents, plus dependents reached through **re-exporting** modules (a module that depends on a module that exports `m` is reached; a plain `implementation` hop is not). A file belongs iff its **owning module** (by content root, not by source root) is in that set; so it includes the dependents' production code, test code, resources and other content. No libraries. |
+| PLAT-SCOPE-061 | MUST | `module_tests_with_dependents_scope(m)` | n/a | as 060 restricted to **test** files: a file qualifies iff its module is in the set **and** (the file is test source per the test-source filter, **or** its module depends on the chain through a *production-on-test* dependency) |
 
-MUST: 050-054, 056, 058, 060, 061. SHOULD: 051-053, 055, 057, 059. (051-053 are trivial given 054's machinery; do them with it.)
+The priority column applies. (The SHOULD constructors are trivial once 054's machinery exists; build them together.)
 
 | ID | Pri | Requirement | Acceptance |
 |---|---|---|---|
@@ -172,6 +172,8 @@ MUST: 050-054, 056, 058, 060, 061. SHOULD: 051-053, 055, 057, 059. (051-053 are 
 | PLAT-SCOPE-071 | SHOULD | **Local search scopes** (set of PSI elements or a file range) are distinct from global ones (they have no index acceleration); `intersect` of global with local is local. | Usage search in a method body uses a local scope. |
 
 ## 5. Library classes versus sources: required behavior for JVM
+
+Provenance: PLAT-SCOPE-080, 082, 083, 084, 085 follow the reference; PLAT-SCOPE-081 (single entry in Go to Class) is a design requirement to avoid showing a class twice, not a verified reference rule.
 
 | ID | Pri | Requirement | Acceptance |
 |---|---|---|---|
@@ -192,6 +194,8 @@ MUST: 050-054, 056, 058, 060, 061. SHOULD: 051-053, 055, 057, 059. (051-053 are 
 | PLAT-SCOPE-093 | SHOULD | Fine-grained notification: which modules/libraries changed, so scope caches of unrelated modules survive. | Changing one module's source folder invalidates only scopes depending on it. |
 
 ## 7. How JVM languages, Spring and frameworks use scopes (platform contract)
+
+Provenance: PLAT-SCOPE-100, 101, 104 follow platform behavior read in the Community sources. PLAT-SCOPE-102 and 103 are **design requirements** for Spring: the Spring plugin is not part of the Community source tree, so its exact scope choices were not verified; they state what the platform contracts imply and what tests must hold.
 
 | ID | Pri | Requirement | Acceptance |
 |---|---|---|---|

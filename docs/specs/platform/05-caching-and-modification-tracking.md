@@ -74,28 +74,28 @@ get_cached_value(owner, provider):
 
 ## 5. Catalog of required trackers
 
-| Tracker | Increments when | ID |
-|---|---|---|
-| **PSI modification count** (per project) | any **physical** tree change (add, remove, replace, children changed, move, rename of file or directory, file added/removed/moved in loaded dirs); file type changes; project-root changes; plug-in unload of PSI; **entering or leaving dumb mode**. Not for non-physical trees, not for pure "writable" flag changes. | PLAT-CACHE-040 |
-| **Per-language PSI tracker** | any change touching an element or file of that language; plus every *generic* change of the line above (roots changed, file types changed, unloaded PSI, directory removed). A tracker for "any language" changes on every change. | PLAT-CACHE-041 |
-| **Language predicate tracker** | any of the languages matching a predicate changed | PLAT-CACHE-042 |
-| **VFS structure modification count** | any create, delete, move, rename in the VFS | PLAT-CACHE-043 |
-| **File content stamp** (per virtual file) | each content change | PLAT-CACHE-044 |
-| **Document stamp** (per document) | each edit | PLAT-CACHE-045 |
-| **Project root modification tracker** | project model roots change: module roots, library roots, SDK, dependency list, exclusion | PLAT-CACHE-046 |
-| **Dumb-mode tracker** | each entry into or exit from dumb mode | PLAT-CACHE-047 |
-| **Stub index tracker** (per project, per file element type) | stub of any file (of that type) changed | PLAT-CACHE-048 |
-| **Index timestamp** (per index) | the index content changed | PLAT-CACHE-049 |
-| **Extension point change tracker** | contributions registered or removed for an extension point | PLAT-CACHE-050 |
-| **Settings trackers** (code style, inspection profile, language level) | the relevant setting changed | PLAT-CACHE-051 |
-| **Library/classpath tracker** | library content changed on disk (jar replaced) | PLAT-CACHE-052 |
-| **Module-system tracker** (Java `module-info` files) | any `module-info` changed | PLAT-CACHE-053 |
+| ID | Pri | Tracker | Increments when |
+|---|---|---|---|
+| PLAT-CACHE-040 | MUST | **PSI modification count** (per project) | any **physical** tree change (add, remove, replace, children changed, move, rename of file or directory, file added/removed/moved in loaded dirs); file type changes; project-root changes; plug-in unload of PSI; **entering or leaving dumb mode**. Not for non-physical trees, not for pure "writable" flag changes. |
+| PLAT-CACHE-041 | MUST | **Per-language PSI tracker** | any change touching an element or file of that language; plus every *generic* change of the line above (roots changed, file types changed, unloaded PSI, directory removed). A tracker for "any language" changes on every change. |
+| PLAT-CACHE-042 | SHOULD | **Language predicate tracker** | any of the languages matching a predicate changed |
+| PLAT-CACHE-043 | MUST | **VFS structure modification count** | any create, delete, move, rename in the VFS |
+| PLAT-CACHE-044 | MUST | **File content stamp** (per virtual file) | each content change |
+| PLAT-CACHE-045 | MUST | **Document stamp** (per document) | each edit |
+| PLAT-CACHE-046 | MUST | **Project root modification tracker** | project model roots change: module roots, library roots, SDK, dependency list, exclusion |
+| PLAT-CACHE-047 | MUST | **Dumb-mode tracker** | each entry into or exit from dumb mode |
+| PLAT-CACHE-048 | MUST | **Stub index tracker** (per project, per file element type) | stub of any file (of that type) changed |
+| PLAT-CACHE-049 | MUST | **Index timestamp** (per index) | the index content changed |
+| PLAT-CACHE-050 | SHOULD | **Extension point change tracker** | contributions registered or removed for an extension point |
+| PLAT-CACHE-051 | SHOULD | **Settings trackers** (code style, inspection profile, language level) | the relevant setting changed |
+| PLAT-CACHE-052 | SHOULD | **Library/classpath tracker** | library content changed on disk (jar replaced) |
+| PLAT-CACHE-053 | SHOULD | **Module-system tracker** (Java `module-info` files) | any `module-info` changed |
 
 Requirements on the catalog:
 
 | ID | Pri | Requirement | Acceptance |
 |---|---|---|---|
-| PLAT-CACHE-054 | MUST | Trackers 040, 041, 043, 044, 045, 046, 047, 048 and 049 are required for the first release. 042, 050, 051, 052, 053 are SHOULD. | Presence tests. |
+| PLAT-CACHE-054 | MUST | The trackers whose catalog priority is MUST are required for the first release; the SHOULD ones follow. | Presence tests. |
 | PLAT-CACHE-055 | MUST | The PSI modification count is incremented **before** or **atomically with** the first moment a reader could observe the changed tree; and a notification (listener topic) is published on the write thread each time it changes, so UI caches can drop. | A cached value computed before an edit is invalid after it. |
 | PLAT-CACHE-056 | MUST | **Do not over-use the global PSI count.** Documentation of the API says: depending on it means "invalid on literally every PSI change in the project", useless if the value is requested whenever the user edits. Prefer per-language trackers, file dependencies, or stamps of the inputs actually read. Caveat that a per-language tracker is **not sufficient** for cross-language resolve (Java resolve depends on Kotlin and other JVM languages). | Java resolve caches depend on a tracker that includes all JVM languages. |
 | PLAT-CACHE-057 | MUST | Computed data that is *derived from a file's own tree only* should depend on that file (its element or its stamp), not on the global count. | A per-file outline cache survives edits in other files. |

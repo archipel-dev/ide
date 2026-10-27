@@ -100,31 +100,31 @@ degrades. Features are marked by a *marker* (a trait implemented by the feature 
 This is the *required* observable behavior for the first release. "Works" means the feature runs with no error and with full
 function; "Degrades" means it runs with reduced results and says so; "Blocked" means it is disabled with the standard message.
 
-| Feature | Dumb-mode behavior | Message / indication | ID |
-|---|---|---|---|
-| Typing, editing, undo, save | Works | none | PLAT-DUMB-050 |
-| Syntax highlighting (lexer-based), brace matching, comment/uncomment, quote handling | Works | none | PLAT-DUMB-051 |
-| Syntax error highlighting from the parser (error elements) | Works | none | PLAT-DUMB-052 |
-| Folding | Works for dumb-aware builders (the platform default is "not aware"; builders that use only the tree declare aware); others produce no regions | none | PLAT-DUMB-053 |
-| Structure view of the current file | Works if built from the tree only | none | PLAT-DUMB-054 |
-| Local resolve (variables, parameters, members of the same file) and highlighting that depends only on it | Works only for features declared aware; otherwise skipped | none | PLAT-DUMB-055 |
-| Annotators and inspections | Only dumb-aware ones run; the daemon **restarts when dumb mode starts and when it ends** so results are consistent with the state | none | PLAT-DUMB-056 |
-| Go to File, Recent Files, project tree, file name search | Works (file-name data comes from the VFS) | none | PLAT-DUMB-057 |
-| Go to Class / Go to Symbol / Search Everywhere (symbol part) | Degrades: shows the text "Analyzing project…" in the popup header, and "Results may be incomplete during the project analysis". The class/symbol tab falls back to file names with the message "'Go To {0}' action is not available during the project analysis, using 'Go To File' instead" | see left | PLAT-DUMB-058 |
-| Find in Files (plain text) and text-occurrence search | Degrades: the word index is read with *raw* access (whatever is currently stored, possibly incomplete); no error is raised; results may be incomplete | "Results may be incomplete during the project analysis" in result popups | PLAT-DUMB-059 |
-| Find Usages | Blocked: the menu item reads "Search for references (not available during the project analysis)" | see left | PLAT-DUMB-060 |
-| Go to Declaration | Degrades with alternative resolve (PLAT-DUMB-042), otherwise the generic balloon | balloon text of PLAT-DUMB-032 | PLAT-DUMB-061 |
-| Completion | Degrades: dumb-aware contributors only (word/text completion, keywords, local names, file-local); popup shows "Analyzing project…" | see left | PLAT-DUMB-062 |
-| Quick documentation | Blocked for rendered docs: "Cannot render documentation during the project analysis" (italic) | see left | PLAT-DUMB-063 |
-| Refactoring (rename, move, safe delete, change signature) | Blocked: "Refactoring is not available until indexes are ready"; rename of a file or symbol: "Cannot update references while project is being analyzed" | see left | PLAT-DUMB-064 |
-| Move file | Allowed only after a warning: "Moving files during the project analysis is in progress will not update their usages. The selected element won't be renamed in non-project files. Proceed anyway?" | see left | PLAT-DUMB-065 |
-| Custom-folding region navigation | Blocked: "Custom folding navigation will be available after the project analysis is finished." | see left | PLAT-DUMB-066 |
-| VCS, terminal, run/debug of already-built targets | Works | none | PLAT-DUMB-067 |
-| Build/compile | Works (builds do not use indexes of this IDE) | none | PLAT-DUMB-068 |
-| Status bar | Shows progress "Analyzing project…" with a determinate bar and a link/popup; the popup title "Analyzing Project to Enable Smart Features" | see left | PLAT-DUMB-069 |
-| Popups and tool windows that list results (Find, hierarchy, bookmarks) | Show a banner "Analyzing project…" while dumb and a **"Reload results"** link after exit | see left | PLAT-DUMB-070 |
+| ID | Pri | Feature | Dumb-mode behavior | Message / indication |
+|---|---|---|---|---|
+| PLAT-DUMB-050 | MUST | Typing, editing, undo, save | Works | none |
+| PLAT-DUMB-051 | MUST | Syntax highlighting (lexer-based), brace matching, comment/uncomment, quote handling | Works | none |
+| PLAT-DUMB-052 | MUST | Syntax error highlighting from the parser (error elements) | Works | none |
+| PLAT-DUMB-053 | MUST | Folding | Works for dumb-aware builders (the platform default is "not aware"; builders that use only the tree declare aware); others produce no regions | none |
+| PLAT-DUMB-054 | MUST | Structure view of the current file | Works if built from the tree only | none |
+| PLAT-DUMB-055 | MUST | Local resolve (variables, parameters, members of the same file) and highlighting that depends only on it | Works only for features declared aware; otherwise skipped | none |
+| PLAT-DUMB-056 | MUST | Annotators and inspections | Only dumb-aware ones run; the daemon **restarts when dumb mode starts and when it ends** so results are consistent with the state | none |
+| PLAT-DUMB-057 | MUST | Go to File, Recent Files, project tree, file name search | Works (file-name data comes from the VFS) | none |
+| PLAT-DUMB-058 | MUST | Go to Class / Go to Symbol / Search Everywhere (symbol part) | Degrades: shows the text "Analyzing project…" in the popup header, and "Results may be incomplete during the project analysis". The class/symbol tab falls back to file names with the message "'Go To {0}' action is not available during the project analysis, using 'Go To File' instead" | see left |
+| PLAT-DUMB-059 | MUST | Find in Files (plain text) and text-occurrence search | Degrades: the word index is read with *raw* access (whatever is currently stored, possibly incomplete); no error is raised; results may be incomplete | "Results may be incomplete during the project analysis" in result popups |
+| PLAT-DUMB-060 | MUST | Find Usages | Blocked: the menu item reads "Search for references (not available during the project analysis)" | see left |
+| PLAT-DUMB-061 | MUST | Go to Declaration | Degrades with alternative resolve (PLAT-DUMB-042), otherwise the generic balloon | balloon text of PLAT-DUMB-032 |
+| PLAT-DUMB-062 | MUST | Completion | Degrades: dumb-aware contributors only (word/text completion, keywords, local names, file-local); popup shows "Analyzing project…" | see left |
+| PLAT-DUMB-063 | SHOULD | Quick documentation | Blocked for rendered docs: "Cannot render documentation during the project analysis" (italic) | see left |
+| PLAT-DUMB-064 | MUST | Refactoring (rename, move, safe delete, change signature) | Blocked: "Refactoring is not available until indexes are ready"; rename of a file or symbol: "Cannot update references while project is being analyzed" | see left |
+| PLAT-DUMB-065 | SHOULD | Move file | Allowed only after a warning: "Moving files during the project analysis is in progress will not update their usages. The selected element won't be renamed in non-project files. Proceed anyway?" | see left |
+| PLAT-DUMB-066 | SHOULD | Custom-folding region navigation | Blocked: "Custom folding navigation will be available after the project analysis is finished." | see left |
+| PLAT-DUMB-067 | MUST | VCS, terminal, run/debug of already-built targets | Works | none |
+| PLAT-DUMB-068 | MUST | Build/compile | Works (builds do not use indexes of this IDE) | none |
+| PLAT-DUMB-069 | MUST | Status bar | Shows progress "Analyzing project…" with a determinate bar and a link/popup; the popup title "Analyzing Project to Enable Smart Features" | see left |
+| PLAT-DUMB-070 | SHOULD | Popups and tool windows that list results (Find, hierarchy, bookmarks) | Show a banner "Analyzing project…" while dumb and a **"Reload results"** link after exit | see left |
 
-Each of PLAT-DUMB-050..070 is MUST for the behavior in the table, except 063, 065, 066 and 070, which are SHOULD.
+The priority column applies to the behavior stated in the row.
 The acceptance of each is the observable behavior stated in the row (a UI scene test or an integration test that starts a long-running
 dumb task and exercises the feature).
 

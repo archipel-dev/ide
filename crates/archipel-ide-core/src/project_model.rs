@@ -262,12 +262,10 @@ impl IdeState {
             self.project_model.model = Some(model);
         }
         // Missing JDK/Gradle/Maven are installed first; the import starts when that finishes.
-        let waits_for_tools = self.toolchains.auto_setup
+        let waits_for_tools = self.toolchains().read().auto_setup
             && self
-                .toolchains
-                .missing
-                .iter()
-                .any(|(_, missing)| !missing.is_empty());
+                .toolchain_requirements()
+                .is_some_and(|requirements| !requirements.read().missing_components().is_empty());
         if self.project_model.auto_import && !waits_for_tools {
             // No build system, no import: the status stays idle and nothing is shown.
             let _ = self.start_external_import(ImportReason::Open);

@@ -11,7 +11,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     let screen = ctx.content_rect();
     let width = 340.0;
     // Stack above the update balloon when both are showing.
-    let lift = if app.state.update_notification {
+    let lift = if app.state.notifications().update_balloon() {
         150.0
     } else {
         0.0

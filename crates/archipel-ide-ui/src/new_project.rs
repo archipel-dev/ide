@@ -264,7 +264,7 @@ pub fn show(
     let mut create = false;
     let mut download: Option<u32> = None;
     // Pick up JDKs that finished downloading.
-    let busy = app.state.toolchains.service.is_busy();
+    let busy = app.state.toolchains().read().service.is_busy();
     if form.jdk_busy && !busy {
         form.jdks = app.state.jdk_choices();
         form.pick_default_jdk();
@@ -276,7 +276,7 @@ pub fn show(
     let deps_page = is_spring && form.spring.page == Page::Dependencies;
     let mut go_next = false;
     let mut go_back = false;
-    let progress = app.state.toolchains.progress();
+    let progress = app.state.toolchains().read().progress();
     let fields = [
         "new_project_name",
         "new_project_parent",

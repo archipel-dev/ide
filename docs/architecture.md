@@ -140,7 +140,11 @@ show the old product name.
 - `archipel-ide-plugin-lua`: sandboxed Lua 5.4 plugin runtime (`LuaLoader`), registered by the app.
 - `archipel-ide-plugin-wasm`: WebAssembly component plugin runtime (`WasmLoader`, wasmtime + WIT) with
   permission-gated WASI, registered by the app.
-- `archipel-ide-core`: application state, the plugin host (scoped `PluginHost`, command
+- `archipel-ide-platform`: the platform kernel shaped after the IntelliJ Platform: `Application` and
+  `Project` containers, lazily created typed services (`service::<T>()`), `MessageBus` with typed
+  topics, extension points and the `Disposer` tree. No UI dependency; see
+  [architecture/platform-kernel.md](architecture/platform-kernel.md).
+- `archipel-ide-core`: application state (`IdeState`, which owns the platform `Application` and the open `Project`; migrated features live in services under `services/`), the plugin host (scoped `PluginHost`, command
   routing, plugin tool window/tab state), tool window layout model (one visible tool window
   per anchor), the problems model (`problems`: syntax errors and LSP diagnostics merged
   into per-file problems with severities, counts and ancestor error propagation), the analysis

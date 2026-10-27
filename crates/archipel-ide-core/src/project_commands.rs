@@ -139,8 +139,7 @@ impl IdeState {
     ) -> Result<String, String> {
         let project = self.project.as_ref().ok_or("no project is open")?;
         let git = self
-            .git
-            .as_ref()
+            .git_status()
             .ok_or("the project is not a Git repository")?;
         let git_root = git.root.canonicalize().unwrap_or_else(|_| git.root.clone());
         let repo_paths: Vec<PathBuf> = paths
@@ -156,8 +155,7 @@ impl IdeState {
         // Commits include what is in the editor, like the reference IDE.
         let _ = self.save_all();
         let hash = self
-            .git
-            .as_ref()
+            .git_status()
             .ok_or("the project is not a Git repository")?
             .commit_with(message, &repo_paths, amend)
             .map_err(|error| error.to_string())?;
@@ -429,7 +427,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 Some("⌘K"),
                 r#"{"message":"string","paths":["string"],"amend":"bool?"}"#,
             ),
-            |state: &IdeState| state.git.is_some(),
+            |state: &IdeState| state.has_git(),
             |state: &mut IdeState, params| {
                 let message = string_param(&params, "message")?;
                 let paths: Vec<PathBuf> = string_array_param(&params, "paths")?
@@ -683,7 +681,7 @@ mod tests {
                 .as_str()
                 .is_some_and(|hash| !hash.is_empty())
         );
-        assert!(state.git.as_ref().unwrap().changes.is_empty());
+        assert!(state.git_status().unwrap().changes.is_empty());
         std::fs::remove_dir_all(root).unwrap();
     }
 

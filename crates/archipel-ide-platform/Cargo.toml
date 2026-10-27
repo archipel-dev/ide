@@ -1,0 +1,9 @@
+[package]
+name = "archipel-ide-platform"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The platform kernel: Application and Project containers, lazily created typed services, MessageBus topics, extension points and the Disposer tree."
+
+[dependencies]
+parking_lot.workspace = true

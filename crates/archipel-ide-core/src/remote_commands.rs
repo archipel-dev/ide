@@ -16,8 +16,7 @@ impl IdeState {
             return Err("Another fetch, pull or push is still running".into());
         }
         let root = self
-            .git
-            .as_ref()
+            .git_status()
             .ok_or("the project is not a Git repository")?
             .root
             .clone();
@@ -37,8 +36,7 @@ impl IdeState {
     /// What Push would send; used by the push dialog.
     pub fn push_plan(&self) -> Result<PushPlan, String> {
         let git = self
-            .git
-            .as_ref()
+            .git_status()
             .ok_or("the project is not a Git repository")?;
         archipel_ide_git::push_plan(&git.root).map_err(|error| error.to_string())
     }
@@ -92,7 +90,7 @@ impl IdeState {
 }
 
 pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
-    let idle = |state: &IdeState| state.git.is_some() && !state.remote_busy();
+    let idle = |state: &IdeState| state.has_git() && !state.remote_busy();
     registry
         .register(Command::new(
             spec("git.fetch", "Fetch", "Git", None, "{}"),

@@ -426,7 +426,7 @@ impl IdeApp {
                 "dialog": self.dialog.as_ref().map(|dialog| dialog.kind()),
                 "findBar": self.find.open,
                 "completion": self.completion_visible(),
-                "notification": self.state.update_notification,
+                "notification": self.state.notifications().update_balloon(),
                 "about": self.state.about_open,
                 "history": self.state.analysis.history.dialog.is_some(),
                 "customize": self.state.first_run_open,

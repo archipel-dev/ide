@@ -404,6 +404,7 @@ dependencies = [
  "archipel-ide-language",
  "archipel-ide-lsp",
  "archipel-ide-markdown",
+ "archipel-ide-platform",
  "archipel-ide-plugins",
  "archipel-ide-project",
  "archipel-ide-projectmodel",
@@ -418,6 +419,7 @@ dependencies = [
  "archipel-ide-toolchains",
  "archipel-ide-update",
  "flate2",
+ "parking_lot",
  "regex",
  "serde",
  "serde_json",
@@ -564,6 +566,13 @@ name = "archipel-ide-markdown"
 version = "0.2.0"
 dependencies = [
  "pulldown-cmark",
+]
+
+[[package]]
+name = "archipel-ide-platform"
+version = "0.2.0"
+dependencies = [
+ "parking_lot",
 ]
 
 [[package]]

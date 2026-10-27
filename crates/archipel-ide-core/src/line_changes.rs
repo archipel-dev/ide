@@ -53,7 +53,7 @@ impl IdeState {
     }
 
     fn load_base(&self, path: &Path) -> Option<String> {
-        let git = self.git.as_ref()?;
+        let git = self.git_status()?;
         let project = self.project.as_ref()?;
         let git_root = git.root.canonicalize().unwrap_or_else(|_| git.root.clone());
         let repo_path = project.root().join(path);
@@ -223,7 +223,7 @@ fn reveal_line(tab: &mut DiffTab, line: usize) {
 }
 
 pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
-    let tracked = |state: &IdeState| state.active_document.is_some() && state.git.is_some();
+    let tracked = |state: &IdeState| state.active_document.is_some() && state.has_git();
     for (id, label, shortcut, forward) in [
         ("vcs.nextChange", "Next Change", "⌃⌥⇧↓", true),
         ("vcs.previousChange", "Previous Change", "⌃⌥⇧↑", false),

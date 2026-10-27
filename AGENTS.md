@@ -39,9 +39,16 @@ Commit messages and PR titles must be Conventional Commits (`feat`, `fix`, `perf
 `refactor`, `docs`, `test`, `chore`, `ci`; `!` for breaking); they drive automatic
 versioning. See `docs/contributing.md`.
 
+## Platform kernel
+
+New feature state is a service of the platform kernel (`archipel-ide-platform`, see
+`docs/architecture/platform-kernel.md`), not a field of `IdeState`. `cargo test -p archipel-ide-core`
+fails when `IdeState` grows beyond the baseline in `tests/ide_state_size.rs`; moving fields out
+lowers it. Features talk through topics and extension points, and the UI reads through services.
+
 ## Layering
 
-`archipel-ide -> archipel-ide-ui -> archipel-ide-core -> {command, project, plugins}`, with
+`archipel-ide -> archipel-ide-ui -> archipel-ide-core -> {platform, command, project, plugins}`, with
 `archipel-ide-compat` (the old Jetthing names) at the bottom.
 Lower layers must not depend on higher layers. Language integrations belong behind
 plugin/service traits, never inside the platform core.

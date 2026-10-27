@@ -321,19 +321,12 @@ impl KeymapState {
 impl IdeState {
     /// Rebuilds the keymap from the `keymap.active` and `keymap.overrides` settings.
     pub fn refresh_keymap(&mut self) {
-        let id = self.settings.text(ids::KEYMAP).unwrap_or_else(|| {
+        let id = self.settings().read().text(ids::KEYMAP).unwrap_or_else(|| {
             archipel_ide_keymap::Desktop::detect()
                 .default_keymap()
                 .into()
         });
-        let lines = match self
-            .settings
-            .store
-            .get(&self.settings.registry, ids::KEYMAP_OVERRIDES)
-        {
-            Ok(SettingValue::List(lines)) => lines,
-            _ => Vec::new(),
-        };
+        let lines = self.settings().read().list(ids::KEYMAP_OVERRIDES);
         let (overrides, error) = KeymapState::parse_overrides(&lines);
         self.keymap.overrides = overrides;
         self.keymap.rebuild(&id);
@@ -344,11 +337,14 @@ impl IdeState {
 
     fn save_keymap_overrides(&mut self) -> Result<(), CommandError> {
         let lines = self.keymap.override_lines();
-        let crate::Settings { registry, store } = &mut self.settings;
-        store
-            .set(registry, ids::KEYMAP_OVERRIDES, SettingValue::List(lines))
-            .and_then(|_| store.save())
-            .map_err(|error| CommandError::Failed(error.to_string()))?;
+        {
+            let settings = self.settings();
+            let mut settings = settings.write();
+            settings
+                .set(ids::KEYMAP_OVERRIDES, SettingValue::List(lines))
+                .and_then(|_| settings.store.save())
+                .map_err(|error| CommandError::Failed(error.to_string()))?;
+        }
         self.refresh_keymap();
         Ok(())
     }
@@ -607,11 +603,7 @@ mod tests {
                 .contains(&"Ctrl+D".parse().unwrap())
         );
         // Persisted as an override line for the active keymap.
-        let lines = state
-            .settings
-            .store
-            .get(&state.settings.registry, ids::KEYMAP_OVERRIDES)
-            .unwrap();
+        let lines = state.settings().read().get(ids::KEYMAP_OVERRIDES).unwrap();
         assert_eq!(
             lines,
             SettingValue::List(vec!["$default\tShowSettings\tCtrl+Alt+S\tCtrl+D".into()])
@@ -650,14 +642,7 @@ mod tests {
         );
         // Reset and unbind removed their overrides; the other actions that lost Ctrl+D
         // when conflicts were removed keep theirs.
-        let SettingValue::List(lines) = state
-            .settings
-            .store
-            .get(&state.settings.registry, ids::KEYMAP_OVERRIDES)
-            .unwrap()
-        else {
-            panic!("overrides are a list");
-        };
+        let lines = state.settings().read().list(ids::KEYMAP_OVERRIDES);
         assert!(!lines.iter().any(|line| line.contains("EditorDuplicate")));
         assert!(!lines.iter().any(|line| line.contains("ShowSettings")));
         assert!(

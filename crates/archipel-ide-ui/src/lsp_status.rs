@@ -141,7 +141,7 @@ pub fn notices(app: &mut IdeApp, ctx: &egui::Context) {
     ctx.request_repaint_after(std::time::Duration::from_secs(1));
     let width = 300.0;
     let mut bottom = crate::chrome::STATUS_BAR_HEIGHT + 16.0;
-    if app.state.update_notification {
+    if app.state.notifications().update_balloon() {
         bottom += 170.0;
     }
     let mut dismiss = None;

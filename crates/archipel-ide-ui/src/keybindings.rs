@@ -194,7 +194,7 @@ impl IdeApp {
             | UiAction::NewDirectory
             | UiAction::NewJavaClass
             | UiAction::NewKotlinFile => self.state.project.is_some(),
-            UiAction::Push => self.state.git.is_some(),
+            UiAction::Push => self.state.has_git(),
             UiAction::ManageProjects => self.state.project.is_some(),
             _ => true,
         }

@@ -3,9 +3,9 @@
 use crate::download::HttpClient;
 use crate::store::InstallPhase;
 use crate::{Installed, ToolVersion, Toolchains, VersionRequest};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 pub type JobId = u64;
@@ -80,7 +80,9 @@ impl Job {
 
 pub struct ToolchainService {
     sender: Sender<ToolchainEvent>,
-    receiver: Receiver<ToolchainEvent>,
+    /// Behind a mutex only so the service is `Sync` (it is a platform service); the
+    /// receiving methods take `&mut self`, so the lock is never contended.
+    receiver: Mutex<Receiver<ToolchainEvent>>,
     jobs: Vec<Job>,
     next_id: JobId,
     http: HttpClient,
@@ -91,7 +93,7 @@ impl Default for ToolchainService {
         let (sender, receiver) = mpsc::channel();
         Self {
             sender,
-            receiver,
+            receiver: Mutex::new(receiver),
             jobs: Vec::new(),
             next_id: 1,
             http: HttpClient::new(),
@@ -100,6 +102,12 @@ impl Default for ToolchainService {
 }
 
 impl ToolchainService {
+    fn receiver_mut(&mut self) -> &mut Receiver<ToolchainEvent> {
+        self.receiver
+            .get_mut()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
     pub fn jobs(&self) -> &[Job] {
         &self.jobs
     }
@@ -197,7 +205,7 @@ impl ToolchainService {
 
     /// Drains pending events, updating [`ToolchainService::jobs`].
     pub fn poll(&mut self) -> Vec<ToolchainEvent> {
-        let events: Vec<ToolchainEvent> = self.receiver.try_iter().collect();
+        let events: Vec<ToolchainEvent> = self.receiver_mut().try_iter().collect();
         for event in &events {
             self.apply(event);
         }
@@ -230,7 +238,7 @@ impl ToolchainService {
         let deadline = Instant::now() + timeout;
         let mut seen = Vec::new();
         while let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
-            let Ok(event) = self.receiver.recv_timeout(remaining) else {
+            let Ok(event) = self.receiver_mut().recv_timeout(remaining) else {
                 break;
             };
             self.apply(&event);

@@ -36,7 +36,10 @@ fn java_project_without_jdk_sets_up_jdk_and_jdtls_and_completes() {
     let toolchains = Toolchains::new(builtin_catalog(), ToolchainStore::new(&root))
         .with_environment(Default::default(), BTreeMap::new());
     let mut state = IdeState::default();
-    state.toolchains = ToolchainState::new(toolchains, Some(scratch.join("user/toolchains.toml")));
+    state.toolchains().replace(ToolchainState::new(
+        toolchains,
+        Some(scratch.join("user/toolchains.toml")),
+    ));
     let commands = built_in_commands();
     commands
         .execute("project.open", &mut state, json!({"path": project}))

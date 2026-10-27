@@ -131,7 +131,8 @@ impl IdeState {
         match History::open(&dir) {
             Ok(store) => {
                 let days = self
-                    .settings
+                    .settings()
+                    .read()
                     .int(archipel_ide_settings::ids::LOCAL_HISTORY_DAYS)
                     .unwrap_or(DEFAULT_RETENTION_DAYS)
                     .clamp(1, 365);
@@ -655,7 +656,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     .cloned()
                     .ok_or_else(|| CommandError::Failed("Local History is off".into()))?;
                 let days = state
-                    .settings
+                    .settings()
+                    .read()
                     .int(archipel_ide_settings::ids::LOCAL_HISTORY_DAYS)
                     .unwrap_or(DEFAULT_RETENTION_DAYS)
                     .clamp(1, 365);

@@ -12,7 +12,7 @@ use archipel_ide_index::readers;
 use archipel_ide_index::todo::{
     TodoFilter, TodoPattern, TodoSettings, parse_filters, parse_patterns,
 };
-use archipel_ide_settings::{SettingValue, ids as setting_ids};
+use archipel_ide_settings::ids as setting_ids;
 use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -115,17 +115,15 @@ impl IdeState {
     /// The TODO patterns, filters and options from the settings (parsed
     /// again only when the stored lines change).
     pub fn todo_settings(&mut self) -> TodoSettings {
-        let list = |id: &str| match self.settings.store.get(&self.settings.registry, id) {
-            Ok(SettingValue::List(lines)) => lines,
-            _ => Vec::new(),
+        let raw = {
+            let settings = self.settings();
+            let settings = settings.read();
+            (
+                settings.list(setting_ids::TODO_PATTERNS),
+                settings.list(setting_ids::TODO_FILTERS),
+                settings.bool(setting_ids::TODO_MULTILINE).unwrap_or(true),
+            )
         };
-        let raw = (
-            list(setting_ids::TODO_PATTERNS),
-            list(setting_ids::TODO_FILTERS),
-            self.settings
-                .bool(setting_ids::TODO_MULTILINE)
-                .unwrap_or(true),
-        );
         if let Some((cached, settings)) = &self.analysis.todo.settings
             && *cached == raw
         {
@@ -479,10 +477,9 @@ mod tests {
 
         // Settings: a filter and new patterns (only the Todo index rebuilds).
         state
-            .settings
-            .store
+            .settings()
+            .write()
             .set(
-                &state.settings.registry,
                 ids::TODO_FILTERS,
                 SettingValue::List(vec!["Fixes: 1".into()]),
             )
@@ -504,10 +501,9 @@ mod tests {
 
         let before = state.analysis.index.stats().indexed;
         state
-            .settings
-            .store
+            .settings()
+            .write()
             .set(
-                &state.settings.registry,
                 ids::TODO_PATTERNS,
                 SettingValue::List(vec![r"i todo \bcall\b.*".into()]),
             )

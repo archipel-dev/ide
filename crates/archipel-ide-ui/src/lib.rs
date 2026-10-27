@@ -303,7 +303,13 @@ impl IdeApp {
         if state.project.is_some() && agents_demo_enabled() {
             state.seed_agents_demo();
         }
-        if check_updates && state.settings.bool(ids::CHECK_UPDATES).unwrap_or(true) {
+        if check_updates
+            && state
+                .settings()
+                .read()
+                .bool(ids::CHECK_UPDATES)
+                .unwrap_or(true)
+        {
             let _ = commands.execute("app.checkForUpdates", &mut state, json!({"silent": true}));
         }
         Self {
@@ -370,7 +376,7 @@ impl IdeApp {
     /// only the plugin's app view.
     /// Installs missing toolchains whenever a project opens, starting with the open one.
     pub fn enable_toolchain_auto_setup(&mut self) {
-        self.state.toolchains.auto_setup = true;
+        self.state.toolchains().write().auto_setup = true;
         self.state.auto_setup_toolchains();
     }
 
@@ -991,7 +997,7 @@ impl IdeApp {
         if self.state.poll_project_model() || self.state.project_model.is_busy() {
             ctx.request_repaint_after(Duration::from_millis(250));
         }
-        if self.state.toolchains.service.is_busy() {
+        if self.state.toolchains().read().service.is_busy() {
             ctx.request_repaint_after(Duration::from_millis(200));
         }
         self.state.poll_remote();
@@ -1047,7 +1053,8 @@ impl IdeApp {
             && !focused
             && self
                 .state
-                .settings
+                .settings()
+                .read()
                 .bool(ids::AUTOSAVE_FOCUS)
                 .unwrap_or(true)
         {
@@ -1072,7 +1079,10 @@ impl IdeApp {
         self.handle_shortcuts(ctx);
         plugin_ui::handle_keybindings(self, ctx);
         self.follow_tool_window_focus(ctx);
-        theme::apply_settings(ctx, &self.state.settings);
+        {
+            let settings = self.state.settings();
+            theme::apply_settings(ctx, &settings.read());
+        }
         self.sync_window_title(ctx);
         if self.modal_page_open() {
             // Command-opened pages must not leave keyboard focus in the editor.
@@ -1383,7 +1393,7 @@ mod tests {
     #[test]
     fn modal_dialogs_render_above_notification_balloons() {
         let (mut app, ctx) = headless_app("balloon-order", "a.txt", "hello\n");
-        app.state.update_notification = true;
+        app.state.notifications().show_update_balloon();
         let _ = ctx.run(frame_input(Vec::new()), |ctx| app.frame(ctx));
         app.dispatch("settings.open", Value::Null);
         for _ in 0..3 {

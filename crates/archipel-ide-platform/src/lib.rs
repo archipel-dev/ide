@@ -19,7 +19,9 @@ mod disposer;
 mod extension;
 mod service;
 
-pub use application::{Application, Project, ProjectManager, ProjectManagerListener};
+pub use application::{
+    Application, Project, ProjectManager, ProjectManagerListener, WeakApplication,
+};
 pub use bus::{BusSender, MessageBus, MessageBusConnection, Topic};
 pub use component::ComponentManager;
 pub use disposer::{Disposable, DisposableId, Disposed, Disposer};

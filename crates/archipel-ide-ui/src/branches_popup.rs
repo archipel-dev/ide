@@ -49,7 +49,7 @@ fn input_id() -> egui::Id {
 
 /// Contents of the VCS widget popup.
 pub fn menu(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let Some(git) = app.state.git.as_ref() else {
+    let Some(git) = app.state.git_status() else {
         return;
     };
     let current = git.branch.clone();
@@ -58,7 +58,7 @@ pub fn menu(app: &mut IdeApp, ui: &mut egui::Ui) {
         app.dispatch("git.log.refresh", Value::Null);
     }
     let branches = app.state.git_log.branches.clone();
-    let pending = app.state.git_pending;
+    let pending = app.state.git_pending();
     ui.set_min_width(260.0);
     let mut action: Option<(&'static str, Value)> = None;
     let mut dialog = None;

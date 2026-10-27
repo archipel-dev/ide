@@ -11,8 +11,7 @@ use std::path::PathBuf;
 impl IdeState {
     fn git_root(&self) -> Result<PathBuf, String> {
         Ok(self
-            .git
-            .as_ref()
+            .git_status()
             .ok_or("the project is not a Git repository")?
             .root
             .clone())
@@ -70,15 +69,6 @@ impl IdeState {
         }
         self.refresh_diff();
     }
-
-    /// Refreshes the cached interrupted-operation state (merge/rebase).
-    pub(crate) fn refresh_pending_operation(&mut self) {
-        self.git_pending = self.git.as_ref().and_then(|git| {
-            archipel_ide_git::pending_operation(&git.root)
-                .ok()
-                .flatten()
-        });
-    }
 }
 
 fn optional_string(params: &Value, name: &str) -> Option<String> {
@@ -94,7 +84,7 @@ fn bool_param(params: &Value, name: &str) -> bool {
 }
 
 pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
-    let has_git = |state: &IdeState| state.git.is_some();
+    let has_git = |state: &IdeState| state.has_git();
     let ok = |message: String| Ok(json!({ "message": message }));
     registry
         .register(Command::new(
@@ -247,7 +237,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.git_pending.is_some(),
+            |state: &IdeState| state.git_pending().is_some(),
             move |state: &mut IdeState, _| {
                 let message = state
                     .run_git_operation(archipel_ide_git::abort_operation)
@@ -308,7 +298,7 @@ mod tests {
         commands
             .execute("git.newBranch", &mut state, json!({"name": "topic"}))
             .unwrap();
-        assert_eq!(state.git.as_ref().unwrap().branch, "topic");
+        assert_eq!(state.git_status().unwrap().branch, "topic");
         // Unsaved edits are saved before the operation and committed on topic.
         commands
             .execute(
@@ -322,7 +312,7 @@ mod tests {
         commands
             .execute("git.checkout", &mut state, json!({"branch": "main"}))
             .unwrap();
-        assert_eq!(state.git.as_ref().unwrap().branch, "main");
+        assert_eq!(state.git_status().unwrap().branch, "main");
         // The open editor shows main's content after the checkout.
         assert_eq!(state.documents[0].text.text(), "main\n");
         assert!(!state.documents[0].text.is_dirty());
@@ -336,12 +326,12 @@ mod tests {
                 .execute("git.merge", &mut state, json!({"branch": "topic"}))
                 .is_err()
         );
-        assert_eq!(state.git_pending, Some(PendingOperation::Merge));
+        assert_eq!(state.git_pending(), Some(PendingOperation::Merge));
         assert!(state.documents[0].text.text().contains("<<<<<<<"));
         commands
             .execute("git.abortOperation", &mut state, Value::Null)
             .unwrap();
-        assert_eq!(state.git_pending, None);
+        assert_eq!(state.git_pending(), None);
         assert_eq!(state.documents[0].text.text(), "other\n");
         assert!(!commands.is_enabled("git.abortOperation", &state));
 

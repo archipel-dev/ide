@@ -13,8 +13,8 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         .and_then(|index| app.state.documents.get(index))
         .map(|document| document.path.clone());
     let banner = match &path {
-        Some(path) => app.state.toolchains.banner_for(path),
-        None => app.state.toolchains.project_banner(),
+        Some(path) => app.state.toolchain_banner_for(path),
+        None => app.state.toolchain_project_banner(),
     };
     let Some(banner) = banner else {
         return;

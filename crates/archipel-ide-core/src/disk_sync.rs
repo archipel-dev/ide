@@ -87,7 +87,7 @@ impl IdeState {
         if changes.is_empty() {
             return;
         }
-        self.vcs_stale = true;
+        self.mark_vcs_stale();
         self.request_git_refresh();
         self.index_paths_changed(&changes.paths);
         if self.is_gradle_project()
@@ -118,7 +118,7 @@ impl IdeState {
         if let Some(project) = &self.project {
             self.set_files(project.entries(20_000));
         }
-        self.vcs_stale = true;
+        self.mark_vcs_stale();
         self.request_git_refresh();
         let paths: Vec<_> = self.documents.iter().map(|d| d.path.clone()).collect();
         let changed = self.sync_paths(&paths);
@@ -546,7 +546,7 @@ mod tests {
                 .iter()
                 .any(|f| f.relative_path == Path::new("src/New.java"))
         );
-        assert!(state.vcs_stale);
+        assert!(state.git().unwrap().is_stale());
         let _ = std::fs::remove_dir_all(root);
     }
 }

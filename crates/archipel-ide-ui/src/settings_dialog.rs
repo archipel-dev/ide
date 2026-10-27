@@ -99,10 +99,11 @@ impl SettingsDialog {
 pub fn take_request(app: &mut IdeApp) {
     if let Some(page) = app.state.settings_request.take() {
         let search = app.keymap_search.take();
+        let settings = app.state.settings();
         match app.settings_dialog.as_mut() {
-            Some(dialog) => dialog.select(&app.state.settings.registry, &page),
+            Some(dialog) => dialog.select(&settings.read().registry, &page),
             None => {
-                app.settings_dialog = Some(SettingsDialog::new(&app.state.settings.registry, &page))
+                app.settings_dialog = Some(SettingsDialog::new(&settings.read().registry, &page))
             }
         }
         if let (Some(search), Some(dialog)) = (search, app.settings_dialog.as_mut()) {
@@ -127,17 +128,22 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         return;
     };
     let mut requests = Vec::new();
-    let outcome = draw(
-        &mut dialog,
-        PageContext {
-            registry: &app.state.settings.registry,
-            store: &app.state.settings.store,
-            keymap: &app.state.keymap,
-            state: &app.state,
-            requests: &mut requests,
-        },
-        ctx,
-    );
+    let outcome = {
+        // Read access for the frame; released before commands may write settings.
+        let settings = app.state.settings();
+        let settings = settings.read();
+        draw(
+            &mut dialog,
+            PageContext {
+                registry: &settings.registry,
+                store: &settings.store,
+                keymap: &app.state.keymap,
+                state: &app.state,
+                requests: &mut requests,
+            },
+            ctx,
+        )
+    };
     // Pages that edit through commands (Keymap) queue them while drawing.
     for (id, params) in requests {
         let result = app.commands.execute(&id, &mut app.state, params);

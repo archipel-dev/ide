@@ -20,6 +20,7 @@ archipel-ide-keymap = { path = "../archipel-ide-keymap" }
 archipel-ide-language = { path = "../archipel-ide-language" }
 archipel-ide-lsp = { path = "../archipel-ide-lsp" }
 archipel-ide-markdown = { path = "../archipel-ide-markdown" }
+archipel-ide-platform = { path = "../archipel-ide-platform" }
 archipel-ide-plugins = { path = "../archipel-ide-plugins" }
 archipel-ide-project = { path = "../archipel-ide-project" }
 archipel-ide-runnables = { path = "../archipel-ide-runnables" }
@@ -32,6 +33,7 @@ archipel-ide-templates = { path = "../archipel-ide-templates" }
 archipel-ide-text = { path = "../archipel-ide-text" }
 archipel-ide-toolchains = { path = "../archipel-ide-toolchains" }
 archipel-ide-update = { path = "../archipel-ide-update" }
+parking_lot.workspace = true
 regex = "1"
 serde.workspace = true
 serde_json.workspace = true

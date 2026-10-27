@@ -249,7 +249,8 @@ fn content(app: &mut IdeApp, ui: &mut egui::Ui) {
         ui.add_space(6.0);
         let offline = app
             .state
-            .settings
+            .settings()
+            .read()
             .bool(archipel_ide_settings::ids::GRADLE_OFFLINE)
             .unwrap_or(false);
         if ui

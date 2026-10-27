@@ -53,8 +53,6 @@ pub struct PluginHostState {
     pub tabs: Vec<PluginTab>,
     /// Active plugin tab; while set it is shown instead of the active document.
     pub active_tab: Option<usize>,
-    /// Unread notifications `(plugin, notification)`, newest last.
-    pub notifications: Vec<(String, Notification)>,
     /// Plugin shown alone in standalone app mode (`--app <id>`).
     pub app_mode: Option<String>,
     /// Per-user directory that `.archipelplugin` archives install into.
@@ -135,10 +133,9 @@ impl PluginHost for HostAdapter<'_> {
     }
 
     fn notify(&mut self, notification: Notification) {
-        let plugins = &mut self.state.plugin_host;
-        plugins.notifications.push((self.id.clone(), notification));
-        let excess = plugins.notifications.len().saturating_sub(20);
-        plugins.notifications.drain(..excess);
+        self.state
+            .notifications()
+            .notify_plugin(&self.id, notification);
     }
 
     fn dispatch(&mut self, command: &str, params: Value) {

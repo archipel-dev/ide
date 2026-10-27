@@ -119,7 +119,12 @@ impl IdeState {
 
     /// Single-click open: reuses the preview tab unless the file is already open.
     pub fn open_file_preview(&mut self, path: &Path) -> Result<(), String> {
-        if !self.settings.bool(ids::EDITOR_PREVIEW_TAB).unwrap_or(true) {
+        if !self
+            .settings()
+            .read()
+            .bool(ids::EDITOR_PREVIEW_TAB)
+            .unwrap_or(true)
+        {
             return self.open_file(path);
         }
         self.sync_splits();
@@ -725,10 +730,10 @@ mod tests {
     #[test]
     fn preview_can_be_switched_off() {
         let (mut state, commands, root) = project(&["a", "b"], "nopreview");
-        let crate::Settings { registry, store } = &mut state.settings;
-        store
+        state
+            .settings()
+            .write()
             .set(
-                registry,
                 ids::EDITOR_PREVIEW_TAB,
                 archipel_ide_settings::SettingValue::Bool(false),
             )

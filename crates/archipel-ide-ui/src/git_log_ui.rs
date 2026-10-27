@@ -47,7 +47,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         app.toggle_tool_window(ToolWindow::Git);
         return;
     }
-    if app.state.git.is_none() {
+    if !app.state.has_git() {
         ui.add_space(12.0);
         ui.vertical_centered(|ui| {
             ui.label(

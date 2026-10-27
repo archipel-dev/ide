@@ -117,7 +117,7 @@ pub fn bottom(app: &mut IdeApp, ctx: &egui::Context) {
 
 /// Git status per project-relative path.
 fn git_colors(app: &IdeApp) -> HashMap<PathBuf, ChangeKind> {
-    let (Some(git), Some(project)) = (&app.state.git, &app.state.project) else {
+    let (Some(git), Some(project)) = (&app.state.git_status(), &app.state.project) else {
         return HashMap::new();
     };
     git.changes
@@ -609,7 +609,7 @@ fn checkbox(ui: &egui::Ui, rect: Rect, state: Option<bool>) {
 }
 
 fn commit(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let Some(git) = app.state.git.clone() else {
+    let Some(git) = app.state.git_status() else {
         ui.add_space(12.0);
         ui.vertical_centered(|ui| {
             ui.label(

@@ -60,6 +60,12 @@ impl Application {
         }
     }
 
+    /// A handle that does not keep the application alive. Listeners and services that need
+    /// the application later hold this instead of an [`Application`] (which would be a cycle).
+    pub fn downgrade(&self) -> WeakApplication {
+        WeakApplication(Arc::downgrade(&self.inner))
+    }
+
     pub fn extensions(&self) -> &ExtensionRegistry {
         &self.inner.extensions
     }
@@ -113,6 +119,17 @@ impl ComponentManager for Application {
 
     fn disposer(&self) -> &Disposer {
         &self.inner.disposer
+    }
+}
+
+/// See [`Application::downgrade`].
+#[derive(Clone)]
+pub struct WeakApplication(Weak<ApplicationInner>);
+
+impl WeakApplication {
+    /// The application, unless every strong handle is gone.
+    pub fn upgrade(&self) -> Option<Application> {
+        self.0.upgrade().map(|inner| Application { inner })
     }
 }
 
@@ -475,6 +492,15 @@ mod tests {
         assert!(project.is_disposed());
         assert_eq!(*events.0.lock(), ["opened p", "closing p", "closed p"]);
         assert!(app.get_service::<usize>().is_none());
+    }
+
+    #[test]
+    fn a_weak_handle_does_not_keep_the_application_alive() {
+        let app = Application::new();
+        let weak = app.downgrade();
+        assert!(weak.upgrade().is_some());
+        drop(app);
+        assert!(weak.upgrade().is_none());
     }
 
     #[test]

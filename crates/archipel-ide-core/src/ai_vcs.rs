@@ -36,7 +36,7 @@ impl IdeState {
         if paths.is_empty() {
             return Err("select changes to commit first".into());
         }
-        let git = self.git.as_ref().ok_or("project is not a Git repository")?;
+        let git = self.git_status().ok_or("project is not a Git repository")?;
         let diff = git.diff(paths).map_err(|e| e.to_string())?;
         if diff.trim().is_empty() {
             return Err("the selected files have no changes to describe".into());
@@ -116,7 +116,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"paths":["string"]}"#,
             ),
-            |state: &IdeState| state.ai.is_enabled() && state.git.is_some(),
+            |state: &IdeState| state.ai.is_enabled() && state.has_git(),
             |state: &mut IdeState, params| {
                 let paths: Vec<PathBuf> = string_array_param(&params, "paths")?
                     .into_iter()

@@ -23,6 +23,7 @@ eframe.workspace = true
 archipel-ide-plugin-hello = { path = "../../plugins/hello", optional = true }
 archipel-ide-plugin-lua = { path = "../archipel-ide-plugin-lua" }
 archipel-ide-plugin-wasm = { path = "../archipel-ide-plugin-wasm" }
+archipel-ide-tui = { path = "../archipel-ide-tui" }
 archipel-ide-ui = { path = "../archipel-ide-ui" }
 mongo-raabit = { path = "../../plugins/mongo-raabit", optional = true }
 nexus-http = { path = "../../plugins/nexus-http", optional = true }

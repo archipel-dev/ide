@@ -14,8 +14,9 @@ use serde_json::json;
 const ROW_HEIGHT: f32 = 24.0;
 const VISIBLE_ROWS: usize = 11;
 const ICON_COLUMN: f32 = 26.0;
-const FOOTER_HEIGHT: f32 = 26.0;
-const MIN_WIDTH: f32 = 520.0;
+const FOOTER_HEIGHT: f32 = 28.0;
+/// UI-POP-032: 573 px wide.
+const MIN_WIDTH: f32 = 573.0;
 const MAX_WIDTH: f32 = 720.0;
 /// Matched characters (blue, like the reference lookup's match highlight).
 const MATCHED: Color32 = Color32::from_rgb(0x56, 0xA8, 0xF5);
@@ -263,10 +264,12 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) -> Option<Rect> {
 fn paint_row(ui: &egui::Ui, rect: Rect, row: &Row, selected: bool, hovered: bool) {
     let painter = ui.painter().with_clip_rect(rect);
     if selected {
+        // UI-POP-031: the lookup list keeps the editor's focus, so its selection is the
+        // inactive one (Gray4), not the blue of a focused list.
         painter.rect_filled(
-            rect.shrink2(vec2(4.0, 1.0)),
+            rect.shrink2(vec2(5.0, 0.0)),
             4.0,
-            *theme::COMPLETION_SELECTION,
+            *theme::SELECTION_INACTIVE,
         );
     } else if hovered {
         painter.rect_filled(rect.shrink2(vec2(4.0, 1.0)), 4.0, *theme::HOVER);

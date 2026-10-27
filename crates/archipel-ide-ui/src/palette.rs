@@ -16,6 +16,16 @@ use serde_json::json;
 use std::time::Duration;
 
 const MAX_ROWS: usize = 40;
+/// Search Everywhere geometry (UI-POP-010/011).
+const POPUP_WIDTH: f32 = 705.0;
+const POPUP_HEIGHT: f32 = 700.0;
+const ROW_HEIGHT: f32 = 24.0;
+const HEADER_HEIGHT: f32 = 41.0;
+const SEARCH_ROW_HEIGHT: f32 = 40.0;
+const FOOTER_HEIGHT: f32 = 29.0;
+const TAB_UNDERLINE: f32 = 3.0;
+/// Header, search row, divider, 4 px above and below the list, footer.
+const CHROME_HEIGHT: f32 = HEADER_HEIGHT + SEARCH_ROW_HEIGHT + 1.0 + 8.0 + FOOTER_HEIGHT;
 /// Time spent indexing symbols per frame while the popup is open.
 const INDEX_BUDGET: Duration = Duration::from_millis(15);
 
@@ -182,9 +192,13 @@ fn highlighted_text(
             0.0,
             egui::text::TextFormat {
                 font_id: font.clone(),
-                color: if matched { *theme::MODIFIED } else { color },
+                color: if matched {
+                    theme::search_match_text()
+                } else {
+                    color
+                },
                 background: if matched {
-                    theme::SELECTION_DISABLED.gamma_multiply(0.6)
+                    *theme::SEARCH_MATCH
                 } else {
                     egui::Color32::TRANSPARENT
                 },
@@ -227,12 +241,13 @@ fn row(
     ranked: &Ranked<Hit>,
     scroll_selected: bool,
 ) -> Option<usize> {
-    let (rect, response) = ui.allocate_exact_size(vec2(width, 26.0), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(vec2(width, ROW_HEIGHT), Sense::click());
     let selected = index == app.palette.selected;
     if selected && scroll_selected {
         response.scroll_to_me(None);
     }
-    let row = rect.shrink2(vec2(6.0, 1.0));
+    // Selection 8 px from the popup border (UI-POP-002).
+    let row = rect.shrink2(vec2(8.0, 0.0));
     if selected {
         ui.painter().rect_filled(row, 4.0, theme::SELECTION);
     } else if response.hovered() {
@@ -313,7 +328,7 @@ fn row(
 
 /// Selected item's path (or action id), the Assign Shortcut hint on the Actions tab.
 fn footer(app: &IdeApp, ui: &mut egui::Ui, width: f32, selected: Option<&Ranked<Hit>>) {
-    let (footer, _) = ui.allocate_exact_size(vec2(width, 28.0), Sense::hover());
+    let (footer, _) = ui.allocate_exact_size(vec2(width, FOOTER_HEIGHT), Sense::hover());
     ui.painter().rect_filled(
         footer,
         egui::CornerRadius {
@@ -322,7 +337,7 @@ fn footer(app: &IdeApp, ui: &mut egui::Ui, width: f32, selected: Option<&Ranked<
             sw: 10,
             se: 10,
         },
-        theme::FRAME,
+        theme::BAND,
     );
     let font = egui::FontId::proportional(theme::UI_FONT_SIZE - 1.0);
     let left = match selected.map(|ranked| &ranked.item) {
@@ -335,19 +350,22 @@ fn footer(app: &IdeApp, ui: &mut egui::Ui, width: f32, selected: Option<&Ranked<
                 .to_owned()
         }
     };
+    // The link at the right: the alternative way to open the selected item (UI-POP-011).
     let right = if app.palette.tab == SearchTab::Actions {
         "Assign Shortcut  Alt+Enter"
+    } else if selected.is_some() {
+        "Open In Right Split  Shift+Enter"
     } else {
         ""
     };
-    let galley =
-        ui.painter()
-            .layout_no_wrap(right.to_owned(), font.clone(), *theme::TEXT_SECONDARY);
+    let galley = ui
+        .painter()
+        .layout_no_wrap(right.to_owned(), font.clone(), *theme::LINK);
     let right_width = galley.size().x;
     ui.painter().galley(
         footer.right_center() - vec2(14.0 + right_width, galley.size().y / 2.0),
         galley,
-        *theme::TEXT_SECONDARY,
+        *theme::LINK,
     );
     ui.painter()
         .with_clip_rect(footer.with_max_x(footer.right() - right_width - 28.0))
@@ -398,18 +416,19 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     let enter = ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Enter))
         || right_split;
     let screen = ctx.content_rect();
-    let width = 700.0_f32.min(screen.width() - 40.0);
+    let width = POPUP_WIDTH.min(screen.width() - 40.0);
     // Alt+Enter on an action: Assign Shortcut (opens the keymap page).
     let assign = app.palette.tab == SearchTab::Actions
         && ctx.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::Enter));
-    let list_height = (screen.height() * 0.7 - 150.0).max(120.0);
+    // 700 px popup (UI-POP-010) minus header, search row, dividers, paddings and footer.
+    let list_height = (POPUP_HEIGHT.min(screen.height() * 0.71) - CHROME_HEIGHT).max(120.0);
     let mut chosen = enter.then_some(app.palette.selected);
     let mut close = false;
     egui::Area::new(egui::Id::new("search_everywhere"))
         .order(egui::Order::Foreground)
         .fixed_pos(egui::pos2(
             screen.center().x - width / 2.0,
-            screen.top() + screen.height() * 0.12,
+            screen.top() + (screen.height() * 0.19).round(),
         ))
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style())
@@ -418,91 +437,140 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                 .show(ui, |ui| {
                     ui.set_width(width);
                     ui.spacing_mut().item_spacing.y = 0.0;
-                    // Header tabs (Tab switches).
-                    ui.horizontal(|ui| {
-                        ui.add_space(8.0);
-                        for tab in Tab::ALL {
-                            let galley = ui.painter().layout_no_wrap(
-                                tab.label().to_owned(),
-                                egui::FontId::proportional(theme::UI_FONT_SIZE),
-                                *theme::TEXT_BRIGHT,
-                            );
-                            let (rect, response) = ui.allocate_exact_size(
-                                vec2(galley.size().x + 20.0, 32.0),
-                                Sense::click(),
-                            );
-                            let pill = rect.shrink2(vec2(0.0, 5.0));
-                            if tab == app.palette.tab {
-                                ui.painter().rect_filled(pill, 4.0, theme::SELECTION);
-                            } else if response.hovered() {
-                                ui.painter().rect_filled(pill, 4.0, theme::HOVER);
-                            }
-                            let color = if tab == app.palette.tab {
-                                *theme::TEXT_BRIGHT
-                            } else {
-                                *theme::TEXT_SECONDARY
-                            };
-                            ui.painter()
-                                .galley(rect.center() - galley.size() / 2.0, galley, color);
-                            if response.clicked() {
-                                app.palette.tab = tab;
-                                app.palette.selected = 0;
-                            }
-                        }
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.add_space(10.0);
-                            match app.palette.tab {
-                                SearchTab::Actions => {
-                                    let actions = app.state.actions();
-                                    let mut include = actions.read().include_disabled;
-                                    if ui
-                                        .checkbox(&mut include, "Include disabled actions")
-                                        .changed()
-                                    {
-                                        actions.write().include_disabled = include;
-                                    }
-                                }
-                                SearchTab::Files | SearchTab::Text => {}
-                                _ => {
-                                    ui.checkbox(
-                                        &mut app.palette.include_non_project,
-                                        "Include non-project items",
+                    // Header band with the tabs (Tab switches), 41 px (UI-POP-011).
+                    let (band, _) =
+                        ui.allocate_exact_size(vec2(width, HEADER_HEIGHT), Sense::hover());
+                    ui.painter().rect_filled(
+                        band,
+                        egui::CornerRadius {
+                            nw: 10,
+                            ne: 10,
+                            sw: 0,
+                            se: 0,
+                        },
+                        theme::BAND,
+                    );
+                    ui.scope_builder(
+                        egui::UiBuilder::new()
+                            .max_rect(band)
+                            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                        |ui| {
+                            ui.add_space(8.0);
+                            for tab in Tab::ALL {
+                                let galley = ui.painter().layout_no_wrap(
+                                    tab.label().to_owned(),
+                                    egui::FontId::proportional(theme::UI_FONT_SIZE),
+                                    *theme::TEXT_BRIGHT,
+                                );
+                                let (rect, response) = ui.allocate_exact_size(
+                                    vec2(galley.size().x + 24.0, HEADER_HEIGHT),
+                                    Sense::click(),
+                                );
+                                let selected = tab == app.palette.tab;
+                                if !selected && response.hovered() {
+                                    ui.painter().rect_filled(
+                                        rect.shrink2(vec2(0.0, 6.0)),
+                                        4.0,
+                                        theme::HOVER,
                                     );
                                 }
+                                let color = if selected {
+                                    *theme::TEXT_BRIGHT
+                                } else {
+                                    *theme::TEXT_SECONDARY
+                                };
+                                ui.painter().galley(
+                                    rect.center() - galley.size() / 2.0,
+                                    galley,
+                                    color,
+                                );
+                                if selected {
+                                    // The selected tab: a 3 px underline, not a pill.
+                                    ui.painter().rect_filled(
+                                        Rect::from_min_max(
+                                            egui::pos2(rect.left(), rect.bottom() - TAB_UNDERLINE),
+                                            rect.right_bottom(),
+                                        ),
+                                        0.0,
+                                        theme::ACCENT,
+                                    );
+                                }
+                                if response.clicked() {
+                                    app.palette.tab = tab;
+                                    app.palette.selected = 0;
+                                }
                             }
-                        });
-                    });
-                    ui.painter().hline(
-                        ui.min_rect().x_range(),
-                        ui.min_rect().bottom(),
-                        egui::Stroke::new(1.0_f32, theme::POPUP_BORDER),
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.add_space(10.0);
+                                    match app.palette.tab {
+                                        SearchTab::Actions => {
+                                            let actions = app.state.actions();
+                                            let mut include = actions.read().include_disabled;
+                                            if ui
+                                                .checkbox(&mut include, "Include disabled actions")
+                                                .changed()
+                                            {
+                                                actions.write().include_disabled = include;
+                                            }
+                                        }
+                                        SearchTab::Files | SearchTab::Text => {}
+                                        _ => {
+                                            ui.checkbox(
+                                                &mut app.palette.include_non_project,
+                                                "Include non-project items",
+                                            );
+                                        }
+                                    }
+                                },
+                            );
+                        },
                     );
-                    ui.horizontal(|ui| {
-                        ui.add_space(12.0);
-                        icons::show(ui, Icon::Search, 16.0, *theme::TEXT_SECONDARY);
-                        let input = ui.add(
-                            egui::TextEdit::singleline(&mut app.palette.query)
-                                .frame(false)
-                                .font(egui::FontId::proportional(theme::UI_FONT_SIZE + 2.0))
-                                .desired_width(width - 60.0)
-                                .margin(egui::Margin::symmetric(4, 10))
-                                .hint_text(
-                                    "Type to search classes, files, symbols, actions and text",
-                                ),
-                        );
-                        if app.palette.just_opened || !input.has_focus() {
-                            input.request_focus();
-                            app.palette.just_opened = false;
-                        }
-                        if input.changed() {
-                            app.palette.selected = 0;
-                        }
-                    });
-                    ui.painter().hline(
-                        ui.min_rect().x_range(),
-                        ui.min_rect().bottom(),
-                        egui::Stroke::new(1.0_f32, theme::POPUP_BORDER),
+                    let (search_row, _) =
+                        ui.allocate_exact_size(vec2(width, SEARCH_ROW_HEIGHT), Sense::hover());
+                    ui.scope_builder(
+                        egui::UiBuilder::new()
+                            .max_rect(search_row)
+                            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                        |ui| {
+                            ui.add_space(19.0);
+                            icons::show(ui, Icon::Search, 16.0, *theme::TEXT_SECONDARY);
+                            let input = ui.add(
+                                egui::TextEdit::singleline(&mut app.palette.query)
+                                    .frame(false)
+                                    .font(egui::FontId::proportional(theme::UI_FONT_SIZE + 2.0))
+                                    .desired_width(width - 60.0)
+                                    .margin(egui::Margin::symmetric(4, 0))
+                                    .hint_text(
+                                        "Type to search classes, files, symbols, actions and text",
+                                    ),
+                            );
+                            if app.palette.just_opened || !input.has_focus() {
+                                input.request_focus();
+                                app.palette.just_opened = false;
+                            }
+                            if input.changed() {
+                                app.palette.selected = 0;
+                            }
+                            // The hint at the right (UI-POP-011).
+                            if app.palette.query.is_empty() {
+                                ui.painter().text(
+                                    search_row.right_center() - vec2(16.0, 0.0),
+                                    egui::Align2::RIGHT_CENTER,
+                                    "Type / to see commands",
+                                    egui::FontId::proportional(theme::UI_FONT_SIZE),
+                                    *theme::TEXT_INFO,
+                                );
+                            }
+                        },
                     );
+                    ui.painter().hline(
+                        search_row.x_range(),
+                        search_row.bottom(),
+                        egui::Stroke::new(1.0_f32, theme::BAND),
+                    );
+                    ui.add_space(1.0);
                     ui.add_space(4.0);
                     if found.is_empty() {
                         ui.add_space(12.0);

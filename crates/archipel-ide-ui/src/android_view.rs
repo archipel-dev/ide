@@ -20,7 +20,7 @@ pub struct AndroidViewState {
 
 /// Whether the Project tool window should render the Android view.
 pub fn active(app: &IdeApp) -> bool {
-    app.state.is_android_project() && app.state.android().android_view
+    app.state.is_android_project() && app.state.android_tooling().android_view()
 }
 
 /// Header with the "Android ▾" / "Project ▾" view switcher. Returns whether
@@ -39,7 +39,7 @@ pub fn header(app: &mut IdeApp, ui: &mut egui::Ui) -> bool {
             .max_rect(rect.shrink2(vec2(4.0, 0.0)))
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
     );
-    let title = if app.state.android().android_view {
+    let title = if app.state.android_tooling().android_view() {
         "Android"
     } else {
         "Project"
@@ -56,7 +56,7 @@ pub fn header(app: &mut IdeApp, ui: &mut egui::Ui) -> bool {
     egui::Popup::menu(&response).show(|ui| {
         ui.set_min_width(160.0);
         for (view, label) in [("project", "Project"), ("android", "Android")] {
-            let selected = (view == "android") == app.state.android().android_view;
+            let selected = (view == "android") == app.state.android_tooling().android_view();
             if ui.selectable_label(selected, label).clicked() {
                 app.dispatch("android.projectView.select", json!({"view": view}));
                 ui.close();

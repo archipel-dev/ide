@@ -5,8 +5,8 @@ use crate::{IdeState, spec, string_param, usize_param};
 use archipel_ide_command::{Command, CommandError, CommandRegistry, CommandResult};
 use archipel_ide_plugins::{
     EditorTabRequest, Notification, Permission, Plugin, PluginError, PluginHost, PluginManifest,
-    PluginRegistry, PluginSet, PluginStatus, PluginStore, StatusWidgetState, ViewContext,
-    ViewPlacement, user_config_dir,
+    PluginRegistry, PluginRuntime, PluginSet, PluginStatus, PluginStore, StatusWidgetState,
+    ViewContext, ViewPlacement, user_config_dir,
 };
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -140,9 +140,8 @@ impl PluginHost for HostAdapter<'_> {
 
     fn dispatch(&mut self, command: &str, params: Value) {
         self.state
-            .plugin_host
-            .queued_commands
-            .push((command.into(), params));
+            .plugin_host_service()
+            .queue_command(command, params);
     }
 
     fn open_tool_window(&mut self, id: &str) {
@@ -159,8 +158,8 @@ impl PluginHost for HostAdapter<'_> {
 
     fn set_setting(&mut self, key: &str, value: Value) -> Result<(), PluginError> {
         self.state
-            .plugin_host
-            .registry
+            .plugin_host_service()
+            .registry_mut()
             .store
             .set_setting(&self.id, key, value)
     }
@@ -168,8 +167,8 @@ impl PluginHost for HostAdapter<'_> {
     fn data_dir(&self) -> Result<PathBuf, PluginError> {
         let dir = self
             .state
-            .plugin_host
-            .registry
+            .plugin_host_service()
+            .registry()
             .store
             .data_dir(&self.id)
             .ok_or_else(|| {
@@ -185,18 +184,22 @@ impl PluginHost for HostAdapter<'_> {
 
     fn has_permission(&self, permission: Permission) -> bool {
         self.state
-            .plugin_host
-            .registry
+            .plugin_host_service()
+            .registry()
             .get(&self.id)
             .is_some_and(|entry| entry.manifest.has_permission(permission))
     }
 
     fn refresh_contributions(&mut self) {
-        self.state.plugin_host.refresh.insert(self.id.clone());
+        self.state
+            .plugin_host_service()
+            .write()
+            .refresh
+            .insert(self.id.clone());
     }
 
     fn request_repaint(&mut self) {
-        self.state.plugin_host.repaint = true;
+        self.state.plugin_host_service().write().repaint = true;
     }
 }
 
@@ -205,16 +208,22 @@ impl IdeState {
     /// per-user plugin directory, then activates enabled plugins.
     pub fn init_plugins(&mut self, store: PluginStore, set: PluginSet) {
         let mut registry = PluginRegistry::new(store);
+        let mut runtime = PluginRuntime::default();
         for loader in set.loaders {
-            registry.add_loader(loader);
+            runtime.add_loader(loader);
         }
         for factory in set.bundled {
-            if let Err(error) = registry.add_bundled(factory) {
+            if let Err(error) = registry.add_bundled(&mut runtime, factory) {
                 registry.problems.push((PathBuf::from("<bundled>"), error));
             }
         }
-        self.plugin_host.registry = registry;
-        self.plugin_host.install_dir = user_plugin_dir();
+        self.plugin_runtime = runtime;
+        {
+            let plugins = self.plugin_host_service();
+            let mut state = plugins.write();
+            state.registry = registry;
+            state.install_dir = user_plugin_dir();
+        }
         self.discover_plugins();
     }
 
@@ -223,7 +232,7 @@ impl IdeState {
     /// directory (`.archipelplugin` archives are unpacked there).
     pub fn discover_plugins(&mut self) {
         let project = self.project.as_ref().map(|p| p.root().to_owned());
-        let install_dir = self.plugin_host.install_dir.clone();
+        let install_dir = self.plugin_host_service().install_dir();
         let roots: Vec<PathBuf> = plugin_dirs(project.as_deref())
             .into_iter()
             .filter_map(|(label, dir)| {
@@ -235,33 +244,35 @@ impl IdeState {
             })
             .collect();
         for root in roots {
-            self.plugin_host.registry.discover(&root);
+            self.plugin_host_service()
+                .registry_mut()
+                .discover(&mut self.plugin_runtime, &root);
         }
         self.activate_pending_plugins();
     }
 
     pub fn activate_pending_plugins(&mut self) {
-        for id in self.plugin_host.registry.pending_activation() {
-            if let Some(problem) = self.plugin_host.registry.dependency_problem(&id) {
-                self.plugin_host
-                    .registry
-                    .set_status(&id, PluginStatus::Failed(problem));
+        let plugins = self.plugin_host_service();
+        let pending = plugins.registry().pending_activation();
+        for id in pending {
+            let problem = plugins.registry().dependency_problem(&id);
+            if let Some(problem) = problem {
+                plugins.set_status(&id, PluginStatus::Failed(problem));
                 continue;
             }
-            if !self.plugin_host.registry.has_code(&id) {
+            if !self.plugin_runtime.has_code(&id) {
                 // Declarative plugins have nothing to run.
-                self.plugin_host
-                    .registry
-                    .set_status(&id, PluginStatus::Active);
+                plugins.set_status(&id, PluginStatus::Active);
                 continue;
             }
-            if let Err(error) = self.plugin_host.registry.ensure_instance(&id) {
-                self.plugin_host
-                    .registry
-                    .set_status(&id, PluginStatus::Failed(error.to_string()));
+            let ensured = self
+                .plugin_runtime
+                .ensure_instance(&plugins.registry(), &id);
+            if let Err(error) = ensured {
+                plugins.set_status(&id, PluginStatus::Failed(error.to_string()));
                 continue;
             }
-            let Some(mut instance) = self.plugin_host.registry.take_instance(&id) else {
+            let Some(mut instance) = self.plugin_runtime.take_instance(&id) else {
                 continue;
             };
             let result = {
@@ -273,16 +284,14 @@ impl IdeState {
             };
             let contributions = instance.contributions();
             let problems = contributions.problems();
-            self.plugin_host.registry.restore_instance(&id, instance);
+            self.plugin_runtime.restore_instance(&id, instance);
             let status = match result {
                 Err(error) => PluginStatus::Failed(error.to_string()),
                 Ok(()) if !problems.is_empty() => PluginStatus::Failed(problems.join("; ")),
                 Ok(()) => PluginStatus::Active,
             };
-            self.plugin_host
-                .registry
-                .set_contributions(&id, contributions);
-            self.plugin_host.registry.set_status(&id, status);
+            plugins.registry_mut().set_contributions(&id, contributions);
+            plugins.set_status(&id, status);
         }
     }
 
@@ -292,10 +301,10 @@ impl IdeState {
         id: &str,
         f: impl FnOnce(&mut dyn Plugin, &mut dyn PluginHost) -> R,
     ) -> Option<R> {
-        if !self.plugin_host.registry.is_active(id) {
+        if !self.plugin_host_service().is_active(id) {
             return None;
         }
-        let mut instance = self.plugin_host.registry.take_instance(id)?;
+        let mut instance = self.plugin_runtime.take_instance(id)?;
         let result = {
             let mut host = HostAdapter {
                 state: self,
@@ -303,12 +312,14 @@ impl IdeState {
             };
             f(instance.as_mut(), &mut host)
         };
-        if self.plugin_host.refresh.remove(id) {
-            self.plugin_host
-                .registry
+        let plugins = self.plugin_host_service();
+        let refresh = plugins.write().refresh.remove(id);
+        if refresh {
+            plugins
+                .registry_mut()
                 .set_contributions(id, instance.contributions());
         }
-        self.plugin_host.registry.restore_instance(id, instance);
+        self.plugin_runtime.restore_instance(id, instance);
         Some(result)
     }
 
@@ -317,7 +328,9 @@ impl IdeState {
         if !enabled {
             self.deactivate_plugin(id);
         }
-        self.plugin_host.registry.set_enabled(id, enabled)?;
+        self.plugin_host_service()
+            .registry_mut()
+            .set_enabled(id, enabled)?;
         if enabled {
             self.activate_pending_plugins();
         }
@@ -326,36 +339,39 @@ impl IdeState {
 
     /// Runs `deactivate`, drops the instance and closes the plugin's views.
     fn deactivate_plugin(&mut self, id: &str) {
-        if self.plugin_host.registry.is_active(id) {
+        let plugins = self.plugin_host_service();
+        if plugins.is_active(id) {
             self.with_plugin(id, |plugin, host| plugin.deactivate(host));
             // A fresh instance is created on re-enable.
-            drop(self.plugin_host.registry.take_instance(id));
-            self.plugin_host.tabs.retain(|tab| tab.plugin != id);
-            self.plugin_host.active_tab = None;
-            if self
-                .plugin_host
-                .tool_window
-                .as_ref()
+            drop(self.plugin_runtime.take_instance(id));
+            {
+                let mut state = plugins.write();
+                state.tabs.retain(|tab| tab.plugin != id);
+                state.active_tab = None;
+            }
+            if plugins
+                .tool_window()
                 .is_some_and(|(plugin, _)| plugin == id)
             {
-                self.plugin_host.tool_window = None;
+                plugins.set_tool_window(None);
             }
         }
     }
 
     /// Whether `id` was installed from an archive and can be uninstalled.
     pub fn plugin_uninstallable(&self, id: &str) -> bool {
-        let Some(install_dir) = &self.plugin_host.install_dir else {
+        let plugins = self.plugin_host_service();
+        let Some(install_dir) = plugins.install_dir() else {
             return false;
         };
-        self.plugin_host.registry.get(id).is_some_and(|entry| {
+        plugins.registry().get(id).is_some_and(|entry| {
             matches!(&entry.source, archipel_ide_plugins::PluginSource::Directory(dir)
                 if dir.parent() == Some(install_dir.as_path()))
         })
     }
 
     fn install_dir(&self) -> Result<PathBuf, PluginError> {
-        self.plugin_host.install_dir.clone().ok_or_else(|| {
+        self.plugin_host_service().install_dir().ok_or_else(|| {
             PluginError::Io(
                 "plugins".into(),
                 "no per-user configuration directory; set ARCHIPEL_CONFIG_DIR".into(),
@@ -371,13 +387,18 @@ impl IdeState {
     ) -> Result<PluginManifest, PluginError> {
         let install_dir = self.install_dir()?;
         let manifest = archipel_ide_plugins::archive::read_manifest(archive)?;
-        if let Some(entry) = self.plugin_host.registry.get(&manifest.id)
+        let provider = self
+            .plugin_host_service()
+            .registry()
+            .get(&manifest.id)
+            .map(|entry| entry.source.clone());
+        if let Some(source) = provider
             && !self.plugin_uninstallable(&manifest.id)
         {
             return Err(PluginError::Manifest(format!(
                 "{} is already provided by {}; it cannot be replaced from an archive",
                 manifest.id,
-                match &entry.source {
+                match &source {
                     archipel_ide_plugins::PluginSource::Bundled =>
                         "this Archipel IDE build".to_owned(),
                     archipel_ide_plugins::PluginSource::Directory(dir) => dir.display().to_string(),
@@ -386,7 +407,9 @@ impl IdeState {
         }
         self.deactivate_plugin(&manifest.id);
         // Rediscovery must load the new files, not keep the old entry.
-        self.plugin_host.registry.remove(&manifest.id);
+        self.plugin_host_service()
+            .registry_mut()
+            .remove(&mut self.plugin_runtime, &manifest.id);
         let manifest = archipel_ide_plugins::archive::install(archive, &install_dir)?;
         self.discover_plugins();
         self.status = format!("Installed plugin {} {}", manifest.name, manifest.version);
@@ -395,7 +418,7 @@ impl IdeState {
 
     /// Deactivates and removes an installed plugin.
     pub fn uninstall_plugin(&mut self, id: &str) -> Result<(), PluginError> {
-        if self.plugin_host.registry.get(id).is_none() {
+        if self.plugin_host_service().registry().get(id).is_none() {
             return Err(PluginError::NotFound(id.into()));
         }
         if !self.plugin_uninstallable(id) {
@@ -407,7 +430,10 @@ impl IdeState {
         self.deactivate_plugin(id);
         archipel_ide_plugins::archive::uninstall(&install_dir, id)?;
         // Forget the user's enable choice together with the plugin.
-        self.plugin_host.registry.store.set_disabled(id, false)?;
+        self.plugin_host_service()
+            .registry_mut()
+            .store
+            .set_disabled(id, false)?;
         self.discover_plugins();
         self.status = format!("Uninstalled plugin {id}");
         Ok(())
@@ -416,8 +442,8 @@ impl IdeState {
     /// Deactivates every plugin (IDE exit).
     pub fn shutdown_plugins(&mut self) {
         let active: Vec<String> = self
-            .plugin_host
-            .registry
+            .plugin_host_service()
+            .registry()
             .entries()
             .iter()
             .filter(|entry| entry.is_active())
@@ -430,11 +456,11 @@ impl IdeState {
 
     pub fn execute_plugin_command(&mut self, command: &str, params: Value) -> CommandResult {
         let owner = self
-            .plugin_host
-            .registry
+            .plugin_host_service()
+            .registry()
             .command_owner(command)
-            .ok_or_else(|| CommandError::Disabled(command.into()))?
-            .to_owned();
+            .map(str::to_owned)
+            .ok_or_else(|| CommandError::Disabled(command.into()))?;
         self.with_plugin(&owner, |plugin, host| plugin.execute(command, params, host))
             .unwrap_or_else(|| Err(CommandError::Disabled(command.into())))
     }
@@ -442,11 +468,11 @@ impl IdeState {
     /// Lets active plugins collect background results.
     pub fn poll_plugins(&mut self) {
         let ids: Vec<String> = self
-            .plugin_host
-            .registry
+            .plugin_host_service()
+            .registry()
             .entries()
             .iter()
-            .filter(|entry| entry.is_active() && self.plugin_host.registry.has_code(entry.id()))
+            .filter(|entry| entry.is_active() && self.plugin_runtime.has_code(entry.id()))
             .map(|entry| entry.id().to_owned())
             .collect();
         for id in ids {
@@ -456,11 +482,12 @@ impl IdeState {
 
     /// Takes and clears the repaint request set by plugins.
     pub fn take_plugin_repaint(&mut self) -> bool {
-        std::mem::take(&mut self.plugin_host.repaint)
+        std::mem::take(&mut self.plugin_host_service().write().repaint)
     }
 
     pub fn plugin_status_widgets(&self) -> Vec<PluginStatusWidget> {
-        let registry = &self.plugin_host.registry;
+        let plugins = self.plugin_host_service();
+        let registry = plugins.registry();
         registry
             .entries()
             .iter()
@@ -487,8 +514,9 @@ impl IdeState {
     /// The active plugin editor view contributed for `path`'s extension, if any.
     pub fn plugin_editor_for(&self, path: &Path) -> Option<(String, String)> {
         let extension = path.extension()?.to_str()?;
-        self.plugin_host
-            .registry
+        let plugins = self.plugin_host_service();
+        let registry = plugins.registry();
+        registry
             .entries()
             .iter()
             .filter(|entry| entry.is_active())
@@ -522,15 +550,15 @@ impl IdeState {
     }
 
     fn plugin_status_widget(&self, plugin: &str, id: &str) -> Option<StatusWidgetState> {
-        self.plugin_host
-            .registry
+        self.plugin_runtime
             .instance(plugin)
             .and_then(|instance| instance.status_widget(id))
     }
 
     /// Stored value of a plugin setting, or the default declared on its settings page.
     pub fn plugin_setting(&self, plugin: &str, key: &str) -> Option<Value> {
-        let registry = &self.plugin_host.registry;
+        let plugins = self.plugin_host_service();
+        let registry = plugins.registry();
         registry.store.setting(plugin, key).cloned().or_else(|| {
             registry.get(plugin).and_then(|entry| {
                 entry
@@ -550,28 +578,32 @@ impl IdeState {
         key: &str,
         value: Value,
     ) -> Result<(), String> {
-        let entry = self
-            .plugin_host
-            .registry
-            .get(plugin)
-            .ok_or_else(|| format!("plugin not found: {plugin}"))?;
-        let field = entry
-            .contributions
-            .settings_pages
-            .iter()
-            .flat_map(|page| &page.fields)
-            .find(|field| field.key == key)
-            .ok_or_else(|| format!("plugin {plugin} has no setting `{key}`"))?;
-        let value = field.kind.coerce(value)?;
-        self.plugin_host
-            .registry
+        let plugins = self.plugin_host_service();
+        let kind = {
+            let registry = plugins.registry();
+            let entry = registry
+                .get(plugin)
+                .ok_or_else(|| format!("plugin not found: {plugin}"))?;
+            entry
+                .contributions
+                .settings_pages
+                .iter()
+                .flat_map(|page| &page.fields)
+                .find(|field| field.key == key)
+                .map(|field| field.kind.clone())
+                .ok_or_else(|| format!("plugin {plugin} has no setting `{key}`"))?
+        };
+        let value = kind.coerce(value)?;
+        plugins
+            .registry_mut()
             .store
             .set_setting(plugin, key, value)
             .map_err(|error| error.to_string())
     }
 
     fn show_plugin_tool_window(&mut self, plugin: &str, id: &str) {
-        self.plugin_host.tool_window = Some((plugin.into(), id.into()));
+        self.plugin_host_service()
+            .set_tool_window(Some((plugin.into(), id.into())));
         // Plugin tool windows share the right anchor with the built-in ones.
         self.tool_windows.hide(crate::ToolWindow::DeviceManager);
         self.tool_windows.hide(crate::ToolWindow::RunningDevices);
@@ -579,18 +611,19 @@ impl IdeState {
 
     /// Toggles a contributed tool window; returns whether it is visible.
     pub fn toggle_plugin_tool_window(&mut self, plugin: &str, id: &str) -> Result<bool, String> {
-        let known = self.plugin_host.registry.get(plugin).is_some_and(|entry| {
+        let plugins = self.plugin_host_service();
+        let known = plugins.registry().get(plugin).is_some_and(|entry| {
             entry.is_active() && entry.contributions.tool_windows.iter().any(|w| w.id == id)
         });
         if !known {
             return Err(format!("plugin {plugin} has no active tool window `{id}`"));
         }
         let target = (plugin.to_owned(), id.to_owned());
-        if self.plugin_host.tool_window.as_ref() == Some(&target) {
-            self.plugin_host.tool_window = None;
+        if plugins.tool_window().as_ref() == Some(&target) {
+            plugins.set_tool_window(None);
             Ok(false)
         } else {
-            self.plugin_host.tool_window = Some(target);
+            plugins.set_tool_window(Some(target));
             self.tool_windows.hide(crate::ToolWindow::DeviceManager);
             self.tool_windows.hide(crate::ToolWindow::RunningDevices);
             Ok(true)
@@ -599,37 +632,42 @@ impl IdeState {
 
     /// Opens (or focuses the tab with the same key of) a plugin editor view.
     pub fn open_plugin_tab(&mut self, plugin: &str, request: EditorTabRequest) {
-        let tabs = &mut self.plugin_host.tabs;
-        let index = match tabs
-            .iter()
-            .position(|tab| tab.plugin == plugin && tab.key == request.key)
         {
-            Some(index) => {
-                tabs[index].title = request.title;
-                index
-            }
-            None => {
-                tabs.push(PluginTab {
-                    plugin: plugin.into(),
-                    view: request.view,
-                    title: request.title,
-                    key: request.key,
-                    path: request.path,
-                });
-                tabs.len() - 1
-            }
-        };
-        self.plugin_host.active_tab = Some(index);
+            let plugins = self.plugin_host_service();
+            let mut state = plugins.write();
+            let tabs = &mut state.tabs;
+            let index = match tabs
+                .iter()
+                .position(|tab| tab.plugin == plugin && tab.key == request.key)
+            {
+                Some(index) => {
+                    tabs[index].title = request.title;
+                    index
+                }
+                None => {
+                    tabs.push(PluginTab {
+                        plugin: plugin.into(),
+                        view: request.view,
+                        title: request.title,
+                        key: request.key,
+                        path: request.path,
+                    });
+                    tabs.len() - 1
+                }
+            };
+            state.active_tab = Some(index);
+        }
         self.diff_active = false;
     }
 
     pub fn close_plugin_tab(&mut self, index: usize) -> Result<(), String> {
-        let tabs = &mut self.plugin_host.tabs;
-        if index >= tabs.len() {
+        let plugins = self.plugin_host_service();
+        let mut state = plugins.write();
+        if index >= state.tabs.len() {
             return Err("plugin tab does not exist".into());
         }
-        tabs.remove(index);
-        self.plugin_host.active_tab = match self.plugin_host.active_tab {
+        state.tabs.remove(index);
+        state.active_tab = match state.active_tab {
             Some(active) if active == index => None,
             Some(active) if active > index => Some(active - 1),
             other => other,
@@ -637,10 +675,11 @@ impl IdeState {
         Ok(())
     }
 
-    pub fn active_plugin_tab(&self) -> Option<&PluginTab> {
-        self.plugin_host
-            .active_tab
-            .and_then(|index| self.plugin_host.tabs.get(index))
+    /// The plugin tab that is shown instead of the active document, if any.
+    pub fn active_plugin_tab(&self) -> Option<PluginTab> {
+        let plugins = self.plugin_host_service();
+        let state = plugins.read();
+        state.tabs.get(state.active_tab?).cloned()
     }
 }
 
@@ -654,7 +693,7 @@ pub fn sync_plugin_commands(
     for id in registered.drain(..) {
         registry.unregister(&id);
     }
-    for (plugin, spec) in state.plugin_host.registry.active_commands() {
+    for (plugin, spec) in state.plugin_host_service().registry().active_commands() {
         let id = spec.id.clone();
         if registry.contains(&id) {
             state.status =
@@ -665,7 +704,7 @@ pub fn sync_plugin_commands(
         let owner = plugin.clone();
         let result = registry.register(Command::new(
             spec,
-            move |state: &IdeState| state.plugin_host.registry.is_active(&owner),
+            move |state: &IdeState| state.plugin_host_service().is_active(&owner),
             move |state: &mut IdeState, params| state.execute_plugin_command(&command_id, params),
         ));
         if result.is_ok() {
@@ -681,7 +720,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
         |_| true,
         |state: &mut IdeState, _| {
             state.discover_plugins();
-            Ok(json!({"count": state.plugin_host.registry.entries().len()}))
+            Ok(json!({"count": state.plugin_host_service().registry().entries().len()}))
         },
     ));
     add(Command::new(
@@ -690,8 +729,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
         |_| true,
         |state: &mut IdeState, _| {
             let plugins: Vec<Value> = state
-                .plugin_host
-                .registry
+                .plugin_host_service().registry()
                 .entries()
                 .iter()
                 .map(|entry| {
@@ -724,7 +762,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     .set_plugin_enabled(&id, enabled)
                     .map_err(|error| CommandError::Failed(error.to_string()))?;
                 Ok(
-                    json!({"id": id, "status": state.plugin_host.registry.get(&id).map(|e| e.status.label())}),
+                    json!({"id": id, "status": state.plugin_host_service().registry().get(&id).map(|e| e.status.label())}),
                 )
             },
         ));
@@ -754,7 +792,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             Ok(json!({
                 "id": manifest.id,
                 "version": manifest.version,
-                "status": state.plugin_host.registry.get(&manifest.id).map(|e| e.status.label()),
+                "status": state.plugin_host_service().registry().get(&manifest.id).map(|e| e.status.label()),
             }))
         },
     ));
@@ -806,16 +844,16 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
         |state: &mut IdeState, params| {
             // Without an index the editor (or the standalone app view) is shown again.
             if params.get("index").is_none_or(Value::is_null) {
-                state.plugin_host.active_tab = None;
+                state.plugin_host_service().set_active_tab(None);
                 return Ok(Value::Null);
             }
             let index = usize_param(&params, "index")?;
-            if index >= state.plugin_host.tabs.len() {
+            if index >= state.plugin_host_service().tab_count() {
                 return Err(CommandError::InvalidParams(
                     "plugin tab does not exist".into(),
                 ));
             }
-            state.plugin_host.active_tab = Some(index);
+            state.plugin_host_service().set_active_tab(Some(index));
             state.diff_active = false;
             Ok(Value::Null)
         },
@@ -828,13 +866,13 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             None,
             r#"{"index":"number?"}"#,
         ),
-        |state: &IdeState| state.plugin_host.active_tab.is_some(),
+        |state: &IdeState| state.plugin_host_service().active_tab().is_some(),
         |state: &mut IdeState, params| {
             let index = match params.get("index") {
                 Some(_) => usize_param(&params, "index")?,
                 None => state
-                    .plugin_host
-                    .active_tab
+                    .plugin_host_service()
+                    .active_tab()
                     .ok_or_else(|| CommandError::Failed("no plugin tab is active".into()))?,
             };
             state
@@ -989,7 +1027,10 @@ mod tests {
             json!(1)
         );
         assert_eq!(state.status, "count 1");
-        assert_eq!(state.plugin_host.queued_commands[0].0, "toolwindow.hideAll");
+        assert_eq!(
+            state.plugin_host_service().read().queued_commands[0].0,
+            "toolwindow.hideAll"
+        );
         registry
             .execute(
                 "plugin.setSetting",
@@ -1021,14 +1062,17 @@ mod tests {
     fn files_open_in_the_plugin_editor_for_their_extension() {
         let (mut state, _, _) = setup(false);
         assert!(!state.open_in_plugin_editor(Path::new("a.http")));
-        assert!(state.plugin_host.tabs.is_empty());
-        state.plugin_host.registry.set_contributions(
-            "test.counter",
-            Contributions::new().editor(
-                archipel_ide_plugins::EditorContribution::new("main", "Counter")
-                    .file_extension("http"),
-            ),
-        );
+        assert!(state.plugin_host_service().write().tabs.is_empty());
+        state
+            .plugin_host_service()
+            .registry_mut()
+            .set_contributions(
+                "test.counter",
+                Contributions::new().editor(
+                    archipel_ide_plugins::EditorContribution::new("main", "Counter")
+                        .file_extension("http"),
+                ),
+            );
         assert!(state.open_in_plugin_editor(Path::new("dir/a.HTTP")));
         let tab = state.active_plugin_tab().unwrap();
         assert_eq!((tab.view.as_str(), tab.title.as_str()), ("main", "a.HTTP"));
@@ -1043,10 +1087,10 @@ mod tests {
             .execute("counter.open", &mut state, Value::Null)
             .unwrap();
         assert_eq!(
-            state.plugin_host.tool_window,
+            state.plugin_host_service().tool_window(),
             Some(("test.counter".into(), "counter".into()))
         );
-        assert_eq!(state.plugin_host.tabs.len(), 1);
+        assert_eq!(state.plugin_host_service().tab_count(), 1);
         assert_eq!(state.active_plugin_tab().unwrap().title, "Counter (again)");
         registry
             .execute(
@@ -1055,7 +1099,7 @@ mod tests {
                 json!({"plugin": "test.counter", "id": "counter"}),
             )
             .unwrap();
-        assert_eq!(state.plugin_host.tool_window, None);
+        assert_eq!(state.plugin_host_service().tool_window(), None);
         assert!(
             registry
                 .execute(
@@ -1068,7 +1112,7 @@ mod tests {
         registry
             .execute("plugin.tab.close", &mut state, Value::Null)
             .unwrap();
-        assert!(state.plugin_host.tabs.is_empty());
+        assert!(state.plugin_host_service().read().tabs.is_empty());
         assert!(
             registry
                 .execute("plugin.tab.activate", &mut state, json!({"index": 3}))
@@ -1088,8 +1132,8 @@ mod tests {
         registry
             .execute("plugin.disable", &mut state, json!({"id": "test.counter"}))
             .unwrap();
-        assert!(state.plugin_host.tabs.is_empty());
-        assert_eq!(state.plugin_host.tool_window, None);
+        assert!(state.plugin_host_service().read().tabs.is_empty());
+        assert_eq!(state.plugin_host_service().tool_window(), None);
         sync_plugin_commands(&mut registry, &mut registered, &mut state);
         assert!(registered.is_empty());
         assert!(matches!(
@@ -1150,7 +1194,7 @@ mod tests {
         let archive = base.join("theme.archipelplugin");
         archipel_ide_plugins::archive::pack(&source, &archive).unwrap();
         let (mut state, registry, _) = setup(false);
-        state.plugin_host.install_dir = Some(base.join("plugins"));
+        state.plugin_host_service().write().install_dir = Some(base.join("plugins"));
         let result = registry
             .execute("plugin.install", &mut state, json!({"path": archive}))
             .unwrap();
@@ -1163,8 +1207,20 @@ mod tests {
         registry
             .execute("plugin.uninstall", &mut state, json!({"id": "x.theme"}))
             .unwrap();
-        assert!(state.plugin_host.registry.get("x.theme").is_none());
-        assert!(!state.plugin_host.registry.store.is_disabled("x.theme"));
+        assert!(
+            state
+                .plugin_host_service()
+                .registry()
+                .get("x.theme")
+                .is_none()
+        );
+        assert!(
+            !state
+                .plugin_host_service()
+                .registry()
+                .store
+                .is_disabled("x.theme")
+        );
         let error = registry
             .execute(
                 "plugin.uninstall",

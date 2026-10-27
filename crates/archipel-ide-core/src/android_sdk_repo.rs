@@ -35,10 +35,9 @@ impl SdkRepoState {
 impl IdeState {
     fn sdk_job(&self, args: &[String]) -> Result<SdkJob, String> {
         let sdk = self
-            .android
-            .sdk
-            .as_ref()
-            .and_then(|d| d.sdk.as_ref())
+            .android_tooling()
+            .sdk()
+            .and_then(|d| d.sdk)
             .ok_or("No Android SDK is configured.")?;
         let tool = sdk.tool("sdkmanager").ok_or(
             "sdkmanager not found. Install the Command-line Tools from \
@@ -49,11 +48,13 @@ impl IdeState {
 
     /// Fetches the repository listing (`sdkmanager --list`).
     pub fn refresh_remote_packages(&mut self) -> Result<(), String> {
-        if self.android.sdk_repo.is_busy() {
+        if self.android_tooling().read().sdk_repo.is_busy() {
             return Err("sdkmanager is already running.".into());
         }
         let job = self.sdk_job(&["--list".into()])?;
-        let repo = &mut self.android.sdk_repo;
+        let tooling = self.android_tooling();
+        let mut guard = tooling.write();
+        let repo = &mut guard.sdk_repo;
         repo.job = Some((JobKind::List, job));
         repo.progress = Some("Fetching the package list…".into());
         repo.result = None;
@@ -66,7 +67,7 @@ impl IdeState {
         install: Vec<String>,
         uninstall: Vec<String>,
     ) -> Result<(), String> {
-        if self.android.sdk_repo.is_busy() {
+        if self.android_tooling().read().sdk_repo.is_busy() {
             return Err("sdkmanager is already running.".into());
         }
         if install.is_empty() && uninstall.is_empty() {
@@ -94,7 +95,9 @@ impl IdeState {
         }
         let first = queue.pop_front().expect("one step queued");
         let job = self.sdk_job(&first)?;
-        let repo = &mut self.android.sdk_repo;
+        let tooling = self.android_tooling();
+        let mut guard = tooling.write();
+        let repo = &mut guard.sdk_repo;
         repo.queue = queue;
         repo.job = Some((JobKind::Apply, job));
         repo.progress = Some("Starting sdkmanager…".into());
@@ -103,17 +106,23 @@ impl IdeState {
     }
 
     pub(crate) fn poll_sdk_repo(&mut self) -> bool {
-        let Some((kind, job)) = &self.android.sdk_repo.job else {
-            return false;
+        // Drain under the read guard, then release it: finishing a job writes the state again.
+        let (kind, events) = {
+            let tooling = self.android_tooling();
+            let guard = tooling.read();
+            let Some((kind, job)) = &guard.sdk_repo.job else {
+                return false;
+            };
+            (*kind, job.poll())
         };
-        let kind = *kind;
-        let events = job.poll();
         if events.is_empty() {
             return false;
         }
         for event in events {
             match event {
-                JobEvent::Line(line) => self.android.sdk_repo.progress = Some(line),
+                JobEvent::Line(line) => {
+                    self.android_tooling().write().sdk_repo.progress = Some(line)
+                }
                 JobEvent::Done(result) => self.finish_sdk_job(kind, result),
             }
         }
@@ -121,34 +130,43 @@ impl IdeState {
     }
 
     fn finish_sdk_job(&mut self, kind: JobKind, result: Result<String, String>) {
-        self.android.sdk_repo.job = None;
+        self.android_tooling().write().sdk_repo.job = None;
         match (kind, result) {
             (JobKind::List, Ok(text)) => {
-                let repo = &mut self.android.sdk_repo;
+                let tooling = self.android_tooling();
+                let mut guard = tooling.write();
+                let repo = &mut guard.sdk_repo;
                 repo.packages = parse_list(&text);
                 repo.loaded = true;
                 repo.progress = None;
                 repo.result = Some(Ok(format!("{} packages", repo.packages.len())));
             }
             (JobKind::Apply, Ok(_)) => {
-                if let Some(args) = self.android.sdk_repo.queue.pop_front() {
+                let next = self.android_tooling().write().sdk_repo.queue.pop_front();
+                if let Some(args) = next {
                     match self.sdk_job(&args) {
                         Ok(job) => {
-                            self.android.sdk_repo.job = Some((JobKind::Apply, job));
+                            self.android_tooling().write().sdk_repo.job =
+                                Some((JobKind::Apply, job));
                             return;
                         }
-                        Err(error) => self.android.sdk_repo.result = Some(Err(error)),
+                        Err(error) => {
+                            self.android_tooling().write().sdk_repo.result = Some(Err(error))
+                        }
                     }
                 } else {
-                    self.android.sdk_repo.result = Some(Ok("SDK packages updated.".into()));
+                    self.android_tooling().write().sdk_repo.result =
+                        Some(Ok("SDK packages updated.".into()));
                 }
-                self.android.sdk_repo.progress = None;
-                let root = self.android.root.clone();
-                self.android.detect_sdk(root.as_deref());
+                self.android_tooling().write().sdk_repo.progress = None;
+                let root = self.android_tooling().read().root.clone();
+                self.android_tooling().detect_sdk(root.as_deref());
                 let _ = self.refresh_remote_packages();
             }
             (_, Err(error)) => {
-                let repo = &mut self.android.sdk_repo;
+                let tooling = self.android_tooling();
+                let mut guard = tooling.write();
+                let repo = &mut guard.sdk_repo;
                 repo.queue.clear();
                 repo.progress = None;
                 repo.result = Some(Err(if error.to_lowercase().contains("licen") {
@@ -184,7 +202,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.android.sdk.is_some(),
+            |state: &IdeState| state.android_tooling().read().sdk.is_some(),
             |state: &mut IdeState, _| {
                 state
                     .refresh_remote_packages()
@@ -202,7 +220,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"install":"string[]","uninstall":"string[]"}"#,
             ),
-            |state: &IdeState| state.android.sdk.is_some(),
+            |state: &IdeState| state.android_tooling().read().sdk.is_some(),
             |state: &mut IdeState, params| {
                 state
                     .apply_sdk_changes(
@@ -244,12 +262,13 @@ mod tests {
         .unwrap();
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
         let mut state = IdeState::default();
-        state.android.sdk_setting = Some(root.clone());
-        state.android.sdk = Some(SdkDetection::detect(Some(&root), None, &SystemEnvironment));
+        state.android_tooling().write().sdk_setting = Some(root.clone());
+        state.android_tooling().write().sdk =
+            Some(SdkDetection::detect(Some(&root), None, &SystemEnvironment));
         let commands = built_in_commands();
         let wait = |state: &mut IdeState| {
             let until = Instant::now() + Duration::from_secs(10);
-            while state.android.sdk_repo.is_busy() {
+            while state.android_tooling().read().sdk_repo.is_busy() {
                 state.poll_android();
                 assert!(Instant::now() < until, "sdkmanager job hung");
                 std::thread::sleep(Duration::from_millis(10));
@@ -259,8 +278,8 @@ mod tests {
             .execute("android.sdk.refreshRemote", &mut state, json!({}))
             .unwrap();
         wait(&mut state);
-        assert!(state.android.sdk_repo.loaded);
-        assert_eq!(state.android.sdk_repo.packages.len(), 2);
+        assert!(state.android_tooling().read().sdk_repo.loaded);
+        assert_eq!(state.android_tooling().read().sdk_repo.packages.len(), 2);
         let error = commands
             .execute(
                 "android.sdk.apply",
@@ -280,7 +299,10 @@ mod tests {
         let calls = std::fs::read_to_string(&log).unwrap();
         assert!(calls.contains("--uninstall platform-tools"), "{calls}");
         assert!(calls.contains("--install platforms;android-36"), "{calls}");
-        assert!(matches!(state.android.sdk_repo.result, Some(Ok(_))));
+        assert!(matches!(
+            state.android_tooling().read().sdk_repo.result,
+            Some(Ok(_))
+        ));
         std::fs::remove_dir_all(root).unwrap();
     }
 }

@@ -8,6 +8,7 @@
 pub mod adb;
 pub mod avd;
 pub mod deploy;
+pub mod inbox;
 pub mod layout;
 pub mod logcat;
 pub mod merged_manifest;
@@ -26,6 +27,7 @@ pub use adb::{
     Adb, AdbError, Device, DeviceProperties, DeviceState, DeviceTracker, TrackEvent, find_adb,
 };
 pub use avd::{Avd, AvdKind, EmulatorProcess, avd_home, find_emulator, list_avds};
+pub use inbox::Inbox;
 pub use logcat::{FilterContext, LogEntry, LogFilter, LogLevel, LogcatEvent, LogcatSession};
 pub use project::{AndroidModule, AndroidProject, LauncherActivity, ModuleKind, ProjectError};
 pub use sdk::{

@@ -86,16 +86,16 @@ fn seconds_text(duration: std::time::Duration) -> String {
 // ---------------------------------------------------------------------------
 
 pub(super) fn threads(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let sessions = app.state.agents().sessions();
+    let sessions = app.state.agents_manager().sessions();
     let open: Vec<&SessionInfo> = app
         .state
-        .agents
-        .threads
+        .agents_manager()
+        .threads()
         .iter()
         .filter_map(|id| sessions.iter().find(|s| s.id == *id))
         .collect();
-    let draft = app.state.agents().new_thread;
-    let draft_active = draft && app.state.agents().draft_active;
+    let draft = app.state.agents_manager().new_thread();
+    let draft_active = draft && app.state.agents_manager().draft_active();
     if open.is_empty() && !draft {
         let shown = StatusText::new("No thread open")
             .hint("Pick an agent in the list, or start a new thread.")
@@ -111,8 +111,8 @@ pub(super) fn threads(app: &mut IdeApp, ui: &mut egui::Ui) {
         open.len()
     } else {
         app.state
-            .agents
-            .selected
+            .agents_manager()
+            .selected()
             .and_then(|id| open.iter().position(|s| s.id == id))
             .unwrap_or(0)
     };
@@ -199,7 +199,7 @@ fn composer_panel(
 fn thread_view(app: &mut IdeApp, ui: &mut egui::Ui, info: &SessionInfo, actions: &mut Vec<Action>) {
     let id = info.id;
     let mut child = column(ui, ("agents_thread", id));
-    let events: Vec<AgentEvent> = app.state.agents().backend.events(id).to_vec();
+    let events: Vec<AgentEvent> = app.state.agents_manager().events(id);
     composer_panel(app, &mut child, id, Some(info), actions);
     let expanded = app.agents_ui.expanded.clone();
     egui::ScrollArea::vertical()
@@ -633,7 +633,7 @@ fn permission_card(
 /// open questions, actions).
 pub(super) fn inspector(app: &mut IdeApp, ui: &mut egui::Ui) {
     panel_header(ui, "Inspector", |_| {});
-    if app.state.agents().new_thread && app.state.agents().draft_active {
+    if app.state.agents_manager().new_thread() && app.state.agents_manager().draft_active() {
         StatusText::new("New thread")
             .hint("Choose the agents and describe the task. The inspector follows the thread once it starts.")
             .show(ui);
@@ -641,9 +641,9 @@ pub(super) fn inspector(app: &mut IdeApp, ui: &mut egui::Ui) {
     }
     let Some(info) = app
         .state
-        .agents
-        .selected
-        .and_then(|id| app.state.agents().session(id))
+        .agents_manager()
+        .selected()
+        .and_then(|id| app.state.agents_manager().session(id))
     else {
         StatusText::new("No thread selected")
             .hint("The inspector shows the active thread.")
@@ -651,26 +651,25 @@ pub(super) fn inspector(app: &mut IdeApp, ui: &mut egui::Ui) {
         return;
     };
     let colors = Theme::colors(ui.ctx());
-    let changes = app.state.agents().backend.changes(info.id);
-    let sessions = app.state.agents().sessions();
+    let changes = app.state.agents_manager().changes(info.id);
+    let sessions = app.state.agents_manager().sessions();
     let children: Vec<&SessionInfo> = sessions
         .iter()
         .filter(|s| s.parent == Some(info.id))
         .collect();
-    let question = app
-        .state
-        .agents
-        .backend
-        .events(info.id)
-        .iter()
-        .find_map(|event| match event {
-            AgentEvent::PermissionRequest {
-                question,
-                answer: None,
-                ..
-            } => Some(question.clone()),
-            _ => None,
-        });
+    let question =
+        app.state
+            .agents_manager()
+            .events(info.id)
+            .iter()
+            .find_map(|event| match event {
+                AgentEvent::PermissionRequest {
+                    question,
+                    answer: None,
+                    ..
+                } => Some(question.clone()),
+                _ => None,
+            });
     let mut actions = Vec::new();
 
     egui::TopBottomPanel::bottom("agents_inspector_actions")

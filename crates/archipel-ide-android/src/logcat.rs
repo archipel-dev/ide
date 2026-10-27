@@ -14,7 +14,7 @@ use serde::Serialize;
 use std::io::Read;
 use std::process::{Child, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -382,7 +382,7 @@ pub struct LogcatSession {
     pub serial: String,
     child: Arc<Mutex<Child>>,
     stop: Arc<AtomicBool>,
-    events: Receiver<LogcatEvent>,
+    events: crate::Inbox<LogcatEvent>,
 }
 
 impl LogcatSession {
@@ -421,12 +421,12 @@ impl LogcatSession {
             serial: serial.to_owned(),
             child,
             stop,
-            events,
+            events: crate::Inbox::new(events),
         })
     }
 
     pub fn poll(&self) -> Vec<LogcatEvent> {
-        self.events.try_iter().collect()
+        self.events.try_iter()
     }
 
     pub fn wait(&self, timeout: Duration) -> Option<LogcatEvent> {

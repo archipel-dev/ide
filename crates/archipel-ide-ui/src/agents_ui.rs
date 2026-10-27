@@ -282,7 +282,7 @@ pub(crate) fn mode_switch(app: &mut IdeApp, ui: &mut egui::Ui) {
     if mode != current {
         app.dispatch("workbench.setMode", json!({"mode": mode.id()}));
     }
-    let attention = app.state.agents().counts().attention();
+    let attention = app.state.agents_manager().counts().attention();
     if attention > 0 && current == WorkbenchMode::Code {
         ui.add(Counter::new(attention).accent(true));
     }
@@ -290,16 +290,16 @@ pub(crate) fn mode_switch(app: &mut IdeApp, ui: &mut egui::Ui) {
 
 /// Status bar text of the agents widget (`2 running · ? 1 input`), empty without agents.
 pub(crate) fn status_text(app: &IdeApp) -> String {
-    let counts = app.state.agents().counts();
+    let counts = app.state.agents_manager().counts();
     counts.status_text()
 }
 
 /// `◐ 2 running · ? 1 input`: opens a popup list of the agents.
 pub(crate) fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::FontId) {
-    if app.state.agents().sessions().is_empty() {
+    if app.state.agents_manager().sessions().is_empty() {
         return;
     }
-    let counts = app.state.agents().counts();
+    let counts = app.state.agents_manager().counts();
     let text = match counts.status_text() {
         text if text.is_empty() => "Agents".to_owned(),
         text => text,
@@ -332,7 +332,7 @@ pub(crate) fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::Fon
 
 fn popup_list(app: &mut IdeApp, ui: &mut egui::Ui) {
     ui.set_min_width(320.0);
-    let sessions = app.state.agents().sessions();
+    let sessions = app.state.agents_manager().sessions();
     let mut shown = None;
     for info in &sessions {
         let (glyph, tone) = look(info.state);
@@ -376,13 +376,15 @@ fn shortcut_label(app: &IdeApp) -> String {
 
 /// Balloons about agents (Code mode only: in Agents mode the agents are in view).
 pub(crate) fn notices(app: &mut IdeApp, ctx: &egui::Context) {
-    if app.state.workbench_mode() != WorkbenchMode::Code || app.state.agents().notices.is_empty() {
+    if app.state.workbench_mode() != WorkbenchMode::Code
+        || !app.state.agents_manager().has_notices()
+    {
         return;
     }
     let notices: Vec<AgentNotice> = app
         .state
-        .agents
-        .notices
+        .agents_manager()
+        .notices()
         .iter()
         .rev()
         .take(3)
@@ -435,10 +437,10 @@ pub(crate) fn notices(app: &mut IdeApp, ctx: &egui::Context) {
 
 /// "Back to agent fix-tab": shown above the editor after "Open in Code mode".
 pub(crate) fn back_banner(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let Some(session) = app.state.agents().return_to else {
+    let Some(session) = app.state.agents_manager().return_to() else {
         return;
     };
-    let Some(info) = app.state.agents().session(session) else {
+    let Some(info) = app.state.agents_manager().session(session) else {
         return;
     };
     let out = egui::Frame::new()
@@ -504,8 +506,8 @@ fn flatten(tasks: &[TaskInfo], sessions: &[SessionInfo], collapsed: &HashSet<Key
 /// The tree of tasks and agents: the Agents mode sidebar, or (`compact`) the Code mode tool
 /// window.
 pub(crate) fn tree(app: &mut IdeApp, ui: &mut egui::Ui, compact: bool) {
-    let tasks = app.state.agents().backend.tasks();
-    let sessions = app.state.agents().sessions();
+    let tasks = app.state.agents_manager().tasks();
+    let sessions = app.state.agents_manager().sessions();
     if sessions.is_empty() {
         StatusText::new("No agents yet")
             .hint("Describe a task in Agents mode and press Enter.")
@@ -514,7 +516,7 @@ pub(crate) fn tree(app: &mut IdeApp, ui: &mut egui::Ui, compact: bool) {
         return;
     }
     let entries = flatten(&tasks, &sessions, &app.agents_ui.collapsed);
-    let selected_session = app.state.agents().selected;
+    let selected_session = app.state.agents_manager().selected();
     let mut selected =
         selected_session.and_then(|id| entries.iter().position(|e| e.key == Key::Session(id)));
     // Rows do not clip their text: fit every label to its row first.
@@ -696,7 +698,7 @@ pub(crate) fn show(app: &mut IdeApp, ctx: &egui::Context) {
         .show_separator_line(false)
         .frame(island_frame(ctx))
         .show(ctx, |ui| sidebar(app, ui));
-    match app.state.agents().screen {
+    match app.state.agents_manager().screen() {
         AgentsScreen::Main => {
             egui::SidePanel::right("agents_inspector")
                 .default_width(INSPECTOR_WIDTH)
@@ -783,14 +785,14 @@ fn review(app: &mut IdeApp, ui: &mut egui::Ui) {
     let colors = Theme::colors(ui.ctx());
     let Some(info) = app
         .state
-        .agents
-        .selected
-        .and_then(|id| app.state.agents().session(id))
+        .agents_manager()
+        .selected()
+        .and_then(|id| app.state.agents_manager().session(id))
     else {
         app.dispatch("agents.closeReview", Value::Null);
         return;
     };
-    let changes = app.state.agents().backend.changes(info.id);
+    let changes = app.state.agents_manager().changes(info.id);
     let mut actions = Vec::new();
     let mut close = false;
     panel_header(ui, &format!("Review: {}", info.name), |ui| {
@@ -834,7 +836,7 @@ fn review(app: &mut IdeApp, ui: &mut egui::Ui) {
                     strategy: MergeStrategy::Squash,
                 });
             }
-            let selected_path = app.state.agents().review_file.clone();
+            let selected_path = app.state.agents_manager().review_file().clone();
             if ui
                 .add(Button::secondary("Open in Code mode").enabled(!changes.is_empty()))
                 .clicked()
@@ -866,12 +868,14 @@ fn review(app: &mut IdeApp, ui: &mut egui::Ui) {
     // The file shown: the one asked for, else the first.
     let current = app
         .state
-        .agents
-        .review_file
+        .agents_manager()
+        .review_file()
         .clone()
         .filter(|path| changes.iter().any(|c| &c.path == path))
         .unwrap_or_else(|| changes[0].path.clone());
-    app.state.agents_mut().review_file = Some(current.clone());
+    app.state
+        .agents_manager()
+        .set_review_file(Some(current.clone()));
     let mut selected = changes.iter().position(|c| c.path == current);
     egui::SidePanel::left("agents_review_files")
         .default_width(240.0)
@@ -895,7 +899,9 @@ fn review(app: &mut IdeApp, ui: &mut egui::Ui) {
             if out.selection_changed
                 && let Some(index) = selected
             {
-                app.state.agents_mut().review_file = Some(changes[index].path.clone());
+                app.state
+                    .agents_manager()
+                    .set_review_file(Some(changes[index].path.clone()));
             }
         });
     egui::CentralPanel::default()
@@ -912,8 +918,7 @@ fn review(app: &mut IdeApp, ui: &mut egui::Ui) {
             if app.agents_ui.review.as_ref().map(|r| &r.key) != Some(&key) {
                 app.agents_ui.review =
                     app.state
-                        .agents
-                        .backend
+                        .agents_manager()
                         .diff(info.id, &current)
                         .map(|diff| ReviewCache {
                             key,
@@ -943,7 +948,7 @@ fn merge_dialog(app: &mut IdeApp, ctx: &egui::Context) {
     let Some(dialog) = app.agents_ui.merge.as_mut() else {
         return;
     };
-    let Some(info) = app.state.agents().session(dialog.session) else {
+    let Some(info) = app.state.agents_manager().session(dialog.session) else {
         app.agents_ui.merge = None;
         return;
     };
@@ -1123,7 +1128,7 @@ mod tests {
         assert_eq!(status_text(&app), "");
         app.dispatch("agents.demo", Value::Null);
         // Pre-rolled 4 s: claude asks; codex, its child, gemini and the spike still work.
-        let counts = app.state.agents.counts();
+        let counts = app.state.agents_manager().counts();
         assert_eq!(counts.needs_input, 1);
         assert_eq!(counts.working, 4);
         assert_eq!(counts.failed, 0);
@@ -1134,7 +1139,7 @@ mod tests {
         // Later everything but the question is done.
         for _ in 0..200 {
             app.state
-                .agents
+                .agents_manager()
                 .advance(Duration::from_millis(100), WorkbenchMode::Code);
         }
         assert_eq!(status_text(&app), "? 1 input · 3 done · 1 failed");
@@ -1162,13 +1167,13 @@ mod tests {
             harness.get_all_by_label(label).next().unwrap().click();
             harness.run_steps(4);
             let app = harness.state();
-            let events = app.state.agents.backend.events(1);
+            let events = app.state.agents_manager().events(1);
             assert!(
                 events.iter().any(|e| matches!(e, archipel_ide_core::agent_events::AgentEvent::PermissionRequest { answer: Some(a), .. } if a == answer)),
                 "{label}"
             );
             assert_ne!(
-                app.state.agents.session(1).unwrap().state,
+                app.state.agents_manager().session(1).unwrap().state,
                 AgentState::NeedsInput
             );
         }
@@ -1202,7 +1207,7 @@ mod tests {
             harness.get_by_label("add-oauth");
             harness.get_by_label("fix-tab").click();
             harness.run_steps(4);
-            assert_eq!(harness.state().state.agents.selected, Some(1));
+            assert_eq!(harness.state().state.agents_manager().selected(), Some(1));
             harness.get_by_label("Waiting for your answer");
             testing::audit(&mut harness).assert_clean();
         }
@@ -1251,8 +1256,7 @@ mod tests {
             !harness
                 .state()
                 .state
-                .agents
-                .backend
+                .agents_manager()
                 .events(2)
                 .iter()
                 .any(|e| matches!(e, AgentEvent::UserPrompt(t) if t.contains("first line"))),
@@ -1264,8 +1268,7 @@ mod tests {
         assert!(
             state
                 .state
-                .agents
-                .backend
+                .agents_manager()
                 .events(2)
                 .iter()
                 .any(|e| matches!(e, AgentEvent::UserPrompt(t) if t == "first line")),
@@ -1291,7 +1294,13 @@ mod tests {
         harness.get_by_label("Stop agent").click();
         harness.run_steps(3);
         assert_eq!(
-            harness.state().state.agents.session(2).unwrap().state,
+            harness
+                .state()
+                .state
+                .agents_manager()
+                .session(2)
+                .unwrap()
+                .state,
             AgentState::Stopped
         );
         // Stopped agents take follow-ups: typing turns it into Send.
@@ -1306,7 +1315,7 @@ mod tests {
         harness.run_steps(3);
         harness.get_by_label("New thread");
         harness.get_by_label("What should the agents work on?");
-        let before = harness.state().state.agents.threads.len();
+        let before = harness.state().state.agents_manager().threads().len();
         harness
             .state_mut()
             .agents_ui
@@ -1318,11 +1327,14 @@ mod tests {
         harness.key_press(egui::Key::Enter);
         harness.run_steps(4);
         let state = harness.state();
-        assert_eq!(state.state.agents.threads.len(), before + 3);
-        assert!(!state.state.agents.new_thread, "the draft tab is gone");
+        assert_eq!(state.state.agents_manager().threads().len(), before + 3);
+        assert!(
+            !state.state.agents_manager().new_thread(),
+            "the draft tab is gone"
+        );
         let names: Vec<String> = state
             .state
-            .agents
+            .agents_manager()
             .sessions()
             .into_iter()
             .filter(|s| s.name.starts_with("add-retries"))
@@ -1377,6 +1389,8 @@ mod tests {
         };
         let _ = ctx.run(frame_input(vec![chord]), |ctx| app.frame(ctx));
         assert_eq!(app.state.workbench_mode, WorkbenchMode::Agents);
-        assert!(app.state.agents.new_thread && app.state.agents.draft_active);
+        assert!(
+            app.state.agents_manager().new_thread() && app.state.agents_manager().draft_active()
+        );
     }
 }

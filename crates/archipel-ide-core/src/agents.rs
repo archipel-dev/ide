@@ -258,7 +258,7 @@ pub enum AgentNews {
 /// The prototype implements it with scripted sessions
 /// ([`crate::agents_mock::MockAgentsBackend`]); a real engine (worktrees, PTYs, hooks)
 /// implements the same trait. The UI never assumes more than this.
-pub trait AgentsBackend {
+pub trait AgentsBackend: Send + Sync {
     /// The project agents work on (worktrees are created from it).
     fn set_project(&mut self, root: Option<&Path>);
     fn tasks(&self) -> Vec<TaskInfo>;
@@ -378,6 +378,8 @@ pub struct AgentsState {
     last_poll: Option<Instant>,
     next_notice: u64,
     last_notice: HashMap<(SessionId, u8), u64>,
+    /// News of the last poll, taken by the service that announces it.
+    news: Vec<AgentNews>,
 }
 
 impl Default for AgentsState {
@@ -402,6 +404,7 @@ impl AgentsState {
             last_poll: None,
             next_notice: 1,
             last_notice: HashMap::new(),
+            news: Vec::new(),
         }
     }
 
@@ -513,6 +516,11 @@ impl AgentsState {
         self.advance(dt, mode)
     }
 
+    /// The news the polls produced since the last call.
+    pub(crate) fn take_news(&mut self) -> Vec<AgentNews> {
+        std::mem::take(&mut self.news)
+    }
+
     /// [`Self::poll`] with an explicit time step (tests, demos).
     pub fn advance(&mut self, dt: Duration, mode: WorkbenchMode) -> bool {
         self.clock_ms += dt.as_millis() as u64;
@@ -520,6 +528,7 @@ impl AgentsState {
         let sessions = self.backend.sessions();
         for event in events {
             self.on_event(&event, &sessions, mode);
+            self.news.push(event);
         }
         // News about the agent the user is looking at is not news.
         if mode == WorkbenchMode::Agents
@@ -624,20 +633,20 @@ impl IdeState {
         }
         self.workbench_mode = mode;
         if mode == WorkbenchMode::Agents {
-            self.agents.notices.clear();
-            self.agents.return_to = None;
+            self.agents_manager().write().notices.clear();
+            self.agents_manager().write().return_to = None;
         }
     }
 
     pub fn poll_agents(&mut self) -> bool {
         let mode = self.workbench_mode;
-        self.agents.poll(Instant::now(), mode)
+        self.agents_manager().poll(Instant::now(), mode)
     }
 
     /// Project changes must reach the backend (worktrees start from the project).
     pub fn sync_agents_project(&mut self) {
         let root = self.project.as_ref().map(|p| p.root().to_path_buf());
-        self.agents.backend.set_project(root.as_deref());
+        self.agents_manager().set_project(root.as_deref());
     }
 
     /// Opens an agent's changed file in the editor at the changed line and switches to Code
@@ -648,7 +657,7 @@ impl IdeState {
         path: Option<&Path>,
         line: Option<usize>,
     ) -> Result<(), String> {
-        let changes = self.agents.backend.changes(session);
+        let changes = self.agents_manager().read().backend.changes(session);
         let change = match path {
             Some(path) => changes.iter().find(|c| c.path == path),
             None => changes
@@ -667,17 +676,22 @@ impl IdeState {
         let target = change.path.clone();
         self.open_file(&target)?;
         crate::editor_commands::select_in_active(self, line, 1, 0)?;
-        self.agents.selected = Some(session);
-        self.agents.return_to = Some(session);
+        self.agents_manager().write().selected = Some(session);
+        self.agents_manager().write().return_to = Some(session);
         self.workbench_mode = WorkbenchMode::Code;
         Ok(())
     }
 
     /// The "Back to agent" banner: returns to the agent's review.
     pub fn agents_back(&mut self) {
-        if let Some(session) = self.agents.return_to.take() {
-            self.agents.selected = Some(session);
-            self.agents.screen = AgentsScreen::Review;
+        let returning = self.agents_manager().write().return_to.take();
+        if let Some(session) = returning {
+            {
+                let agents = self.agents_manager();
+                let mut state = agents.write();
+                state.selected = Some(session);
+                state.screen = AgentsScreen::Review;
+            }
             self.set_workbench_mode(WorkbenchMode::Agents);
         }
     }
@@ -686,7 +700,7 @@ impl IdeState {
     /// few seconds ago (`ARCHIPEL_AGENTS_DEMO=1`).
     pub fn seed_agents_demo(&mut self) {
         self.sync_agents_project();
-        self.agents.seed_demo();
+        self.agents_manager().write().seed_demo();
     }
 }
 
@@ -744,7 +758,8 @@ fn session_param(params: &Value) -> Result<SessionId, CommandError> {
 fn known_session(state: &IdeState, params: &Value) -> Result<SessionId, CommandError> {
     let id = session_param(params)?;
     state
-        .agents
+        .agents_manager()
+        .read()
         .session(id)
         .map(|s| s.id)
         .ok_or_else(|| CommandError::Failed(format!("no agent session {id}")))
@@ -819,8 +834,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 if profiles.is_empty() {
                     return Err(CommandError::InvalidParams("choose an agent".into()));
                 }
-                state.agents.screen = AgentsScreen::Main;
-                let task = state.agents.launch(prompt.trim(), &profiles);
+                state.agents_manager().set_screen(AgentsScreen::Main);
+                let task = state.agents_manager().launch(prompt.trim(), &profiles);
                 Ok(json!({"task": task}))
             },
         ))
@@ -837,7 +852,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |_| true,
             |state: &mut IdeState, params| {
                 let id = known_session(state, &params)?;
-                state.agents.select(id);
+                state.agents_manager().select(id);
                 Ok(Value::Null)
             },
         ))
@@ -855,12 +870,12 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |state: &mut IdeState, params| {
                 let id = known_session(state, &params)?;
                 state.set_workbench_mode(WorkbenchMode::Agents);
-                state.agents.select(id);
+                state.agents_manager().select(id);
                 let review = params
                     .get("review")
                     .and_then(Value::as_bool)
                     .unwrap_or(false);
-                state.agents.screen = if review {
+                state.agents_manager().write().screen = if review {
                     AgentsScreen::Review
                 } else {
                     AgentsScreen::Main
@@ -884,17 +899,20 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     known_session(state, &params)?
                 } else {
                     state
-                        .agents
+                        .agents_manager()
+                        .read()
                         .selected
                         .ok_or_else(|| CommandError::Failed("no agent is selected".into()))?
                 };
                 state.set_workbench_mode(WorkbenchMode::Agents);
-                state.agents.select(id);
-                state.agents.review_file = params
-                    .get("path")
-                    .and_then(Value::as_str)
-                    .map(PathBuf::from);
-                state.agents.screen = AgentsScreen::Review;
+                state.agents_manager().select(id);
+                state.agents_manager().set_review_file(
+                    params
+                        .get("path")
+                        .and_then(Value::as_str)
+                        .map(PathBuf::from),
+                );
+                state.agents_manager().set_screen(AgentsScreen::Review);
                 Ok(Value::Null)
             },
         ))
@@ -902,9 +920,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
     registry
         .register(Command::new(
             spec("agents.closeReview", "Back to Agents", "Agents", None, "{}"),
-            |s: &IdeState| s.agents.screen == AgentsScreen::Review,
+            |s: &IdeState| s.agents_manager().read().screen == AgentsScreen::Review,
             |state: &mut IdeState, _| {
-                state.agents.screen = AgentsScreen::Main;
+                state.agents_manager().set_screen(AgentsScreen::Main);
                 Ok(Value::Null)
             },
         ))
@@ -922,7 +940,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |state: &mut IdeState, params| {
                 let id = known_session(state, &params)?;
                 let input = string_param(&params, "input")?;
-                state.agents.backend.send(id, &input);
+                state.agents_manager().write().backend.send(id, &input);
                 Ok(Value::Null)
             },
         ))
@@ -939,7 +957,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |_| true,
             |state: &mut IdeState, params| {
                 let id = known_session(state, &params)?;
-                state.agents.backend.stop(id);
+                state.agents_manager().write().backend.stop(id);
                 Ok(Value::Null)
             },
         ))
@@ -961,12 +979,13 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     CommandError::InvalidParams(format!("unknown strategy `{name}`"))
                 })?;
                 let message = state
-                    .agents
+                    .agents_manager()
+                    .write()
                     .backend
                     .merge(id, strategy)
                     .map_err(CommandError::Failed)?;
                 state.status = message.clone();
-                state.agents.screen = AgentsScreen::Main;
+                state.agents_manager().set_screen(AgentsScreen::Main);
                 Ok(json!({"message": message}))
             },
         ))
@@ -986,7 +1005,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     known_session(state, &params)?
                 } else {
                     state
-                        .agents
+                        .agents_manager()
+                        .read()
                         .selected
                         .ok_or_else(|| CommandError::Failed("no agent is selected".into()))?
                 };
@@ -1008,7 +1028,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
     registry
         .register(Command::new(
             spec("agents.backToAgent", "Back to Agent", "Agents", None, "{}"),
-            |s: &IdeState| s.agents.return_to.is_some(),
+            |s: &IdeState| s.agents_manager().read().return_to.is_some(),
             |state: &mut IdeState, _| {
                 state.agents_back();
                 Ok(Value::Null)
@@ -1027,8 +1047,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |s: &IdeState| s.project.is_some(),
             |state: &mut IdeState, _| {
                 state.set_workbench_mode(WorkbenchMode::Agents);
-                state.agents.screen = AgentsScreen::Main;
-                state.agents.open_draft();
+                state.agents_manager().set_screen(AgentsScreen::Main);
+                state.agents_manager().write().open_draft();
                 Ok(Value::Null)
             },
         ))
@@ -1042,9 +1062,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |s: &IdeState| s.agents.new_thread,
+            |s: &IdeState| s.agents_manager().read().new_thread,
             |state: &mut IdeState, _| {
-                state.agents.close_draft();
+                state.agents_manager().write().close_draft();
                 Ok(Value::Null)
             },
         ))
@@ -1061,7 +1081,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |_| true,
             |state: &mut IdeState, params| {
                 let id = known_session(state, &params)?;
-                state.agents.close_thread(id);
+                state.agents_manager().write().close_thread(id);
                 Ok(Value::Null)
             },
         ))
@@ -1073,9 +1093,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
         registry
             .register(Command::new(
                 spec(id, label, "Agents", None, "{}"),
-                |s: &IdeState| s.agents.threads.len() > 1,
+                |s: &IdeState| s.agents_manager().read().threads.len() > 1,
                 move |state: &mut IdeState, _| {
-                    state.agents.cycle_thread(forward);
+                    state.agents_manager().write().cycle_thread(forward);
                     Ok(Value::Null)
                 },
             ))
@@ -1093,7 +1113,11 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |_| true,
             |state: &mut IdeState, params| {
                 let id = usize_param(&params, "id")? as u64;
-                state.agents.notices.retain(|notice| notice.id != id);
+                state
+                    .agents_manager()
+                    .write()
+                    .notices
+                    .retain(|notice| notice.id != id);
                 Ok(Value::Null)
             },
         ))
@@ -1168,7 +1192,7 @@ mod tests {
     fn mode_round_trips_and_clears_balloons_when_agents_are_in_view() {
         let mut state = IdeState::default();
         assert_eq!(state.workbench_mode, WorkbenchMode::Code);
-        state.agents.notices.push(AgentNotice {
+        state.agents_manager().write().notices.push(AgentNotice {
             id: 1,
             session: 1,
             kind: NoticeKind::Done,
@@ -1177,7 +1201,7 @@ mod tests {
             expires_ms: None,
         });
         state.set_workbench_mode(WorkbenchMode::Agents);
-        assert!(state.agents.notices.is_empty());
+        assert!(state.agents_manager().read().notices.is_empty());
         assert_eq!(WorkbenchMode::parse("agents"), Some(WorkbenchMode::Agents));
         assert_eq!(WorkbenchMode::parse("x"), None);
         assert_eq!(WorkbenchMode::Code.other(), WorkbenchMode::Agents);

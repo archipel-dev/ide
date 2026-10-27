@@ -174,8 +174,8 @@ fn project_widget(app: &mut IdeApp, ui: &mut egui::Ui) -> Rect {
         ui.label(
             egui::RichText::new(widgets::pluralize(
                 app.state
-                    .plugin_host
-                    .registry
+                    .plugin_host_service()
+                    .registry()
                     .entries()
                     .iter()
                     .filter(|entry| entry.is_active())
@@ -630,7 +630,7 @@ pub(crate) fn stripe_button(app: &mut IdeApp, ui: &mut egui::Ui, window: ToolWin
         badge = Some(theme::RUN_GREEN);
     }
     if window == ToolWindow::Agents {
-        let counts = app.state.agents().counts();
+        let counts = app.state.agents_manager().counts();
         if counts.needs_input > 0 {
             badge = Some(theme::WARNING);
         } else if counts.working > 0 {
@@ -662,7 +662,7 @@ pub fn left_stripe(app: &mut IdeApp, ctx: &egui::Context) {
                 stripe_button(app, ui, ToolWindow::Project, Icon::Project);
                 stripe_button(app, ui, ToolWindow::Commit, Icon::Commit);
                 stripe_button(app, ui, ToolWindow::Structure, Icon::Structure);
-                if !app.state.agents().sessions().is_empty()
+                if !app.state.agents_manager().sessions().is_empty()
                     || app.state.tool_windows().is_visible(ToolWindow::Agents)
                 {
                     stripe_button(

@@ -962,18 +962,17 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                             );
                         }
                     }
+                    let update_state = app.state.update_state();
                     if let archipel_ide_core::UpdateState::Available { version, .. }
-                    | archipel_ide_core::UpdateState::Installed(version) =
-                        &app.state.update_state
+                    | archipel_ide_core::UpdateState::Installed(version) = &update_state
                     {
-                        let label = if matches!(
-                            app.state.update_state,
-                            archipel_ide_core::UpdateState::Installed(_)
-                        ) {
-                            "Restart to update".to_owned()
-                        } else {
-                            format!("Update {version}")
-                        };
+                        let label =
+                            if matches!(update_state, archipel_ide_core::UpdateState::Installed(_))
+                            {
+                                "Restart to update".to_owned()
+                            } else {
+                                format!("Update {version}")
+                            };
                         if widgets::flat_widget(
                             ui,
                             Some((Icon::Refresh, *theme::MODIFIED)),
@@ -988,7 +987,7 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                             app.state.notifications().show_update_balloon();
                         }
                     }
-                    if app.state.runner.is_running() || app.state.search.is_running() {
+                    if app.state.runner.is_running() || app.state.search_running() {
                         widgets::busy_spinner(ui, 12.0, *theme::ACCENT);
                         ui.add_space(6.0);
                     }

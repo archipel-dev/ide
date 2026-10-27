@@ -175,49 +175,59 @@ impl IdeState {
             .ok_or("the project is not a Git repository")?
             .root
             .clone();
-        let state = &mut self.git_log;
-        state.loaded = true;
+        let service = self.git_log().ok_or("no project is open")?;
+        let (branch, path) = service.with_mut(|state| {
+            state.loaded = true;
+            (state.branch.clone(), state.path.clone())
+        });
         let result = branches(&root).and_then(|branches| {
             let commits = log(
                 &root,
                 &LogQuery {
-                    revision: state.branch.clone(),
-                    path: state.path.clone(),
+                    revision: branch,
+                    path,
                     limit: LOG_LIMIT,
                 },
             )?;
             Ok((branches, commits))
         });
-        match result {
-            Ok((branches, commits)) => {
-                state.graph = graph(&commits);
-                state.commits = commits;
-                state.branches = branches;
-                state.error = None;
-            }
+        let (branches, commits) = match result {
+            Ok(loaded) => loaded,
             Err(error) => {
-                state.error = Some(error.to_string());
+                service.with_mut(|state| state.error = Some(error.to_string()));
                 return Err(error.to_string());
             }
-        }
-        let keep = state
-            .selected
-            .clone()
-            .filter(|hash| state.commits.iter().any(|commit| &commit.hash == hash));
-        let selected = keep.or_else(|| state.commits.first().map(|commit| commit.hash.clone()));
+        };
+        let selected = service.with_mut(|state| {
+            state.graph = graph(&commits);
+            state.commits = commits;
+            state.branches = branches;
+            state.error = None;
+            let keep = state
+                .selected
+                .clone()
+                .filter(|hash| state.commits.iter().any(|commit| &commit.hash == hash));
+            keep.or_else(|| state.commits.first().map(|commit| commit.hash.clone()))
+        });
         match selected {
             Some(hash) => self.select_commit(&hash),
             None => {
-                self.git_log.selected = None;
-                self.git_log.details = None;
+                service.with_mut(|state| {
+                    state.selected = None;
+                    state.details = None;
+                });
                 Ok(())
             }
         }
     }
 
-    /// Marks the log stale; it reloads the next time it is shown.
-    pub(crate) fn invalidate_git_log(&mut self) {
-        self.git_log.loaded = false;
+    /// Marks the log stale; it reloads the next time it is shown. A repository change does
+    /// this by itself (the service subscribes to it); this is for changes Git status did not
+    /// see, such as the end of a fetch.
+    pub(crate) fn invalidate_git_log(&self) {
+        if let Some(service) = self.git_log() {
+            service.invalidate();
+        }
     }
 
     pub fn select_commit(&mut self, hash: &str) -> Result<(), String> {
@@ -226,8 +236,9 @@ impl IdeState {
             .ok_or("the project is not a Git repository")?
             .root
             .clone();
-        if !self
-            .git_log
+        let service = self.git_log().ok_or("no project is open")?;
+        if !service
+            .snapshot()
             .commits
             .iter()
             .any(|commit| commit.hash == hash)
@@ -235,9 +246,16 @@ impl IdeState {
             return Err(format!("commit {hash} is not in the loaded log"));
         }
         let details = commit_details(&root, hash).map_err(|error| error.to_string())?;
-        self.git_log.selected = Some(hash.to_owned());
-        self.git_log.details = Some(details);
+        service.with_mut(|state| {
+            state.selected = Some(hash.to_owned());
+            state.details = Some(details);
+        });
         Ok(())
+    }
+
+    /// Changes the Git Log tab's filters and selection.
+    pub(crate) fn git_log_update<R>(&self, f: impl FnOnce(&mut GitLogState) -> R) -> Option<R> {
+        Some(self.git_log()?.with_mut(f))
     }
 }
 
@@ -249,7 +267,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             has_git,
             |state: &mut IdeState, _| {
                 state.refresh_git_log().map_err(CommandError::Failed)?;
-                Ok(json!({"commits": state.git_log.commits.len()}))
+                Ok(json!({"commits": state.git_log_snapshot().commits.len()}))
             },
         ))
         .expect("unique built-in id");
@@ -259,7 +277,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             has_git,
             |state: &mut IdeState, _| {
                 state.tool_windows.show(ToolWindow::Git);
-                if !state.git_log.loaded {
+                if !state.git_log_snapshot().loaded {
                     state.refresh_git_log().map_err(CommandError::Failed)?;
                 }
                 Ok(Value::Null)
@@ -295,11 +313,12 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             has_git,
             |state: &mut IdeState, params| {
-                state.git_log.branch = params
+                let branch = params
                     .get("branch")
                     .and_then(Value::as_str)
                     .filter(|branch| !branch.is_empty())
-                    .map(Into::into);
+                    .map(String::from);
+                state.git_log_update(|log| log.branch = branch);
                 state.refresh_git_log().map_err(CommandError::Failed)?;
                 Ok(Value::Null)
             },
@@ -316,14 +335,19 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             has_git,
             |state: &mut IdeState, params| {
-                state.git_log.filter = string_param(&params, "text")?;
-                if let Some(regex) = params.get("regex").and_then(Value::as_bool) {
-                    state.git_log.regex = regex;
-                }
-                if let Some(case) = params.get("matchCase").and_then(Value::as_bool) {
-                    state.git_log.match_case = case;
-                }
-                Ok(json!({"visible": state.git_log.visible().len()}))
+                let text = string_param(&params, "text")?;
+                let regex = params.get("regex").and_then(Value::as_bool);
+                let case = params.get("matchCase").and_then(Value::as_bool);
+                state.git_log_update(|log| {
+                    log.filter = text;
+                    if let Some(regex) = regex {
+                        log.regex = regex;
+                    }
+                    if let Some(case) = case {
+                        log.match_case = case;
+                    }
+                });
+                Ok(json!({"visible": state.git_log_snapshot().visible().len()}))
             },
         ))
         .expect("unique built-in id");
@@ -338,12 +362,13 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             has_git,
             |state: &mut IdeState, params| {
-                state.git_log.user = params
+                let user = params
                     .get("user")
                     .and_then(Value::as_str)
                     .filter(|user| !user.is_empty())
-                    .map(Into::into);
-                Ok(json!({"visible": state.git_log.visible().len()}))
+                    .map(String::from);
+                state.git_log_update(|log| log.user = user);
+                Ok(json!({"visible": state.git_log_snapshot().visible().len()}))
             },
         ))
         .expect("unique built-in id");
@@ -359,9 +384,10 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             has_git,
             |state: &mut IdeState, params| {
                 let id = string_param(&params, "range")?;
-                state.git_log.date = DateRange::parse(&id)
+                let date = DateRange::parse(&id)
                     .ok_or_else(|| CommandError::Failed(format!("unknown date range '{id}'")))?;
-                Ok(json!({"visible": state.git_log.visible().len()}))
+                state.git_log_update(|log| log.date = date);
+                Ok(json!({"visible": state.git_log_snapshot().visible().len()}))
             },
         ))
         .expect("unique built-in id");
@@ -376,12 +402,13 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             has_git,
             |state: &mut IdeState, params| {
-                state.git_log.path = params
+                let path = params
                     .get("path")
                     .and_then(Value::as_str)
                     .map(str::trim)
                     .filter(|path| !path.is_empty())
                     .map(PathBuf::from);
+                state.git_log_update(|log| log.path = path);
                 state.refresh_git_log().map_err(CommandError::Failed)?;
                 Ok(Value::Null)
             },
@@ -403,14 +430,14 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     .and_then(Value::as_str)
                     .map(PathBuf::from);
                 if let Some(path) = &path
-                    && !state.git_log.history_tabs.contains(path)
+                    && !state.git_log_snapshot().history_tabs.contains(path)
                 {
                     return Err(CommandError::InvalidParams(format!(
                         "no history tab for `{}`",
                         path.display()
                     )));
                 }
-                state.git_log.path = path;
+                state.git_log_update(|log| log.path = path);
                 state.refresh_git_log().map_err(CommandError::Failed)?;
                 Ok(Value::Null)
             },
@@ -433,17 +460,25 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                         .and_then(Value::as_str)
                         .ok_or_else(|| CommandError::InvalidParams("missing `path`".into()))?,
                 );
-                let log = &mut state.git_log;
-                let before = log.history_tabs.len();
-                log.history_tabs.retain(|tab| *tab != path);
-                if log.history_tabs.len() == before {
+                let (removed, was_active) = state
+                    .git_log_update(|log| {
+                        let before = log.history_tabs.len();
+                        log.history_tabs.retain(|tab| *tab != path);
+                        let removed = log.history_tabs.len() != before;
+                        let was_active = removed && log.path.as_ref() == Some(&path);
+                        if was_active {
+                            log.path = None;
+                        }
+                        (removed, was_active)
+                    })
+                    .unwrap_or_default();
+                if !removed {
                     return Err(CommandError::InvalidParams(format!(
                         "no history tab for `{}`",
                         path.display()
                     )));
                 }
-                if log.path.as_ref() == Some(&path) {
-                    log.path = None;
+                if was_active {
                     state.refresh_git_log().map_err(CommandError::Failed)?;
                 }
                 Ok(Value::Null)
@@ -455,8 +490,13 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             spec("git.log.toggleDetails", "Show Details", "Git", None, "{}"),
             has_git,
             |state: &mut IdeState, _| {
-                state.git_log.hide_details = !state.git_log.hide_details;
-                Ok(json!({"visible": !state.git_log.hide_details}))
+                let hidden = state
+                    .git_log_update(|log| {
+                        log.hide_details = !log.hide_details;
+                        log.hide_details
+                    })
+                    .unwrap_or_default();
+                Ok(json!({"visible": !hidden}))
             },
         ))
         .expect("unique built-in id");
@@ -528,12 +568,21 @@ mod tests {
             .execute("git.log.show", &mut state, Value::Null)
             .unwrap();
         assert!(state.tool_windows.is_visible(ToolWindow::Git));
-        assert_eq!(state.git_log.commits.len(), 2);
-        assert_eq!(state.git_log.graph.len(), 2);
+        assert_eq!(state.git_log_snapshot().commits.len(), 2);
+        assert_eq!(state.git_log_snapshot().graph.len(), 2);
         // Newest commit is selected with its details.
-        let newest = state.git_log.commits[0].hash.clone();
-        assert_eq!(state.git_log.selected.as_ref(), Some(&newest));
-        assert_eq!(state.git_log.details.as_ref().unwrap().files.len(), 1);
+        let newest = state.git_log_snapshot().commits[0].hash.clone();
+        assert_eq!(state.git_log_snapshot().selected.as_ref(), Some(&newest));
+        assert_eq!(
+            state
+                .git_log_snapshot()
+                .details
+                .as_ref()
+                .unwrap()
+                .files
+                .len(),
+            1
+        );
 
         let result = commands
             .execute("git.log.filterText", &mut state, json!({"text": "topic"}))
@@ -546,11 +595,11 @@ mod tests {
                 json!({"branch": "main"}),
             )
             .unwrap();
-        assert_eq!(state.git_log.commits.len(), 1);
+        assert_eq!(state.git_log_snapshot().commits.len(), 1);
         commands
             .execute("git.log.filterBranch", &mut state, json!({}))
             .unwrap();
-        assert_eq!(state.git_log.commits.len(), 2);
+        assert_eq!(state.git_log_snapshot().commits.len(), 2);
 
         let result = commands
             .execute("git.log.filterUser", &mut state, json!({"user": "Nobody"}))
@@ -581,7 +630,7 @@ mod tests {
         commands
             .execute("git.log.filterDate", &mut state, json!({"range": "today"}))
             .unwrap();
-        assert_eq!(state.git_log.visible().len(), 2);
+        assert_eq!(state.git_log_snapshot().visible().len(), 2);
         commands
             .execute("git.log.filterDate", &mut state, json!({"range": "any"}))
             .unwrap();
@@ -593,11 +642,11 @@ mod tests {
         commands
             .execute("git.log.filterPath", &mut state, json!({"path": "a.txt"}))
             .unwrap();
-        assert_eq!(state.git_log.commits.len(), 2);
+        assert_eq!(state.git_log_snapshot().commits.len(), 2);
         commands
             .execute("git.log.filterPath", &mut state, json!({"path": "missing"}))
             .unwrap();
-        assert!(state.git_log.commits.is_empty());
+        assert!(state.git_log_snapshot().commits.is_empty());
         commands
             .execute("git.log.filterPath", &mut state, json!({}))
             .unwrap();

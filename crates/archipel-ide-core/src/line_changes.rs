@@ -4,7 +4,7 @@
 use crate::vcs::DiffTab;
 use crate::{CommandError, IdeState, spec};
 use archipel_ide_command::{Command, CommandRegistry};
-use archipel_ide_git::{ChangeKind, FileDiff, Hunk, HunkKind};
+use archipel_ide_git::{ChangeKind, Hunk, HunkKind};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
@@ -13,10 +13,19 @@ use std::path::{Path, PathBuf};
 pub(crate) struct LineChanges {
     /// `HEAD` content; `None` when the file is untracked, ignored or binary
     /// (no markers are shown).
-    base: Option<String>,
+    pub(crate) base: Option<String>,
     /// Document revision the hunks were computed for.
-    revision: Option<u64>,
-    hunks: Vec<Hunk>,
+    pub(crate) revision: Option<u64>,
+    pub(crate) hunks: Vec<Hunk>,
+}
+
+impl LineChanges {
+    pub(crate) fn with_base(base: Option<String>) -> Self {
+        Self {
+            base,
+            ..Self::default()
+        }
+    }
 }
 
 /// Hunk that "owns" new-side `line`: the one covering it, or a deletion
@@ -47,11 +56,6 @@ fn byte_range(text: &str, lines: std::ops::Range<usize>) -> std::ops::Range<usiz
 }
 
 impl IdeState {
-    /// Drops cached `HEAD` contents, e.g. after a commit or checkout.
-    pub(crate) fn invalidate_line_changes(&mut self) {
-        self.line_changes.clear();
-    }
-
     fn load_base(&self, path: &Path) -> Option<String> {
         let git = self.git_status()?;
         let project = self.project.as_ref()?;
@@ -79,43 +83,27 @@ impl IdeState {
 
     /// Changed hunks of document `index` against `HEAD`, recomputed only when
     /// the document or the repository changed.
-    pub fn document_changes(&mut self, index: usize) -> &[Hunk] {
-        let Some(document) = self.documents.get(index) else {
-            return &[];
+    pub fn document_changes(&self, index: usize) -> Vec<Hunk> {
+        let (Some(document), Some(tracker)) = (self.documents.get(index), self.line_status())
+        else {
+            return Vec::new();
         };
         let path = document.path.clone();
-        let revision = document.text.revision();
-        if !self.line_changes.contains_key(&path) {
-            let base = self.load_base(&path);
-            self.line_changes.insert(
-                path.clone(),
-                LineChanges {
-                    base,
-                    ..LineChanges::default()
-                },
-            );
-        }
-        let entry = self.line_changes.get_mut(&path).expect("inserted above");
-        if entry.revision != Some(revision) {
+        tracker.changes(
+            &path,
+            document.text.revision(),
+            || self.load_base(&path),
             // Copying the rope out is only needed when the document changed.
-            entry.hunks = match &entry.base {
-                Some(base) => {
-                    let text = self.documents[index].text.text();
-                    FileDiff::compute(path.clone(), None, base.clone(), text).hunks
-                }
-                None => Vec::new(),
-            };
-            entry.revision = Some(revision);
-        }
-        &entry.hunks
+            || document.text.text(),
+        )
     }
 
     /// `HEAD` text of the old side of `hunk` in document `index`, as cached by
     /// [`IdeState::document_changes`].
     pub fn hunk_base_text(&self, index: usize, hunk: &Hunk) -> Option<String> {
         let path = &self.documents.get(index)?.path;
-        let base = self.line_changes.get(path)?.base.as_ref()?;
-        Some(base[byte_range(base, hunk.old.clone())].to_owned())
+        let base = self.line_status()?.base_text(path)?;
+        Some(base[byte_range(&base, hunk.old.clone())].to_owned())
     }
 
     fn active_line(&self) -> Result<(usize, usize), String> {
@@ -130,7 +118,7 @@ impl IdeState {
     /// Moves the caret to the next or previous changed hunk.
     fn navigate_change(&mut self, forward: bool) -> Result<(), String> {
         let (index, line) = self.active_line()?;
-        let hunks = self.document_changes(index).to_vec();
+        let hunks = self.document_changes(index);
         let current = hunk_at_line(&hunks, line);
         let target = if forward {
             hunks
@@ -168,15 +156,14 @@ impl IdeState {
     pub fn rollback_change(&mut self, line: Option<usize>) -> Result<(), String> {
         let (index, caret_line) = self.active_line()?;
         let line = line.unwrap_or(caret_line);
-        let hunks = self.document_changes(index).to_vec();
+        let hunks = self.document_changes(index);
         let hunk = hunk_at_line(&hunks, line)
             .map(|i| hunks[i].clone())
             .ok_or("There is no change at this line")?;
         let path = self.documents[index].path.clone();
         let base = self
-            .line_changes
-            .get(&path)
-            .and_then(|entry| entry.base.clone())
+            .line_status()
+            .and_then(|tracker| tracker.base_text(&path))
             .ok_or("There is no change at this line")?;
         let old = base[byte_range(&base, hunk.old.clone())].to_owned();
         self.edit_active(|document| {

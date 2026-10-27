@@ -12,7 +12,7 @@ use serde_json::Value;
 /// recent location. Runs once per frame, after input has been dispatched.
 pub fn frame(app: &mut IdeApp, ctx: &egui::Context) {
     app.state.record_caret_location();
-    match app.state.quick_nav.request.take() {
+    match app.state.take_navigation_request() {
         Some(NavigationRequest::SearchEverywhere(tab)) => app.palette.show_tab(tab),
         Some(NavigationRequest::RecentFiles) => app.open_dialog(popups::Dialog::Recent {
             query: String::new(),
@@ -21,14 +21,14 @@ pub fn frame(app: &mut IdeApp, ctx: &egui::Context) {
         }),
         Some(NavigationRequest::RecentLocations) => {
             app.open_dialog(popups::Dialog::RecentLocations {
-                selected: usize::from(app.state.quick_nav.locations.len() > 1),
+                selected: usize::from(app.state.recent_locations().len() > 1),
             })
         }
         None => {}
     }
     // Held Ctrl was part of opening the Switcher: releasing it commits.
     let ctrl = ctx.input(|input| input.modifiers.ctrl);
-    if app.state.quick_nav.switcher.is_none() {
+    if !app.state.switcher_open() {
         app.switcher_ctrl = None;
     } else if app.switcher_ctrl.is_none() {
         app.switcher_ctrl = Some(ctrl);
@@ -40,11 +40,7 @@ pub fn frame(app: &mut IdeApp, ctx: &egui::Context) {
 fn commit(app: &mut IdeApp, ctx: &egui::Context) {
     app.switcher_ctrl = None;
     let is_file = matches!(
-        app.state
-            .quick_nav
-            .switcher
-            .as_ref()
-            .map(|s| s.selected_entry()),
+        app.state.switcher().as_ref().map(|s| s.selected_entry()),
         Some(SwitcherEntry::File(_))
     );
     app.dispatch("navigate.switcherCommit", Value::Null);
@@ -79,7 +75,7 @@ fn window_icon(window: ToolWindow) -> Icon {
 }
 
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
-    let Some(switcher) = app.state.quick_nav.switcher.clone() else {
+    let Some(switcher) = app.state.switcher() else {
         return;
     };
     let backward = |ctx: &egui::Context, key| {
@@ -96,9 +92,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     }
     let selected = app
         .state
-        .quick_nav
-        .switcher
-        .as_ref()
+        .switcher()
         .map_or(switcher.selected, |s| s.selected);
     let screen = ctx.content_rect();
     let width = 420.0_f32.min(screen.width() - 40.0);
@@ -181,9 +175,9 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                 });
         });
     if let Some(index) = clicked
-        && let Some(state) = app.state.quick_nav.switcher.as_mut()
+        && app.state.switcher_open()
     {
-        state.selected = index;
+        app.state.select_switcher_entry(index);
         commit(app, ctx);
     }
 }

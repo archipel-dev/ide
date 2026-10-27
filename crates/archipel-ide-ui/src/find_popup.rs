@@ -64,7 +64,7 @@ impl IdeApp {
             self.search_input = selection;
         }
         if self.search_input.is_empty() {
-            self.search_input = self.state.search_query.clone();
+            self.search_input = self.state.search_query();
         }
         let popup = &mut self.find_popup;
         popup.open = true;
@@ -81,7 +81,7 @@ fn run_search(app: &mut IdeApp) {
         return;
     }
     let scope = app.state.project_view.search_scope.clone();
-    let kind = app.state.search_scope_kind;
+    let kind = app.state.search_scope_kind();
     let options = &app.find_options;
     let params = json!({
         "query": app.search_input,
@@ -91,7 +91,7 @@ fn run_search(app: &mut IdeApp) {
         "fileMask": options.file_mask,
         "scope": scope.map(|s| s.display().to_string()).unwrap_or_default(),
         "scopeKind": kind.id(),
-        "scopeName": app.state.search_custom_scope,
+        "scopeName": app.state.search_custom_scope(),
         "background": true,
     });
     app.dispatch("search.project", params);
@@ -168,7 +168,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
         return;
     }
-    let results = app.state.search_results.clone();
+    let results = app.state.search_results();
     if !results.is_empty() {
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)) {
             app.find_popup.selected = (app.find_popup.selected + 1) % results.len();
@@ -210,10 +210,10 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                             widgets::pluralize(results.len(), "match", "matches"),
                             widgets::pluralize(files.len(), "file", "files")
                         );
-                        if app.state.search.is_running() {
+                        if app.state.search_running() {
                             summary.push('…');
                         }
-                        if !app.state.search_query.is_empty() {
+                        if !app.state.search_query().is_empty() {
                             ui.label(egui::RichText::new(summary).color(theme::TEXT_SECONDARY));
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -281,18 +281,19 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                             }
                         }
                     });
+                    let scope_kind = app.state.search_scope_kind();
+                    let custom_scope = app.state.search_custom_scope();
+                    let custom_scopes = app.state.custom_scopes();
                     ui.horizontal(|ui| {
                         for (label, kind) in TABS {
-                            if scope_tab(ui, label, app.state.search_scope_kind == kind) {
-                                app.state.search_scope_kind = kind;
+                            if scope_tab(ui, label, scope_kind == kind) {
+                                app.state.set_search_scope_kind(kind);
                                 changed = true;
                             }
                         }
-                        let custom = CUSTOM_SCOPES
-                            .iter()
-                            .find(|(_, kind)| *kind == app.state.search_scope_kind);
+                        let custom = CUSTOM_SCOPES.iter().find(|(_, kind)| *kind == scope_kind);
                         let current = custom.map_or_else(
-                            || match (&app.state.search_custom_scope, app.state.search_scope_kind) {
+                            || match (&app.state.search_custom_scope(), scope_kind) {
                                 (Some(name), SearchScopeKind::Custom) => name.clone(),
                                 _ => "Scope".to_owned(),
                             },
@@ -302,32 +303,23 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                             .selected_text(current)
                             .show_ui(ui, |ui| {
                                 for (label, kind) in CUSTOM_SCOPES {
-                                    if ui
-                                        .selectable_label(
-                                            app.state.search_scope_kind == kind,
-                                            label,
-                                        )
-                                        .clicked()
-                                    {
-                                        app.state.search_scope_kind = kind;
+                                    if ui.selectable_label(scope_kind == kind, label).clicked() {
+                                        app.state.set_search_scope_kind(kind);
                                         changed = true;
                                     }
                                 }
-                                if !app.state.custom_scopes.is_empty() {
+                                if !custom_scopes.is_empty() {
                                     ui.separator();
                                 }
-                                for scope in app.state.custom_scopes.clone() {
-                                    let selected = app.state.search_scope_kind
-                                        == SearchScopeKind::Custom
-                                        && app.state.search_custom_scope.as_ref()
-                                            == Some(&scope.name);
+                                for scope in custom_scopes {
+                                    let selected = scope_kind == SearchScopeKind::Custom
+                                        && custom_scope.as_ref() == Some(&scope.name);
                                     if ui
                                         .selectable_label(selected, &scope.name)
                                         .on_hover_text(&scope.mask)
                                         .clicked()
                                     {
-                                        app.state.search_scope_kind = SearchScopeKind::Custom;
-                                        app.state.search_custom_scope = Some(scope.name.clone());
+                                        app.state.select_custom_scope(&scope.name);
                                         app.find_popup.scope_edit = Some((scope.name, scope.mask));
                                         changed = true;
                                     }
@@ -343,7 +335,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                     if app.find_popup.scope_edit.is_some() {
                         scope_editor(app, ui, width, &mut changed);
                     }
-                    if app.state.search_scope_kind == SearchScopeKind::Directory {
+                    if scope_kind == SearchScopeKind::Directory {
                         ui.horizontal(|ui| {
                             ui.label(
                                 egui::RichText::new("Directory:").color(theme::TEXT_SECONDARY),
@@ -380,7 +372,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                         ui.vertical_centered(|ui| {
                             let text = if app.search_input.is_empty() {
                                 "Type to search the project"
-                            } else if app.state.search.is_running() {
+                            } else if app.state.search_running() {
                                 "Searching…"
                             } else {
                                 "Nothing found"
@@ -443,7 +435,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         .is_some_and(|since| since.elapsed() >= DEBOUNCE)
     {
         run_search(app);
-    } else if app.find_popup.dirty_since.is_some() || app.state.search.is_running() {
+    } else if app.find_popup.dirty_since.is_some() || app.state.search_running() {
         ctx.request_repaint_after(Duration::from_millis(30));
     }
     if ctx.input(|input| input.pointer.any_click()) && !ctx.is_pointer_over_area() {
@@ -502,7 +494,7 @@ fn scope_editor(app: &mut IdeApp, ui: &mut egui::Ui, width: f32, changed: &mut b
         delete = ui
             .add_enabled(
                 app.state
-                    .custom_scopes
+                    .custom_scopes()
                     .iter()
                     .any(|scope| scope.name == name),
                 egui::Button::new("Delete"),
@@ -517,12 +509,11 @@ fn scope_editor(app: &mut IdeApp, ui: &mut egui::Ui, width: f32, changed: &mut b
         );
         if app
             .state
-            .custom_scopes
+            .custom_scopes()
             .iter()
             .any(|s| s.name == name.trim())
         {
-            app.state.search_scope_kind = SearchScopeKind::Custom;
-            app.state.search_custom_scope = Some(name.trim().to_owned());
+            app.state.select_custom_scope(name.trim());
             *changed = true;
         }
     }
@@ -624,12 +615,12 @@ mod tests {
         assert!(app.find_popup.open && app.find_popup.select_query);
         for _ in 0..200 {
             let _ = ctx.run(egui::RawInput::default(), |ctx| app.frame(ctx));
-            if !app.state.search_results.is_empty() {
+            if app.state.search_result_count() > 0 {
                 break;
             }
             std::thread::sleep(Duration::from_millis(10));
         }
-        assert_eq!(app.state.search_results.len(), 1, "results without Enter");
+        assert_eq!(app.state.search_result_count(), 1, "results without Enter");
         assert!(
             app.state
                 .tool_windows

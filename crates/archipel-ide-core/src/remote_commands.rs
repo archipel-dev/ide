@@ -1,18 +1,30 @@
 //! Fetch, Update Project (pull) and Push as background operations with
 //! progress in the status bar.
 
+use crate::services::RemoteOutcome;
 use crate::{CommandError, IdeState, spec};
 use archipel_ide_command::{Command, CommandRegistry};
-use archipel_ide_git::{PushPlan, RemoteEvent, RemoteJob, RemoteOperation};
+use archipel_ide_git::{PushPlan, RemoteOperation};
 use serde_json::{Value, json};
 
 impl IdeState {
     pub fn remote_busy(&self) -> bool {
-        self.remote_job.is_some()
+        self.remote_ops().is_some_and(|ops| ops.is_busy())
+    }
+
+    /// Latest progress line of the running fetch, pull or push.
+    pub fn remote_progress(&self) -> Option<String> {
+        self.remote_ops()?.progress()
+    }
+
+    /// Message of the last failed fetch, pull or push.
+    pub fn remote_error(&self) -> Option<String> {
+        self.remote_ops()?.error()
     }
 
     fn start_remote(&mut self, operation: RemoteOperation) -> Result<(), String> {
-        if self.remote_busy() {
+        let ops = self.remote_ops().ok_or("no project is open")?;
+        if ops.is_busy() {
             return Err("Another fetch, pull or push is still running".into());
         }
         let root = self
@@ -25,10 +37,7 @@ impl IdeState {
             self.save_all()?;
         }
         let label = operation.label();
-        let job = RemoteJob::start(&root, operation, self.repaint.notifier())
-            .map_err(|error| error.to_string())?;
-        self.remote_job = Some(job);
-        self.remote_progress = Some(format!("{label}…"));
+        ops.start(&root, operation, self.repaint.notifier())?;
         self.status = format!("{label}…");
         Ok(())
     }
@@ -41,50 +50,46 @@ impl IdeState {
         archipel_ide_git::push_plan(&git.root).map_err(|error| error.to_string())
     }
 
-    /// Applies progress and completion of the running remote operation.
+    /// Applies progress and completion of the running remote operation. The end of the
+    /// operation arrives as a [`crate::services::REMOTE_TOPIC`] event.
     pub fn poll_remote(&mut self) {
-        let Some(job) = self.remote_job.as_ref() else {
+        let Some(ops) = self.remote_ops() else {
             return;
         };
-        let label = job.operation.label();
-        let pull = matches!(job.operation, RemoteOperation::Pull { .. });
-        for event in job.poll() {
-            match event {
-                RemoteEvent::Progress(line) => {
-                    let progress = format!("{label}: {line}");
-                    self.status = progress.clone();
-                    self.remote_progress = Some(progress);
-                }
-                RemoteEvent::Finished(result) => {
-                    self.remote_job = None;
-                    self.remote_progress = None;
-                    let _ = self.refresh_git();
-                    self.invalidate_git_log();
-                    if pull {
-                        self.reload_documents_from_disk();
-                        if let Some(project) = &self.project {
-                            self.set_files(project.entries(20_000));
-                        }
-                    }
-                    self.status = match result {
-                        Ok(summary) => summary,
-                        Err(error) => format!(
-                            "{} failed: {}",
-                            match label {
-                                "Fetching" => "Fetch",
-                                "Pushing" => "Push",
-                                _ => "Update",
-                            },
-                            error.lines().next().unwrap_or_default()
-                        ),
-                    };
-                    self.remote_error = self
-                        .status
-                        .contains(" failed: ")
-                        .then(|| self.status.clone());
-                    return;
-                }
+        if let Some(progress) = ops.poll() {
+            self.status = progress;
+        }
+        self.dispatch_reactions();
+    }
+
+    /// Brings the IDE up to date after a fetch, pull or push ended.
+    pub(crate) fn remote_operation_finished(&mut self, outcome: RemoteOutcome) {
+        let _ = self.refresh_git();
+        self.invalidate_git_log();
+        if outcome.pull {
+            self.reload_documents_from_disk();
+            if let Some(project) = &self.project {
+                self.set_files(project.entries(20_000));
             }
+        }
+        self.status = match outcome.result {
+            Ok(summary) => summary,
+            Err(error) => format!(
+                "{} failed: {}",
+                match outcome.label {
+                    "Fetching" => "Fetch",
+                    "Pushing" => "Push",
+                    _ => "Update",
+                },
+                error.lines().next().unwrap_or_default()
+            ),
+        };
+        if let Some(ops) = self.remote_ops() {
+            ops.set_error(
+                self.status
+                    .contains(" failed: ")
+                    .then(|| self.status.clone()),
+            );
         }
     }
 }
@@ -248,7 +253,11 @@ mod tests {
                 .iter()
                 .any(|f| f.relative_path == Path::new("f.txt"))
         );
-        assert!(b_state.remote_error.is_none(), "{:?}", b_state.remote_error);
+        assert!(
+            b_state.remote_error().is_none(),
+            "{:?}",
+            b_state.remote_error()
+        );
 
         // Failure is reported, not panicked.
         git(
@@ -264,7 +273,7 @@ mod tests {
             "{}",
             a_state.status
         );
-        assert!(a_state.remote_error.is_some());
+        assert!(a_state.remote_error().is_some());
         fs::remove_dir_all(base).unwrap();
     }
 }

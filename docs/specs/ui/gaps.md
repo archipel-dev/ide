@@ -1,5 +1,14 @@
 # UI gaps: every measured difference, ranked by visibility
 
+## Decision: the default stays Islands Dark
+
+The default theme stays **Islands Dark** with the `islands` look (decision of the product owner, binding). Gap 1 is
+therefore closed as "by decision, not a defect". Requirements in `01`..`07` that name colors or the frame of New UI
+Dark (`#2B2D30` frame, `#1E1F22` editor, no islands, no 4 px gaps, 40 px stripes in the frame color) apply to the
+**New UI Dark** theme option with the `new_ui` look. Look-independent geometry and behavior (line pitch, gutter,
+error stripe, icon sizes and pitch, row heights, popup anatomy, mnemonics, underline thickness, status bar height,
+control heights) apply to **all** looks. Gaps below are fixed under that rule.
+
 Facts only. "Where" names the likely responsible place (crates/archipel-ide-ui files are under `crates/archipel-ide-ui/src/`; "kit" = archipel-kit component). Spec IDs in brackets.
 
 | # | Visibility | Difference (IntelliJ vs Archipel) | Where | Spec |

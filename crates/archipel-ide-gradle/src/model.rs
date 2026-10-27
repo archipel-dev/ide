@@ -25,26 +25,12 @@ import groovy.json.JsonOutput
 
 def archipelModelFile = gradle.startParameter.projectProperties.get('archipel.modelFile')
 
-gradle.rootProject { root ->
-    if (root.gradle.parent != null) return
-    root.tasks.register('archipelModel') {
-        description = 'Writes the Archipel IDE project model.'
-    }
-}
-
-// Runs any main class of a JVM project (gutter run icons): -Parchipel.mainClass=...
-gradle.allprojects { p ->
-    if (p.gradle.parent != null) return
-    p.plugins.withId('java') {
-        p.tasks.register('archipelRunMain', JavaExec) {
-            description = 'Runs the main class selected in Archipel IDE.'
-            def selected = p.findProperty('archipel.mainClass')
-            if (selected != null) {
-                mainClass.set(selected.toString())
-            }
-            classpath = p.extensions.getByName('sourceSets').getByName('main').runtimeClasspath
-            standardInput = System.in
-        }
+// BuildIdentifier.isCurrentBuild() is gone in Gradle 9; getBuildPath() exists since 8.2.
+def archipelInCurrentBuild = { build ->
+    try {
+        return build.buildPath == ':'
+    } catch (MissingPropertyException ignored) {
+        return build.currentBuild
     }
 }
 
@@ -72,7 +58,7 @@ def archipelDependencies = { Project p, String configName, List unresolved ->
         configuration.incoming.resolutionResult.allComponents.each { c ->
             def id = c.id
             if (id instanceof org.gradle.api.artifacts.component.ProjectComponentIdentifier
-                    && id.build.currentBuild && id.projectPath != p.path) {
+                    && archipelInCurrentBuild(id.build) && id.projectPath != p.path) {
                 result << [projectPath: id.projectPath]
             }
         }
@@ -82,96 +68,143 @@ def archipelDependencies = { Project p, String configName, List unresolved ->
     result.unique()
 }
 
-gradle.projectsEvaluated { g ->
-    if (g.parent != null || archipelModelFile == null) return
-    def root = g.rootProject
-    def projects = root.allprojects.collect { p ->
-        def unresolved = []
-        def sourceSets = []
-        def container = p.extensions.findByName('sourceSets') ?: p.extensions.findByName('java')?.sourceSets
-        if (container != null) {
-            def testClassDirs = [] as Set
+def archipelProjectModel = { Project p ->
+    def unresolved = []
+    def sourceSets = []
+    def container = p.extensions.findByName('sourceSets') ?: p.extensions.findByName('java')?.sourceSets
+    if (container != null) {
+        def testClassDirs = [] as Set
+        try {
+            p.tasks.withType(org.gradle.api.tasks.testing.Test).each { t ->
+                testClassDirs.addAll(t.testClassesDirs.files)
+            }
+        } catch (Exception ignored) {
+        }
+        container.each { s ->
+            def classesDirs = []
+            try { classesDirs = s.output.classesDirs.files.collect { it.absolutePath } } catch (Exception ignored) { }
+            def generated = []
             try {
-                p.tasks.withType(org.gradle.api.tasks.testing.Test).each { t ->
-                    testClassDirs.addAll(t.testClassesDirs.files)
-                }
+                def compile = p.tasks.findByName(s.compileJavaTaskName)
+                def dir = compile?.options?.generatedSourceOutputDirectory?.asFile?.getOrNull()
+                if (dir != null) generated << dir.absolutePath
             } catch (Exception ignored) {
             }
-            container.each { s ->
-                def classesDirs = []
-                try { classesDirs = s.output.classesDirs.files.collect { it.absolutePath } } catch (Exception ignored) { }
-                def generated = []
-                try {
-                    def compile = p.tasks.findByName(s.compileJavaTaskName)
-                    def dir = compile?.options?.generatedSourceOutputDirectory?.asFile?.getOrNull()
-                    if (dir != null) generated << dir.absolutePath
-                } catch (Exception ignored) {
-                }
-                def resourceDirs = s.resources.srcDirs
-                def sources = []
-                try { sources = s.allSource.srcDirs.findAll { !(it in resourceDirs) }.collect { it.absolutePath } } catch (Exception ignored) { }
-                sourceSets << [
-                    name: s.name,
-                    java: s.java.srcDirs.collect { it.absolutePath },
-                    resources: resourceDirs.collect { it.absolutePath },
-                    sources: sources,
-                    generated: generated,
-                    isTest: s.name == 'test' || (!testClassDirs.isEmpty() && s.output.classesDirs.files.any { it in testClassDirs }),
-                    classesDirs: classesDirs,
-                    resourcesDir: s.output.resourcesDir?.absolutePath,
-                    compileClasspath: archipelDependencies(p, s.compileClasspathConfigurationName, unresolved),
-                    runtimeClasspath: archipelDependencies(p, s.runtimeClasspathConfigurationName, unresolved),
-                ]
-            }
+            def resourceDirs = s.resources.srcDirs
+            def sources = []
+            try { sources = s.allSource.srcDirs.findAll { !(it in resourceDirs) }.collect { it.absolutePath } } catch (Exception ignored) { }
+            sourceSets << [
+                name: s.name,
+                java: s.java.srcDirs.collect { it.absolutePath },
+                resources: resourceDirs.collect { it.absolutePath },
+                sources: sources,
+                generated: generated,
+                isTest: s.name == 'test' || (!testClassDirs.isEmpty() && s.output.classesDirs.files.any { it in testClassDirs }),
+                classesDirs: classesDirs,
+                resourcesDir: s.output.resourcesDir?.absolutePath,
+                compileClasspath: archipelDependencies(p, s.compileClasspathConfigurationName, unresolved),
+                runtimeClasspath: archipelDependencies(p, s.runtimeClasspathConfigurationName, unresolved),
+            ]
         }
-        def libraries = []
-        def runtime = p.configurations.findByName('runtimeClasspath')
-        if (runtime != null && runtime.canBeResolved) {
-            try {
-                runtime.resolvedConfiguration.lenientConfiguration.artifacts.each { a ->
-                    def id = a.moduleVersion.id
-                    libraries << [name: "${id.group}:${id.name}:${id.version}".toString(), path: a.file.absolutePath]
-                }
-            } catch (Exception ignored) {
-                // Unresolvable dependencies are left out of External Libraries.
-            }
-        }
-        def tasks = p.tasks.findAll { !it.name.startsWith('archipel') }.collect { t ->
-            [name: t.name, path: t.path, group: t.group?.toString(), description: t.description?.toString()]
-        }
-        def languageLevel = null
-        try { languageLevel = p.extensions.findByName('java')?.sourceCompatibility?.toString() } catch (Exception ignored) { }
-        def buildDir = null
-        try { buildDir = p.layout.buildDirectory.get().asFile.absolutePath } catch (Exception ignored) { }
-        [
-            path: p.path,
-            name: p.name,
-            dir: p.projectDir.absolutePath,
-            buildFile: p.buildFile.absolutePath,
-            description: p.description?.toString(),
-            plugins: [
-                java: p.plugins.hasPlugin('java'),
-                application: p.plugins.hasPlugin('application'),
-                androidApplication: p.plugins.hasPlugin('com.android.application'),
-                androidLibrary: p.plugins.hasPlugin('com.android.library'),
-            ],
-            tasks: tasks,
-            sourceSets: sourceSets,
-            libraries: libraries,
-            buildDir: buildDir,
-            languageLevel: languageLevel,
-            unresolved: unresolved.take(50),
-        ]
     }
-    def out = new File(archipelModelFile)
-    out.parentFile.mkdirs()
-    out.text = JsonOutput.toJson([
-        gradleVersion: g.gradleVersion,
-        rootDir: root.rootDir.absolutePath,
-        jdk: [home: System.getProperty('java.home'), version: System.getProperty('java.version')],
-        projects: projects,
-    ])
+    def libraries = []
+    def runtime = p.configurations.findByName('runtimeClasspath')
+    if (runtime != null && runtime.canBeResolved) {
+        try {
+            runtime.resolvedConfiguration.lenientConfiguration.artifacts.each { a ->
+                def id = a.moduleVersion.id
+                libraries << [name: "${id.group}:${id.name}:${id.version}".toString(), path: a.file.absolutePath]
+            }
+        } catch (Exception ignored) {
+            // Unresolvable dependencies are left out of External Libraries.
+        }
+    }
+    def tasks = p.tasks.findAll { !it.name.startsWith('archipel') }.collect { t ->
+        [name: t.name, path: t.path, group: t.group?.toString(), description: t.description?.toString()]
+    }
+    def languageLevel = null
+    try { languageLevel = p.extensions.findByName('java')?.sourceCompatibility?.toString() } catch (Exception ignored) { }
+    def buildDir = null
+    try { buildDir = p.layout.buildDirectory.get().asFile.absolutePath } catch (Exception ignored) { }
+    [
+        path: p.path,
+        name: p.name,
+        dir: p.projectDir.absolutePath,
+        buildFile: p.buildFile.absolutePath,
+        description: p.description?.toString(),
+        plugins: [
+            java: p.plugins.hasPlugin('java'),
+            application: p.plugins.hasPlugin('application'),
+            androidApplication: p.plugins.hasPlugin('com.android.application'),
+            androidLibrary: p.plugins.hasPlugin('com.android.library'),
+        ],
+        tasks: tasks,
+        sourceSets: sourceSets,
+        libraries: libraries,
+        buildDir: buildDir,
+        languageLevel: languageLevel,
+        unresolved: unresolved.take(50),
+    ]
 }
+
+gradle.ext.archipelResults = [:]
+
+gradle.rootProject { root ->
+    if (root.gradle.parent != null) return
+    root.tasks.register('archipelModel') {
+        description = 'Writes the Archipel IDE project model.'
+        doLast {
+            if (archipelModelFile == null) return
+            def g = root.gradle
+            def projects = root.allprojects.collect { g.ext.archipelResults[it.path] }.findAll { it != null }
+            def out = new File(archipelModelFile)
+            out.parentFile.mkdirs()
+            out.text = JsonOutput.toJson([
+                gradleVersion: g.gradleVersion,
+                rootDir: root.rootDir.absolutePath,
+                jdk: [home: System.getProperty('java.home'), version: System.getProperty('java.version')],
+                projects: projects,
+            ])
+        }
+    }
+}
+
+// Each project resolves its own configurations in its own task: Gradle 9 refuses to resolve a
+// project's configurations from outside that project's lock (as an evaluation hook would).
+gradle.allprojects { p ->
+    if (p.gradle.parent != null) return
+    p.tasks.register('archipelProjectModel') {
+        description = 'Collects the Archipel IDE model of this project.'
+        doLast {
+            p.gradle.ext.archipelResults[p.path] = archipelProjectModel(p)
+        }
+    }
+}
+
+gradle.projectsEvaluated { g ->
+    if (g.parent != null) return
+    def root = g.rootProject
+    root.tasks.named('archipelModel') {
+        dependsOn root.allprojects.collect { it.tasks.named('archipelProjectModel') }
+    }
+}
+
+// Runs any main class of a JVM project (gutter run icons): -Parchipel.mainClass=...
+gradle.allprojects { p ->
+    if (p.gradle.parent != null) return
+    p.plugins.withId('java') {
+        p.tasks.register('archipelRunMain', JavaExec) {
+            description = 'Runs the main class selected in Archipel IDE.'
+            def selected = p.findProperty('archipel.mainClass')
+            if (selected != null) {
+                mainClass.set(selected.toString())
+            }
+            classpath = p.extensions.getByName('sourceSets').getByName('main').runtimeClasspath
+            standardInput = System.in
+        }
+    }
+}
+
 "#;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

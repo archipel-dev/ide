@@ -156,6 +156,13 @@ pub enum UnitKind {
     Jdk,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnitOrigin {
+    pub kind: UnitKind,
+    pub module: Option<String>,
+    pub test: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct UnitInfo {
     pub id: u32,
@@ -708,6 +715,25 @@ impl JavaIndex {
 
     pub fn unit(&self, id: u32) -> Option<UnitInfo> {
         self.inner.catalog.read().units.get(&id).cloned()
+    }
+
+    /// Which module (and test or production code) or library a unit belongs to.
+    pub fn origin(&self, unit: u32) -> UnitOrigin {
+        let cat = self.inner.catalog.read();
+        let kind = cat.units.get(&unit).map(|u| u.kind.clone()).unwrap_or(UnitKind::Source);
+        let mut origin = UnitOrigin { kind, module: None, test: false };
+        for (name, (prod, tests)) in &cat.modules {
+            if prod.contains(&unit) {
+                origin.module = Some(name.clone());
+                break;
+            }
+            if tests.contains(&unit) {
+                origin.module = Some(name.clone());
+                origin.test = true;
+                break;
+            }
+        }
+        origin
     }
 
     pub fn unit_for_path(&self, path: &Path) -> Option<u32> {

@@ -118,7 +118,7 @@ impl ClassStub {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ImportStub {
     /// Reference text without `import`, `static`, `;` and `.*`.
     pub name: String,

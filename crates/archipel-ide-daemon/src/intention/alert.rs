@@ -233,7 +233,7 @@ fn fix_row(
         text: fix.text.to_string(),
         family: fix.family.to_string(),
         group,
-        priority: Priority::Normal,
+        priority: action.priority(),
         submenu: None,
         source: Source::Native,
         anchor: Some(info.range.clone()),

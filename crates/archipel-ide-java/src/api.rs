@@ -55,3 +55,21 @@ impl JavaProject {
         analyze(&env, text, &tree, &current, incomplete)
     }
 }
+
+impl JavaProject {
+    /// Like [`Self::analyze_text`] with a tree the host already parsed.
+    pub fn analyze_tree(&self, path: &Path, text: &str, tree: &tree_sitter::Tree) -> Option<(Analysis, CurrentFile, ResolveScope)> {
+        let scope = self.scope_for(path);
+        if scope.kind == ScopeKind::Everything {
+            return None;
+        }
+        let stub = source::build_from_tree(tree, text);
+        let current = CurrentFile::new(self.index.unit_for_path(path), stub);
+        let analysis = {
+            let env = Env::new(&self.index, &scope, Some(&current));
+            let incomplete = !self.is_complete();
+            analyze(&env, text, tree, &current, incomplete)
+        };
+        Some((analysis, current, scope))
+    }
+}

@@ -508,6 +508,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "archipel-ide-java"
+version = "0.2.0"
+dependencies = [
+ "archipel-ide-analysis",
+ "archipel-ide-externalsystem",
+ "archipel-ide-index",
+ "archipel-ide-language",
+ "archipel-ide-project",
+ "archipel-ide-projectmodel",
+ "parking_lot",
+ "postcard",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tree-sitter",
+ "tree-sitter-java",
+ "walkdir",
+ "zip",
+]
+
+[[package]]
 name = "archipel-ide-keymap"
 version = "0.2.0"
 dependencies = [

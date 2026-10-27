@@ -4,7 +4,10 @@
 pub mod analyze;
 pub mod api;
 pub mod classfile;
+pub mod diagnostics;
 pub mod env;
+pub mod import_edit;
+pub mod import_fix;
 pub mod index;
 pub mod jimage;
 pub mod scope;

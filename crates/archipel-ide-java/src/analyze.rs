@@ -45,10 +45,19 @@ pub struct Problem {
 #[derive(Debug, Clone, Default)]
 pub struct Usage {
     pub used: HashSet<usize>,
-    /// Some reference could not be resolved (so any import might be the one it needs).
+    /// The analysis cannot say anything reliable (index lost, project loading): no import is unused.
     pub uncertain: bool,
     /// Short names referenced through a static import (field or method).
     pub static_names: HashSet<String>,
+    /// FQNs of classes that were found through an import statement (single or on demand).
+    pub classes: std::collections::BTreeSet<String>,
+    /// Static members used through static imports: `(class named by the import, member)`.
+    pub statics: std::collections::BTreeSet<(String, String)>,
+    /// Simple names that did not resolve (or could not be resolved reliably): they count as
+    /// using any import that could provide them (JAVA-IMP-076).
+    pub unresolved: HashSet<String>,
+    /// Set when some unresolved name could come from an on-demand import.
+    pub unresolved_any: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -131,6 +140,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
     }
 
     fn push_symbol_at(&mut self, r: Range<u32>, name: &str, class_ref: bool, annotation: bool) {
+        self.unresolved(name);
         if self.incomplete {
             self.out.problems.push(Problem { range: r, message: PENDING_MESSAGE.into(), kind: ProblemKind::Pending });
             return;
@@ -142,13 +152,31 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         });
     }
 
-    fn mark(&mut self, via: Via) {
+    fn mark(&mut self, via: Via, class: &ClassHit) {
         match via {
-            Via::SingleImport(i) | Via::SingleStaticImport(i) | Via::StaticOnDemand(i) | Via::OnDemand(i) => {
+            Via::SingleImport(i) | Via::OnDemand(i) => {
                 self.out.usage.used.insert(i);
+                self.out.usage.classes.insert(class.class().qname.clone());
+            }
+            Via::SingleStaticImport(i) | Via::StaticOnDemand(i) => {
+                self.out.usage.used.insert(i);
+                self.mark_static(i, class.class().name.clone());
             }
             _ => {}
         }
+    }
+
+    /// A member used through static import `i`.
+    fn mark_static(&mut self, i: usize, member: String) {
+        let Some(imp) = self.file.stub.imports.get(i) else { return };
+        let class = if imp.on_demand { imp.name.clone() } else { imp.name.rsplit_once('.').map(|(c, _)| c.to_string()).unwrap_or_default() };
+        self.out.usage.used.insert(i);
+        self.out.usage.statics.insert((class, member.clone()));
+        self.out.usage.static_names.insert(member);
+    }
+
+    fn unresolved(&mut self, name: &str) {
+        self.out.usage.unresolved.insert(name.to_string());
     }
 
     // ---- imports ----------------------------------------------------------------------
@@ -234,7 +262,11 @@ impl<'a, 'e> Analyzer<'a, 'e> {
 
     fn visit(&mut self, node: Node<'_>) -> Res<()> {
         match node.kind() {
-            "import_declaration" | "package_declaration" | "line_comment" | "block_comment" | "string_literal"
+            "block_comment" => {
+                self.javadoc(node)?;
+                return Ok(());
+            }
+            "import_declaration" | "package_declaration" | "line_comment" | "string_literal"
             | "text_block" | "character_literal" | "ERROR" => return Ok(()),
             "marker_annotation" | "annotation" => {
                 self.annotation(node)?;
@@ -310,6 +342,40 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             _ => false,
         };
         ok.then_some(())
+    }
+
+    /// Javadoc references count as uses of imports (JAVA-IMP-073); they are never reported.
+    fn javadoc(&mut self, n: Node<'_>) -> Res<()> {
+        let text = self.txt(n);
+        if !text.starts_with("/**") || !text.contains('@') {
+            return Ok(());
+        }
+        let mut names: Vec<String> = Vec::new();
+        for tag in ["{@link ", "{@linkplain ", "{@value ", "@see ", "@throws ", "@exception "] {
+            let mut rest = text;
+            while let Some(i) = rest.find(tag) {
+                rest = &rest[i + tag.len()..];
+                let token: String = rest
+                    .trim_start()
+                    .chars()
+                    .take_while(|c| c.is_alphanumeric() || matches!(c, '_' | '$' | '.'))
+                    .collect();
+                let first = token.split('.').next().unwrap_or("");
+                if !first.is_empty() && first.chars().next().is_some_and(char::is_uppercase) {
+                    names.push(first.to_string());
+                }
+            }
+        }
+        if names.is_empty() {
+            return Ok(());
+        }
+        let ctx = self.ctx_at(n)?;
+        for name in names {
+            if let NameRes::Class(h, via) = self.env.resolve_type_name(&name, &ctx)? {
+                self.mark(via, &h);
+            }
+        }
+        Ok(())
     }
 
     fn annotation(&mut self, n: Node<'_>) -> Res<()> {
@@ -517,7 +583,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         let ctx = self.ctx_at(at)?;
         match self.env.resolve_type_name(&names[0], &ctx)? {
             NameRes::Class(mut h, via) => {
-                self.mark(via);
+                self.mark(via, &h);
                 for (k, seg) in names.iter().enumerate().skip(1) {
                     match self.env.member_type(&h, seg)? {
                         Some(m) => h = m,
@@ -531,7 +597,10 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 }
             }
             NameRes::TypeVar(_) | NameRes::Ambiguous(..) => {}
-            NameRes::Incomplete => self.out.usage.uncertain = true,
+            NameRes::Incomplete => {
+                self.unresolved(&names[0]);
+                self.out.usage.unresolved_any = true;
+            }
             NameRes::NotFound => {
                 if names.len() == 1 {
                     self.out.usage.uncertain |= self.incomplete;
@@ -816,13 +885,14 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             VarRes::NotFound { incomplete } => {
                 let ctx = self.ctx_at(n)?;
                 match self.env.resolve_type_name(&name, &ctx)? {
-                    NameRes::Class(_, via) => {
-                        self.mark(via);
+                    NameRes::Class(h, via) => {
+                        self.mark(via, &h);
                         return Ok(());
                     }
                     NameRes::TypeVar(_) | NameRes::Ambiguous(..) => return Ok(()),
                     NameRes::Incomplete => {
-                        self.out.usage.uncertain = true;
+                        self.unresolved(&name);
+                        self.out.usage.unresolved_any = true;
                         return Ok(());
                     }
                     NameRes::NotFound => {}
@@ -831,16 +901,14 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                     return Ok(());
                 }
                 if incomplete || self.lombok {
-                    self.out.usage.uncertain = true;
+                    self.unresolved(&name);
+                    self.out.usage.unresolved_any = true;
                     return Ok(());
                 }
                 self.out.usage.uncertain |= self.incomplete;
                 self.push_symbol(n, &name, false, false);
             }
-            VarRes::StaticImport { import, .. } => {
-                self.out.usage.used.insert(import);
-                self.out.usage.static_names.insert(name);
-            }
+            VarRes::StaticImport { import, .. } => self.mark_static(import, name),
             _ => {}
         }
         Ok(())
@@ -908,8 +976,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 });
             }
             VarRes::StaticImport { import, ty, class } => {
-                self.out.usage.used.insert(import);
-                self.out.usage.static_names.insert(head.clone());
+                self.mark_static(import, head.clone());
                 head_ty = Some(match ty {
                     Some(t) => self.ty_in_class(&t, &class)?,
                     None => Ty::Unknown,
@@ -919,11 +986,12 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 let ctx = self.ctx_at(segs[0])?;
                 match self.env.resolve_type_name(head, &ctx)? {
                     NameRes::Class(h, via) => {
-                        self.mark(via);
+                        self.mark(via, &h);
                         cls = Some(h);
                     }
                     NameRes::Incomplete | NameRes::Ambiguous(..) | NameRes::TypeVar(_) => {
-                        self.out.usage.uncertain = true;
+                        self.unresolved(head);
+                        self.out.usage.unresolved_any = true;
                         return Ok(());
                     }
                     NameRes::NotFound => {
@@ -942,7 +1010,8 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                             }
                             None => {
                                 if incomplete || self.lombok {
-                                    self.out.usage.uncertain = true;
+                                    self.unresolved(head);
+                                    self.out.usage.unresolved_any = true;
                                     return Ok(());
                                 }
                                 let mut known = 0;
@@ -1185,8 +1254,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                         let (ms, complete) = self.env.methods_named(&h, name)?;
                         incomplete |= !complete;
                         if !ms.is_empty() {
-                            self.out.usage.used.insert(i);
-                            self.out.usage.static_names.insert(name.to_string());
+                            self.mark_static(i, name.to_string());
                             return Ok(());
                         }
                     }
@@ -1199,8 +1267,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                         let (ms, complete) = self.env.methods_named(&h, name)?;
                         incomplete |= !complete;
                         if !ms.is_empty() {
-                            self.out.usage.used.insert(i);
-                            self.out.usage.static_names.insert(name.to_string());
+                            self.mark_static(i, name.to_string());
                             return Ok(());
                         }
                     }
@@ -1209,7 +1276,8 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             }
         }
         if incomplete || self.lombok || chain.is_empty() {
-            self.out.usage.uncertain = true;
+            self.unresolved(name);
+            self.out.usage.unresolved_any = true;
             return Ok(());
         }
         if args.iter().any(|a| matches!(a, Ty::Unknown)) && false {
@@ -1220,6 +1288,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
     }
 
     fn push_method(&mut self, call: Node<'_>, name_node: Node<'_>, name: &str, args: &[Ty], qualified: bool) {
+        self.unresolved(name);
         if self.incomplete {
             self.out.problems.push(Problem { range: range(name_node), message: PENDING_MESSAGE.into(), kind: ProblemKind::Pending });
             self.out.usage.uncertain = true;

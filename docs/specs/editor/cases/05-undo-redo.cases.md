@@ -321,3 +321,15 @@ keys: type "abc", Ctrl+S, Ctrl+Z
 ```after
 <caret>
 ```
+
+### ED-UNDO-001 case 1: each Duplicate is its own step
+settings: default
+language: plain
+```before
+a<caret>
+```
+keys: Ctrl+D, Ctrl+D, Ctrl+Z
+```after
+a
+a<caret>
+```

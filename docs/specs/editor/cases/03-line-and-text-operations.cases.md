@@ -902,3 +902,51 @@ keys: Ctrl+X
 a<caret>b
 cd
 ```
+
+### ED-CLIP-006 case 1: Cut up to Line End
+settings: default
+language: plain
+```before
+ab<caret>cd
+ef
+```
+keys: action EditorCutLineEnd
+```after
+ab<caret>
+ef
+```
+
+### ED-CLIP-006 case 2: Cut up to Line End at the end of a line joins the lines
+settings: default
+language: plain
+```before
+ab<caret>
+cd
+```
+keys: action EditorCutLineEnd
+```after
+ab<caret>cd
+```
+
+### ED-CLIP-006 case 3: Cut Line Backward
+settings: default
+language: plain
+```before
+ab<caret>cd
+```
+keys: action EditorCutLineBackward
+```after
+<caret>cd
+```
+
+### ED-CLIP-006 case 4: Cut Line Backward at a line start joins with the previous line
+settings: default
+language: plain
+```before
+ab
+<caret>cd
+```
+keys: action EditorCutLineBackward
+```after
+ab<caret>cd
+```

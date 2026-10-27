@@ -742,3 +742,117 @@ keys: Left
 ```after
 <caret>ab
 ```
+
+### ED-CARET-019 case 1: carets that become equal merge
+settings: default
+language: plain
+```before
+a<caret>b<caret>
+```
+keys: Right
+```after
+ab<caret>
+```
+
+### ED-CARET-038 case 1: Extend Line Selection selects the whole line
+settings: default
+language: plain
+```before
+a<caret>b
+cd
+ef
+```
+keys: action EditorSelectLine
+```after
+<selection>ab
+<caret></selection>cd
+ef
+```
+
+### ED-CARET-038 case 2: repeating adds the next line
+settings: default
+language: plain
+```before
+a<caret>b
+cd
+ef
+```
+keys: action EditorSelectLine, action EditorSelectLine
+```after
+<selection>ab
+cd
+<caret></selection>ef
+```
+
+### ED-CARET-073 case 1: Clone Caret Below
+settings: default
+language: plain
+```before
+a<caret>bc
+def
+ghi
+```
+keys: action EditorCloneCaretBelow
+```after
+a<caret>bc
+d<caret>ef
+ghi
+```
+
+### ED-CARET-073 case 2: Clone Caret Below twice
+settings: default
+language: plain
+```before
+a<caret>bc
+def
+ghi
+```
+keys: action EditorCloneCaretBelow, action EditorCloneCaretBelow
+```after
+a<caret>bc
+d<caret>ef
+g<caret>hi
+```
+
+### ED-CARET-073 case 3: Clone Caret Above
+settings: default
+language: plain
+```before
+abc
+d<caret>ef
+```
+keys: action EditorCloneCaretAbove
+```after
+a<caret>bc
+d<caret>ef
+```
+
+### ED-CARET-073 case 4: the remembered column is used on shorter lines
+settings: default
+language: plain
+```before
+abc<caret>
+d
+ef
+```
+keys: action EditorCloneCaretBelow, action EditorCloneCaretBelow
+```after
+abc<caret>
+d<caret>
+ef<caret>
+```
+
+### ED-CARET-073 case 5: the opposite direction removes the newest clone
+settings: default
+language: plain
+```before
+a<caret>bc
+def
+ghi
+```
+keys: action EditorCloneCaretBelow, action EditorCloneCaretBelow, action EditorCloneCaretAbove
+```after
+a<caret>bc
+d<caret>ef
+ghi
+```

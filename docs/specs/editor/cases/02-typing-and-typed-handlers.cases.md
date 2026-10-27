@@ -1346,3 +1346,36 @@ b();<caret>
     }
 }
 ```
+
+### ED-TYPE-037 case 1: replacing the quotes of a literal by typing over one of them
+settings: default
+language: java
+```before
+class A { String s = <selection>"</selection>ab"; }
+```
+keys: type "'"
+```after
+class A { String s = '<caret>ab'; }
+```
+
+### ED-TYPE-044 case 1: Backspace removes the generics pair
+settings: default
+language: java
+```before
+class A { List<<caret>> x; }
+```
+keys: Backspace
+```after
+class A { List<caret> x; }
+```
+
+### ED-TYPE-083 case 1: Indent Line or Selection without a selection
+settings: default
+language: plain
+```before
+a<caret>
+```
+keys: action EditorIndentLineOrSelection
+```after
+    a<caret>
+```

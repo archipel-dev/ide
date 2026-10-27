@@ -63,3 +63,5 @@ EditorSettingsState.kt`, `platform/ide-core/resources/messages/ApplicationBundle
 * The exact list of EditorConfig properties applied to non-indent behaviors (line endings, final
   newline) is specified with saving (`platform/09-saving-and-autosave.md` when it lands).
 * Which languages ship non-4 defaults.
+* The relative priority of EditorConfig and indent detection in `ED-STYLE-002` is taken from product
+  behavior; the provider ordering was not read in the sources.

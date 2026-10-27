@@ -33,6 +33,10 @@ pub struct Scene {
     /// Project-relative files passed on the command line.
     #[serde(default)]
     pub open: Vec<String>,
+    /// Toolchain components the scene needs (`jdtls`); it is skipped, not
+    /// failed, when one is not installed on this machine.
+    #[serde(default)]
+    pub requires: Vec<String>,
     /// Extra environment variables of the IDE process (e.g. to slow indexing down).
     #[serde(default)]
     pub env: std::collections::BTreeMap<String, String>,
@@ -54,6 +58,14 @@ pub enum Step {
         contains: Option<String>,
     },
     Sleep(Duration),
+    /// Polls the `state` snapshot until the value at `pointer` matches or
+    /// `timeout` passes (slow background work: a project import).
+    WaitFor {
+        pointer: String,
+        equals: Option<Value>,
+        contains: Option<String>,
+        timeout: Duration,
+    },
     /// Writes (or appends to) a file in the fixture, e.g. to create VCS changes.
     WriteFile {
         path: String,
@@ -92,6 +104,27 @@ impl Step {
                     pointer: string("pointer")?,
                     equals,
                     contains,
+                }
+            }
+            "waitFor" => {
+                let equals = value.get("equals").cloned();
+                let contains = value
+                    .get("contains")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
+                if equals.is_none() && contains.is_none() {
+                    bail!("waitFor step needs \"equals\" or \"contains\": {value}");
+                }
+                Step::WaitFor {
+                    pointer: string("pointer")?,
+                    equals,
+                    contains,
+                    timeout: Duration::from_millis(
+                        value
+                            .get("timeoutMs")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(10_000),
+                    ),
                 }
             }
             "sleep" => Step::Sleep(Duration::from_millis(
@@ -197,6 +230,9 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
         }
         match run_scene(&app, &display, &work, &out, scene, steps) {
             Ok(()) => println!("ok"),
+            Err(error) if error.downcast_ref::<Skipped>().is_some() => {
+                println!("skipped ({error})")
+            }
             Err(error) => {
                 println!("FAILED\n    {error:#}");
                 failures.push(scene.id.clone());
@@ -213,6 +249,18 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
     }
     Ok(())
 }
+
+/// A scene that cannot run on this machine (a required tool is missing).
+#[derive(Debug)]
+struct Skipped(String);
+
+impl std::fmt::Display for Skipped {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for Skipped {}
 
 pub(crate) fn build_app(release: bool) -> Result<PathBuf> {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
@@ -355,6 +403,18 @@ fn run_scene(
             .with_context(|| format!("launch {}", app.display()))?,
     );
     let mut client = connect(&socket, &mut process.0, &scene_dir)?;
+    for component in &scene.requires {
+        let located = send(
+            &mut client,
+            &Request::Execute {
+                command: "toolchain.locate".into(),
+                args: serde_json::json!({"component": component}),
+            },
+        )?;
+        if located.is_null() {
+            return Err(Skipped(format!("{component} is not installed")).into());
+        }
+    }
     for (index, step) in steps.iter().enumerate() {
         run_step(&mut client, step, project.as_deref(), out)
             .with_context(|| format!("step {} ({:?})", index + 1, step))?;
@@ -421,6 +481,24 @@ fn run_step(
             check_assertion(&state, pointer, equals.as_ref(), contains.as_deref())?;
         }
         Step::Sleep(duration) => std::thread::sleep(*duration),
+        Step::WaitFor {
+            pointer,
+            equals,
+            contains,
+            timeout,
+        } => {
+            let started = Instant::now();
+            loop {
+                let state = send(client, &Request::State)?;
+                match check_assertion(&state, pointer, equals.as_ref(), contains.as_deref()) {
+                    Ok(()) => break,
+                    Err(error) if started.elapsed() > *timeout => {
+                        bail!("timed out after {timeout:?}: {error}")
+                    }
+                    Err(_) => std::thread::sleep(Duration::from_millis(250)),
+                }
+            }
+        }
         Step::WriteFile {
             path,
             contents,
@@ -493,6 +571,27 @@ pub fn fixture_files(name: &str) -> Result<Vec<(&'static str, &'static str)>> {
                 "# java-gradle\n\nSample project for Archipel IDE parity scenes.\n",
             ),
         ]),
+        // A test that calls AssertJ's `assertThat` without the static import:
+        // the language server marks it and offers the import.
+        "java-gradle-assertj" => Ok(vec![
+            (
+                "settings.gradle",
+                "rootProject.name = 'java-gradle-assertj'\n",
+            ),
+            (
+                "build.gradle",
+                "plugins {\n    id 'java'\n}\n\nrepositories {\n    mavenCentral()\n}\n\ndependencies {\n    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.0'\n    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.0'\n    testImplementation 'org.assertj:assertj-core:3.26.3'\n}\n\ntest {\n    useJUnitPlatform()\n}\n",
+            ),
+            (
+                "src/main/java/com/example/App.java",
+                "package com.example;\n\npublic class App {\n    public static String greeting(String name) {\n        return \"Hello, \" + name + \"!\";\n    }\n}\n",
+            ),
+            (
+                "src/test/java/com/example/AppTest.java",
+                "package com.example;\n\nimport org.junit.jupiter.api.Test;\n\nclass AppTest {\n    @Test\n    void greets() {\n        assertThat(App.greeting(\"Java\")).isEqualTo(\"Hello, Java!\");\n    }\n}\n",
+            ),
+            (".gitignore", ".gradle/\nbuild/\nbin/\n.archipel/\n"),
+        ]),
         "rust-cargo" => Ok(vec![
             (
                 "Cargo.toml",
@@ -518,7 +617,9 @@ pub fn fixture_files(name: &str) -> Result<Vec<(&'static str, &'static str)>> {
             ),
             (".gitignore", "target/\n.archipel/\n"),
         ]),
-        other => bail!("unknown fixture {other:?} (known: java-gradle, rust-cargo, spring-maven)"),
+        other => bail!(
+            "unknown fixture {other:?} (known: java-gradle, java-gradle-assertj, rust-cargo, spring-maven)"
+        ),
     }
 }
 

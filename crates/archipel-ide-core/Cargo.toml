@@ -13,6 +13,8 @@ archipel-ide-ai = { path = "../archipel-ide-ai" }
 archipel-ide-bazel = { path = "../archipel-ide-bazel" }
 archipel-ide-command = { path = "../archipel-ide-command" }
 archipel-ide-gradle = { path = "../archipel-ide-gradle" }
+archipel-ide-externalsystem = { path = "../archipel-ide-externalsystem" }
+archipel-ide-projectmodel = { path = "../archipel-ide-projectmodel" }
 archipel-ide-dap = { path = "../archipel-ide-dap" }
 archipel-ide-git = { path = "../archipel-ide-git" }
 archipel-ide-index = { path = "../archipel-ide-index" }

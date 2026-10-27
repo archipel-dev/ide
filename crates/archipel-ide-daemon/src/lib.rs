@@ -8,6 +8,7 @@
 
 pub mod clock;
 pub mod daemon;
+pub mod external;
 pub mod inspection;
 pub mod intention;
 pub mod markup;
@@ -19,6 +20,7 @@ pub mod stripe;
 
 pub use clock::{Clock, ManualClock, SystemClock};
 pub use daemon::{Daemon, DaemonSettings};
+pub use external::{ExternalDiagnostic, ExternalDiagnostics, ExternalFile};
 pub use markup::{FileMarkup, HighlightId, MarkupCounts, MarkupLimits, MarkupStore, ReplaceStats};
 pub use passes::{LineMarker, LineMarkerProvider, Shared};
 pub use problem_files::{FileSummary, ProblemFiles};

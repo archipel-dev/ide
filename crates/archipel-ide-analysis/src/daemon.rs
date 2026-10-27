@@ -153,6 +153,18 @@ impl AnnotationBuilder<'_> {
         self
     }
 
+    /// The reporting tool's problem code.
+    pub fn code(mut self, code: impl Into<Arc<str>>) -> Self {
+        self.info.code = Some(code.into());
+        self
+    }
+
+    /// Display name of the reporting tool (`Java`, `rustc`).
+    pub fn source(mut self, source: impl Into<Arc<str>>) -> Self {
+        self.info.source = Some(source.into());
+        self
+    }
+
     pub fn create(self) {
         self.holder.infos.push(self.info);
     }

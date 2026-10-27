@@ -61,6 +61,7 @@ mod diagnostic_commands;
 pub mod diagnostics;
 mod disk_sync;
 mod editor_commands;
+mod external_diagnostics;
 pub mod first_run;
 mod folds;
 mod git_log;
@@ -83,6 +84,7 @@ pub use new_class::{FileTemplate, JavaKind, KotlinKind, file_templates};
 mod generate;
 mod hierarchy;
 mod project_commands;
+pub mod project_model;
 pub mod project_view;
 mod quick_doc;
 mod refactor;
@@ -538,6 +540,7 @@ impl IdeState {
         self.detect_build();
         self.load_gradle_model();
         self.load_bazel_targets();
+        self.open_project_model();
         self.load_run_configurations();
         self.load_search_scopes();
         self.load_breakpoints();
@@ -1018,6 +1021,7 @@ impl IdeState {
     pub fn poll_lsp(&mut self) {
         let restarted = self.lsp.poll();
         self.poll_completion();
+        self.sync_external_diagnostics();
         self.refresh_problems();
         self.poll_navigation();
         self.poll_code_actions();
@@ -1213,6 +1217,7 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
     disk_sync::register(&mut registry);
     tabs::register(&mut registry);
     gradle_commands::register(&mut registry);
+    project_model::register(&mut registry);
     gutter_commands::register(&mut registry);
     run_config_commands::register(&mut registry);
     search_scopes::register(&mut registry);

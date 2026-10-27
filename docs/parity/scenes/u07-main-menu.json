@@ -52,6 +52,11 @@
       "ms": 800
     },
     {
+      "op": "assert",
+      "pointer": "/activeTab",
+      "equals": "src/main/java/com/example/App.java"
+    },
+    {
       "op": "screenshot",
       "name": "u07-main-menu.png"
     }

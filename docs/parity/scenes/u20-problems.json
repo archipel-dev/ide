@@ -1,0 +1,63 @@
+{
+  "id": "u20",
+  "title": "UI spec capture (New UI Dark, new_ui look): Problems tool window (syntax errors)",
+  "reference": "reference/intellij-community/java-gradle/20-problems.png",
+  "fixture": "rust-cargo",
+  "open": [
+    "src/broken.rs"
+  ],
+  "steps": [
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "execute",
+      "command": "settings.apply",
+      "args": {
+        "changes": {
+          "appearance.uiLook": "new_ui",
+          "appearance.theme": "New UI Dark",
+          "appearance.compactMode": false
+        }
+      }
+    },
+    {
+      "op": "execute",
+      "command": "toolchain.dismissBanner",
+      "args": {
+        "language": "Java"
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 800
+    },
+    {
+      "op": "key",
+      "chord": "Alt+6"
+    },
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "assert",
+      "pointer": "/toolWindows/bottom",
+      "equals": "problems"
+    },
+    {
+      "op": "assert",
+      "pointer": "/activeTab",
+      "equals": "src/broken.rs"
+    },
+    {
+      "op": "sleep",
+      "ms": 6000
+    },
+    {
+      "op": "screenshot",
+      "name": "u20-problems.png"
+    }
+  ]
+}

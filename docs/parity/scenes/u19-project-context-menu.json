@@ -1,0 +1,62 @@
+{
+  "id": "u19",
+  "title": "UI spec capture (New UI Dark, new_ui look): Project tree context menu",
+  "reference": "reference/intellij-community/java-gradle/19-project-context-menu.png",
+  "fixture": "java-gradle",
+  "steps": [
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "execute",
+      "command": "settings.apply",
+      "args": {
+        "changes": {
+          "appearance.uiLook": "new_ui",
+          "appearance.theme": "New UI Dark",
+          "appearance.compactMode": false
+        }
+      }
+    },
+    {
+      "op": "execute",
+      "command": "toolchain.dismissBanner",
+      "args": {
+        "language": "Java"
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 800
+    },
+    {
+      "op": "click",
+      "x": 120,
+      "y": 113,
+      "button": "secondary"
+    },
+    {
+      "op": "wait",
+      "until": "popup"
+    },
+    {
+      "op": "move",
+      "x": 180,
+      "y": 135
+    },
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "assert",
+      "pointer": "/popups/menu",
+      "equals": true
+    },
+    {
+      "op": "screenshot",
+      "name": "u19-project-context-menu.png"
+    }
+  ]
+}

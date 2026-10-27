@@ -1,0 +1,62 @@
+{
+  "id": "u06",
+  "title": "UI spec capture (New UI Dark, new_ui look): Find Action (query \"run\")",
+  "reference": "reference/intellij-community/java-gradle/06-find-action.png",
+  "fixture": "java-gradle",
+  "open": [
+    "src/main/java/com/example/App.java"
+  ],
+  "steps": [
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "execute",
+      "command": "settings.apply",
+      "args": {
+        "changes": {
+          "appearance.uiLook": "new_ui",
+          "appearance.theme": "New UI Dark",
+          "appearance.compactMode": false
+        }
+      }
+    },
+    {
+      "op": "execute",
+      "command": "toolchain.dismissBanner",
+      "args": {
+        "language": "Java"
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 800
+    },
+    {
+      "op": "key",
+      "chord": "Primary+Shift+A"
+    },
+    {
+      "op": "wait",
+      "until": "popup"
+    },
+    {
+      "op": "type",
+      "text": "run"
+    },
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "assert",
+      "pointer": "/popups/searchEverywhere",
+      "equals": "actions"
+    },
+    {
+      "op": "screenshot",
+      "name": "u06-find-action.png"
+    }
+  ]
+}

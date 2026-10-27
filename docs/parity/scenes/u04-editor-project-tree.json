@@ -1,0 +1,61 @@
+{
+  "id": "u04",
+  "title": "UI spec capture (New UI Dark, new_ui look): Editor and project tree",
+  "reference": "reference/intellij-community/java-gradle/04-editor-project-tree.png",
+  "fixture": "java-gradle",
+  "open": [
+    "src/main/java/com/example/App.java"
+  ],
+  "steps": [
+    {
+      "op": "wait",
+      "until": "idle"
+    },
+    {
+      "op": "execute",
+      "command": "settings.apply",
+      "args": {
+        "changes": {
+          "appearance.uiLook": "new_ui",
+          "appearance.theme": "New UI Dark",
+          "appearance.compactMode": false
+        }
+      }
+    },
+    {
+      "op": "execute",
+      "command": "toolchain.dismissBanner",
+      "args": {
+        "language": "Java"
+      }
+    },
+    {
+      "op": "sleep",
+      "ms": 800
+    },
+    {
+      "op": "assert",
+      "pointer": "/activeTab",
+      "equals": "src/main/java/com/example/App.java"
+    },
+    {
+      "op": "assert",
+      "pointer": "/toolWindows/left",
+      "equals": "project"
+    },
+    {
+      "op": "assert",
+      "pointer": "/projectTree/selected",
+      "equals": "src/main/java/com/example/App.java"
+    },
+    {
+      "op": "assert",
+      "pointer": "/editor/text",
+      "contains": "public static void main"
+    },
+    {
+      "op": "screenshot",
+      "name": "u04-editor-project-tree.png"
+    }
+  ]
+}

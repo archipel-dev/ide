@@ -132,6 +132,7 @@ impl IdeState {
             env: Vec::new(),
             kind: archipel_ide_runner::TaskKind::Build,
         };
+        self.save_before(crate::SavePoint::Run);
         self.execution().start(task).map_err(|e| e.to_string())?;
         self.tool_windows.show(ToolWindow::Build);
         let tooling = self.android_tooling();

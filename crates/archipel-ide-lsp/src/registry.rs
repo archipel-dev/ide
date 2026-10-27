@@ -373,6 +373,34 @@ impl LanguageServerProvider for SpecProvider {
 /// Environment variable through which a resolver passes the java-debug plugin jar.
 pub const JAVA_DEBUG_PLUGIN_ENV: &str = "ARCHIPEL_JAVA_DEBUG_PLUGIN";
 
+/// Classes whose static members jdtls offers as "import static" fixes for
+/// unresolved methods (`java.completion.favoriteStaticMembers`). jdtls only
+/// proposes static imports from this list, and its default one lacks AssertJ,
+/// Hamcrest's `assertThat` and Truth; the reference IDE offers the import from
+/// any class on the classpath, so the list names the common test libraries.
+pub const JDTLS_FAVORITE_STATIC_MEMBERS: &[&str] = &[
+    "org.junit.Assert.*",
+    "org.junit.Assume.*",
+    "org.junit.jupiter.api.Assertions.*",
+    "org.junit.jupiter.api.Assumptions.*",
+    "org.junit.jupiter.api.DynamicContainer.*",
+    "org.junit.jupiter.api.DynamicTest.*",
+    "org.assertj.core.api.Assertions.*",
+    "org.assertj.core.api.Assumptions.*",
+    "org.hamcrest.MatcherAssert.assertThat",
+    "org.hamcrest.Matchers.*",
+    "org.hamcrest.CoreMatchers.*",
+    "org.mockito.Mockito.*",
+    "org.mockito.ArgumentMatchers.*",
+    "org.mockito.BDDMockito.*",
+    "org.mockito.Answers.*",
+    "com.google.common.truth.Truth.*",
+    "org.awaitility.Awaitility.*",
+    "org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*",
+    "org.springframework.test.web.servlet.result.MockMvcResultMatchers.*",
+    "org.springframework.test.web.servlet.result.MockMvcResultHandlers.*",
+];
+
 /// Eclipse JDT LS needs a writable workspace data directory per project.
 pub struct JdtlsProvider(pub ServerSpec);
 
@@ -390,8 +418,13 @@ impl LanguageServerProvider for JdtlsProvider {
             .file_stem()
             .is_some_and(|stem| stem == "jdtls");
         const NO_METADATA: &str = "-Djava.import.generatesMetadataFilesAtProjectRoot=false";
-        if launcher && !config.args.iter().any(|arg| arg.contains(NO_METADATA)) {
-            config.args.insert(0, format!("--jvm-arg={NO_METADATA}"));
+        if !config.args.iter().any(|arg| arg.contains(NO_METADATA)) {
+            if launcher {
+                config.args.insert(0, format!("--jvm-arg={NO_METADATA}"));
+            } else if let Some(jar) = config.args.iter().position(|arg| arg == "-jar") {
+                // The Equinox launcher run on a JDK directly (managed installs).
+                config.args.insert(jar, NO_METADATA.to_owned());
+            }
         }
         if !config.args.iter().any(|arg| arg == "-data") {
             let name = context
@@ -410,7 +443,10 @@ impl LanguageServerProvider for JdtlsProvider {
             config.initialization_options = Some(serde_json::json!({
                 "settings": {"java": {
                     "import": {"generatesMetadataFilesAtProjectRoot": false},
-                    "completion": {"guessMethodArguments": "insertParameterNames"},
+                    "completion": {
+                        "guessMethodArguments": "insertParameterNames",
+                        "favoriteStaticMembers": JDTLS_FAVORITE_STATIC_MEMBERS
+                    },
                     "signatureHelp": {"enabled": true}
                 }},
                 "extendedClientCapabilities": {"progressReportProvider": false}
@@ -713,6 +749,42 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn jdtls_on_a_jdk_keeps_metadata_out_of_the_project_and_favours_test_libraries() {
+        // A managed install runs the Equinox launcher on the JDK directly: the
+        // JVM property goes in front of `-jar`, not after it.
+        let settings = ServerSettings {
+            command: Some("/bin/sh".into()),
+            args: Some(vec!["-Xms1G".into(), "-jar".into(), "launcher.jar".into()]),
+            enabled: true,
+            ..Default::default()
+        };
+        let provider = JdtlsProvider(builtin_specs().remove(1));
+        let config = provider
+            .launch(&context(Path::new("/p/app"), Some(&settings)))
+            .unwrap();
+        let jar = config.args.iter().position(|arg| arg == "-jar").unwrap();
+        assert_eq!(
+            config.args[jar - 1],
+            "-Djava.import.generatesMetadataFilesAtProjectRoot=false"
+        );
+        let favorites = &config.initialization_options.unwrap()["settings"]["java"]["completion"]["favoriteStaticMembers"];
+        let favorites: Vec<&str> = favorites
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|value| value.as_str())
+            .collect();
+        for expected in [
+            "org.assertj.core.api.Assertions.*",
+            "org.hamcrest.MatcherAssert.assertThat",
+            "org.junit.jupiter.api.Assertions.*",
+        ] {
+            assert!(favorites.contains(&expected), "{expected} in {favorites:?}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn jdtls_gets_a_stable_per_root_data_directory() {
         let settings = ServerSettings {
             command: Some("/bin/sh".into()),
@@ -837,7 +909,14 @@ mod tests {
         context.resolver = Some(&FixedResolver);
         let config = jdtls.launch(&context).unwrap();
         assert_eq!(config.program, PathBuf::from("/managed/jdk/bin/java"));
-        assert_eq!(&config.args[..2], ["-jar", "launcher.jar"]);
+        assert_eq!(
+            &config.args[..3],
+            [
+                "-Djava.import.generatesMetadataFilesAtProjectRoot=false",
+                "-jar",
+                "launcher.jar"
+            ]
+        );
         // The jdtls provider still adds its per-workspace data directory.
         assert!(config.args.contains(&"-data".to_string()));
         assert_eq!(

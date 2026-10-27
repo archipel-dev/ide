@@ -36,9 +36,10 @@ and uploads the PNGs and app logs as the `parity-scenes` artifact.
 ```
 
 - `fixture` (optional) generates a project and commits it to a fresh Git repository on
-  `master`. Known fixtures: `java-gradle`, `rust-cargo` (builds with Cargo; `src/broken.rs`
+  `master`. Known fixtures: `java-gradle`, `java-gradle-assertj`, `rust-cargo` (builds with Cargo; `src/broken.rs`
   is outside the crate and has syntax errors). Without a fixture the welcome screen shows.
 - `open` lists project-relative files passed on the command line.
+- `requires` (optional) names toolchain components (`jdtls`) the scene needs; the runner skips the scene when one is not installed.
 - `env` (optional) adds environment variables to the IDE process (scene 30 slows indexing
   down with `ARCHIPEL_INDEX_THROTTLE_MS`). Every scene gets its own `ARCHIPEL_INDEX_DIR`, so
   indexes and Local History never touch the user's cache.
@@ -47,6 +48,7 @@ and uploads the PNGs and app logs as the `parity-scenes` artifact.
   - `screenshot {name}` writes `<out>/<name>`;
   - `assert {pointer, equals | contains}` checks a JSON pointer into the `state` snapshot;
   - `sleep {ms}`;
+  - `waitFor {pointer, equals | contains, timeoutMs}` polls the state until it matches (slow background work such as a project import);
   - `writeFile` / `appendFile {path, contents}` change fixture files, e.g. to create VCS
     changes.
 
@@ -68,6 +70,7 @@ Chords use the Linux keymap (`Alt+0`, `Alt+F12`); `Primary` means ⌘ on macOS a
 | 20 Problems | `20-problems.json` | Alt+6 lists the 2 syntax errors of `src/broken.rs` |
 | 30 Indexing | `30-indexing.json` | while the content indexes build the IDE is in dumb mode with `FileName` ready and `Words` building; afterwards every index is ready |
 | 31 TODO window | `31-todo.json` | an outside change adds a TODO and a FIXME comment (a TODO in a string is ignored): the TODO window lists 2 items for the project and for the current file |
+| 35 LSP static import | `35-lsp-static-import.json` | needs jdtls (`requires`, skipped otherwise) and network: the Gradle import shows as progress; `assertThat` without the import is one error from jdtls; Alt+Enter lists "Add static import for 'Assertions.assertThat'" first; applying it adds the import line and clears the error |
 | 32 Local History | `32-history.json` | an outside change to an open file records two revisions (initial and external); Show History lists them and previews the diff of the older one |
 
 Coordinates in `click`/`move` are logical points in the default 1440×900 window.

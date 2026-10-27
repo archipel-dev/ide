@@ -6,7 +6,6 @@
 //! appear as modified tabs, like the reference IDE's changed files), so each
 //! file's change is one undo step and the language server sees it.
 use crate::{Document, IdeState};
-use archipel_ide_language::analyze;
 use archipel_ide_text::{Selection, TextChange};
 use serde::Serialize;
 use serde_json::Value;
@@ -206,7 +205,7 @@ impl IdeState {
                 .min(document.text.len_chars());
             document.selections.set_single(Selection::caret(caret));
             let text = document.text.text();
-            document.analysis = analyze(&document.path, &text);
+            document.refresh_analysis(&text);
             let path = document.path.clone();
             let version = document.text.revision().min(i32::MAX as u64) as i32;
             summary.files.push(path.clone());

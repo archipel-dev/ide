@@ -61,6 +61,7 @@ mod diagnostic_commands;
 pub mod diagnostics;
 mod disk_sync;
 mod editor_commands;
+mod external_diagnostics;
 pub mod first_run;
 mod folds;
 mod git_log;
@@ -1020,6 +1021,7 @@ impl IdeState {
     pub fn poll_lsp(&mut self) {
         let restarted = self.lsp.poll();
         self.poll_completion();
+        self.sync_external_diagnostics();
         self.refresh_problems();
         self.poll_navigation();
         self.poll_code_actions();

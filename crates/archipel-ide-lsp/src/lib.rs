@@ -19,14 +19,14 @@ pub mod transport;
 pub mod workspace_symbol;
 
 pub use client::{
-    ApplyEditRequest, LaunchConfig, LspDiagnostic, LspResponse, LspService, ResponseError,
-    ServerMessage, ServerState, WorkProgress,
+    ApplyEditRequest, ImportPhase, LaunchConfig, LspDiagnostic, LspResponse, LspService,
+    ResponseError, ServerMessage, ServerState, WorkProgress,
 };
 pub use locations::{LspLocation, parse_locations};
 pub use lsp_types;
 pub use manager::{
-    CompletionResult, CompletionTrigger, Feature, LspManager, LspNotice, RequestHandle, ServerInfo,
-    ServerKey, ServerStatus, describe_progress,
+    CompletionResult, CompletionTrigger, Feature, LspManager, LspNotice, Publication,
+    RequestHandle, ServerInfo, ServerKey, ServerStatus, describe_progress,
 };
 pub use registry::{
     JAVA_DEBUG_PLUGIN_ENV, LanguageServerProvider, LaunchContext, LspSettings, ProgramResolver,

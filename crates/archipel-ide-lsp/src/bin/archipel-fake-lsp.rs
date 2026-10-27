@@ -43,6 +43,9 @@
 //!   "Building" progress from `initialized` on, answer the first `n`
 //!   completion requests with an empty list, and end the progress 300 ms
 //!   after the last of them.
+//!   It also reports jdtls's `language/status` (`Starting` ... `ServiceReady`).
+//! - `--java-commands`: quick fixes come as `java.apply.workspaceEdit`
+//!   commands (jdtls hands edits to clients that way) instead of edits.
 //! - `--java-debug <port>`: answer the java-debug plugin's `vscode.java.*` commands
 //!   (main class `demo.App` in `<root>/App.java`, a one-entry class path, and the
 //!   given debug port).
@@ -78,6 +81,7 @@ fn main() {
     let publish = value("--publish");
     let java_debug_port: Option<u16> = value("--java-debug").and_then(|p| p.parse().ok());
     let prepare_rename = !flag("--no-prepare-rename");
+    let java_commands = flag("--java-commands");
     let mut importing: u32 = value("--importing")
         .and_then(|n| n.parse().ok())
         .unwrap_or(0);
@@ -140,6 +144,9 @@ fn main() {
                 );
                 send(
                     json!({"jsonrpc":"2.0","method":"$/progress","params":{"token":"import","value":{"kind":"begin","title":"Building","percentage":0}}}),
+                );
+                send(
+                    json!({"jsonrpc":"2.0","method":"language/status","params":{"type":"Starting","message":"70% Starting Java Language Server"}}),
                 );
             }
             ("initialized", None) => {
@@ -490,10 +497,17 @@ fn main() {
                     .into_iter()
                     .flatten()
                     .map(|diagnostic| {
-                        json!({"title": format!("Fix {}", diagnostic["message"].as_str().unwrap_or("")),
-                            "kind": "quickfix", "isPreferred": true, "diagnostics": [diagnostic],
-                            "edit": {"changes": {uri.as_str().unwrap_or_default():
-                                [{"range": diagnostic["range"], "newText": "fixed"}]}}})
+                        let edit = json!({"changes": {uri.as_str().unwrap_or_default():
+                            [{"range": diagnostic["range"], "newText": "fixed"}]}});
+                        let title = format!("Fix {}", diagnostic["message"].as_str().unwrap_or(""));
+                        if java_commands {
+                            json!({"title": title, "kind": "quickfix", "diagnostics": [diagnostic],
+                                "command": {"title": title, "command": "java.apply.workspaceEdit",
+                                    "arguments": [edit]}})
+                        } else {
+                            json!({"title": title, "kind": "quickfix", "isPreferred": true,
+                                "diagnostics": [diagnostic], "edit": edit})
+                        }
                     })
                     .collect();
                 actions.push(
@@ -556,6 +570,9 @@ fn main() {
                 importing -= 1;
                 if importing == 0 {
                     std::thread::sleep(std::time::Duration::from_millis(300));
+                    send(
+                        json!({"jsonrpc":"2.0","method":"language/status","params":{"type":"ServiceReady","message":"ServiceReady"}}),
+                    );
                     send(
                         json!({"jsonrpc":"2.0","method":"$/progress","params":{"token":"import","value":{"kind":"end"}}}),
                     );

@@ -116,6 +116,10 @@ pub struct HighlightInfo {
     pub group: Option<ProblemGroup>,
     pub problem_range_for_gutter: Option<Range<u32>>,
     pub file_level: bool,
+    /// Problem code of an external tool (`67108964`, `E0425`).
+    pub code: Option<Arc<str>>,
+    /// Display name of the external tool that reported it (`Java`, `rustc`).
+    pub source: Option<Arc<str>>,
 }
 
 impl HighlightInfo {
@@ -131,6 +135,8 @@ impl HighlightInfo {
             group: None,
             problem_range_for_gutter: None,
             file_level: false,
+            code: None,
+            source: None,
         }
     }
 

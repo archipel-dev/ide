@@ -296,6 +296,7 @@ impl IdeApp {
             || self.completion_visible()
             || egui::Popup::is_any_open(ctx)
             || self.state.docs.popup.is_some()
+            || self.state.code_actions.popup
     }
 
     fn completion_visible(&self) -> bool {
@@ -453,6 +454,20 @@ impl IdeApp {
                 "selected": self.find_popup.selected(),
             },
             "problems": active.map(|_| self.state.active_problems().len()),
+            // The Alt+Enter list (native fixes and the language server's
+            // actions in one) and the language servers' import state.
+            "intentions": {
+                "popup": self.state.code_actions.popup,
+                "rows": self.state.alert_texts(),
+            },
+            "lsp": {
+                "importing": self.state.lsp.servers().iter().any(|server| server.importing),
+                "servers": self.state.lsp.servers().iter().map(|server| json!({
+                    "id": server.id,
+                    "importing": server.importing,
+                    "progress": server.progress.iter().map(archipel_ide_lsp::describe_progress).collect::<Vec<_>>(),
+                })).collect::<Vec<_>>(),
+            },
             "history": {
                 "enabled": self.state.analysis.history.is_enabled(),
                 "revisions": self.state.analysis.history.dialog.as_ref().map(|d| d.revisions.len()),

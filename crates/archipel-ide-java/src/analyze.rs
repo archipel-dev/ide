@@ -575,9 +575,35 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         })
     }
 
+    /// Whether a local class, record, interface or enum called `name` is declared before `at` in an
+    /// enclosing block (JAVA-RES-006: local classes are scoped like local variables).
+    fn local_type_declared(&self, at: Node<'_>, name: &str) -> bool {
+        let mut child = at;
+        let mut cur = at.parent();
+        while let Some(a) = cur {
+            if matches!(a.kind(), "block" | "constructor_body" | "switch_block" | "switch_block_statement_group" | "switch_rule") {
+                let mut c = a.walk();
+                for sib in a.children(&mut c) {
+                    if sib.start_byte() >= child.start_byte() {
+                        break;
+                    }
+                    if kind_is_class(sib.kind()) && sib.child_by_field_name("name").is_some_and(|n| self.txt(n) == name) {
+                        return true;
+                    }
+                }
+            }
+            child = a;
+            cur = a.parent();
+        }
+        false
+    }
+
     /// Resolves a (qualified) type name; reports the first unresolved segment (JAVA-RES-005).
     fn resolve_type_chain(&mut self, at: Node<'_>, segs: &[Node<'_>], names: &[String], annotation: bool) -> Res<()> {
         if names.is_empty() {
+            return Ok(());
+        }
+        if self.local_type_declared(at, &names[0]) {
             return Ok(());
         }
         let ctx = self.ctx_at(at)?;
@@ -883,6 +909,9 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         });
         match self.resolve_variable(n, &name)? {
             VarRes::NotFound { incomplete } => {
+                if self.local_type_declared(n, &name) {
+                    return Ok(());
+                }
                 let ctx = self.ctx_at(n)?;
                 match self.env.resolve_type_name(&name, &ctx)? {
                     NameRes::Class(h, via) => {
@@ -983,6 +1012,9 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 });
             }
             VarRes::NotFound { incomplete } => {
+                if self.local_type_declared(segs[0], head) {
+                    return Ok(());
+                }
                 let ctx = self.ctx_at(segs[0])?;
                 match self.env.resolve_type_name(head, &ctx)? {
                     NameRes::Class(h, via) => {
@@ -1097,7 +1129,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
     fn member_chain_after_expr(&mut self, obj: Node<'_>, segs: &[Node<'_>]) -> Res<()> {
         // `expr.f1.f2`: report a missing field only when the type of `expr` is known.
         let mut t = self.expr_ty(obj)?;
-        for s in segs.iter().skip(1) {
+        for s in segs {
             let name = self.txt(*s).to_string();
             match self.field_type_of(&t, &name)? {
                 FieldLookup::Found(nt) => t = nt,

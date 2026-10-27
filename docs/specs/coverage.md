@@ -14,27 +14,27 @@ How a requirement gets its status:
 
 | | Total | Implemented | Partial | Missing | % implemented |
 |---|---|---|---|---|---|
-| Java | 445 | 0 | 0 | 445 | 0.0% |
-| Platform | 559 | 33 | 60 | 466 | 5.9% |
+| Java | 445 | 63 | 54 | 328 | 14.2% |
+| Platform | 559 | 33 | 66 | 460 | 5.9% |
 | Code insight | 281 | 21 | 28 | 232 | 7.5% |
-| **All** | 1285 | 54 | 88 | 1143 | 4.2% |
+| **All** | 1285 | 117 | 148 | 1020 | 9.1% |
 
 ## By priority
 
 | | Total | Implemented | Partial | Missing | % implemented |
 |---|---|---|---|---|---|
-| MUST | 884 | 46 | 85 | 753 | 5.2% |
-| SHOULD | 351 | 7 | 3 | 341 | 2.0% |
-| LATER | 50 | 1 | 0 | 49 | 2.0% |
+| MUST | 884 | 95 | 120 | 669 | 10.7% |
+| SHOULD | 351 | 20 | 23 | 308 | 5.7% |
+| LATER | 50 | 2 | 5 | 43 | 4.0% |
 
 ## By spec set and priority
 
 | | Total | Implemented | Partial | Missing | % implemented |
 |---|---|---|---|---|---|
-| Java MUST | 227 | 0 | 0 | 227 | 0.0% |
-| Java SHOULD | 181 | 0 | 0 | 181 | 0.0% |
-| Java LATER | 37 | 0 | 0 | 37 | 0.0% |
-| Platform MUST | 451 | 29 | 58 | 364 | 6.4% |
+| Java MUST | 227 | 49 | 29 | 149 | 21.6% |
+| Java SHOULD | 181 | 13 | 20 | 148 | 7.2% |
+| Java LATER | 37 | 1 | 5 | 31 | 2.7% |
+| Platform MUST | 451 | 29 | 64 | 358 | 6.4% |
 | Platform SHOULD | 102 | 3 | 2 | 97 | 2.9% |
 | Platform LATER | 6 | 1 | 0 | 5 | 16.7% |
 | Code insight MUST | 206 | 17 | 27 | 162 | 8.3% |
@@ -55,24 +55,24 @@ Cells are implemented / partial / total.
 | `codeinsight/06-completion.md` | 0/0/32 | 0/0/8 | 0/0/0 | 0/0/40 |
 | `codeinsight/07-navigation.md` | 0/0/11 | 0/0/12 | 0/0/1 | 0/0/24 |
 | `codeinsight/08-optimize-imports-and-reformat.md` | 0/0/12 | 0/0/6 | 0/0/0 | 0/0/18 |
-| `java/01-psi-and-stubs.md` | 0/0/19 | 0/0/7 | 0/0/2 | 0/0/28 |
-| `java/02-resolve.md` | 0/0/30 | 0/0/15 | 0/0/2 | 0/0/47 |
+| `java/01-psi-and-stubs.md` | 14/2/19 | 4/1/7 | 1/0/2 | 19/3/28 |
+| `java/02-resolve.md` | 9/9/30 | 1/5/15 | 0/1/2 | 10/15/47 |
 | `java/03-types.md` | 0/0/30 | 0/0/10 | 0/0/1 | 0/0/41 |
-| `java/04-error-catalog.md` | 0/0/59 | 0/0/81 | 0/0/12 | 0/0/152 |
-| `java/05-imports.md` | 0/0/39 | 0/0/22 | 0/0/5 | 0/0/66 |
+| `java/04-error-catalog.md` | 4/2/59 | 1/0/81 | 0/0/12 | 5/2/152 |
+| `java/05-imports.md` | 22/16/39 | 7/14/22 | 0/4/5 | 29/34/66 |
 | `java/06-completion.md` | 0/0/16 | 0/0/17 | 0/0/4 | 0/0/37 |
 | `java/07-inspections.md` | 0/0/34 | 0/0/27 | 0/0/1 | 0/0/62 |
 | `java/08-spring.md` | 0/0/0 | 0/0/2 | 0/0/10 | 0/0/12 |
 | `platform/01-vfs-and-documents.md` | 1/7/66 | 1/0/15 | 0/0/1 | 2/7/82 |
 | `platform/02-psi-model.md` | 0/3/91 | 0/0/19 | 0/0/1 | 0/3/111 |
-| `platform/03-stubs-and-indexes.md` | 8/12/60 | 1/0/11 | 1/0/3 | 10/12/74 |
+| `platform/03-stubs-and-indexes.md` | 8/15/60 | 1/0/11 | 1/0/3 | 10/15/74 |
 | `platform/04-dumb-mode.md` | 3/7/51 | 0/0/8 | 0/0/1 | 3/7/60 |
 | `platform/05-caching-and-modification-tracking.md` | 7/6/43 | 0/0/11 | 0/0/0 | 7/6/54 |
 | `platform/06-concurrency-and-cancellation.md` | 3/1/35 | 1/0/7 | 0/0/0 | 4/1/42 |
-| `platform/07-project-structure-and-scopes.md` | 6/17/57 | 0/2/15 | 0/0/0 | 6/19/72 |
+| `platform/07-project-structure-and-scopes.md` | 6/20/57 | 0/2/15 | 0/0/0 | 6/22/72 |
 | `platform/08-language-extension-points.md` | 1/5/48 | 0/0/16 | 0/0/0 | 1/5/64 |
 
-142 requirements are credited by overrides in `docs/specs/coverage.toml`, 0 by scanned references.
+142 requirements are credited by overrides in `docs/specs/coverage.toml`, 123 by scanned references.
 
 ## Credited by override
 
@@ -455,16 +455,10 @@ Cells are implemented / partial / total.
 
 | ID | Requirement | Acceptance |
 |---|---|---|
-| JAVA-ERR-001 | Report model of 4.1.1 (anchor, range, style, tooltip, navigation). |  |
-| JAVA-ERR-002 | Check chains stop at the first error per element visit. |  |
-| JAVA-ERR-003 | Pending-reference behavior while the project model is incomplete. |  |
 | JAVA-ERR-004 | Header ranges that exclude annotations (4.1.1). |  |
-| JAVA-ERR-007 | `Cannot resolve method '{0}'` where `{0}` = `name(shortArgTypes)` | A method call whose method name yields **zero candidates** (no method of that name visible, accessibility aside) |
 | JAVA-ERR-008 | `Cannot resolve method '{0}'` (same text) | Candidates with this name exist (overloads) and **none is applicable**; all arguments have known types; no two are applicable |
 | JAVA-ERR-009 | `'{0}' in '{1}' cannot be applied to '{2}'` (`{0}` method signature, `{1}` containing class, `{2}` `(argTypes)` fully qualified). When the a… | Exactly one candidate, accessible, but arguments not applicable |
 | JAVA-ERR-010 | `Ambiguous method call: both '{0}' and '{1}' match` | Two or more candidates are applicable and none is most specific (JLS 15.12.2.5) |
-| JAVA-ERR-011 | `Cannot resolve method '{0}' in '{1}'` | Qualifier is a type/class and no candidate is accessible |
-| JAVA-ERR-012 | `Cannot resolve symbol '{0}'` | Unresolved simple or qualified name of a class, variable, package or field (not a method name) |
 | JAVA-ERR-013 | `Reference to '{0}' is ambiguous, both '{1}' and '{2}' match` (the two descriptions sorted alphabetically) | A name resolves to two members that are both accessible and not hiding each other (e.g. a field inherited from two interfaces; a class imported from two on-demand packages) |
 | JAVA-ERR-014 | `'{0}' has private access in '{1}'` | Resolved member is private and the place is outside the top-level class (JLS 6.6.1) |
 | JAVA-ERR-015 | `'{0}' has protected access in '{1}'` | Protected member accessed from another package outside a subclass context (JLS 6.6.2) |
@@ -519,45 +513,7 @@ Cells are implemented / partial / total.
 
 | ID | Requirement | Acceptance |
 |---|---|---|
-| JAVA-IMP-001 | Unresolved unqualified method call with zero candidates reports exactly one error with message `Cannot resolve method '<name>(<argTypes>)'`,… | scenario 5.1.2, markup range equals the 10 characters of `assertThat`. |
-| JAVA-IMP-002 | The message prints argument types as presentable short names; unknown type prints `?`; zero arguments prints `()`. | `foo()` -> `Cannot resolve method 'foo()'`; `foo(1, "a", unknownVar)` -> `Cannot resolve method 'foo(int, String, ?)'`. |
-| JAVA-IMP-003 | The static-import fix is registered on that error as the first quick fix (before qualify-static, add-qualifier, create-method). | the Alt+Enter list of 5.1.2 starts with `Import static method...`. |
-| JAVA-IMP-004 | In a test-source file the AssertJ `Assertions.assertThat` is found; in a production-source file with AssertJ test-scoped it is not. | same snippet under `src/main/java` yields no import item. |
-| JAVA-IMP-005 | Choosing a candidate adds `import static <class>.<method>;` in the static block and leaves the call text unchanged. | file in 5.1.2. |
-| JAVA-IMP-006 | The edit is a single undo step. |  |
-| JAVA-IMP-010 | Candidate methods come from the method-name index limited to the place's resolve scope (test vs production per 02-resolve). | production file never offers a test-scope library method; test file offers it. |
-| JAVA-IMP-011 | Only `static` members; interface methods need an explicit `static`. | `WithAssertions.assertThat` (an interface default method) is not offered. |
-| JAVA-IMP-012 | Accessibility filter at the place and at the file for static imports. | a package-private static method of another package is not offered; a private one never. |
-| JAVA-IMP-013 | One member per class; a class FQN appears once even if indexed twice. | a project having both `assertj-core` jar and its sources shows each class once. |
-| JAVA-IMP-014 | Applicable members hide non-applicable ones. | with Hamcrest, JUnit 4 and AssertJ present, `assertThat(x)` lists only AssertJ classes (Hamcrest/JUnit `assertThat` need two or three arguments); `assertThat(x, is(1))` lists Hamcrest `MatcherAssert` and JUnit 4 `Assert`, not AssertJ. |
-| JAVA-IMP-015 | When nothing is applicable, list one member per class with a matching name. | `assertThat()` with zero arguments lists all classes (fix title ends with `...`). |
-| JAVA-IMP-016 | Excluded names are never offered (5.7). |  |
-| JAVA-IMP-017 | Cap at 100 classes before sorting. |  |
-| JAVA-IMP-019a | Compiled (class-file) members and source members are treated the same; synthetic and bridge methods never appear. |  |
-| JAVA-IMP-020 | Comparator keys 1, 2, 5 and the Archipel tie-break as defined. | AssertJ list order is `Assertions` first; deprecated `Java6Assertions` last. |
-| JAVA-IMP-030 | Popup title `Method to Import` (field `Field to Import`, class `Class to Import`). |  |
-| JAVA-IMP-031 | One candidate: no popup |  |
-| JAVA-IMP-032 | Fix title `Import static method...` for several candidates (with ellipsis), or `Import static method '<qualified member>'` for one |  |
-| JAVA-IMP-033 | Edit semantics of 5.4.3 including the on-demand collapse at the third name |  |
-| JAVA-IMP-034 | Hint shown for static candidates only when `ADD_MEMBER_IMPORTS_ON_THE_FLY` is on; Escape dismisses it for that element. |  |
-| JAVA-IMP-037 | The hint never edits the file. |  |
-| JAVA-IMP-040 | `Import class` registered first on unresolved class references. |  |
-| JAVA-IMP-041 | Candidate search steps 2-4 and 8-9. |  |
-| JAVA-IMP-042 | Sorting per 5.3 on classes; `java.util.List` before `java.awt.List`. | both on classpath of JDK; popup lists `java.util.List` first. |
-| JAVA-IMP-043 | Popup `Class to Import` with FQN rows; one candidate applies directly. |  |
-| JAVA-IMP-044 | The edit adds a single-type import in the sorted position (5.6) unless the class is in `java.lang` or the file's package (then no import lin… |  |
-| JAVA-IMP-050 | Default settings of 5.6.1 exactly. |  |
-| JAVA-IMP-051 | Layout algorithm 5.6.2 (entry matching, sorting, blank-line counting) |  |
-| JAVA-IMP-052 | Optimize Imports removes unused imports, keeps used, sorts per layout. |  |
-| JAVA-IMP-053 | On-demand thresholds: classes 5 (`import java.util.*;` when 5 distinct `java.util` classes are used), static names 3, always-on-demand `java… |  |
-| JAVA-IMP-054 | Static imports are laid out in the static group at the end, separated by one blank line from the group above. |  |
-| JAVA-IMP-055 | No import for `java.lang` or same-package classes (implicit). |  |
-| JAVA-IMP-070 | Unused import detection with message `Unused import statement`, WARNING, range whole statement, unused text style. | `import java.util.List;` with no use. |
-| JAVA-IMP-071 | Fix `Remove unused imports` removes all unused imports of the file. |  |
-| JAVA-IMP-072 | Same-package class import is reported. |  |
-| JAVA-IMP-073 | Javadoc references count as use. |  |
 | JAVA-IMP-080 | Honor the exclusion list in static-import, class-import and completion. |  |
-| JAVA-IMP-081 | Honor `[a-z].?` no-auto-import pattern. |  |
 
 ### `java/07-inspections.md`
 
@@ -603,58 +559,24 @@ Cells are implemented / partial / total.
 | ID | Requirement | Acceptance |
 |---|---|---|
 | JAVA-RES-001 | A single scope-walk engine serves resolve and variants. | completion of `Str` at a place offers exactly the classes that `Str...` resolution would find. |
-| JAVA-RES-002 | Resolve results carry target, substitutor, accessibility, static-context correctness and file-level context (import statement or class scope… |  |
 | JAVA-RES-003 | No panics if the project model is empty or the SDK is missing; unresolved is a valid result. |  |
-| JAVA-RES-004 | Name classification per steps 1-4. | in `class A { int java; void f() { java.util.List x; } }` the declaration type `java.util.List` resolves (type position), while `java.util.List.of()` in an expression position inside `f` fails at `util` (variable `java` obscures the package… |
-| JAVA-RES-005 | Errors are anchored on the first unresolved segment only (04-error-catalog 012). |  |
-| JAVA-RES-006 | Local/parameter walk order of 2.3.1 with visibility by position. |  |
-| JAVA-RES-007 | Class scope order 2.3.2: own members hide inherited; inherited from superclass and superinterfaces with substitution; outer classes after. |  |
-| JAVA-RES-008 | Static context flagging (018 instead of "cannot resolve"). |  |
 | JAVA-RES-010 | A member-type name found twice through different supertypes is ambiguous (013), a field/type declared in the class hides inherited ones. |  |
-| JAVA-RES-011 | Innermost-class-level rule for unqualified calls (2.4.1). | ```java class O { void f(int a) {} class I { void f(String s) {} void g() { f(1); } } } ``` reports an error in `g` (inner `f(String)` is the only level considered), not a call to `O.f`. |
 | JAVA-RES-012 | Arity filter, then phases strict/loose/varargs as in 2.4.2. | `void f(long a){} void f(Integer a){} f(1)` resolves to `f(long)` (strict beats boxing); `void g(Object o){} void g(int... a){} g(1)` resolves to `g(Object)`. |
 | JAVA-RES-013 | Most-specific selection with ambiguity detection. | `void h(Integer a, Object b){} void h(Object a, Integer b){} h(1, 1)` is ambiguous (010). |
 | JAVA-RES-014 | Lambda/method-reference pertinence rules and arity-of-lambda filtering in the potentially-applicable step. |  |
 | JAVA-RES-015 | Override removal and interface-over-Object preference. |  |
-| JAVA-RES-018 | Stage order A1,A2,A3 then B4..B8 exactly. | ```java package p; // p contains class List import java.util.*; class T { List l; } // -> p.List (package beats on-demand import) ``` and with `import java.util.List;` added the same reference resolves to `java.util.List` (single import bea… |
-| JAVA-RES-019 | Ambiguity when two on-demand imports supply the same name: `import java.util.*; import java.awt.*; List x;` reports `Reference to 'List' is… |  |
-| JAVA-RES-020 | `java.lang` is an implicit on-demand import: hidden by file classes, single imports and the same package; ambiguous with another on-demand i… | `import foo.*;` where `foo.Object` exists, then `Object o;` is ambiguous. |
-| JAVA-RES-021 | Static single and static on-demand imports for fields, methods and member types; an explicitly named import hides on-demand static members o… |  |
 | JAVA-RES-025 | Implicit classes of compact source files are not importable and not visible to other files. |  |
-| JAVA-RES-026 | FQN lookup by FQN index with search-order tie-break. |  |
-| JAVA-RES-027 | Package existence derived from source directories (using package prefix of the source root) and library/SDK class packages. |  |
-| JAVA-RES-029 | Resolve scope 1: module + dependencies + libraries + SDK, tests included only for test-source files. | `org.junit.Assert` resolves in `src/test/java/..` and not in `src/main/java/..` when JUnit is `testImplementation`. |
-| JAVA-RES-030 | Files outside source roots resolve only to themselves. |  |
 | JAVA-RES-033 | The same scope is used for the import fixes and completion candidate searches. |  |
-| JAVA-RES-034 | Class-file stubs with the content and the skipping rules of 2.8.1, built without sources and without a running language server. |  |
 | JAVA-RES-035 | Generic signatures decoded into type parameters and generic supertypes/members (so `List<String>.get(0)` has type `String`). |  |
-| JAVA-RES-036 | JDK classes from the SDK image or `rt.jar`; `java.lang` implicit. | in a project with a JDK 21 SDK, `String`, `Optional`, `List` and `ProcessHandle` resolve; `sun.misc.Unsafe` resolves with a discouraged marker only if the module graph exposes it. |
 | JAVA-RES-041 | Skip synthetic/bridge members and anonymous/local classes in the index. |  |
-| JAVA-RES-043 | Accessibility per above, evaluated at the place and for static imports at the file (05 5.2.2). |  |
 | JAVA-RES-044 | Constructor resolution incl |  |
 
 ### `java/01-psi-and-stubs.md`
 
 | ID | Requirement | Acceptance |
 |---|---|---|
-| JAVA-STUB-001 | A per-file stub is computed from source or from a class file, persisted, and keyed by file content (or class-file content) hash. | touching a file without changing content does not reparse it; changing a method body leaves the stub equal. |
-| JAVA-STUB-002 | Stubs hold unresolved source text for types, annotations and constant initializers. |  |
-| JAVA-STUB-003 | Stub equality ignores bodies: an edit inside a method body (without adding a class, lambda, method reference or annotation inside it, see 1.… |  |
-| JAVA-STUB-004 | Class-file stubs and source stubs have the same shape (2.8.1 in `02-resolve.md`). |  |
-| JAVA-STUB-005 | Stubs for: file, package statement, import list and statements (with the three flags), classes of all kinds, modifier lists, type parameter… |  |
-| JAVA-STUB-006 | The fields and flags listed above, stored as text where text is named. |  |
-| JAVA-STUB-007 | Constant initializers kept only for constant candidates (so constant folding of library `static final` fields works without parsing the file… |  |
-| JAVA-STUB-010 | Order of children equals source order; implicit members are *not* in the stub (see 1.5). |  |
-| JAVA-STUB-011 | Indexes: short class names, class FQN, method names, field names, annotations (short name), super classes (short names with the `Enum`/`Anno… | a project with `class A extends pkg.Base<String> implements I, J` puts `A` under super-class keys `Base`, `I`, `J`; `enum E {}` under `Enum`. |
-| JAVA-STUB-012 | The annotations key uses the unqualified name with arguments removed. |  |
-| JAVA-STUB-013 | The method-names index also contains constructors, under the class name (their stub name is the class name); consumers that look for methods… | the `Import static method` search for `assertThat` never returns a constructor. |
-| JAVA-STUB-017 | Index queries accept a scope (the file's resolve scope, 02 2.7) and filter result declarations by the scope's source/library kinds. |  |
-| JAVA-STUB-018 | Index updates are incremental: for a changed file remove its old entries (forward map file -> keys) and add the new ones; an edit that does… |  |
-| JAVA-STUB-019 | Bodies are skipped unless they contain a local/anonymous class, lambda, method reference or annotation. |  |
-| JAVA-STUB-021 | The *has javadoc* and *deprecated by javadoc* flags are derived from the leading doc comment (a `@deprecated` tag), without storing the comm… |  |
 | JAVA-STUB-022 | Synthetic members of this section are part of every class model queried by resolve, completion and inspections, flagged *synthetic* so that… |  |
 | JAVA-STUB-023 | `values()` and `valueOf(String)` for enums; canonical constructor, accessors and `Record` members for records; default constructors. |  |
-| JAVA-STUB-026 | Defined behavior while indexes are not ready (above). |  |
 | JAVA-STUB-027 | Corrupt/failed stub builds are isolated to the file. |  |
 
 ### `java/03-types.md`
@@ -826,7 +748,6 @@ Cells are implemented / partial / total.
 | PLAT-IDX-036 | A file that fails to index (exception in an indexer, parse failure) is logged with file and index id, contributes nothing for that index, an… | A throwing indexer for one file type: other file types index normally. |
 | PLAT-IDX-038 | **Project-level re-scan triggers**: project model (roots) changes, file type changes, language level or similar per-file properties changing… | Add a library: the library is scanned; unchanged modules are not. |
 | PLAT-IDX-040 | Queries (all take a scope and, directly or indirectly, a project): values for a key; files containing a key; iterate values with their file… | Conformance test for each. |
-| PLAT-IDX-041 | A query result is a pure function of (index state, key, scope). Scope membership is checked per file. Results for equal queries in the same… | Run a query 100 times; identical order. |
 | PLAT-IDX-043 | "All keys" and key-prefix enumeration support early stop and cancellation, and may take an optional file-id filter to narrow keys to a proje… | Budget: cancel an all-keys scan over 1M keys within 50 ms. |
 | PLAT-IDX-044 | Query calls are cancellation points (a pending write section cancels the read section). Long loops check cancellation at least every 256 ent… | A pending write action makes a long all-keys query abort with `Cancelled`. |
 | PLAT-IDX-045 | The caller must not hold one big read section around a project-wide iterate-files call; iterate-files functions are documented as "do not wr… | n/a, API doc test. |
@@ -841,10 +762,8 @@ Cells are implemented / partial / total.
 | PLAT-IDX-072 | Local, anonymous and implicit-class members are **not** reachable through short-name and FQN indexes except as specified (anonymous only und… | A local class does not appear in Go to Class. |
 | PLAT-IDX-082 | **Text occurrence search** (platform helper) is: (1) look up candidate files by word hash + context mask + scope; (2) order candidates (file… | Find usages of a method returns hits ordered with same-file hits first; typing in the editor during the search cancels and restarts it. |
 | PLAT-IDX-090 | `find_class(qualified_name, scope)` returns the **best** class. Ask every registered *class finder* (the Java source/class finder is registe… | Two jars containing `a.B`: the one earlier in the module's dependency order wins. |
-| PLAT-IDX-091 | `find_classes(qualified_name, scope)` returns **all** candidates: those of the Java facade (the Java finder's results are sorted best-first… | Source and compiled twin both appear in an all-scope query; a class from the earlier jar precedes one from a later jar. |
 | PLAT-IDX-092 | `has_class(qualified_name, scope[, filter])` is an existence check that must not load more than the index entry. | 100k `has_class` calls do not parse any file. |
 | PLAT-IDX-093 | `find_class` for a **nested class** works with both `Outer.Inner` (source style) and with the FQN index key; names with `$` are not valid so… | `find_class("a.Outer.Inner")` returns the inner class. |
-| PLAT-IDX-094 | For a candidate from a **class file**, the directory path between the class root and the file must consist of valid identifiers (ignoring mu… | A class file placed under a directory named `1-bad` is not found. |
 | PLAT-IDX-095 | `find_class` results are cached per (scope, name) and the whole cache is cleared on **any** PSI modification count change. Results influence… | After any edit, the cache is empty. |
 | PLAT-IDX-096 | `find_package(qualified_name)` returns a package if any package directory in any source/class root, or any package-declared file, exists for… | An empty directory `a/b` makes package `a.b` exist. |
 | PLAT-IDX-097 | In **dumb mode** with *alternative resolve* enabled (spec 04), `find_class` does not use the class indexes: it finds the package, then looks… | Go to Declaration during indexing finds project classes by directory lookup (slower, may miss generated or library classes). |
@@ -1015,9 +934,7 @@ Cells are implemented / partial / total.
 | PLAT-SCOPE-058 | `module_content_scope(m)` | all files in the module's content (not only source folders) |
 | PLAT-SCOPE-060 | `module_with_dependents_scope(m)` | the module plus the modules that use it: its **direct** dependents, plus dependents reached through **re-exporting** modules (a module that depends on a module that exports `m` is reached; a plain `implementation` hop is not). A file belong… |
 | PLAT-SCOPE-061 | `module_tests_with_dependents_scope(m)` | as 060 restricted to **test** files: a file qualifies iff its module is in the set **and** (the file is test source per the test-source filter, **or** its module depends on the chain through a *production-on-test* dependency) |
-| PLAT-SCOPE-062 | **Test vs production for the *resolve scope of a file***: production file: `module_with_dependencies_and_libraries_scope(m, false)`; test fi… | A production class importing a JUnit class is unresolved; a test class resolves it. |
 | PLAT-SCOPE-064 | Libraries and SDK appear in a scope by their **classes** roots. Library **source** roots are not in module scopes; library source files are… | `find_class("org.x.Y", module_scope_with_libs)` returns one class (compiled). |
-| PLAT-SCOPE-067 | **Library resolve scope** (for a file *inside a library*): resolve names against the union of the runtime classpath of all modules that use… | A class in `a.jar` referencing `b.Foo` resolves in the project's jar `b.jar`, not in another module's unrelated version. |
 | PLAT-SCOPE-068 | **Library use scope** (where usages of a library element may occur): all modules depending on the library (with their dependents) plus libra… | Usages of a library class are searched in dependent modules only. |
 | PLAT-SCOPE-069 | Scope objects are cached per (module, options) in a size-bounded cache invalidated on project-root changes, so repeated calls return the sam… | Weigher test: cache cap honored. |
 | PLAT-SCOPE-070 | **File scope** and **files scope** (one file; a set of files) with optional hint "contains library files / does not" for speed; **restrict b… | Scope algebra tests. |
@@ -1025,7 +942,6 @@ Cells are implemented / partial / total.
 | PLAT-SCOPE-081 | **Index both classes and sources** of libraries (both are in indexable roots) so search-by-name over the *all scope* can find source files;… | `Go to Class "ArrayList"` lists one `ArrayList` for the JDK. |
 | PLAT-SCOPE-082 | Attaching or detaching a library sources root changes `navigation_element` for its classes and invalidates the cached source-file lookup (PL… | Attach sources: navigation updates; resolve results unchanged. |
 | PLAT-SCOPE-083 | Library **version conflicts** on the same classpath: two jars with `a.B` in one module's scope: the earlier order entry wins `find_class`; b… | See PLAT-IDX-090/091. |
-| PLAT-SCOPE-090 | Any change to modules, content/source/excluded folders, libraries, SDKs, order entries or scopes of dependencies: (1) bumps the *project roo… | Change a dependency scope from Compile to Test: production resolve of that library fails after the change, without restart. |
 | PLAT-SCOPE-091 | The model is changed atomically (all edits of one import apply in one write section) so readers never observe a half-imported project. | A background reader during import sees either the old or the new model. |
 | PLAT-SCOPE-092 | The import result (project model) has a stable identity per module (name) so that caches keyed by module survive a re-import that did not ch… | Re-import without changes keeps scope caches (no invalidation storm). |
 | PLAT-SCOPE-100 | Every language service that resolves cross-file names obtains its scope from the **file's resolve scope** (PLAT-PSI-131), never from the pro… | A Kotlin file in `module-b` does not see `module-c` classes absent from its dependencies. |

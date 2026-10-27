@@ -101,7 +101,7 @@ is covered or explicitly placed:
 | `IntroduceVariable`, `IntroduceConstant`, `IntroduceField`, `IntroduceParameter`, `ExtractMethod`, `IntroduceFunctionalParameter`, `IntroduceFunctionalVariable` | `04-extract-introduce.md` |
 | `IntroduceParameterObject`, `ExtractClass` (Extract Delegate), `ReplaceMethodWithMethodObject` | `04-extract-introduce.md` (REF-EXT-080..090), the latter two LATER |
 | `Inline` | `05-inline.md` |
-| `ChangeSignature`, `ChangeTypeSignature` (Type Migration) | `06-change-signature.md`, REF-OTH-020 |
+| `ChangeSignature`, `ChangeTypeSignature` (Type Migration) | `06-change-signature.md`, REF-OTH-070 |
 | `SafeDelete`, `MembersPullUp`, `MemberPushDown`, `ExtractInterface`, `ExtractSuperclass`, `EncapsulateFields`, `AnonymousToInner`, `MakeStatic`, `ConvertToInstanceMethod`, `InvertBoolean`, `TurnRefsToSuper`, `InheritanceToDelegation`, `MethodDuplicates` | `07-safe-delete-and-others.md` |
 | Kotlin: `ExtractFunction`, `ExtractFunctionToScope`, `IntroduceProperty`, `IntroduceTypeAlias` | `04-extract-introduce.md` |
 | `Generify`, `RemoveMiddleman`, `WrapReturnValue`, `ReplaceTempWithQuery` (rare refactorings plugin), `I18nize` | `07-safe-delete-and-others.md` REF-OTH-090 (LATER: rarely used; plugin) |

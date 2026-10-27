@@ -27,7 +27,7 @@ two-team clean-room process:
 
 | Area | Directory | Covers |
 |---|---|---|
-| Platform | `platform/` | VFS, PSI, stubs and indexes, dumb mode, caching, concurrency, scopes, language extension points |
+| Platform | `platform/` | VFS, PSI, stubs and indexes, dumb mode, caching, concurrency, scopes, language extension points, saving and autosave |
 | Code insight | `codeinsight/` | highlighting daemon, inspections, quick fixes and Alt+Enter, auto-import, completion framework, navigation |
 | Java | `java/` | stubs, resolve, types and inference, error catalog, imports, completion, inspections, Spring notes |
 

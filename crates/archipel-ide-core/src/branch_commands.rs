@@ -24,7 +24,7 @@ impl IdeState {
         operation: impl FnOnce(&std::path::Path) -> Result<String, GitError>,
     ) -> Result<String, String> {
         let root = self.git_root()?;
-        self.save_all()?;
+        self.save_all_at(crate::SavePoint::Vcs).into_result()?;
         let result = operation(&root).map_err(|error| error.to_string());
         self.after_git_operation();
         let message = result?;

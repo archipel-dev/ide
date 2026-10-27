@@ -4,7 +4,7 @@ use crate::icons;
 use crate::native_dialog::Purpose;
 use crate::widgets::row_text;
 use crate::{IdeApp, theme};
-use archipel_ide_core::{JavaKind, KotlinKind};
+use archipel_ide_core::{JavaKind, KotlinKind, saving_texts};
 use archipel_kit::parts::Surface;
 use eframe::egui::{self, Rect, RichText, Sense, vec2};
 use serde_json::json;
@@ -64,6 +64,8 @@ pub enum Dialog {
         query: String,
         selected: Option<usize>,
     },
+    /// "Cannot Save Files": a save failed (PLAT-SAVE-077).
+    SaveFailure(archipel_ide_core::SaveFailureReport),
 }
 
 impl Dialog {
@@ -83,6 +85,7 @@ impl Dialog {
             Dialog::Recent { .. } => "recentFiles",
             Dialog::RecentLocations { .. } => "recentLocations",
             Dialog::FileStructure { .. } => "fileStructure",
+            Dialog::SaveFailure(_) => "saveFailure",
         }
     }
 }
@@ -419,6 +422,55 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                 keep = false;
                 app.dispatch("project.delete", json!({"path": path}));
                 app.tree_selection = None;
+            }
+        }
+        Dialog::SaveFailure(report) => {
+            let mut revert = false;
+            let mut close =
+                ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+            let confirm_label = if report.closing {
+                saving_texts::IGNORE_CHANGES
+            } else {
+                saving_texts::REVERT_CHANGES
+            };
+            popup_frame(ctx, "dialog_save_failure", 460.0, |ui| {
+                title(ui, saving_texts::FAILURE_TITLE);
+                ui.label(saving_texts::FAILURE_MESSAGE);
+                ui.add_space(6.0);
+                egui::ScrollArea::vertical()
+                    .max_height(160.0)
+                    .id_salt("save_failure_text")
+                    .show(ui, |ui| {
+                        // Read-only text with the errors of all failed documents.
+                        let text = report.text();
+                        let mut view: &str = &text;
+                        ui.add(
+                            egui::TextEdit::multiline(&mut view)
+                                .desired_width(f32::INFINITY)
+                                .desired_rows(3),
+                        );
+                    });
+                ui.add_space(10.0);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let confirm =
+                        egui::Button::new(RichText::new(confirm_label).color(egui::Color32::WHITE))
+                            .fill(theme::ACCENT);
+                    if ui.add(confirm).clicked() {
+                        revert = true;
+                    }
+                    if ui.button(saving_texts::CLOSE).clicked() {
+                        close = true;
+                    }
+                });
+            });
+            if revert {
+                keep = false;
+                // Reloads each failed document from disk, discarding its memory text.
+                let paths = report.paths.clone();
+                app.state.revert_documents(&paths);
+            } else if close {
+                // The documents stay unsaved; a later trigger retries.
+                keep = false;
             }
         }
         Dialog::SafeDelete { path, usages } => {

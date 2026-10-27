@@ -46,6 +46,10 @@ pub enum DiskConflict {
     Deleted,
 }
 
+/// The `disk_hash` of a document whose file was deleted and whose user chose to keep the
+/// editor version: the next save recreates the file (PLAT-SAVE-079).
+const RECREATE_ON_SAVE: u64 = 0;
+
 pub fn content_hash(text: &str) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     text.hash(&mut hasher);
@@ -54,7 +58,7 @@ pub fn content_hash(text: &str) -> u64 {
 
 /// What one synchronization did to a document.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SyncOutcome {
+pub(crate) enum SyncOutcome {
     Unchanged,
     Reloaded,
     Closed,
@@ -157,7 +161,7 @@ impl IdeState {
         changed
     }
 
-    fn sync_document(&mut self, index: usize) -> SyncOutcome {
+    pub(crate) fn sync_document(&mut self, index: usize) -> SyncOutcome {
         let Some(project) = &self.project else {
             return SyncOutcome::Unchanged;
         };
@@ -165,6 +169,10 @@ impl IdeState {
         let dirty = document.text.is_dirty();
         let exists = project.root().join(&document.path).exists();
         if !exists {
+            if dirty && document.disk_hash == RECREATE_ON_SAVE {
+                // "Keep and recreate on save" was chosen: the next save writes the file.
+                return SyncOutcome::Unchanged;
+            }
             if dirty {
                 self.documents[index].conflict = Some(DiskConflict::Deleted);
                 return SyncOutcome::Conflict;
@@ -245,7 +253,7 @@ impl IdeState {
         let disk_hash = project
             .read_text(&document.path)
             .map(|text| content_hash(&text))
-            .unwrap_or(0);
+            .unwrap_or(RECREATE_ON_SAVE);
         let document = &mut self.documents[index];
         document.disk_hash = disk_hash;
         document.conflict = None;
@@ -344,24 +352,6 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             },
         ))
         .expect("unique built-in id");
-}
-
-/// Refuses to write over an unresolved outside change.
-pub(crate) fn ensure_no_conflict(state: &IdeState, index: usize) -> Result<(), String> {
-    let Some(document) = state.documents.get(index) else {
-        return Ok(());
-    };
-    match document.conflict {
-        None => Ok(()),
-        Some(DiskConflict::Modified) => Err(format!(
-            "{} changed on disk; load the disk version or keep yours before saving",
-            document.path.display()
-        )),
-        Some(DiskConflict::Deleted) => Err(format!(
-            "{} was deleted on disk; close it or keep your version before saving",
-            document.path.display()
-        )),
-    }
 }
 
 #[cfg(test)]

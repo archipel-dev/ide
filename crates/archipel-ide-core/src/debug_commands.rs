@@ -1,7 +1,7 @@
 //! Debugger: line breakpoints and Debug Adapter Protocol sessions.
 
 use crate::java_debug::JavaStage;
-use crate::{IdeState, ToolWindow, spec, string_param, usize_param};
+use crate::{IdeState, SavePoint, ToolWindow, spec, string_param, usize_param};
 use archipel_ide_command::{Command, CommandError, CommandRegistry};
 use archipel_ide_dap::{Adapter, BreakpointOptions, DebugClient, SessionState, Step};
 use archipel_ide_runner::{RunConfiguration, RunTarget, TaskKind, TaskPlan, TaskState};
@@ -449,8 +449,14 @@ impl IdeState {
                 let plan =
                     TaskPlan::new(format!("Build {}", config.name), "cargo", build_args, cwd)
                         .with_kind(TaskKind::Build);
-                self.start_task(Ok(plan), "Build", TaskKind::Build)
-                    .inspect_err(|_| self.debugger().state_mut().pending = None)
+                // PLAT-SAVE-032: the before-launch build saves non-explicitly.
+                self.start_task_at(
+                    Ok(plan),
+                    "Build",
+                    TaskKind::Build,
+                    SavePoint::BeforeLaunchBuild,
+                )
+                .inspect_err(|_| self.debugger().state_mut().pending = None)
             }
             RunTarget::Shell { program, arguments } => {
                 let cwd = config.cwd(&root);
@@ -537,6 +543,7 @@ impl IdeState {
         main_class: Option<String>,
         args: Vec<String>,
     ) -> Result<(), String> {
+        self.save_before(SavePoint::Debug);
         let anchor = self.java_anchor(root)?;
         self.debugger().state_mut().java = Some(PendingJava {
             name: config.name.clone(),
@@ -581,6 +588,8 @@ impl IdeState {
 
     /// Starts the adapter for a built program.
     fn launch_debugger(&mut self, pending: PendingDebug) -> Result<(), String> {
+        // PLAT-SAVE-030: everything is on disk just before the debuggee starts.
+        self.save_before(SavePoint::Debug);
         if !pending.program.is_file() {
             return Err(format!(
                 "{} does not exist; build it first",

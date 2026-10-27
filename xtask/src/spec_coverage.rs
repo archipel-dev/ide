@@ -33,6 +33,7 @@ const SETS: &[(&str, &str)] = &[
     ("ED", "Editor"),
     ("WB", "Workbench"),
     ("UI", "UI look and feel"),
+    ("REF", "Refactoring"),
 ];
 /// Pre-spec ID areas from `docs/spec/features/` that still appear in evidence files.
 const LEGACY_AREAS: [&str; 2] = ["JAVA-NAV", "JAVA-GEN"];
@@ -392,7 +393,7 @@ fn scan_line(text: &str, line: usize, out: &mut Vec<RefToken>) {
                 !(p.is_ascii_alphanumeric() || p == b'-' || (p == b'_' && !allow_us))
             }
         };
-        let upper = [("PLAT-", 5), ("CI-", 3), ("JAVA-", 5)]
+        let upper = [("PLAT-", 5), ("CI-", 3), ("JAVA-", 5), ("REF-", 4)]
             .iter()
             .find(|(p, _)| b[i..].starts_with(p.as_bytes()))
             .map(|(_, n)| *n);
@@ -465,9 +466,14 @@ fn scan_line(text: &str, line: usize, out: &mut Vec<RefToken>) {
             }
         }
         // Lowercase test names: plat_psi_051, ci_alt_007, java_imp_012.
-        let lower = [("plat_", "PLAT"), ("ci_", "CI"), ("java_", "JAVA")]
-            .iter()
-            .find(|(p, _)| b[i..].starts_with(p.as_bytes()));
+        let lower = [
+            ("plat_", "PLAT"),
+            ("ci_", "CI"),
+            ("java_", "JAVA"),
+            ("ref_", "REF"),
+        ]
+        .iter()
+        .find(|(p, _)| b[i..].starts_with(p.as_bytes()));
         if let Some((p, set)) = lower
             && boundary_ok(i, true)
         {

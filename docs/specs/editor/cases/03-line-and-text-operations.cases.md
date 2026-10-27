@@ -66,7 +66,6 @@ keys: Ctrl+D
 ```after
 a
 
-
 <caret>
 b
 ```
@@ -232,6 +231,7 @@ xy<caret> z
 
 ### ED-LINE-022 case 1: Java statement joined with its body
 settings: default
+status: unverified (caret placement not confirmed from source)
 language: java
 ```before
 class A {
@@ -516,12 +516,12 @@ class A {
 ```
 
 ### ED-LINE-040 case 3: a mixed selection is commented, not uncommented
-settings: Line comment at first column=off, Move caret down after Comment with Line Comment action=off
+settings: Line comment at first column=off
 language: java
 ```before
 class A {
     void f() {
-        <selection>//a();
+<selection>        //a();
         b();
 </selection>    }
 }
@@ -631,11 +631,12 @@ keys: Ctrl+Shift+U
 <selection>FOO BAR<caret></selection>
 ```
 
-### ED-LINE-050 case 3: the word at the caret end is selected and converted
+### ED-LINE-050 case 3: the word at the caret is selected and converted
 settings: default
+status: unverified (caret placement not confirmed from source)
 language: plain
 ```before
-foo<caret> bar
+<caret>foo bar
 ```
 keys: Ctrl+Shift+U
 ```after
@@ -655,6 +656,7 @@ keys: Ctrl+Shift+U
 
 ### ED-LINE-050 case 5: the converted text may change length
 settings: locale=en
+status: unverified (caret placement not confirmed from source)
 language: plain
 ```before
 <selection>straße<caret></selection>

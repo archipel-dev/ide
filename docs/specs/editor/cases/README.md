@@ -27,3 +27,6 @@ Conventions:
   preset the clipboard.
 * A language of `java` means a `.java` file whose text is a complete compilation unit or a class body
   as shown; the caret context decides the typed handlers.
+* An optional line `status: unverified (<reason>)` after `settings:` marks a case whose result was
+  derived from reading the source but not confirmed in a running IDE (most often caret placement).
+  Implementers still implement it; reviewers confirm it first.

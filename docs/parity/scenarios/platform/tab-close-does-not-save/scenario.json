@@ -1,0 +1,18 @@
+{
+  "title": "Closing an editor tab does not save (PLAT-SAVE-052)",
+  "requires": [],
+  "open": "notes.txt",
+  "steps": [
+    {"op": "typeAt", "line": 1, "column": 1, "text": "edited "},
+    {"op": "key", "chord": "Ctrl+F4"},
+    {"op": "sleep", "ms": 300}
+  ],
+  "expect": {
+    "file": [{"path": "notes.txt", "equals": "first line\nsecond line\n"}]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "type at the start of the first line, close the tab (Ctrl+F4), no application switch",
+    "notes": "docs/specs/platform/09-saving-and-autosave.md PLAT-SAVE-052: no prompt and no write; the text waits for the next trigger (deactivation, idle, a save point, Save All)"
+  }
+}

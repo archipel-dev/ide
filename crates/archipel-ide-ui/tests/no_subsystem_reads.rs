@@ -35,7 +35,7 @@ use std::path::{Path, PathBuf};
 /// at line 96, so nearly all of it was skipped) and could not see `app\n    .state\n    .field`
 /// broken over lines. Counting everything, 86 reads were there all along, most of them in
 /// `src/lib.rs` and `src/toolwindows.rs`.
-const SUBSYSTEM_READ_BASELINE: usize = 86;
+const SUBSYSTEM_READ_BASELINE: usize = 85;
 
 /// The number of calls of whole-subsystem handles the UI may still make. Lower it when calls go
 /// (a call becomes a `DataContext` key, a narrower accessor or a service call); never raise it.

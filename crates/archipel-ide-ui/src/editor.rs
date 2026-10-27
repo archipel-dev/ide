@@ -87,7 +87,7 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                     app.caret_screen_pos = None;
                     return;
                 }
-                if app.state.plugin_host().active_tab.is_some() {
+                if app.state.plugin_host_service().active_tab().is_some() {
                     crate::plugin_ui::active_tab_body(app, ui);
                     app.caret_screen_pos = None;
                     return;
@@ -109,7 +109,7 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                 }
                 if crate::merged_manifest_ui::applies(app) {
                     crate::merged_manifest_ui::tab_bar(app, ui);
-                    if app.state.android().merged_manifest.open {
+                    if app.state.android_tooling().merged_manifest().open {
                         crate::merged_manifest_ui::body(app, ui);
                         app.caret_screen_pos = None;
                         return;
@@ -117,7 +117,7 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                 }
                 if crate::layout_editor_ui::applies(app) {
                     crate::layout_editor_ui::mode_bar(app, ui);
-                    match app.state.android().layout.mode {
+                    match app.state.android_tooling().layout().mode {
                         archipel_ide_core::LayoutMode::Design => {
                             crate::layout_editor_ui::design_body(app, ui);
                             app.caret_screen_pos = None;
@@ -505,7 +505,7 @@ fn tabs(app: &mut IdeApp, ui: &mut egui::Ui, strip: Option<&TabStrip>) {
         let preview = app.state.is_preview(index);
         let active = app.state.active_index() == Some(index)
             && !app.state.diff_active()
-            && app.state.plugin_host().active_tab.is_none();
+            && app.state.plugin_host_service().active_tab().is_none();
         let color = if active {
             *theme::TEXT_BRIGHT
         } else {
@@ -736,12 +736,12 @@ fn show_groups(
         let saved = (
             app.state.active_index(),
             app.state.diff_active(),
-            app.state.plugin_host().active_tab,
+            app.state.plugin_host_service().active_tab(),
         );
         app.state.set_active_index(active);
         if !primary {
             app.state.set_diff_active(false);
-            app.state.plugin_host_mut().active_tab = None;
+            app.state.plugin_host_service().set_active_tab(None);
         }
         ui.ctx().data_mut(|data| {
             data.insert_temp(
@@ -761,7 +761,7 @@ fn show_groups(
             let (active, diff_active, plugin_tab) = saved;
             app.state.set_active_index(active);
             app.state.set_diff_active(diff_active);
-            app.state.plugin_host_mut().active_tab = plugin_tab;
+            app.state.plugin_host_service().set_active_tab(plugin_tab);
         }
     }
     ui.ctx()

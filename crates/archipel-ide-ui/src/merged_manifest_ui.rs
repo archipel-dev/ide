@@ -31,7 +31,7 @@ pub fn applies(app: &IdeApp) -> bool {
 
 /// Bottom tab bar of the manifest editor.
 pub fn tab_bar(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let merged = app.state.android().merged_manifest.open;
+    let merged = app.state.android_tooling().merged_manifest().open;
     let mut choice = None;
     egui::TopBottomPanel::bottom("manifest_tabs")
         .exact_height(26.0)
@@ -74,7 +74,8 @@ pub fn body(app: &mut IdeApp, ui: &mut egui::Ui) {
     let mut close = ui.input(|i| i.key_pressed(egui::Key::Escape));
     let mut open: Option<(std::path::PathBuf, usize)> = None;
     let mut build: Option<String> = None;
-    let view = &app.state.android().merged_manifest;
+    let tooling = app.state.android_tooling();
+    let view = tooling.merged_manifest();
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         ui.add_space(8.0);
@@ -99,6 +100,7 @@ pub fn body(app: &mut IdeApp, ui: &mut egui::Ui) {
                     }
                 });
             });
+            drop(view);
             if let Some(task) = build {
                 app.dispatch("gradle.runTask", json!({"task": task}));
             }
@@ -181,6 +183,8 @@ pub fn body(app: &mut IdeApp, ui: &mut egui::Ui) {
             });
         }
     }
+    // Commands write the Android state: release the read guard first.
+    drop(view);
     if let Some((path, line)) = open {
         let relative = path
             .strip_prefix(&root)

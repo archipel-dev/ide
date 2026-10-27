@@ -163,7 +163,7 @@ fn invalid_components_fail_with_actionable_errors() {
 
 #[test]
 fn loader_registers_wasm_plugins_with_the_registry() {
-    use archipel_ide_plugins::{PluginLoader, PluginRegistry, PluginStatus};
+    use archipel_ide_plugins::{PluginLoader, PluginRegistry, PluginRuntime, PluginStatus};
     use std::rc::Rc;
     let root =
         std::env::temp_dir().join(format!("archipel-ide-wasm-registry-{}", std::process::id()));
@@ -176,13 +176,16 @@ fn loader_registers_wasm_plugins_with_the_registry() {
     let loader = WasmLoader::new().unwrap();
     assert_eq!(loader.kind(), PluginKind::Wasm);
     let mut registry = PluginRegistry::default();
-    registry.add_loader(Rc::new(loader));
-    registry.discover(&root);
+    let mut runtime = PluginRuntime::default();
+    runtime.add_loader(Rc::new(loader));
+    registry.discover(&mut runtime, &root);
     assert_eq!(
         registry.get("dev.archipel.hello-wasm").unwrap().status,
         PluginStatus::Enabled
     );
-    registry.ensure_instance("dev.archipel.hello-wasm").unwrap();
+    runtime
+        .ensure_instance(&registry, "dev.archipel.hello-wasm")
+        .unwrap();
     fs::remove_dir_all(&root).unwrap();
 }
 

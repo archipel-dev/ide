@@ -139,18 +139,23 @@ impl PluginManager {
 
 /// The page body, filling the rest of the settings dialog's page area.
 pub fn page(ui: &mut egui::Ui, manager: &mut PluginManager, cx: &mut PageContext<'_>) {
-    let registry = &cx.state.plugin_host().registry;
-    if manager.tab == Tab::Installed
-        && manager
-            .selected
-            .as_deref()
-            .is_none_or(|id| registry.get(id).is_none())
     {
-        // Like the reference, the first plugin is previewed until another is picked.
-        manager.selected = registry
-            .entries()
-            .first()
-            .map(|entry| entry.id().to_owned());
+        // The guard ends with this block: the rows below dispatch commands that write the
+        // registry.
+        let plugins = cx.state.plugin_host_service();
+        let registry = plugins.registry();
+        if manager.tab == Tab::Installed
+            && manager
+                .selected
+                .as_deref()
+                .is_none_or(|id| registry.get(id).is_none())
+        {
+            // Like the reference, the first plugin is previewed until another is picked.
+            manager.selected = registry
+                .entries()
+                .first()
+                .map(|entry| entry.id().to_owned());
+        }
     }
     if manager.tab == Tab::Marketplace && manager.catalog.is_none() {
         manager.catalog = Some(Catalog::scan(&archipel_ide_core::plugin_registry_dirs()));
@@ -227,7 +232,7 @@ fn plugin_directories(cx: &PageContext<'_>, ui: &mut egui::Ui) {
 
 fn header_row(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginManager) {
     let rect = ui.max_rect();
-    let installed = cx.state.plugin_host().registry.entries().len();
+    let installed = cx.state.plugin_host_service().registry().entries().len();
     let font = egui::FontId::proportional(theme::UI_FONT_SIZE);
     let mut x = rect.left();
     for (tab, label) in [
@@ -428,13 +433,8 @@ fn marketplace(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut Plugin
             ui.spacing_mut().item_spacing.y = 0.0;
             group_header(ui, "Local registry", true, false);
             for entry in visible {
-                let installed = cx.state.plugin_host().registry.get(&entry.manifest.id);
-                if market_row(
-                    ui,
-                    entry,
-                    installed.map(|e| e.manifest.version.as_str()),
-                    manager,
-                ) {
+                let installed = cx.state.plugin_host_service().version(&entry.manifest.id);
+                if market_row(ui, entry, installed.as_deref(), manager) {
                     installs.push(entry.archive.clone());
                 }
             }
@@ -559,8 +559,8 @@ fn market_details(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut Plu
     ui.add_space(8.0);
     let installed_version = cx
         .state
-        .plugin_host
-        .registry
+        .plugin_host_service()
+        .registry()
         .get(&manifest.id)
         .map(|installed| installed.manifest.version.clone());
     ui.horizontal(|ui| {
@@ -741,10 +741,9 @@ fn installed_list(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut Plu
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
             for group in [Group::Downloaded, Group::Project, Group::Bundled] {
-                let entries: Vec<&PluginEntry> = cx
-                    .state
-                    .plugin_host
-                    .registry
+                let plugins = cx.state.plugin_host_service();
+                let registry = plugins.registry();
+                let entries: Vec<&PluginEntry> = registry
                     .entries()
                     .iter()
                     .filter(|entry| {
@@ -778,9 +777,15 @@ fn installed_list(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut Plu
                     }
                 }
             }
-            if !cx.state.plugin_host().registry.problems.is_empty() {
+            if !cx
+                .state
+                .plugin_host_service()
+                .registry()
+                .problems
+                .is_empty()
+            {
                 group_header(ui, "Problems", true, false);
-                for (path, problem) in &cx.state.plugin_host().registry.problems {
+                for (path, problem) in &cx.state.plugin_host_service().registry().problems {
                     egui::Frame::new()
                         .inner_margin(egui::Margin::symmetric(10, 4))
                         .show(ui, |ui| {
@@ -929,7 +934,7 @@ fn details(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginMana
     let Some(entry) = manager
         .selected
         .as_deref()
-        .and_then(|id| cx.state.plugin_host().registry.get(id))
+        .and_then(|id| cx.state.plugin_host_service().entry(id))
     else {
         placeholder(ui, "Select plugin to preview details");
         return;
@@ -939,7 +944,7 @@ fn details(cx: &mut PageContext<'_>, ui: &mut egui::Ui, manager: &mut PluginMana
     let status = entry.status.clone();
     let source = entry.source.clone();
     let can_toggle = entry.can_toggle();
-    let is_enabled = enabled(entry);
+    let is_enabled = enabled(&entry);
     let uninstallable = cx.state.plugin_uninstallable(&manifest.id);
     ui.label(
         RichText::new(&manifest.name)
@@ -1227,7 +1232,7 @@ fn settings(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use archipel_ide_plugins::{Plugin, PluginManifest, PluginRegistry};
+    use archipel_ide_plugins::{Plugin, PluginManifest, PluginRegistry, PluginRuntime};
     use std::rc::Rc;
 
     struct P(PluginManifest);
@@ -1242,7 +1247,7 @@ mod tests {
     fn search_matches_name_vendor_and_tags() {
         let mut registry = PluginRegistry::default();
         registry
-            .add_bundled(Rc::new(|| {
+            .add_bundled(&mut PluginRuntime::default(), Rc::new(|| {
                 Box::new(P(PluginManifest::parse(
                     "id='x.http'\nname='Nexus HTTP'\nversion='1'\napi_version=1\nkind='rust'\nvendor='Archipel IDE'\ncapabilities=['rest']\n",
                 )

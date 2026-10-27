@@ -7,13 +7,12 @@ use serde_json::{Value, json};
 impl IdeState {
     /// Active variant of a module: the selection, else the module default.
     pub fn active_variant(&self, gradle_path: &str) -> Option<String> {
-        if let Some(name) = self.android.active_variants.get(gradle_path) {
-            return Some(name.clone());
+        let tooling = self.android_tooling();
+        if let Some(name) = tooling.active_variant(gradle_path) {
+            return Some(name);
         }
-        let module = self
-            .android
-            .project
-            .as_ref()?
+        let project = tooling.project()?;
+        let module = project
             .modules
             .iter()
             .find(|m| m.gradle_path == gradle_path)?;
@@ -22,9 +21,8 @@ impl IdeState {
 
     pub fn select_variant(&mut self, gradle_path: &str, variant: &str) -> Result<(), String> {
         let project = self
-            .android
-            .project
-            .as_ref()
+            .android_tooling()
+            .project()
             .ok_or("The open project is not an Android project.")?;
         let module = project
             .modules
@@ -43,7 +41,8 @@ impl IdeState {
                 known.join(", ")
             ));
         }
-        self.android
+        self.android_tooling()
+            .write()
             .active_variants
             .insert(gradle_path.to_owned(), variant.to_owned());
         self.status = format!("{gradle_path}: active build variant {variant}");
@@ -61,10 +60,10 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.android.project.is_some(),
+            |state: &IdeState| state.android_tooling().is_android_project(),
             |state: &mut IdeState, _| {
                 let modules: Vec<Value> = state
-                    .android
+                    .android_tooling().read()
                     .project
                     .iter()
                     .flat_map(|p| p.modules.iter())
@@ -89,7 +88,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"module":"string","variant":"string"}"#,
             ),
-            |state: &IdeState| state.android.project.is_some(),
+            |state: &IdeState| state.android_tooling().is_android_project(),
             |state: &mut IdeState, params| {
                 let module = string_param(&params, "module")?;
                 let variant = string_param(&params, "variant")?;

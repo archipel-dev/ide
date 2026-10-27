@@ -22,6 +22,9 @@
 //! | [`KeymapManager`] | application | `IdeState::keymap` |
 //! | [`UpdateChecker`] | application | `IdeState::{updates, update_state, update_silent, update_executable, update_installer}` |
 //! | [`RecentProjectsManager`] | application | `IdeState::recent_projects` |
+//! | [`AgentsManager`] | application | `IdeState::agents` (sessions, thread tabs, review, balloons) |
+//! | [`PluginHostService`] | application | `IdeState::plugin_host` (registry, plugin tabs and tool window) |
+//! | [`AndroidTooling`] | application | `IdeState::android` (SDK, devices, Logcat, deploy, ...) |
 
 use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard,
@@ -104,12 +107,15 @@ pub(crate) fn lock<'a, T>(mutex: &'a Mutex<T>, what: &str) -> MutexGuard<'a, T> 
 }
 
 mod actions;
+mod agents;
+mod android;
 mod debugger;
 mod execution;
 mod find;
 mod git;
 mod keymap;
 mod notifications;
+mod plugins;
 mod project_model;
 mod recent_projects;
 mod remote;
@@ -122,6 +128,8 @@ mod update;
 mod vcs;
 
 pub use actions::{ActionManager, ActionOptions};
+pub use agents::{AGENTS_TOPIC, AgentsListener, AgentsManager};
+pub use android::{ANDROID_TOPIC, AndroidListener, AndroidTooling};
 pub(crate) use debugger::Announced;
 pub use debugger::{DEBUG_SESSION_TOPIC, DebugSessionListener, XDebuggerManager};
 pub use execution::{EXECUTION_TOPIC, ExecutionListener, ExecutionManager};
@@ -131,6 +139,7 @@ pub use keymap::{KeymapManager, KeymapState};
 pub use notifications::{
     NOTIFICATION_TOPIC, NotificationListener, NotificationSource, Notifications,
 };
+pub use plugins::{PLUGIN_TOPIC, PluginHostService, PluginListener};
 pub use project_model::{PROJECT_MODEL_TOPIC, ProjectModelListener, ProjectModelService};
 pub use recent_projects::RecentProjectsManager;
 pub use remote::{
@@ -156,6 +165,9 @@ fn assert_sync() {
     sync::<crate::gutter_commands::RunnableCache>();
     sync::<crate::debug_commands::DebuggerState>();
     sync::<archipel_ide_terminal::TerminalSession>();
+    sync::<crate::AndroidState>();
+    sync::<crate::agents::AgentsState>();
+    sync::<crate::PluginHostState>();
 }
 pub use update::{UPDATE_TOPIC, UpdateChecker, UpdateListener};
 pub(crate) use vcs::REBLAME_INTERVAL;

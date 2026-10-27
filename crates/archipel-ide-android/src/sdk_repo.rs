@@ -4,7 +4,7 @@
 use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc;
 
 /// One package of the repository listing.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,12 +127,12 @@ pub enum JobEvent {
 
 /// A running `sdkmanager` process.
 pub struct SdkJob {
-    rx: Receiver<JobEvent>,
+    rx: crate::Inbox<JobEvent>,
 }
 
 impl SdkJob {
     pub fn poll(&self) -> Vec<JobEvent> {
-        self.rx.try_iter().collect()
+        self.rx.try_iter()
     }
 
     /// Runs `sdkmanager --sdk_root=<root> <args>` on a worker thread.
@@ -206,7 +206,9 @@ impl SdkJob {
             };
             let _ = tx.send(JobEvent::Done(result));
         });
-        Self { rx }
+        Self {
+            rx: crate::Inbox::new(rx),
+        }
     }
 }
 

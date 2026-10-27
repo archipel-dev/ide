@@ -37,7 +37,7 @@ impl IdeState {
                 self.tabs.preview = None;
             }
         }
-        if self.diff_active || self.plugin_host.active_tab.is_some() {
+        if self.diff_active || self.plugin_host_service().active_tab().is_some() {
             return;
         }
         let Some(current) = self.active_path() else {
@@ -72,7 +72,7 @@ impl IdeState {
     fn show_split_active(&mut self) {
         self.follow_split_active();
         self.diff_active = false;
-        self.plugin_host.active_tab = None;
+        self.plugin_host_service().set_active_tab(None);
         self.close_completion();
     }
 
@@ -150,7 +150,7 @@ impl IdeState {
     }
 
     fn open_in_plugin_editor_active(&self) -> bool {
-        self.plugin_host.active_tab.is_some()
+        self.plugin_host_service().active_tab().is_some()
     }
 
     /// Keep Tab Open: the preview tab becomes permanent.

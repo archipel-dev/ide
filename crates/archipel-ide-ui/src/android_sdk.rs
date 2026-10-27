@@ -299,7 +299,7 @@ pub fn remote_tool_rows(
 const NAME_X: f32 = 32.0;
 
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
-    if !app.state.android().sdk_manager_open {
+    if !app.state.android_tooling().sdk_manager_open() {
         return;
     }
     let mut close = false;
@@ -336,8 +336,8 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                     ui.add_space(14.0);
                     ui.label("Manager for the Android SDK and Tools used by the IDE");
                     ui.add_space(8.0);
-                    let detection = app.state.android().sdk.as_ref();
-                    let sdk = detection.and_then(|d| d.sdk.as_ref());
+                    let detection = app.state.android_tooling().sdk();
+                    let sdk = detection.as_ref().and_then(|d| d.sdk.as_ref());
                     ui.horizontal(|ui| {
                         ui.label("Android SDK Location:");
                         let field_width = (ui.available_width() - 60.0).max(120.0);
@@ -382,7 +382,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                     }
                     if let Some(error) = &page.error {
                         ui.label(RichText::new(error).color(theme::ERROR));
-                    } else if let Some(problem) = detection.and_then(|d| d.problem()) {
+                    } else if let Some(problem) = detection.as_ref().and_then(|d| d.problem()) {
                         ui.label(RichText::new(problem).color(theme::ERROR));
                     }
                     ui.add_space(10.0);
@@ -421,7 +421,8 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                     ui.add_space(8.0);
                     let footer_height = 76.0;
                     let table_height = (ui.available_height() - footer_height).max(80.0);
-                    let remote = &app.state.android().sdk_repo;
+                    let tooling = app.state.android_tooling();
+                    let remote = tooling.sdk_repo();
                     let rows = match (sdk, page.tab) {
                         (_, Tab::UpdateSites) => Vec::new(),
                         (_, Tab::Platforms) if remote.loaded => remote_platform_rows(
@@ -468,7 +469,8 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                     ui.add_space(8.0);
                     ui.separator();
                     ui.horizontal(|ui| {
-                        let repo = &app.state.android().sdk_repo;
+                        let tooling = app.state.android_tooling();
+                        let repo = tooling.sdk_repo();
                         let status = match (&repo.progress, &repo.result) {
                             (Some(progress), _) => RichText::new(progress).color(theme::TEXT_INFO),
                             (None, Some(Err(error))) => RichText::new(error).color(theme::ERROR),
@@ -522,7 +524,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         apply = false;
         apply_packages = false;
     }
-    if !app.android_sdk.requested && app.state.android().sdk.is_some() {
+    if !app.android_sdk.requested && app.state.android_tooling().has_sdk_detection() {
         app.android_sdk.requested = true;
         // A missing sdkmanager is not an error here: the installed list stays.
         let _ = app
@@ -530,14 +532,19 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
             .execute("android.sdk.refreshRemote", &mut app.state, json!({}));
     }
     if apply_packages {
-        let packages = &app.state.android().sdk_repo.packages;
-        let installed = |path: &str| packages.iter().any(|p| p.path == path && p.installed);
         let (mut install, mut uninstall) = (Vec::new(), Vec::new());
-        for (path, wanted) in &app.android_sdk.pending {
-            match (*wanted, installed(path)) {
-                (true, false) => install.push(path.clone()),
-                (false, true) => uninstall.push(path.clone()),
-                _ => {}
+        {
+            // The guard ends here: the command below writes the same state.
+            let tooling = app.state.android_tooling();
+            let repo = tooling.sdk_repo();
+            let installed =
+                |path: &str| repo.packages.iter().any(|p| p.path == path && p.installed);
+            for (path, wanted) in &app.android_sdk.pending {
+                match (*wanted, installed(path)) {
+                    (true, false) => install.push(path.clone()),
+                    (false, true) => uninstall.push(path.clone()),
+                    _ => {}
+                }
             }
         }
         app.android_sdk.pending.clear();
@@ -565,7 +572,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         }
     }
     if close {
-        app.state.android_mut().sdk_manager_open = false;
+        app.state.android_tooling().set_sdk_manager_open(false);
         app.android_sdk.location_edit = None;
         app.android_sdk.error = None;
         app.android_sdk.requested = false;

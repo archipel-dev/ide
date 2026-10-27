@@ -226,7 +226,7 @@ impl IdeState {
         tab.highlight = highlight;
         self.diff = Some(tab);
         self.diff_active = true;
-        self.plugin_host.active_tab = None;
+        self.plugin_host_service().set_active_tab(None);
         self.status = format!(
             "{}: {count} difference{}",
             path.display(),
@@ -577,7 +577,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |state: &IdeState| state.diff.is_some(),
             |state: &mut IdeState, _| {
                 state.diff_active = true;
-                state.plugin_host.active_tab = None;
+                state.plugin_host_service().set_active_tab(None);
                 Ok(Value::Null)
             },
         ))

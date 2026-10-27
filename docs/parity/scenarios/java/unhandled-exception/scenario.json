@@ -1,0 +1,79 @@
+{
+  "title": "Unhandled checked exception offers throws and try/catch",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/demo/Opener.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "typeAt",
+      "line": 7,
+      "column": 36,
+      "text": "\nnew FileReader(\"a.txt\");"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "typed",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "caret",
+      "line": 8,
+      "column": 14
+    },
+    {
+      "op": "altEnter"
+    },
+    {
+      "op": "applyIntention",
+      "title": "Add exception to method signature"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "fixed",
+      "timeoutMs": 120000
+    }
+  ],
+  "expect": {
+    "markup": [
+      {
+        "when": "typed",
+        "range": "8:9-8:32",
+        "severity": "error",
+        "message": "Unhandled exception: java.io.FileNotFoundException"
+      }
+    ],
+    "intentions": [
+      {
+        "items": [
+          "Add exception to method signature",
+          "Surround with try/catch"
+        ]
+      }
+    ],
+    "file": [
+      {
+        "contains": [
+          "throws FileNotFoundException"
+        ]
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "type new FileReader(\"a.txt\"); in a method, Alt+Enter",
+    "notes": "the error covers the whole new-expression"
+  }
+}

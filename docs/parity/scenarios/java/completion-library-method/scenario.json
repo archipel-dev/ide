@@ -1,0 +1,44 @@
+{
+  "title": "Completion lists AssertJ methods",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/test/java/demo/LibTest.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "typeAt",
+      "line": 8,
+      "column": 19,
+      "text": "\nAssertions.assertThat(x).isEq"
+    },
+    {
+      "op": "complete"
+    }
+  ],
+  "expect": {
+    "completion": [
+      {
+        "contains": [
+          "isEqualTo",
+          "isEqualByComparingTo"
+        ]
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "type Assertions.assertThat(x).isEq and press Ctrl+Space"
+  }
+}

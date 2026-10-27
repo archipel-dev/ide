@@ -1,0 +1,86 @@
+{
+  "title": "Import offered for an unresolved Kotlin class",
+  "requires": [
+    "jdk",
+    "kotlin-lsp",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/kotlin/demo/Main.kt",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 240000
+    },
+    {
+      "op": "typeAt",
+      "line": 4,
+      "column": 21,
+      "text": "\nval today = LocalDate.now()"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "typed",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "caret",
+      "line": 5,
+      "column": 20
+    },
+    {
+      "op": "altEnter"
+    },
+    {
+      "op": "applyIntention",
+      "title": "re:^Import"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "fixed",
+      "timeoutMs": 120000
+    }
+  ],
+  "expect": {
+    "markup": [
+      {
+        "when": "typed",
+        "range": "5:17-5:26",
+        "severity": "error",
+        "message": "Unresolved reference 'LocalDate'.",
+        "confidence": "unverified"
+      }
+    ],
+    "intentions": [
+      {
+        "items": [
+          "re:^Import"
+        ],
+        "confidence": "unverified"
+      }
+    ],
+    "file": [
+      {
+        "contains": [
+          "import java.time.LocalDate"
+        ]
+      }
+    ],
+    "noMarkup": [
+      {
+        "when": "fixed",
+        "severity": "error"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2 (Kotlin K2 mode)",
+    "action": "type val today = LocalDate.now() without the import, Alt+Enter on LocalDate",
+    "notes": "Kotlin K2 mode wording (K1 says 'Unresolved reference: LocalDate'); the quick fix text is recalled"
+  }
+}

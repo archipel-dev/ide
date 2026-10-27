@@ -1,0 +1,34 @@
+{
+  "title": "Spring Boot Maven project opens and resolves",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "maven",
+    "network"
+  ],
+  "open": "src/main/java/com/example/demo/DemoApplication.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "opened",
+      "timeoutMs": 300000
+    }
+  ],
+  "expect": {
+    "noMarkup": [
+      {
+        "when": "opened",
+        "severity": "error"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "open the pom.xml project, wait for the Maven import to finish",
+    "notes": "SpringApplication and @SpringBootApplication resolve; no error in the file"
+  }
+}

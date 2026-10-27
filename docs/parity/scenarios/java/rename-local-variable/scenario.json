@@ -1,0 +1,53 @@
+{
+  "title": "Rename a local variable",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/demo/Total.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "caret",
+      "line": 5,
+      "column": 15
+    },
+    {
+      "op": "rename",
+      "to": "result"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "renamed",
+      "timeoutMs": 120000
+    }
+  ],
+  "expect": {
+    "file": [
+      {
+        "contains": [
+          "int result = 0;",
+          "result += v;",
+          "return result;"
+        ],
+        "notContains": [
+          "total"
+        ]
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "Shift+F6 on the variable declaration, type the new name, Enter"
+  }
+}

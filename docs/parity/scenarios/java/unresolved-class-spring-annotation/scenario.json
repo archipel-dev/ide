@@ -1,0 +1,85 @@
+{
+  "title": "Import class offered for an unresolved Spring annotation",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/demo/HelloController.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "typeAt",
+      "line": 2,
+      "column": 1,
+      "text": "@RestController"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "typed",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "caret",
+      "line": 2,
+      "column": 5
+    },
+    {
+      "op": "altEnter"
+    },
+    {
+      "op": "applyIntention",
+      "title": "re:^Import"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "fixed",
+      "timeoutMs": 120000
+    }
+  ],
+  "expect": {
+    "markup": [
+      {
+        "when": "typed",
+        "range": "2:2-2:16",
+        "severity": "error",
+        "message": "Cannot resolve symbol 'RestController'"
+      }
+    ],
+    "intentions": [
+      {
+        "items": [
+          "re:^Import class"
+        ],
+        "confidence": "unverified"
+      }
+    ],
+    "file": [
+      {
+        "contains": [
+          "import org.springframework.web.bind.annotation.RestController;"
+        ]
+      }
+    ],
+    "noMarkup": [
+      {
+        "when": "fixed",
+        "severity": "error"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "type @RestController above the class, Alt+Enter, import the Spring annotation",
+    "notes": "needs spring-web on the classpath; with several candidates IntelliJ asks which class to import"
+  }
+}

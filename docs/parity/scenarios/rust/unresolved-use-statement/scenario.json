@@ -1,0 +1,45 @@
+{
+  "title": "Misspelled item in a use statement",
+  "requires": [
+    "rust-analyzer"
+  ],
+  "open": "src/main.rs",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 240000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 240000
+    },
+    {
+      "op": "typeAt",
+      "line": 1,
+      "column": 1,
+      "text": "use std::collections::HashMapp;\n"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "typed",
+      "timeoutMs": 120000
+    }
+  ],
+  "expect": {
+    "markup": [
+      {
+        "when": "typed",
+        "range": "1:23-1:31",
+        "severity": "error",
+        "message": "Unresolved reference: `HashMapp`",
+        "confidence": "unverified"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "RustRover 2025.2",
+    "action": "type use std::collections::HashMapp; at the top of the file",
+    "notes": "the unresolved last path segment is marked"
+  }
+}

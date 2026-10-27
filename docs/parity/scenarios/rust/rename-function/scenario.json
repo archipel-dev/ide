@@ -1,0 +1,49 @@
+{
+  "title": "Rename a Rust function",
+  "requires": [
+    "rust-analyzer"
+  ],
+  "open": "src/main.rs",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 240000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 240000
+    },
+    {
+      "op": "caret",
+      "line": 1,
+      "column": 5
+    },
+    {
+      "op": "rename",
+      "to": "sum"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "renamed",
+      "timeoutMs": 120000
+    }
+  ],
+  "expect": {
+    "file": [
+      {
+        "contains": [
+          "fn sum(a: i32, b: i32)",
+          "sum(1, 2)"
+        ],
+        "notContains": [
+          "add"
+        ]
+      }
+    ]
+  },
+  "intellij": {
+    "version": "RustRover 2025.2",
+    "action": "Shift+F6 on the function name, type the new name, Enter"
+  }
+}

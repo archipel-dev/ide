@@ -1,0 +1,48 @@
+{
+  "title": "Missing semicolon is a syntax error",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/demo/Semi.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "typeAt",
+      "line": 5,
+      "column": 19,
+      "text": "\nint y = 2"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "typed",
+      "timeoutMs": 120000
+    }
+  ],
+  "expect": {
+    "markup": [
+      {
+        "when": "typed",
+        "range": "6:18-6:18",
+        "severity": "error",
+        "message": "';' expected",
+        "confidence": "unverified"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "type int y = 2 without the semicolon",
+    "notes": "the message is certain; the exact range (zero-width after the 2, drawn on it) is recalled"
+  }
+}

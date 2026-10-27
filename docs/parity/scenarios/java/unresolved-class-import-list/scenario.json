@@ -1,0 +1,85 @@
+{
+  "title": "Import class offered for an unresolved List",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/demo/Names.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "typeAt",
+      "line": 5,
+      "column": 19,
+      "text": "\nList<String> names = null;"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "typed",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "caret",
+      "line": 6,
+      "column": 11
+    },
+    {
+      "op": "altEnter"
+    },
+    {
+      "op": "applyIntention",
+      "title": "re:^(Import class|Import 'List' \\(java\\.util\\))"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "fixed",
+      "timeoutMs": 120000
+    }
+  ],
+  "expect": {
+    "markup": [
+      {
+        "when": "typed",
+        "range": "6:9-6:13",
+        "severity": "error",
+        "message": "Cannot resolve symbol 'List'"
+      }
+    ],
+    "intentions": [
+      {
+        "items": [
+          "re:^Import class"
+        ],
+        "confidence": "unverified"
+      }
+    ],
+    "file": [
+      {
+        "contains": [
+          "import java.util.List;"
+        ]
+      }
+    ],
+    "noMarkup": [
+      {
+        "when": "fixed",
+        "severity": "error"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "type a List declaration without the import, Alt+Enter on List, choose java.util.List",
+    "notes": "message from JavaErrorBundle; the item text is recalled, not re-observed"
+  }
+}

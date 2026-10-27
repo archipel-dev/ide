@@ -1,0 +1,52 @@
+{
+  "title": "Rename a Kotlin function",
+  "requires": [
+    "jdk",
+    "kotlin-lsp",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/kotlin/demo/Main.kt",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 240000
+    },
+    {
+      "op": "caret",
+      "line": 3,
+      "column": 7
+    },
+    {
+      "op": "rename",
+      "to": "welcome"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "renamed",
+      "timeoutMs": 120000
+    }
+  ],
+  "expect": {
+    "file": [
+      {
+        "contains": [
+          "fun welcome(name: String)",
+          "println(welcome(\"x\"))"
+        ],
+        "notContains": [
+          "greet"
+        ]
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2 (Kotlin K2 mode)",
+    "action": "Shift+F6 on the function name, type the new name, Enter"
+  }
+}

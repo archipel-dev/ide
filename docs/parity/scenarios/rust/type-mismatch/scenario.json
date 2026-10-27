@@ -1,0 +1,45 @@
+{
+  "title": "String literal assigned to i32",
+  "requires": [
+    "rust-analyzer"
+  ],
+  "open": "src/main.rs",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 240000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 240000
+    },
+    {
+      "op": "typeAt",
+      "line": 2,
+      "column": 19,
+      "text": "\nlet n: i32 = \"text\";"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "typed",
+      "timeoutMs": 120000
+    }
+  ],
+  "expect": {
+    "markup": [
+      {
+        "when": "typed",
+        "range": "3:18-3:24",
+        "severity": "error",
+        "message": "Mismatched types [E0308]: expected `i32`, found `&str`",
+        "confidence": "unverified"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "RustRover 2025.2",
+    "action": "type let n: i32 = \"text\";",
+    "notes": "IntelliJ Rust quotes the rustc error code; wording recalled"
+  }
+}

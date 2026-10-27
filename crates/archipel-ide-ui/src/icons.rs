@@ -31,11 +31,6 @@ pub use archipel_kit::icons::{FolderKind, SymbolKind as TypeKind};
 /// Neutral icon color (palette `Gray11`).
 pub const ICON: theme::Token = theme::ICON;
 
-/// Tint of an excluded folder (`build`, `target`): orange.
-pub(crate) const EXCLUDED: Color32 = Color32::from_rgb(0xD0, 0x8A, 0x4B);
-/// Tint of a test source root: green.
-pub(crate) const TEST_ROOT: Color32 = Color32::from_rgb(0x5F, 0xAD, 0x65);
-
 /// An icon of the IDE; see the module documentation for the mapping onto the kit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Icon {
@@ -244,13 +239,41 @@ pub fn button_colored(
     tooltip: &str,
     selected: bool,
 ) -> egui::Response {
+    sized_button_colored(ui, icon, color, tooltip, selected, false)
+}
+
+/// Main toolbar button: 30 pt hit area with the toolbar icon size (UI-CHR-003; the
+/// kit's `ActionButton::large`).
+pub fn toolbar_button(ui: &mut egui::Ui, icon: Icon, tooltip: &str) -> egui::Response {
+    ui.add(ActionButton::new(icon, tooltip).large(true))
+}
+
+/// [`button_colored`] at the main toolbar size.
+pub fn toolbar_button_colored(
+    ui: &mut egui::Ui,
+    icon: Icon,
+    color: impl Into<Color32>,
+    tooltip: &str,
+    selected: bool,
+) -> egui::Response {
+    sized_button_colored(ui, icon, color, tooltip, selected, true)
+}
+
+fn sized_button_colored(
+    ui: &mut egui::Ui,
+    icon: Icon,
+    color: impl Into<Color32>,
+    tooltip: &str,
+    selected: bool,
+    large: bool,
+) -> egui::Response {
     let colors = Theme::colors(ui.ctx());
     let color = color.into();
     let tone = Tone::ALL
         .into_iter()
         .find(|tone| tone.color(&colors) == color)
         .unwrap_or(Tone::Icon);
-    let button = ActionButton::new(icon, tooltip).tone(tone);
+    let button = ActionButton::new(icon, tooltip).tone(tone).large(large);
     ui.add(if selected {
         button.selected(true)
     } else {

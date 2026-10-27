@@ -419,8 +419,9 @@ pub fn tree_row(ui: &mut egui::Ui, spec: TreeRow<'_>) -> TreeRowOut {
     let colors = Theme::colors(&ctx);
     if let (false, Some(tint)) = (spec.selected, spec.tint) {
         // Under the row: the kit row paints on top and an opaque selection hides it.
+        // Edge to edge, not inset like the selection pill (UI-TW-009).
         let below = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), ROW_HEIGHT));
-        row_pill(ui.painter(), below, tint);
+        ui.painter().rect_filled(below, 0.0, tint);
     }
     let label_tone = spec
         .tone

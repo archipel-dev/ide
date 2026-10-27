@@ -428,14 +428,15 @@ impl IdeState {
                     state.last_duration = Some(took);
                     state.imports_finished += 1;
                 }
-                let plural =
-                    |n: usize, word: &str| format!("{n} {word}{}", if n == 1 { "" } else { "s" });
+                let plural = |n: usize, one: &str, many: &str| {
+                    format!("{n} {}", if n == 1 { one } else { many })
+                };
                 self.status = format!(
                     "Project imported: {}, {}{}",
-                    plural(modules, "module"),
-                    plural(libraries, "library"),
+                    plural(modules, "module", "modules"),
+                    plural(libraries, "library", "libraries"),
                     if warnings > 0 {
-                        format!(" ({})", plural(warnings, "warning"))
+                        format!(" ({})", plural(warnings, "warning", "warnings"))
                     } else {
                         String::new()
                     }
@@ -637,6 +638,11 @@ mod tests {
         assert!(index.is_in_test_source(&root.join("tests/it.rs")));
         assert!(
             state.status.starts_with("Project imported: 1 module"),
+            "{}",
+            state.status
+        );
+        assert!(
+            state.status.contains(" libraries") || state.status.contains(" 1 library"),
             "{}",
             state.status
         );

@@ -24,7 +24,7 @@ behavior and contracts independent of implementation language.
 | [04-folding.md](04-folding.md) | fold model, update rules, every folding command and its selection rule, defaults, Java regions and placeholders, custom regions, persistence | `ED-FOLD` | 28 | 9 | 1 | 30 |
 | [05-undo-redo.md](05-undo-redo.md) | command grouping and merging, undo and redo with editor-state restore, global undo, limits, dialogs | `ED-UNDO` | 22 | 5 | 0 | 28 |
 | [06-live-templates-and-postfix.md](06-live-templates-and-postfix.md) | template syntax and variables, predefined functions, expansion and sessions, Insert Live Template, Surround With, postfix, Java catalog | `ED-TMPL`, `ED-POST` | 31 | 6 | 0 | 30 |
-| [07-editor-appearance-and-settings.md](07-editor-appearance-and-settings.md) | defaults of every Editor, General setting, gutter, caret and highlighting, scrolling, soft wraps, whitespace, guides, breadcrumbs, sticky lines, inlay hints, zoom, timings | `ED-APPEAR` | 24 | 12 | 0 | 7 |
+| [07-editor-appearance-and-settings.md](07-editor-appearance-and-settings.md) | defaults of every Editor, General setting, gutter, caret and highlighting, scrolling, soft wraps, whitespace, guides, breadcrumbs, sticky lines, inlay hints, zoom, timings | `ED-VIEW` | 24 | 12 | 0 | 7 |
 | [08-tabs-and-editor-management.md](08-tabs-and-editor-management.md) | opening, tab placement, closing and the active tab, tab limit, preview and pinned tabs, reopen, splits, editor history, Back/Forward, Recent Files and Locations | `ED-TABS`, `ED-NAV` | 22 | 6 | 0 | 28 |
 | [09-code-style-interplay.md](09-code-style-interplay.md) | the code style values the editor reads, precedence (EditorConfig, detection, scheme), indent detection | `ED-STYLE` | 8 | 2 | 0 | 6 |
 | **Total** | | | **258** | **65** | **2** | **377** |
@@ -72,5 +72,5 @@ with three values (`ED-TYPE-046`).
   (`ED-UNDO-011`, Redo not read).
 - The complete list of commands that mark themselves as navigation for Back/Forward (`ED-NAV-002`).
 - The default of the completion auto-popup delay and the distance at which navigation centers the
-  target line (`ED-APPEAR-021`).
+  target line (`ED-VIEW-021`).
 - Exact Java and Kotlin selection-extender ranges for Extend Selection (`ED-CARET-031`).

@@ -2,7 +2,7 @@
 
 All viewport cases are `status: unverified (scroll mechanics derived from the settings texts)`.
 
-### ED-APPEAR-020 case 1: moving down into the scroll margin scrolls one line
+### ED-VIEW-020 case 1: moving down into the scroll margin scrolls one line
 settings: default
 status: unverified (scroll mechanics derived from the settings texts)
 language: plain
@@ -30,7 +30,7 @@ keys: Down
 ```
 after viewport: top=1
 
-### ED-APPEAR-020 case 2: moving inside the margin does not scroll
+### ED-VIEW-020 case 2: moving inside the margin does not scroll
 settings: default
 status: unverified (scroll mechanics derived from the settings texts)
 language: plain
@@ -54,7 +54,7 @@ keys: Down
 ```
 after viewport: top=0
 
-### ED-APPEAR-020 case 3: moving up into the top margin scrolls one line
+### ED-VIEW-020 case 3: moving up into the top margin scrolls one line
 settings: default
 status: unverified (scroll mechanics derived from the settings texts)
 language: plain
@@ -84,7 +84,7 @@ keys: Up
 ```
 after viewport: top=2
 
-### ED-APPEAR-020 case 4: scroll offset 0
+### ED-VIEW-020 case 4: scroll offset 0
 settings: Vertical scroll offset=0
 status: unverified (scroll mechanics derived from the settings texts)
 language: plain
@@ -108,7 +108,7 @@ keys: Down, Down
 ```
 after viewport: top=1
 
-### ED-APPEAR-071 case 1: global font size increase
+### ED-VIEW-071 case 1: global font size increase
 settings: editor font size=12
 language: plain
 ```before
@@ -120,7 +120,7 @@ keys: Alt+Shift+Period
 ```
 after font size: 13
 
-### ED-APPEAR-071 case 2: the maximum size is not exceeded
+### ED-VIEW-071 case 2: the maximum size is not exceeded
 settings: editor font size=40
 language: plain
 ```before
@@ -132,7 +132,7 @@ keys: Alt+Shift+Period
 ```
 after font size: 40
 
-### ED-APPEAR-071 case 3: the minimum zoom-out size
+### ED-VIEW-071 case 3: the minimum zoom-out size
 settings: editor font size=8
 language: plain
 ```before

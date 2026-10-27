@@ -22,6 +22,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+/// Repeats of a code action request the server failed transiently.
+const CODE_ACTION_RETRIES: u8 = 4;
+
 /// The client command jdtls uses to hand a `WorkspaceEdit` to the editor.
 const APPLY_WORKSPACE_EDIT: &str = "java.apply.workspaceEdit";
 
@@ -110,6 +113,10 @@ pub struct CodeActionState {
     pub(crate) alerts: AlertCache,
     /// Intention ids the user switched off.
     pub disabled_intentions: HashSet<String>,
+    /// How often the current request was repeated after a transient failure.
+    retries: u8,
+    /// When to repeat the request, and whether it opens the popup.
+    retry: Option<(std::time::Instant, bool)>,
 }
 
 impl IdeState {
@@ -469,9 +476,18 @@ impl IdeState {
             .is_some_and(|path| self.lsp.supports(&path, Feature::CodeAction))
     }
 
+    fn request_code_actions_retrying(&mut self, popup: bool) -> Result<(), String> {
+        let retries = self.code_actions.retries;
+        let result = self.request_code_actions(popup);
+        self.code_actions.retries = retries;
+        result
+    }
+
     /// Requests code actions at the caret; `popup` opens the intention popup
     /// when they arrive (Alt+Enter), otherwise only the lightbulb updates.
     pub fn request_code_actions(&mut self, popup: bool) -> Result<(), String> {
+        self.code_actions.retries = 0;
+        self.code_actions.retry = None;
         if !self.active_supports_code_actions() {
             // Native fixes and intentions only.
             let native = self
@@ -653,6 +669,12 @@ impl IdeState {
 
     /// Applies code action answers and server-requested edits.
     pub fn poll_code_actions(&mut self) {
+        if let Some((at, popup)) = self.code_actions.retry
+            && std::time::Instant::now() >= at
+        {
+            self.code_actions.retry = None;
+            let _ = self.request_code_actions_retrying(popup);
+        }
         if let Some(pending) = &self.code_actions.pending
             && let Some(result) = self.lsp.take_response(&pending.handle)
             && let Some(pending) = self.code_actions.pending.take()
@@ -683,6 +705,18 @@ impl IdeState {
                         diagnostics: self.lsp.diagnostics_generation(),
                         items,
                     });
+                }
+                // A server that is validating the file right now (jdtls)
+                // answers `Internal error` or `ContentModified`: ask again.
+                Err(archipel_ide_lsp::LspError::Server { code, .. })
+                    if matches!(code, -32603 | -32801 | -32802)
+                        && self.code_actions.retries < CODE_ACTION_RETRIES =>
+                {
+                    self.code_actions.retries += 1;
+                    self.code_actions.retry = Some((
+                        std::time::Instant::now() + std::time::Duration::from_millis(400),
+                        pending.popup,
+                    ));
                 }
                 Err(error) if pending.popup => self.status = error.to_string(),
                 Err(_) => {}

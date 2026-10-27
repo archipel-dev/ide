@@ -277,8 +277,8 @@ impl IdeApp {
     }
 
     fn background_idle(&self) -> bool {
-        !self.state.search.is_running()
-            && !self.state.quick_nav.text.is_running()
+        !self.state.search_running()
+            && !self.state.text_search_running()
             && !self.find_popup.pending()
             && !self.state.runner.is_running()
             && !self.state.updates.is_busy()
@@ -420,7 +420,7 @@ impl IdeApp {
             "popups": {
                 "searchEverywhere": self.palette.open.then(|| self.palette.tab_name()),
                 "findInFilesPopup": self.find_popup.open,
-                "switcher": self.state.quick_nav.switcher.as_ref().map(|switcher| match switcher.selected_entry() {
+                "switcher": self.state.switcher().as_ref().map(|switcher| match switcher.selected_entry() {
                     archipel_ide_core::quick_nav::SwitcherEntry::File(path) => relative(path),
                     archipel_ide_core::quick_nav::SwitcherEntry::ToolWindow(window) => window.title().to_owned(),
                 }),
@@ -447,10 +447,10 @@ impl IdeApp {
                 "height": ctx.content_rect().height(),
             },
             "findInFiles": {
-                "query": self.state.search_query,
-                "results": self.state.search_results.len(),
+                "query": self.state.search_query(),
+                "results": self.state.search_result_count(),
                 "popup": self.find_popup.open,
-                "scope": self.state.search_scope_kind.id(),
+                "scope": self.state.search_scope_kind().id(),
                 "selected": self.find_popup.selected(),
             },
             "problems": active.map(|_| self.state.active_problems().len()),
@@ -662,7 +662,7 @@ mod tests {
             let _ = ctx.run(input, |ctx| app.detect_double_shift(ctx));
         }
         assert_eq!(
-            app.state.quick_nav.request,
+            app.state.navigation_request(),
             Some(
                 archipel_ide_core::quick_nav::NavigationRequest::SearchEverywhere(
                     archipel_ide_core::quick_nav::SearchTab::All

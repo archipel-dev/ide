@@ -11,9 +11,10 @@
 //! feature becomes a service, its listener does the work itself and the reaction disappears.
 
 use crate::services::{
-    GIT_REPO_CHANGE, GitRepositories, GitRepositoryChangeListener, Notifications,
-    ProjectModelService, SettingsService, TOOLCHAIN_TOPIC, ToolchainBanner, ToolchainListener,
-    ToolchainManager, ToolchainRequirementsService, ToolchainState,
+    ActionManager, FIND_TOPIC, FindInProjectService, FindListener, GIT_REPO_CHANGE,
+    GitRepositories, GitRepositoryChangeListener, Notifications, ProjectModelService,
+    SearchEverywhereManager, SearchSummary, SettingsService, TOOLCHAIN_TOPIC, ToolchainBanner,
+    ToolchainListener, ToolchainManager, ToolchainRequirementsService, ToolchainState,
 };
 use crate::{IdeState, toolchain_commands};
 use archipel_ide_git::RepositoryStatus;
@@ -32,6 +33,8 @@ pub(crate) enum Reaction {
     ToolchainInstalled,
     /// The Git status was replaced.
     VcsChanged { structure_changed: bool },
+    /// A Find in Files search finished.
+    SearchFinished(SearchSummary),
 }
 
 #[derive(Clone, Default)]
@@ -73,6 +76,14 @@ impl GitRepositoryChangeListener for VcsReactions {
     }
 }
 
+struct FindReactions(Reactions);
+
+impl FindListener for FindReactions {
+    fn search_finished(&self, summary: &SearchSummary) {
+        self.0.push(Reaction::SearchFinished(*summary));
+    }
+}
+
 /// Connects the per-project listeners when a project opens.
 struct CoreProjectListener(Reactions);
 
@@ -83,6 +94,11 @@ impl ProjectManagerListener for CoreProjectListener {
             GIT_REPO_CHANGE,
             Arc::new(VcsReactions(self.0.clone())),
         );
+        let _ = project.message_bus().subscribe(
+            project.disposable(),
+            FIND_TOPIC,
+            Arc::new(FindReactions(self.0.clone())),
+        );
     }
 }
 
@@ -92,6 +108,7 @@ fn register_core_services(application: &Application) {
             ToolchainManager::new(ToolchainState::default())
         })),
         application.register_service(ServiceDescriptor::of_default::<SettingsService>()),
+        application.register_service(ServiceDescriptor::of_default::<ActionManager>()),
         application.register_service(ServiceDescriptor::new(|application: &Application| {
             Notifications::new(application.message_bus().clone())
         })),
@@ -101,6 +118,11 @@ fn register_core_services(application: &Application) {
         application.register_project_service(ServiceDescriptor::disposable(|project: &Project| {
             GitRepositories::new(project.message_bus().clone())
         })),
+        application.register_project_service(ServiceDescriptor::disposable(|project: &Project| {
+            FindInProjectService::new(project.message_bus().clone())
+        })),
+        application
+            .register_project_service(ServiceDescriptor::of_default::<SearchEverywhereManager>()),
         application.register_project_service(ServiceDescriptor::disposable(|project: &Project| {
             ProjectModelService::new(project.message_bus().clone())
         })),
@@ -193,6 +215,32 @@ impl IdeState {
         self.application().service()
     }
 
+    /// Find Action options (application service).
+    pub fn actions(&self) -> Arc<ActionManager> {
+        self.application().service()
+    }
+
+    /// Find in Files: results, scope and options (project service).
+    pub fn find(&self) -> Option<Arc<FindInProjectService>> {
+        self.platform_project()?.get_service()
+    }
+
+    /// Whether a Find in Files search is running.
+    pub fn search_running(&self) -> bool {
+        self.find().is_some_and(|find| find.is_running())
+    }
+
+    /// Search Everywhere, Recent Locations and the Switcher (project service).
+    pub fn search_everywhere(&self) -> Option<Arc<SearchEverywhereManager>> {
+        self.platform_project()?.get_service()
+    }
+
+    /// Whether the Switcher popup is open.
+    pub fn switcher_open(&self) -> bool {
+        self.search_everywhere()
+            .is_some_and(|nav| nav.read().switcher.is_some())
+    }
+
     /// Toolchain discovery, pins and installs (application service).
     pub fn toolchains(&self) -> Arc<ToolchainManager> {
         self.application().service()
@@ -281,6 +329,19 @@ impl IdeState {
                     self.refresh_diff();
                 }
                 Reaction::ToolchainInstalled => self.toolchain_installed(),
+                Reaction::SearchFinished(summary) => {
+                    self.status = format!(
+                        "Found {} result{} in {} files{}",
+                        summary.results,
+                        if summary.results == 1 { "" } else { "s" },
+                        summary.files_scanned,
+                        if summary.truncated {
+                            " (limit reached)"
+                        } else {
+                            ""
+                        }
+                    );
+                }
             }
         }
     }

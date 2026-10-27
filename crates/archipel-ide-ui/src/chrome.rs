@@ -988,7 +988,7 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                             app.state.notifications().show_update_balloon();
                         }
                     }
-                    if app.state.runner.is_running() || app.state.search.is_running() {
+                    if app.state.runner.is_running() || app.state.search_running() {
                         widgets::busy_spinner(ui, 12.0, *theme::ACCENT);
                         ui.add_space(6.0);
                     }

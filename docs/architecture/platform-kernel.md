@@ -234,11 +234,11 @@ this list (so it cannot go stale) or if the struct grows. Tick a field when it h
   trees, navigation history and requests.
 
 **Search and navigation (`SearchEverywhere`, `FindManager`)**
-- [ ] `search`, `search_results`, `search_query`, `search_scope_kind`, `custom_scopes`,
+- [x] `search`, `search_results`, `search_query`, `search_scope_kind`, `custom_scopes`,
   `search_custom_scope`, `search_background`, `search_options`, `search_files_scanned`,
   `search_truncated`: Find in Files.
-- [ ] `quick_nav`: Search Everywhere, Recent Locations, Switcher.
-- [ ] `include_disabled_actions`: Find Action option (`ActionManager`).
+- [x] `quick_nav`: Search Everywhere, Recent Locations, Switcher.
+- [x] `include_disabled_actions`: Find Action option (`ActionManager`).
 
 **VCS (project services next to `GitRepositories`)**
 - [ ] `git_log`: Git Log tab state.

@@ -759,7 +759,7 @@ impl IdeApp {
                 self.push_dialog = None;
             } else if self.change_popup.is_some() {
                 self.change_popup = None;
-            } else if self.state.quick_nav.switcher.is_some() {
+            } else if self.state.switcher_open() {
                 self.dispatch("navigate.switcherCancel", Value::Null);
             } else if self.state.ai.pending_apply.is_some() {
                 self.dispatch("ai.chat.applyCancel", Value::Null);
@@ -1041,7 +1041,7 @@ impl IdeApp {
             self.control_after_frame(ctx);
             return;
         }
-        if self.state.search.is_running() || self.state.runner.is_running() {
+        if self.state.search_running() || self.state.runner.is_running() {
             ctx.request_repaint_after(Duration::from_millis(50));
         }
         self.state.poll_background_terminals();

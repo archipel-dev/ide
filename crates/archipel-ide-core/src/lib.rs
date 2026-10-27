@@ -4,8 +4,8 @@ use archipel_ide_language::{LanguageAnalysis, analyze_lazy};
 use archipel_ide_lsp::{LspDiagnostic, LspManager};
 use archipel_ide_project::{FileEntry, Project};
 use archipel_ide_runner::TaskService;
+use archipel_ide_search::SearchEvent;
 pub use archipel_ide_search::TextMatch;
-use archipel_ide_search::{SearchEvent, SearchService};
 use archipel_ide_terminal::TerminalSession;
 use archipel_ide_text::{EditJournal, Selection, SelectionSet, TextDocument};
 use serde_json::{Value, json};
@@ -302,21 +302,6 @@ pub struct IdeState {
     pub terminal: Option<TerminalSession>,
     /// Sessions of the Terminal tool window; the active one lives in `terminal`.
     pub terminal_tabs: terminal_tabs::TerminalTabs,
-    pub search: SearchService,
-    pub search_results: Vec<TextMatch>,
-    pub search_query: String,
-    pub search_scope_kind: SearchScopeKind,
-    /// User-defined Find in Files scopes of the project and the selected one.
-    pub custom_scopes: Vec<search_scopes::CustomScope>,
-    pub search_custom_scope: Option<String>,
-    /// Set while the Find in Files popup drives the search: no tool window opens.
-    pub search_background: bool,
-    /// Find Action: list disabled actions too (persisted in the workspace file).
-    pub include_disabled_actions: bool,
-    /// Options of the last Find in Files run.
-    pub search_options: SearchOptions,
-    pub search_files_scanned: usize,
-    pub search_truncated: bool,
     /// Running fetch/pull/push.
     pub remote_job: Option<archipel_ide_git::RemoteJob>,
     /// Latest progress line of the running remote operation.
@@ -361,8 +346,6 @@ pub struct IdeState {
     pub detected_build: Option<DetectedBuild>,
     /// Navigation history and pending/finished navigation requests.
     pub navigation: NavigationState,
-    /// Search Everywhere / Recent Locations / Switcher state.
-    pub quick_nav: quick_nav::QuickNavState,
     /// Quick fixes and intentions at the caret (Alt+Enter).
     pub code_actions: CodeActionState,
     /// Rename and the other server-backed refactorings.
@@ -460,9 +443,6 @@ impl IdeState {
             limit: self.tabs.limit,
             ..Default::default()
         };
-        self.search.cancel();
-        self.search_results.clear();
-        self.search_query.clear();
         self.terminal = None;
         self.runner = TaskService::default();
         self.watcher = None;
@@ -503,11 +483,6 @@ impl IdeState {
             limit: self.tabs.limit,
             ..Default::default()
         };
-        self.search.cancel();
-        self.search_results.clear();
-        self.search_query.clear();
-        self.search_files_scanned = 0;
-        self.search_truncated = false;
         self.terminal = None;
         self.terminal_tabs = Default::default();
         self.runner = TaskService::default();
@@ -528,7 +503,6 @@ impl IdeState {
         self.hierarchy = HierarchyState::default();
         self.expanded_dirs.clear();
         self.recent_files.clear();
-        self.quick_nav = quick_nav::QuickNavState::default();
         self.tool_windows = ToolWindowLayout::default();
         self.tool_windows.show(ToolWindow::Project);
         self.recent_projects.record(project.root());
@@ -813,12 +787,18 @@ impl IdeState {
     /// the Find in Files results.
     pub fn request_text_search(&mut self, query: &str) {
         let query = query.trim();
-        if self.quick_nav.text_query == query {
+        let Some(nav) = self.search_everywhere() else {
+            return;
+        };
+        if nav.read().text_query == query {
             return;
         }
-        self.quick_nav.text.cancel();
-        self.quick_nav.text_results.clear();
-        self.quick_nav.text_query = query.to_owned();
+        {
+            let mut nav = nav.write();
+            nav.text.lock().cancel();
+            nav.text_results.clear();
+            nav.text_query = query.to_owned();
+        }
         let Some(project) = self.project.as_ref() else {
             return;
         };
@@ -832,7 +812,7 @@ impl IdeState {
             .map(|entry| entry.relative_path.clone())
             .collect();
         // An unstartable query (empty) simply lists no text hits.
-        let _ = self.quick_nav.text.start(
+        let _ = nav.read().text.lock().start(
             project.root().to_owned(),
             files,
             query.to_owned(),
@@ -871,7 +851,8 @@ impl IdeState {
                     && !matches!(mark, project_view::DirMark::Excluded)
             })
         };
-        match self.search_scope_kind {
+        let scope_kind = self.find().map(|find| find.read().scope_kind);
+        match scope_kind.unwrap_or_default() {
             SearchScopeKind::Project => true,
             SearchScopeKind::Directory => self
                 .project_view
@@ -894,9 +875,14 @@ impl IdeState {
     }
 
     pub fn poll_text_search(&mut self) {
-        for event in self.quick_nav.text.poll() {
+        let Some(nav) = self.search_everywhere() else {
+            return;
+        };
+        let mut nav = nav.write();
+        let events = nav.text.lock().poll();
+        for event in events {
             if let SearchEvent::Match(found) = event {
-                self.quick_nav.text_results.push(found);
+                nav.text_results.push(found);
             }
         }
     }
@@ -947,48 +933,26 @@ impl IdeState {
         // Validate before clearing the previous results.
         archipel_ide_search::Matcher::new(&query, &options).map_err(|error| error.to_string())?;
         let project = self.project.as_ref().ok_or("no project is open")?;
+        let find = self.find().ok_or("no project is open")?;
         let files = self.search_files();
-        self.search_results.clear();
-        self.search_files_scanned = 0;
-        self.search_truncated = false;
-        self.search_query = query.clone();
-        if !self.search_background {
+        let background = find.read().background;
+        if !background {
             self.tool_windows.show(ToolWindow::Find);
         }
-        let job = self
-            .search
-            .start(project.root().to_owned(), files, query, &options)
+        let job = find
+            .start(project.root().to_owned(), files, query, options)
             .map_err(|error| error.to_string())?;
-        self.search_options = options;
         self.status = format!("Searching project (job {job})");
         Ok(job)
     }
 
+    /// Collects the results the search thread found; the status bar follows the
+    /// [`services::FIND_TOPIC`] event the service publishes when the search finishes.
     pub fn poll_search(&mut self) {
-        for event in self.search.poll() {
-            match event {
-                SearchEvent::Match(result) => self.search_results.push(result),
-                SearchEvent::Finished {
-                    files_scanned,
-                    truncated,
-                    ..
-                } => {
-                    self.search_files_scanned = files_scanned;
-                    self.search_truncated = truncated;
-                    self.status = format!(
-                        "Found {} result{} in {} files{}",
-                        self.search_results.len(),
-                        if self.search_results.len() == 1 {
-                            ""
-                        } else {
-                            "s"
-                        },
-                        files_scanned,
-                        if truncated { " (limit reached)" } else { "" }
-                    );
-                }
-            }
+        if let Some(find) = self.find() {
+            find.poll();
         }
+        self.dispatch_reactions();
     }
 
     pub fn refresh_git(&mut self) -> Result<(), String> {
@@ -1399,7 +1363,7 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
                     .and_then(Value::as_str)
                     .filter(|scope| !scope.is_empty())
                     .map(PathBuf::from);
-                state.search_scope_kind = params
+                let scope_kind = params
                     .get("scopeKind")
                     .and_then(Value::as_str)
                     .and_then(SearchScopeKind::parse)
@@ -1408,13 +1372,20 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
                     } else {
                         SearchScopeKind::Project
                     });
-                state.search_custom_scope = params
+                let scope_name = params
                     .get("scopeName")
                     .and_then(Value::as_str)
                     .map(str::to_owned);
-                state.search_background = flag("background");
+                if let Some(find) = state.find() {
+                    let mut find = find.write();
+                    find.scope_kind = scope_kind;
+                    find.custom_scope = scope_name;
+                    find.background = flag("background");
+                }
                 let job = state.start_search_with(query, options);
-                state.search_background = false;
+                if let Some(find) = state.find() {
+                    find.write().background = false;
+                }
                 let job = job.map_err(CommandError::InvalidParams)?;
                 Ok(json!({"job": job}))
             },
@@ -1423,9 +1394,11 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
     registry
         .register(Command::new(
             spec("search.cancel", "Cancel Search", "Search", None, "{}"),
-            |state: &IdeState| state.search.is_running(),
+            |state: &IdeState| state.search_running(),
             |state: &mut IdeState, _| {
-                state.search.cancel();
+                if let Some(find) = state.find() {
+                    find.cancel();
+                }
                 state.status = "Search cancelled".into();
                 Ok(Value::Null)
             },
@@ -1843,7 +1816,7 @@ mod tests {
             .unwrap();
         state.open_file(Path::new("notes.txt")).unwrap();
         state.documents[0].text.edit(0, 6, "after").unwrap();
-        state.search_query = "old query".into();
+        state.find().unwrap().write().query = "old query".into();
         commands
             .execute("project.open", &mut state, json!({"path": second}))
             .unwrap();
@@ -1852,7 +1825,7 @@ mod tests {
             "after"
         );
         assert!(state.documents.is_empty());
-        assert!(state.search_query.is_empty());
+        assert!(state.search_query().is_empty());
         commands
             .execute("project.open", &mut state, json!({"path": first}))
             .unwrap();
@@ -1920,13 +1893,13 @@ mod tests {
             .execute("search.project", &mut state, json!({"query": "needle"}))
             .unwrap();
         let deadline = Instant::now() + Duration::from_secs(3);
-        while state.search.is_running() && Instant::now() < deadline {
+        while state.search_running() && Instant::now() < deadline {
             state.poll_search();
             thread::sleep(Duration::from_millis(5));
         }
         state.poll_search();
-        assert_eq!(state.search_results.len(), 1);
-        assert_eq!(state.search_results[0].path, Path::new("sample.txt"));
+        assert_eq!(state.search_result_count(), 1);
+        assert_eq!(state.search_results()[0].path, Path::new("sample.txt"));
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -1947,13 +1920,13 @@ mod tests {
         let run = |state: &mut IdeState, params: Value| {
             commands.execute("search.project", state, params).unwrap();
             let deadline = Instant::now() + Duration::from_secs(3);
-            while state.search.is_running() && Instant::now() < deadline {
+            while state.search_running() && Instant::now() < deadline {
                 state.poll_search();
                 thread::sleep(Duration::from_millis(5));
             }
             state.poll_search();
             state
-                .search_results
+                .search_results()
                 .iter()
                 .map(|result| (result.path.display().to_string(), result.line))
                 .collect::<Vec<_>>()
@@ -1963,11 +1936,11 @@ mod tests {
             json!({"query": "greet", "matchCase": true, "wholeWords": true, "fileMask": "*.java"}),
         );
         assert_eq!(hits, [("App.java".to_owned(), 1)]);
-        assert_eq!(state.search_results[0].highlights, vec![6..11]);
-        assert!(state.search_options.match_case && state.search_options.whole_words);
+        assert_eq!(state.search_results()[0].highlights, vec![6..11]);
+        assert!(state.search_options().match_case && state.search_options().whole_words);
         let hits = run(&mut state, json!({"query": "^greet", "regex": true}));
         assert_eq!(hits.len(), 3, "{hits:?}");
-        let previous = state.search_results.len();
+        let previous = state.search_result_count();
         let error = commands
             .execute(
                 "search.project",
@@ -1980,7 +1953,7 @@ mod tests {
             "{error}"
         );
         assert_eq!(
-            state.search_results.len(),
+            state.search_result_count(),
             previous,
             "bad input keeps old results"
         );

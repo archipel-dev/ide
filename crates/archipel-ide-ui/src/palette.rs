@@ -116,12 +116,13 @@ fn items(app: &mut IdeApp) -> Vec<Ranked<Hit>> {
         // The All tab never lists disabled actions; the Actions tab has the checkbox.
         actions(
             app,
-            tab == SearchTab::Actions && app.state.include_disabled_actions,
+            tab == SearchTab::Actions && app.state.actions().read().include_disabled,
         )
     } else {
         Vec::new()
     };
-    let navigation = &app.state.quick_nav;
+    let manager = app.state.search_everywhere().unwrap_or_default();
+    let navigation = manager.read();
     let sources = SearchSources {
         files: &app.state.files,
         recent: &app.state.recent_files,
@@ -359,7 +360,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         }
     }
     let found = items(app);
-    if app.state.quick_nav.text.is_running() {
+    if app.state.text_search_running() {
         ctx.request_repaint_after(std::time::Duration::from_millis(30));
     }
     if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
@@ -438,10 +439,14 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                             ui.add_space(10.0);
                             match app.palette.tab {
                                 SearchTab::Actions => {
-                                    ui.checkbox(
-                                        &mut app.state.include_disabled_actions,
-                                        "Include disabled actions",
-                                    );
+                                    let actions = app.state.actions();
+                                    let mut include = actions.read().include_disabled;
+                                    if ui
+                                        .checkbox(&mut include, "Include disabled actions")
+                                        .changed()
+                                    {
+                                        actions.write().include_disabled = include;
+                                    }
                                 }
                                 SearchTab::Files | SearchTab::Text => {}
                                 _ => {

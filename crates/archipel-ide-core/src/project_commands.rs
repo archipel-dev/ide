@@ -222,7 +222,7 @@ impl IdeState {
             pinned_files: self.tabs.pinned.iter().cloned().collect(),
             marked_dirs: self.project_view.marks.clone(),
             compact_packages: Some(self.project_view.compact_packages),
-            include_disabled_actions: self.include_disabled_actions,
+            include_disabled_actions: self.actions().read().include_disabled,
             splits: self.splits_json(),
             selected_run_configuration: self
                 .run_configurations
@@ -278,7 +278,7 @@ impl IdeState {
             .filter(|(path, _)| known.contains(*path))
             .map(|(path, mark)| (path.clone(), *mark))
             .collect();
-        self.include_disabled_actions = workspace.include_disabled_actions;
+        self.actions().write().include_disabled = workspace.include_disabled_actions;
         if let Some(compact) = workspace.compact_packages {
             self.project_view.compact_packages = compact;
         }

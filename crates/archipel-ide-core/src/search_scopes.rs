@@ -47,18 +47,24 @@ fn save(root: &Path, scopes: &[CustomScope]) -> Result<(), String> {
 
 impl IdeState {
     pub(crate) fn load_search_scopes(&mut self) {
-        self.custom_scopes = self
+        let scopes = self
             .project
             .as_ref()
             .map(|project| load(project.root()))
             .unwrap_or_default();
-        self.search_custom_scope = None;
+        if let Some(find) = self.find() {
+            let mut find = find.write();
+            find.custom_scopes = scopes;
+            find.custom_scope = None;
+        }
     }
 
     /// The filter of the selected custom scope; `None` outside custom scopes.
     pub(crate) fn custom_scope_filter(&self) -> Option<FileMaskFilter> {
-        let name = self.search_custom_scope.as_ref()?;
-        let scope = self
+        let find = self.find()?;
+        let find = find.read();
+        let name = find.custom_scope.as_ref()?;
+        let scope = find
             .custom_scopes
             .iter()
             .find(|scope| &scope.name == name)?;
@@ -78,15 +84,17 @@ impl IdeState {
             .ok_or("no project is open")?
             .root()
             .to_owned();
+        let find = self.find().ok_or("no project is open")?;
         let scope = CustomScope {
             name: name.to_owned(),
             mask: mask.trim().to_owned(),
         };
-        match self.custom_scopes.iter_mut().find(|s| s.name == name) {
+        let mut find = find.write();
+        match find.custom_scopes.iter_mut().find(|s| s.name == name) {
             Some(existing) => *existing = scope,
-            None => self.custom_scopes.push(scope),
+            None => find.custom_scopes.push(scope),
         }
-        save(&root, &self.custom_scopes)
+        save(&root, &find.custom_scopes)
     }
 
     pub fn delete_search_scope(&mut self, name: &str) -> Result<(), String> {
@@ -96,16 +104,80 @@ impl IdeState {
             .ok_or("no project is open")?
             .root()
             .to_owned();
-        let before = self.custom_scopes.len();
-        self.custom_scopes.retain(|scope| scope.name != name);
-        if self.custom_scopes.len() == before {
+        let find = self.find().ok_or("no project is open")?;
+        let mut find = find.write();
+        let before = find.custom_scopes.len();
+        find.custom_scopes.retain(|scope| scope.name != name);
+        if find.custom_scopes.len() == before {
             return Err(format!("no search scope named `{name}`"));
         }
-        if self.search_custom_scope.as_deref() == Some(name) {
-            self.search_custom_scope = None;
-            self.search_scope_kind = SearchScopeKind::Project;
+        if find.custom_scope.as_deref() == Some(name) {
+            find.custom_scope = None;
+            find.scope_kind = SearchScopeKind::Project;
         }
-        save(&root, &self.custom_scopes)
+        save(&root, &find.custom_scopes)
+    }
+
+    /// The results of the last Find in Files run (empty without a project).
+    pub fn search_results(&self) -> Vec<archipel_ide_search::TextMatch> {
+        self.find()
+            .map(|find| find.read().results.clone())
+            .unwrap_or_default()
+    }
+
+    pub fn search_result_count(&self) -> usize {
+        self.find().map_or(0, |find| find.read().results.len())
+    }
+
+    pub fn search_query(&self) -> String {
+        self.find()
+            .map(|find| find.read().query.clone())
+            .unwrap_or_default()
+    }
+
+    /// Options of the last Find in Files run.
+    pub fn search_options(&self) -> archipel_ide_search::SearchOptions {
+        self.find()
+            .map(|find| find.read().options.clone())
+            .unwrap_or_default()
+    }
+
+    /// Whether the last run stopped at the result limit.
+    pub fn search_truncated(&self) -> bool {
+        self.find().is_some_and(|find| find.read().truncated)
+    }
+
+    pub fn search_scope_kind(&self) -> SearchScopeKind {
+        self.find()
+            .map(|find| find.read().scope_kind)
+            .unwrap_or_default()
+    }
+
+    pub fn search_custom_scope(&self) -> Option<String> {
+        self.find()
+            .and_then(|find| find.read().custom_scope.clone())
+    }
+
+    pub fn set_search_scope_kind(&self, kind: SearchScopeKind) {
+        if let Some(find) = self.find() {
+            find.write().scope_kind = kind;
+        }
+    }
+
+    /// Selects the user-defined scope `name` in the Find in Files popup.
+    pub fn select_custom_scope(&self, name: &str) {
+        if let Some(find) = self.find() {
+            let mut find = find.write();
+            find.scope_kind = SearchScopeKind::Custom;
+            find.custom_scope = Some(name.to_owned());
+        }
+    }
+
+    /// The user-defined Find in Files scopes of the open project.
+    pub fn custom_scopes(&self) -> Vec<CustomScope> {
+        self.find()
+            .map(|find| find.read().custom_scopes.clone())
+            .unwrap_or_default()
     }
 }
 
@@ -126,7 +198,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 state
                     .save_search_scope(&name, &mask)
                     .map_err(CommandError::InvalidParams)?;
-                Ok(json!({"scopes": state.custom_scopes.len()}))
+                Ok(json!({"scopes": state.custom_scopes().len()}))
             },
         ))
         .expect("unique built-in id");
@@ -139,7 +211,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"name":"string"}"#,
             ),
-            |state: &IdeState| !state.custom_scopes.is_empty(),
+            |state: &IdeState| !state.custom_scopes().is_empty(),
             |state: &mut IdeState, params| {
                 let name = string_param(&params, "name")?;
                 state
@@ -171,13 +243,16 @@ mod tests {
         let run = |state: &mut IdeState, params: serde_json::Value| {
             commands.execute("search.project", state, params).unwrap();
             let deadline = Instant::now() + Duration::from_secs(3);
-            while state.search.is_running() && Instant::now() < deadline {
+            while state.search_running() && Instant::now() < deadline {
                 state.poll_search();
                 std::thread::sleep(Duration::from_millis(5));
             }
             state.poll_search();
             let mut paths: Vec<_> = state
-                .search_results
+                .find()
+                .unwrap()
+                .read()
+                .results
                 .iter()
                 .map(|found| found.path.display().to_string())
                 .collect();
@@ -211,8 +286,8 @@ mod tests {
         // Scopes live in the project and come back when it is reopened.
         let mut reopened = IdeState::default();
         reopened.open_project(&root).unwrap();
-        assert_eq!(reopened.custom_scopes.len(), 1);
-        assert_eq!(reopened.custom_scopes[0].mask, "*.java, !api/**");
+        assert_eq!(reopened.custom_scopes().len(), 1);
+        assert_eq!(reopened.custom_scopes()[0].mask, "*.java, !api/**");
 
         commands
             .execute(
@@ -221,7 +296,7 @@ mod tests {
                 json!({"name": "Java outside api"}),
             )
             .unwrap();
-        assert!(state.custom_scopes.is_empty());
+        assert!(state.custom_scopes().is_empty());
         assert!(
             commands
                 .execute("search.deleteScope", &mut state, json!({"name": "x"}))

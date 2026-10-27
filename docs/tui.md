@@ -153,8 +153,12 @@ The core stays the source of truth for the caret and the text every command sees
 
 `cargo test -p archipel-ide-tui` drives the real IDE core against ratatui's `TestBackend`
 (no terminal, no GPU): the layout renders, a fixture project opens, typing and saving reach the
-file, the daemon reports a diagnostic and Alt+Enter applies the quick fix, Find Action and Go
-to File, Find in Files, a shell run configuration prints its output, completion and Go to
-Declaration against the scriptable fake language server (`archipel-fake-lsp`, built by
-`cargo test --workspace`; the tests are skipped when it is missing), the Commit window against a
-temporary Git repository, and the Terminal window against a real shell.
+file (and a lost terminal focus saves), syntax colors come from the analysis, the daemon
+reports a diagnostic and Alt+Enter applies the quick fix, Find Action, Go to File and Recent
+Files, Find in Files, tab clicks, the project tree (open, New File, Delete), a shell run
+configuration prints its output and Stop ends a running task, completion and Go to
+Declaration with Back and Forward against the scriptable fake language server
+(`archipel-fake-lsp`, built by `cargo test --workspace`; those tests are skipped when it is
+missing), the Commit window against a temporary Git repository, and the Terminal window
+against a real shell. Unit tests cover the editor/core mirror (offsets, CRLF, undo), the tree
+nesting, the keymap layering and the shell key bytes.

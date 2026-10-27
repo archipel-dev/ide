@@ -2,9 +2,7 @@
 //! this frontend. They register first, so they own their reference ids; everything else is a
 //! `CommandAction` of the core.
 
-use archipel_ide_actions::{
-    ActionEffect, ActionPlace, ActionRegistry, AnAction, AnActionEvent, Presentation,
-};
+use archipel_ide_actions::{ActionEffect, ActionRegistry, AnAction, AnActionEvent, Presentation};
 use archipel_ide_platform::data_keys;
 use std::sync::Arc;
 
@@ -64,6 +62,3 @@ pub fn register(registry: ActionRegistry<'_>) {
         let _ = registry.register(id, Arc::new(TuiActionImpl(action)), None);
     }
 }
-
-/// The place the frontend asks actions in for key presses.
-pub const KEY_PLACE: ActionPlace = ActionPlace::Keymap;

@@ -194,7 +194,9 @@ impl TuiApp {
     /// The keymap for the runtime: the kit's terminal keymap with the IDE's shortcuts.
     pub fn keymap(&self, os: Os) -> Keymap {
         let active = self.ide.state().keymap_state();
-        crate::keys::build_keymap(os, &active.keymap, |id| self.ide.knows_action(id))
+        crate::keys::build_keymap(os, &active.keymap, |id| {
+            self.ide.knows_action(id) || id == "ChooseRunConfiguration"
+        })
     }
 
     /// Shows a balloon.

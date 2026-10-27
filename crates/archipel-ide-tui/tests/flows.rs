@@ -506,3 +506,40 @@ fn a_click_on_a_tab_selects_it_and_recent_files_lists_the_history() {
         Some("two.txt")
     );
 }
+
+#[test]
+fn the_run_configuration_chooser_runs_the_pick_and_stop_ends_a_running_task() {
+    let project = Project::new(
+        "stop",
+        &[
+            ("README.md", "# stop\n"),
+            (
+                ".archipel/runConfigurations/quick.toml",
+                "name = \"quick\"\ntype = \"shell\"\nprogram = \"sh\"\narguments = [\"-c\", \"echo quick-done\"]\n",
+            ),
+            (
+                ".archipel/runConfigurations/slow.toml",
+                "name = \"slow\"\ntype = \"shell\"\nprogram = \"sh\"\narguments = [\"-c\", \"echo slow-started; sleep 30\"]\n",
+            ),
+        ],
+    );
+    let mut tui = Tui::open(&project.root, &["README.md"], 120, 30);
+    tui.advance(0.1);
+    // Alt+Shift+F10 lists the configurations; choose `slow` and it runs.
+    tui.press_with(KeyCode::F(10), KeyModifiers::ALT | KeyModifiers::SHIFT);
+    tui.expect("the chooser", 10, |tui| tui.contains("Run Configurations"));
+    assert!(
+        tui.contains("quick") && tui.contains("slow"),
+        "{}",
+        tui.text()
+    );
+    tui.type_text("slow");
+    tui.expect("the slow row", 10, |tui| tui.contains("Shell Command"));
+    tui.press(KeyCode::Enter);
+    tui.expect("the output", 20, |tui| tui.contains("slow-started"));
+    assert!(tui.app.ide().state().execution().is_running());
+    // Ctrl+F2 stops it.
+    tui.press_with(KeyCode::F(2), KeyModifiers::CONTROL);
+    tui.expect("the stop", 20, |tui| tui.contains("Process stopped"));
+    assert!(!tui.app.ide().state().execution().is_running());
+}

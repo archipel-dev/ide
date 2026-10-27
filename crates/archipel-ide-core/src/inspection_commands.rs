@@ -59,7 +59,9 @@ impl IdeState {
     }
 
     fn ensure_inspection_settings(&mut self) {
-        let registry = &mut self.settings.registry;
+        let settings = self.settings();
+        let mut settings = settings.write();
+        let registry = &mut settings.registry;
         if registry.setting(SETTING_PROFILE).is_some() || registry.page(INSPECTIONS_PAGE).is_none()
         {
             return;
@@ -106,7 +108,8 @@ impl IdeState {
             return false;
         };
         let selected = self
-            .settings
+            .settings()
+            .read()
             .text(SETTING_PROFILE)
             .filter(|name| !name.trim().is_empty())
             .unwrap_or_else(|| PROJECT_DEFAULT_PROFILE.into());
@@ -121,9 +124,13 @@ impl IdeState {
         }
         let settings = DaemonSettings {
             debounce: Duration::from_millis(
-                self.settings.int(SETTING_DELAY).unwrap_or(300).max(0) as u64
+                self.settings()
+                    .read()
+                    .int(SETTING_DELAY)
+                    .unwrap_or(300)
+                    .max(0) as u64,
             ),
-            enabled: self.settings.bool(SETTING_ENABLED).unwrap_or(true),
+            enabled: self.settings().read().bool(SETTING_ENABLED).unwrap_or(true),
             ..service.lock().settings()
         };
         let caret = self.active_document.and_then(|index| {
@@ -379,13 +386,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |state: &mut IdeState, params| {
                 let name = string_param(&params, "name")?;
                 state
-                    .settings
-                    .store
-                    .set(
-                        &state.settings.registry,
-                        SETTING_PROFILE,
-                        SettingValue::Text(name.clone()),
-                    )
+                    .settings()
+                    .write()
+                    .set(SETTING_PROFILE, SettingValue::Text(name.clone()))
                     .map_err(|e| CommandError::Failed(e.to_string()))?;
                 state.poll_analysis();
                 let service = state
@@ -436,9 +439,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     })
                     .map_err(|e| CommandError::Failed(e.to_string()))?;
                 state
-                    .settings
-                    .store
-                    .set(&state.settings.registry, SETTING_PROFILE, SettingValue::Text(name.clone()))
+                    .settings()
+                    .write()
+                    .set(SETTING_PROFILE, SettingValue::Text(name.clone()))
                     .map_err(|e| CommandError::Failed(e.to_string()))?;
                 state.analysis.host.apply(Change::SettingsChanged);
                 state.poll_analysis();

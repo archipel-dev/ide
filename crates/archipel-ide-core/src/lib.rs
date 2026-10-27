@@ -75,9 +75,11 @@ mod lsp_commands;
 mod markdown_commands;
 mod navigation;
 mod new_class;
+pub mod platform;
 mod plugin_host;
 mod problems;
 pub mod quick_nav;
+pub mod services;
 pub use new_class::{FileTemplate, JavaKind, KotlinKind, file_templates};
 mod generate;
 mod hierarchy;
@@ -111,7 +113,7 @@ pub use android_devices::DeviceHub;
 pub use android_logcat::LogcatState;
 pub use android_tools::{LayoutEditorState, LayoutMode};
 pub use disk_sync::{DiskConflict, Waker, content_hash};
-pub use settings_commands::Settings;
+pub use services::Settings;
 mod vcs;
 pub use archipel_ide_runnables::RunnableKind;
 pub use archipel_ide_search::SearchOptions;
@@ -188,10 +190,10 @@ pub use navigation::{NavigationItem, NavigationKind, NavigationList, NavigationS
 pub use problems::{FileProblems, Problem, ProblemCounts, ProblemIndex, Severity};
 pub use quick_doc::{DocsState, QuickDoc};
 pub use refactor::{RefactorState, Refactoring, RenameSession};
+pub use services::{ToolchainBanner, ToolchainState};
 pub use signature_help::{ParameterInfo, SignatureLine, SignatureState};
 pub use snippet_session::SnippetSession;
 pub use todo_commands::{TodoGroup, TodoRow, TodoScope, TodoState, TodoView};
-pub use toolchain_commands::ToolchainState;
 mod worktree_commands;
 pub use branch_commands::abort_label;
 pub use folds::{CollapsedFold, FoldState};
@@ -267,6 +269,10 @@ impl Document {
 
 #[derive(Default)]
 pub struct IdeState {
+    /// The platform kernel: the [`archipel_ide_platform::Application`], the open
+    /// [`archipel_ide_platform::Project`] and their services (toolchains, settings,
+    /// notifications, Git status). Use the accessors in [`platform`].
+    pub(crate) platform: platform::Platform,
     pub project: Option<Project>,
     pub files: Vec<FileEntry>,
     /// Bumped whenever [`IdeState::files`] is replaced; keys the tree-row cache.
@@ -312,11 +318,6 @@ pub struct IdeState {
     pub search_options: SearchOptions,
     pub search_files_scanned: usize,
     pub search_truncated: bool,
-    pub git: Option<RepositoryStatus>,
-    /// Background status refresh for external changes.
-    git_watcher: Option<archipel_ide_git::StatusWatcher>,
-    /// Interrupted merge/rebase/cherry-pick, if any.
-    pub git_pending: Option<archipel_ide_git::PendingOperation>,
     /// Running fetch/pull/push.
     pub remote_job: Option<archipel_ide_git::RemoteJob>,
     /// Latest progress line of the running remote operation.
@@ -350,8 +351,6 @@ pub struct IdeState {
     pub lsp: LspManager,
     /// Project-wide problems, refreshed by [`IdeState::refresh_problems`].
     pub problems: ProblemIndex,
-    /// Toolchain provisioning: discovery, pins and background installs.
-    pub toolchains: ToolchainState,
     /// The code completion popup, while open.
     pub completion: Option<CompletionSession>,
     /// What the user picked before, to rank it first next time.
@@ -408,8 +407,6 @@ pub struct IdeState {
     pub recent_files: Vec<PathBuf>,
     pub updates: archipel_ide_update::UpdateService,
     pub update_state: UpdateState,
-    /// Whether the update balloon is showing.
-    pub update_notification: bool,
     /// Whether Help → About is showing (`app.about`).
     pub about_open: bool,
     /// Unseen crash report from a previous session (`app.dismissCrashReport`).
@@ -421,7 +418,6 @@ pub struct IdeState {
     update_silent: bool,
     /// Original install path, retained when the running binary is renamed.
     update_executable: Option<PathBuf>,
-    pub settings: Settings,
     pub keymap: keymap_commands::KeymapState,
     /// Settings page the UI should open (set by `settings.open`, taken by the UI).
     pub settings_request: Option<String>,
@@ -433,8 +429,6 @@ pub struct IdeState {
     watcher: Option<archipel_ide_project::ProjectWatcher>,
     /// Lets background services (file watcher) wake the UI.
     pub waker: Waker,
-    /// Files or `.git` changed outside the IDE since VCS status was loaded.
-    pub vcs_stale: bool,
     /// Paths queued for the next native file dialog (control socket and tests inject
     /// the user's choice here instead of opening an OS dialog).
     pub injected_dialog_paths: std::collections::VecDeque<PathBuf>,
@@ -472,8 +466,6 @@ impl IdeState {
         self.search_query.clear();
         self.terminal = None;
         self.runner = TaskService::default();
-        self.git = None;
-        self.git_watcher = None;
         self.watcher = None;
         self.lsp.set_project(None);
         self.close_diff();
@@ -483,6 +475,8 @@ impl IdeState {
         self.recent_files.clear();
         self.tool_windows = ToolWindowLayout::default();
         self.project = None;
+        // Disposes the project services (Git status and its watcher, toolchain requirements).
+        self.platform.close_project();
         self.status = "Closed project".into();
         Ok(())
     }
@@ -499,6 +493,8 @@ impl IdeState {
     }
 
     pub(crate) fn install_project(&mut self, project: Project) -> Result<(), String> {
+        // Closes the previous project and opens this one; the services below belong to it.
+        self.platform.open_project(project.root());
         self.set_files(project.entries(20_000));
         self.documents.clear();
         self.active_document = None;
@@ -516,12 +512,12 @@ impl IdeState {
         self.terminal = None;
         self.terminal_tabs = Default::default();
         self.runner = TaskService::default();
-        self.git = RepositoryStatus::load(project.root()).ok();
+        if let Some(git) = self.git() {
+            git.open(project.root(), self.repaint.notifier());
+        }
         self.lsp.set_project(Some(project.root()));
-        self.start_git_watcher();
-        self.refresh_pending_operation();
         self.close_diff();
-        self.toolchains.reload(Some(project.root()));
+        self.reload_toolchains(Some(project.root()));
         self.annotations.clear();
         self.invalidate_line_changes();
         self.git_log = GitLogState::default();
@@ -542,7 +538,6 @@ impl IdeState {
         self.android.project_opened(project.root());
         self.project = Some(project);
         self.start_watcher();
-        self.vcs_stale = false;
         self.detect_build();
         self.load_gradle_model();
         self.load_bazel_targets();
@@ -916,7 +911,8 @@ impl IdeState {
             .or_else(|| self.project.as_ref().map(Project::root))
             .unwrap_or_else(|| Path::new("."));
         let shell = self
-            .settings
+            .settings()
+            .read()
             .text(archipel_ide_settings::ids::TERMINAL_SHELL)
             .unwrap_or_default();
         if shell.trim().is_empty() {
@@ -997,21 +993,16 @@ impl IdeState {
 
     pub fn refresh_git(&mut self) -> Result<(), String> {
         let root = self.project.as_ref().ok_or("no project is open")?.root();
-        self.git = Some(RepositoryStatus::load(root).map_err(|error| error.to_string())?);
-        if let Some(git) = &self.git {
-            self.status = changes_summary(git.changes.len(), &git.branch);
-        }
-        self.invalidate_line_changes();
-        self.invalidate_git_log();
-        self.invalidate_annotations();
-        self.refresh_pending_operation();
-        self.refresh_diff();
+        let status = RepositoryStatus::load(root).map_err(|error| error.to_string())?;
+        self.status = changes_summary(status.changes.len(), &status.branch);
+        // Announces the change; `dispatch_reactions` refreshes what depends on it.
+        self.git().ok_or("no project is open")?.update(status);
+        self.dispatch_reactions();
         Ok(())
     }
 
     pub fn stage_path(&mut self, path: &Path) -> Result<(), String> {
-        self.git
-            .as_ref()
+        self.git_status()
             .ok_or("project is not a Git repository")?
             .stage(path)
             .map_err(|error| error.to_string())?;
@@ -1019,8 +1010,7 @@ impl IdeState {
     }
 
     pub fn unstage_path(&mut self, path: &Path) -> Result<(), String> {
-        self.git
-            .as_ref()
+        self.git_status()
             .ok_or("project is not a Git repository")?
             .unstage(path)
             .map_err(|error| error.to_string())?;
@@ -1339,7 +1329,7 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
                 None,
                 r#"{"path":"string","hunks":"[usize]?"}"#,
             ),
-            |state: &IdeState| state.git.is_some(),
+            |state: &IdeState| state.has_git(),
             |state: &mut IdeState, params| {
                 let path = string_param(&params, "path")?;
                 // With `hunks`, only those chunks of the open diff are staged.
@@ -1370,7 +1360,7 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
                 None,
                 r#"{"path":"string"}"#,
             ),
-            |state: &IdeState| state.git.is_some(),
+            |state: &IdeState| state.has_git(),
             |state: &mut IdeState, params| {
                 state
                     .unstage_path(Path::new(&string_param(&params, "path")?))

@@ -3,19 +3,12 @@
 
 use crate::{CommandError, IdeState, spec, string_param};
 use archipel_ide_command::{Command, CommandRegistry};
-use archipel_ide_git::{
-    ChangeKind, FileDiff, Notify, RepositoryStatus, StatusWatcher, WhitespaceMode,
-};
+use archipel_ide_git::{FileDiff, Notify, RepositoryStatus, WhitespaceMode};
 use archipel_ide_language::{LanguageAnalysis, analyze};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
-
-/// How often Git status is reloaded in the background. External changes also
-/// trigger an immediate reload when the IDE window regains focus.
-const STATUS_INTERVAL: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DiffViewer {
@@ -171,40 +164,25 @@ impl RepaintHook {
 }
 
 impl IdeState {
-    /// Starts background Git status refresh for the open project.
-    pub(crate) fn start_git_watcher(&mut self) {
-        self.git_watcher = self.git.as_ref().map(|git| {
-            StatusWatcher::spawn(git.root.clone(), STATUS_INTERVAL, self.repaint.notifier())
-        });
-    }
-
     /// Asks the background watcher to reload status now.
     pub fn request_git_refresh(&self) {
-        if let Some(watcher) = &self.git_watcher {
-            watcher.refresh();
+        if let Some(git) = self.git() {
+            git.request_refresh();
         }
     }
 
     /// Applies status reloaded in the background (external changes).
     pub fn poll_git(&mut self) {
-        let Some(status) = self.git_watcher.as_ref().and_then(StatusWatcher::latest) else {
+        let Some(git) = self.git() else {
             return;
         };
-        if self.git.as_ref() == Some(&status) {
+        let Some(status) = git.poll_watcher() else {
             return;
-        }
-        // Files created or deleted outside the IDE change the set of
-        // untracked/added/deleted paths; rescan so the project tree shows them.
-        let rescan = self.git.as_ref().map(structural_changes) != Some(structural_changes(&status));
-        self.git = Some(status);
-        self.invalidate_line_changes();
-        self.invalidate_git_log();
-        self.invalidate_annotations();
-        self.refresh_pending_operation();
-        if rescan && let Some(project) = &self.project {
-            self.set_files(project.entries(20_000));
-        }
-        self.refresh_diff();
+        };
+        // Announces the change; `dispatch_reactions` refreshes what depends on it (and rescans
+        // the tree when files were created or deleted outside the IDE).
+        git.update(status);
+        self.dispatch_reactions();
     }
 
     /// Converts a project-relative path to one relative to the Git root.
@@ -220,10 +198,9 @@ impl IdeState {
 
     fn compute_diff(&self, path: &Path) -> Result<FileDiff, String> {
         let git = self
-            .git
-            .as_ref()
+            .git_status()
             .ok_or("the project is not a Git repository")?;
-        let repo_path = self.repo_relative(git, path)?;
+        let repo_path = self.repo_relative(&git, path)?;
         // Compare against what the editor holds, unsaved edits included.
         let working = match self.documents.iter().find(|d| d.path == path) {
             Some(document) => Some(document.text.text()),
@@ -280,8 +257,7 @@ impl IdeState {
     /// commit `hash` (against its first parent).
     pub fn show_commit_diff(&mut self, hash: &str, path: &Path) -> Result<(), String> {
         let git = self
-            .git
-            .as_ref()
+            .git_status()
             .ok_or("the project is not a Git repository")?;
         let commit = self
             .git_log
@@ -313,8 +289,7 @@ impl IdeState {
     /// `path`, leaving the other changes of the file unstaged.
     pub fn stage_hunks(&mut self, path: &Path, hunks: &[usize]) -> Result<(), String> {
         let git = self
-            .git
-            .as_ref()
+            .git_status()
             .ok_or("the project is not a Git repository")?;
         let tab = self
             .diff
@@ -324,7 +299,7 @@ impl IdeState {
         if let Some(bad) = hunks.iter().find(|&&index| index >= tab.diff.hunks.len()) {
             return Err(format!("the diff has no chunk {bad}"));
         }
-        let repo_path = self.repo_relative(git, path)?;
+        let repo_path = self.repo_relative(&git, path)?;
         git.stage_text(&repo_path, &tab.diff.old_with_hunks(hunks))
             .map_err(|error| error.to_string())?;
         if let Some(tab) = self.diff.as_mut() {
@@ -398,15 +373,6 @@ impl IdeState {
     }
 }
 
-/// Changes that add or remove files (as opposed to editing them).
-fn structural_changes(git: &RepositoryStatus) -> Vec<&Path> {
-    git.changes
-        .iter()
-        .filter(|change| change.kind != ChangeKind::Modified)
-        .map(|change| change.path.as_path())
-        .collect()
-}
-
 pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
     let diff_active = |state: &IdeState| state.diff_active && state.diff.is_some();
     registry
@@ -418,7 +384,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 Some("⌘D"),
                 r#"{"path":"string"}"#,
             ),
-            |state: &IdeState| state.git.is_some(),
+            |state: &IdeState| state.has_git(),
             |state: &mut IdeState, params| {
                 let path = PathBuf::from(string_param(&params, "path")?);
                 state.show_diff(&path).map_err(CommandError::Failed)?;
@@ -829,16 +795,16 @@ mod tests {
         commands
             .execute("project.open", &mut state, json!({"path": root}))
             .unwrap();
-        assert!(state.git.as_ref().unwrap().changes.is_empty());
+        assert!(state.git_status().unwrap().changes.is_empty());
         // Changed by another tool, not through the IDE.
         fs::write(root.join("App.java"), "changed\n").unwrap();
         state.request_git_refresh();
         let deadline = Instant::now() + Duration::from_secs(10);
-        while state.git.as_ref().unwrap().changes.is_empty() && Instant::now() < deadline {
+        while state.git_status().unwrap().changes.is_empty() && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(20));
             state.poll_git();
         }
-        assert_eq!(state.git.as_ref().unwrap().changes.len(), 1);
+        assert_eq!(state.git_status().unwrap().changes.len(), 1);
         // A file created outside the IDE shows up in the project tree.
         fs::write(root.join("Notes.txt"), "new\n").unwrap();
         state.request_git_refresh();

@@ -110,13 +110,11 @@ fn word_start(text: &TextDocument, caret: usize) -> usize {
 impl IdeState {
     /// Bundled live templates plus the user's, honoring the enable toggles.
     pub fn live_templates(&self) -> TemplateRegistry {
-        let list = |id: &str| match self.settings.store.get(&self.settings.registry, id) {
-            Ok(SettingValue::List(lines)) => lines,
-            _ => Vec::new(),
-        };
+        let settings = self.settings();
+        let settings = settings.read();
         TemplateRegistry::bundled().with_user(
-            list(ids::LIVE_TEMPLATES_USER),
-            list(ids::LIVE_TEMPLATES_DISABLED),
+            settings.list(ids::LIVE_TEMPLATES_USER),
+            settings.list(ids::LIVE_TEMPLATES_DISABLED),
         )
     }
 
@@ -349,21 +347,15 @@ impl IdeState {
     }
 
     fn user_template_lines(&self) -> Vec<String> {
-        match self
-            .settings
-            .store
-            .get(&self.settings.registry, ids::LIVE_TEMPLATES_USER)
-        {
-            Ok(SettingValue::List(lines)) => lines,
-            _ => Vec::new(),
-        }
+        self.settings().read().list(ids::LIVE_TEMPLATES_USER)
     }
 
     fn store_list(&mut self, id: &str, lines: Vec<String>) -> Result<(), CommandError> {
-        let crate::Settings { registry, store } = &mut self.settings;
-        store
-            .set(registry, id, SettingValue::List(lines))
-            .and_then(|_| store.save())
+        let settings = self.settings();
+        let mut settings = settings.write();
+        settings
+            .set(id, SettingValue::List(lines))
+            .and_then(|_| settings.store.save())
             .map_err(|error| CommandError::Failed(error.to_string()))
     }
 
@@ -422,14 +414,7 @@ impl IdeState {
 
     /// Switches a group (`Java`) or template (`Java/sout`, `Java/.if`) on or off.
     pub fn set_template_enabled(&mut self, key: &str, enabled: bool) -> Result<(), CommandError> {
-        let mut disabled = match self
-            .settings
-            .store
-            .get(&self.settings.registry, ids::LIVE_TEMPLATES_DISABLED)
-        {
-            Ok(SettingValue::List(lines)) => lines,
-            _ => Vec::new(),
-        };
+        let mut disabled = self.settings().read().list(ids::LIVE_TEMPLATES_DISABLED);
         disabled.retain(|line| line != key);
         if !enabled {
             disabled.push(key.to_owned());

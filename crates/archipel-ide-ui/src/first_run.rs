@@ -17,7 +17,8 @@ pub struct Draft {
 
 impl Draft {
     fn current(app: &IdeApp) -> Draft {
-        let settings = &app.state.settings;
+        let settings = app.state.settings();
+        let settings = settings.read();
         Draft {
             theme: settings.text(ids::THEME).unwrap_or_default(),
             keymap: settings.text(ids::KEYMAP).unwrap_or_default(),

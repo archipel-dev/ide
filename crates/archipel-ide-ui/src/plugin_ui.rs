@@ -417,7 +417,8 @@ pub fn status_widgets(
 
 /// Plugin notification balloons, newest at the bottom.
 pub fn notifications(app: &mut IdeApp, ctx: &egui::Context) {
-    if app.state.plugin_host.notifications.is_empty() {
+    let notifications = app.state.notifications();
+    if notifications.plugin_notification_count() == 0 {
         return;
     }
     let screen = ctx.content_rect();
@@ -431,10 +432,8 @@ pub fn notifications(app: &mut IdeApp, ctx: &egui::Context) {
         )
         .show(ctx, |ui| {
             ui.set_max_width(width.min(screen.width() - 32.0));
-            let shown = app.state.plugin_host.notifications.len().min(3);
-            let start = app.state.plugin_host.notifications.len() - shown;
-            for index in start..app.state.plugin_host.notifications.len() {
-                let (plugin, notification) = &app.state.plugin_host.notifications[index];
+            for (index, plugin, notification) in &notifications.recent_plugin_notifications(3) {
+                let index = *index;
                 egui::Frame::new()
                     .fill(*theme::NOTIFICATION)
                     .stroke(egui::Stroke::new(1.0_f32, theme::POPUP_BORDER))
@@ -480,7 +479,7 @@ pub fn notifications(app: &mut IdeApp, ctx: &egui::Context) {
             }
         });
     if let Some(index) = dismiss {
-        app.state.plugin_host.notifications.remove(index);
+        notifications.dismiss_plugin_notification(index);
     }
 }
 

@@ -198,7 +198,7 @@ impl IdeApp {
         // Local History needs a change journal Archipel IDE does not keep yet.
         let at = position(items, "RevealGroup").map_or(items.len(), |index| index + 1);
         items.insert(at, action("LocalHistory", "Local History"));
-        if self.state.git.is_some() && !root {
+        if self.state.has_git() && !root {
             let mut git = vec![action("jt.git.diff", "Show Diff")];
             if !is_dir {
                 git.push(action("jt.git.stage", "Add"));
@@ -232,7 +232,7 @@ impl IdeApp {
                 },
             );
         }
-        if !is_dir && !root && self.state.git.is_some() {
+        if !is_dir && !root && self.state.has_git() {
             let at = items.len();
             items.insert(at, MenuItem::Separator(None));
             items.insert(at + 1, action("jt.git.diff", "Compare With HEAD…"));

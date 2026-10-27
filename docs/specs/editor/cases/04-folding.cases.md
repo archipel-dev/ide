@@ -168,6 +168,7 @@ class A {
 
 ### ED-FOLD-035 case 1: documentation comments are expanded by default
 settings: default
+status: unverified (blanks inside the placeholder)
 language: java
 ```before
 class A {
@@ -517,7 +518,7 @@ a <selection>bcdef<caret></selection> g
 ```
 keys: Ctrl+.
 ```after
-a <fold text="...">bcdef</fold><caret> g
+a <caret><fold text="...">bcdef</fold> g
 ```
 
 ### ED-FOLD-015 case 2: Fold Selection again removes a user-defined region

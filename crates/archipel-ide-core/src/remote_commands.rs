@@ -34,7 +34,7 @@ impl IdeState {
             .clone();
         if matches!(operation, RemoteOperation::Pull { .. }) {
             // The pull rewrites files; editors are reloaded when it ends.
-            self.save_all()?;
+            self.save_all_at(crate::SavePoint::Vcs).into_result()?;
         }
         let label = operation.label();
         ops.start(&root, operation, self.repaint.notifier())?;

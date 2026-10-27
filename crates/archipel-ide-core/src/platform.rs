@@ -14,7 +14,7 @@ use crate::build_window::BuildWindowFollower;
 use crate::services::Settings;
 use crate::services::{
     ActionManager, AgentsManager, AndroidTooling, BlameAnnotations, CloneManager,
-    DEBUG_SESSION_TOPIC, DebugSessionListener, EXECUTION_TOPIC, ExecutionListener,
+    DEBUG_SESSION_TOPIC, DebugSessionListener, DocumentSaving, EXECUTION_TOPIC, ExecutionListener,
     ExecutionManager, FIND_TOPIC, FindInProjectService, FindListener, GIT_REPO_CHANGE,
     GitLogService, GitRemoteOperations, GitRepositories, GitRepositoryChangeListener,
     KeymapManager, LineStatusTracker, Notifications, PluginHostService, ProjectModelService,
@@ -247,6 +247,7 @@ fn register_core_services(application: &Application) {
             CloneManager::new(application.message_bus().clone())
         })),
         application.register_service(ServiceDescriptor::of_default::<ActionManager>()),
+        application.register_service(ServiceDescriptor::of_default::<DocumentSaving>()),
         application.register_service(ServiceDescriptor::new(|application: &Application| {
             PluginHostService::new(application.message_bus().clone())
         })),

@@ -1,6 +1,6 @@
 //! Build, run and test actions backed by the build-system registry.
 
-use crate::{IdeState, ToolWindow, spec, string_array_param, string_param};
+use crate::{IdeState, SavePoint, ToolWindow, spec, string_array_param, string_param};
 use archipel_ide_command::{Command, CommandError, CommandRegistry};
 use archipel_ide_runner::{
     BuildSystem, BuildSystemKind, BuildSystemRegistry, RunnerError, TaskKind, TaskPlan, TaskState,
@@ -94,9 +94,27 @@ impl IdeState {
         label: &str,
         kind: TaskKind,
     ) -> Result<(), String> {
+        let point = match kind {
+            TaskKind::Build => SavePoint::Build,
+            TaskKind::Sync => SavePoint::ExternalSystem,
+            _ => SavePoint::Run,
+        };
+        self.start_task_at(plan, label, kind, point)
+    }
+
+    /// [`Self::start_task`] saving at `point` first (PLAT-SAVE-030 to 034): every unsaved
+    /// document is on disk before the process reads it. A task that cannot start saves nothing.
+    pub(crate) fn start_task_at(
+        &mut self,
+        plan: Result<TaskPlan, RunnerError>,
+        label: &str,
+        kind: TaskKind,
+        point: SavePoint,
+    ) -> Result<(), String> {
         if self.execution().is_running() {
             return Err("A task is already running; stop it first.".into());
         }
+        self.save_before(point);
         self.tool_windows.show(ToolWindow::Build);
         match plan {
             Ok(plan) => {

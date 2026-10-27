@@ -45,7 +45,7 @@ implicit receivers, outer classes, then file scope). Member callables beat exten
 that is *shadowed* by a member is reported as a warning (03).
 
 `KT-RES-001` MUST: file-level lookup uses exactly the order above, and a same-rank ambiguity is an ambiguity error
-(03, `OVERLOAD_RESOLUTION_AMBIGUITY` / ambiguous reference), not "first wins". Acceptance: cases 02/1..3: an explicit import
+(03, `OVERLOAD_RESOLUTION_AMBIGUITY` / ambiguous reference), not "first wins". Acceptance: the cases of this ID in `cases/02-*.cases.md`: an explicit import
 beats a same-package class of the same name; a same-package class beats a star import; a star import beats a default
 import; two star imports of the same simple name used by that name give an ambiguity error.
 
@@ -56,7 +56,7 @@ introduced). Acceptance: after `import a.B as C`, a use of
 `KT-RES-003` MUST: `import a.Obj.member` imports one member of an `object` (or of a companion, as
 `a.Cls.Companion.member`, or of a Java class if static); `import a.Obj.*` is **an error** for Kotlin objects
 (`Cannot import on demand from object 'Obj'.`), but allowed for Java classes (imports the static members and nested
-classes) and for Kotlin **classes** (imports nested classifiers only). Acceptance: cases 02/4.
+classes) and for Kotlin **classes** (imports nested classifiers only). Acceptance: the cases of this ID in `cases/02-*.cases.md`
 
 ## 2.2 Default imports
 
@@ -113,7 +113,7 @@ iterator error; `val (a, b) = p` a component error; `by lazyLike` a delegate err
 a candidate exists.
 
 `KT-IMP-001` MUST: the Import fix is registered for every diagnostic listed above whenever at least one candidate exists
-(2.5), and is the **first** item of the Alt+Enter list (top priority) in the error group. Acceptance: cases 02/5..9.
+(2.5), and is the **first** item of the Alt+Enter list (top priority) in the error group. Acceptance: the cases of this ID in `cases/02-*.cases.md`
 
 ## 2.5 Which declarations are candidates
 
@@ -147,7 +147,7 @@ import without alias, or implied by default imports):
 
 After filtering, candidates are de-duplicated by FQ name (the one with the best priority survives).
 
-`KT-IMP-002` MUST: candidate sets per the two tables. Acceptance: cases 02/5..14: in type position only classifiers; in
+`KT-IMP-002` MUST: candidate sets per the two tables. Acceptance: the cases of this ID in `cases/02-*.cases.md`: in type position only classifiers; in
 `x.foo()` only extensions; an `infix fun` appears for `a foo b`, a non-infix extension does not; `private`, local and
 already-imported declarations never appear.
 
@@ -202,10 +202,10 @@ Enter chooses; **Right arrow** opens a one-step submenu with `Exclude '<x>' from
 each of its parent prefixes while the prefix still has two or more segments (`java.util.List` -> `java.util.List`, `java.util`;
 `a.b.c.D` -> `a.b.c.D`, `a.b.c`, `a.b`), choosing adds an exclusion (`KT-IMP-004`).
 
-`KT-IMP-006` MUST: item text rules above (kinds, plural, "and n more", fallback `Import`). Acceptance: cases 02/5, 6, 10, 11.
+`KT-IMP-006` MUST: item text rules above (kinds, plural, "and n more", fallback `Import`). Acceptance: the cases of this ID in `cases/02-*.cases.md`
 
 `KT-IMP-007` MUST: hint text `Import <fq>?`, shown for the best candidate, silent import restricted as stated. Acceptance:
-cases 02/12, 13.
+the cases of this ID in `cases/02-*.cases.md`
 
 `KT-IMP-008` MUST: chooser title `Imports`, rows, speed search, Right-arrow exclude submenu with the exact `Exclude '<x>' from
 auto-import` strings. Acceptance: case 02/6.
@@ -235,7 +235,7 @@ Candidates are ordered by a priority comparison applied in this order (first dif
 
 Different from Java (`java/05-imports.md`): there is no "one member per class" reduction; every distinct FQ name is a row.
 
-`KT-IMP-010` MUST: the ordering above. Acceptance: cases 02/6, 10, 14.
+`KT-IMP-010` MUST: the ordering above. Acceptance: the cases of this ID in `cases/02-*.cases.md`
 
 ## 2.8 What the fix does (the edit)
 
@@ -253,7 +253,7 @@ Choosing a candidate runs as one undoable command named `Add Import`.
 - **Position of the new line** and format: see 2.11.
 - **Usage statistics**: the choice is recorded for ordering (2.7 step 4).
 
-`KT-IMP-011` MUST: the edit rules above; undo restores the file exactly. Acceptance: cases 02/5..9, 15.
+`KT-IMP-011` MUST: the edit rules above; undo restores the file exactly. Acceptance: the cases of this ID in `cases/02-*.cases.md`
 
 ## 2.9 Extension receiver applicability
 
@@ -287,7 +287,7 @@ that mentions its name resolves to something else with higher priority (for exam
 adds nothing; an alias import is used iff the alias is used. (An explicit import of a name that default imports already provide
 is reported as unused by Optimize Imports because step 5 of 2.10.2 drops it; see Q-IMP-4.)
 
-`KT-IMP-020` MUST: the inspection, texts and fixes above. Acceptance: cases 02/17, 18.
+`KT-IMP-020` MUST: the inspection, texts and fixes above. Acceptance: the cases of this ID in `cases/02-*.cases.md`
 
 ### 2.10.2 Optimize Imports (Code | Optimize Imports; also run on save/reformat when configured)
 
@@ -322,7 +322,7 @@ Result notification (a short editor hint after the action): `Removed N imports` 
 `, added M import(s)` when new lines were written, `Rearranged imports` when only the order changed, `Unused imports not
 found` when nothing changed. (Count noun: `import` for fewer than 2, `imports` otherwise.)
 
-`KT-IMP-021` MUST: steps 1 to 8. Acceptance: cases 02/19..27.
+`KT-IMP-021` MUST: steps 1 to 8. Acceptance: the cases of this ID in `cases/02-*.cases.md`
 
 ### 2.10.3 The layout
 
@@ -340,7 +340,7 @@ wins; between two matching entries a **without-subpackages** entry beats a with-
 Within the same group imports are sorted by plain string order of their text (with backticks removed), so `a.B` < `a.b`
 (upper case before lower case, code point order).
 
-`KT-IMP-022` MUST: defaults above; the matching rule; sorting by text without backticks. Acceptance: cases 02/19, 20.
+`KT-IMP-022` MUST: defaults above; the matching rule; sorting by text without backticks. Acceptance: the cases of this ID in `cases/02-*.cases.md`
 
 ### 2.10.4 On-the-fly optimize
 
@@ -366,7 +366,7 @@ Given an import path (fqName, `.*` flag, optional alias):
 - Adding **never** collapses to a star import and never removes imports; collapsing happens only in Optimize Imports.
 - In a code fragment (debugger, etc.) the import text is attached to the fragment's own import list.
 
-`KT-IMP-030` MUST: the rules above. Acceptance: cases 02/5, 15, 21.
+`KT-IMP-030` MUST: the rules above. Acceptance: the cases of this ID in `cases/02-*.cases.md`
 
 ## 2.12 Import on paste
 

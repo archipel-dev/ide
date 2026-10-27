@@ -41,7 +41,7 @@ The IDE has two producers of problems for a Kotlin file:
 
 `KT-DIAG-001` MUST: every compiler diagnostic of this catalog is reported with the exact message, severity and range given,
 independent of inspection profiles, and diagnostic-based inspections never produce duplicate marks. Acceptance:
-cases 03/1..30.
+the cases of this ID in `cases/03-*.cases.md`
 
 ### 3.1.1 Highlight type, tooltip and presentation
 
@@ -71,7 +71,7 @@ suppression options (3.4); a warning with no fix of its own still gets an intent
 outside content roots in "essential highlighting only" mode. In *code fragments* (debugger expressions) visibility errors
 (`INVISIBLE_REFERENCE`, `INVISIBLE_SETTER`) are suppressed.
 
-`KT-DIAG-002` MUST: highlight types, tooltip/description rule, pending state, scope rules. Acceptance: cases 03/1, 2, 31.
+`KT-DIAG-002` MUST: highlight types, tooltip/description rule, pending state, scope rules. Acceptance: the cases of this ID in `cases/03-*.cases.md`
 
 ## 3.2 Ranges ("positioning")
 
@@ -235,7 +235,7 @@ Acceptance: differential test over the compiler's own diagnostic test corpus.
 
 `KT-DIAG-131` MUST: keep the compiler's rendering conventions: types shown in short, user-readable form (`List<String>`, `String?`,
 `(Int) -> Unit`), declarations shown as Kotlin source heads (`fun foo(a: Int): Unit`, `val x: Int`), one declaration per line after
-a `:`-terminated header (`Conflicting declarations:`), quoted names with single quotes. Acceptance: cases 03.
+a `:`-terminated header (`Conflicting declarations:`), quoted names with single quotes. Acceptance: the cases of this ID in `cases/03-diagnostics.cases.md`.
 
 ## 3.3.7 Rendering of declarations and types in messages
 
@@ -248,7 +248,7 @@ different types would print the same name (then FQ names), nullable as `T?`, fun
 `A.(B) -> R`, captured and flexible types in their user form (`String!` for a platform type). *Candidate lists*
 put each candidate on its own line after the header line.
 
-`KT-DIAG-132` SHOULD: this rendering; identical output for identical programs. Acceptance: cases 03/9, 10, 15.
+`KT-DIAG-132` SHOULD: this rendering; identical output for identical programs. Acceptance: the cases of this ID in `cases/03-*.cases.md`
 
 ## 3.4 Suppression and the "compiler warning" intention
 
@@ -263,7 +263,7 @@ Applying `Suppress ... for statement` writes `@Suppress("NAME")` before the stat
 or inline before the expression when the statement is a part of a larger expression).
 
 `KT-DIAG-140` MUST: the suppress annotation honoured at statement, declaration, class and file level; the popup rows as described;
-errors not suppressible. Acceptance: cases 03/32, 33.
+errors not suppressible. Acceptance: the cases of this ID in `cases/03-*.cases.md`
 
 ## 3.5 Ordering of fixes
 

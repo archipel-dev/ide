@@ -59,7 +59,7 @@ The contributors, with what they add (in descending importance; details in 4.2 t
 12. **plain-text symbol contributor** (names inside comments/strings that refer to symbols, for the "word" step);
 13. in **Java files**: a contributor that adds Kotlin companion members and Kotlin extension functions as Java items (4.10).
 
-`KT-CMP-001` MUST: position classification as above and that contributors run only for their positions. Acceptance: cases 04/1..4.
+`KT-CMP-001` MUST: position classification as above and that contributors run only for their positions. Acceptance: the cases of this ID in `cases/04-*.cases.md`
 
 ## 4.2 What expression-name completion offers
 
@@ -87,10 +87,10 @@ Operators declared as `get`/`set` members are additionally offered as the bracke
 Items are never offered when: the position is inside a comment (except KDoc references), a string literal *outside* a template, a numeric literal,
 right after `..`/`..<` (only expressions), or the declaration would be invisible.
 
-`KT-CMP-010` MUST: item sources 1 to 8 with the visibility, receiver and smart-cast rules above. Acceptance: cases 04/5..14.
+`KT-CMP-010` MUST: item sources 1 to 8 with the visibility, receiver and smart-cast rules above. Acceptance: the cases of this ID in `cases/04-*.cases.md`
 
 `KT-CMP-011` MUST: items that require an import are offered on the first invocation, ranked after non-import items, and add the import on insertion
-(4.6). Acceptance: cases 04/12, 13.
+(4.6). Acceptance: the cases of this ID in `cases/04-*.cases.md`
 
 `KT-CMP-012` SHOULD: a Java getter/setter pair is offered as the synthetic property with the tail ` (from getX()/setX())` (read-only: ` (from getX())`)
 and also matches when the user types the getter's or setter's name (`getNa` finds `name`). Acceptance: case 04/14.
@@ -126,7 +126,7 @@ Style: keywords bold; **deprecated** items struck through; items needing a smart
 Kotlin icons (class, interface, object, enum, annotation, function, extension function, property, variable, parameter, package).
 
 `KT-CMP-020` MUST: the presentation columns above for functions, properties, classes, constructors, extensions, named arguments, keywords. Acceptance:
-cases 04/15..19.
+the cases of this ID in `cases/04-*.cases.md`
 
 ## 4.4 Insertion: functions and properties
 
@@ -150,9 +150,9 @@ Choosing a function item (Enter/Tab) or typing one of its commit characters inse
 
 Choosing a property/variable inserts the name only; in a string template see 4.5; a property called through `invoke` with a function type is a function item (rule 5).
 
-`KT-CMP-030` MUST: rules 1 to 3, 5 to 7. Acceptance: cases 04/20..27.
+`KT-CMP-030` MUST: rules 1 to 3, 5 to 7. Acceptance: the cases of this ID in `cases/04-*.cases.md`
 
-`KT-CMP-031` SHOULD: the trailing-lambda variant and its template (rule 4) and rule 8. Acceptance: cases 04/28, 29.
+`KT-CMP-031` SHOULD: the trailing-lambda variant and its template (rule 4) and rule 8. Acceptance: the cases of this ID in `cases/04-*.cases.md`
 
 ## 4.5 Insertion: classes, templates, brackets, named arguments
 
@@ -175,11 +175,11 @@ Choosing a property/variable inserts the name only; in a string template see 4.5
   (in this file, no imports) have the names of at least two still-missing parameters in order, a single item `a, b` is offered which inserts all of them
   separated by `, ` (a pair of overlapping icons).
 
-`KT-CMP-040` MUST: class insertion with import, `<>`, objects, string-template wrapping and dot handling. Acceptance: cases 04/30..34.
+`KT-CMP-040` MUST: class insertion with import, `<>`, objects, string-template wrapping and dot handling. Acceptance: the cases of this ID in `cases/04-*.cases.md`
 
-`KT-CMP-041` MUST: named-argument items with the conditions above. Acceptance: cases 04/35..38.
+`KT-CMP-041` MUST: named-argument items with the conditions above. Acceptance: the cases of this ID in `cases/04-*.cases.md`
 
-`KT-CMP-042` SHOULD: multiple-argument items, bracket-operator items, anonymous-object items. Acceptance: cases 04/39..41.
+`KT-CMP-042` SHOULD: multiple-argument items, bracket-operator items, anonymous-object items. Acceptance: the cases of this ID in `cases/04-*.cases.md`
 
 ## 4.6 Imports on completion
 
@@ -197,7 +197,7 @@ Every item that is not already accessible carries an **import strategy** decided
 An import is **not** added if the name is already available (explicit/star/default/same-package import) — checked against the import scopes of the file. Adding uses the
 primitive of `02` 2.11 (no star collapse). The import is part of the same undo step as the insertion.
 
-`KT-CMP-050` MUST: strategies above. Acceptance: cases 04/12, 13, 42.
+`KT-CMP-050` MUST: strategies above. Acceptance: the cases of this ID in `cases/04-*.cases.md`
 
 ## 4.7 Keyword completion
 
@@ -227,7 +227,7 @@ Rules on top of the parse test:
   `super<Type>` for each direct supertype when ambiguity exists, `override` offers member lists (4.9), `actual` offers actual stubs for `expect` members;
 - `dynamic` is not offered on the JVM.
 
-`KT-CMP-060` MUST: parse-based filtering and the rules above. Acceptance: cases 04/43..50.
+`KT-CMP-060` MUST: parse-based filtering and the rules above. Acceptance: the cases of this ID in `cases/04-*.cases.md`
 
 ## 4.8 Ordering
 
@@ -243,7 +243,7 @@ On top of the framework's classifier chain (`codeinsight/06` section 7) Kotlin c
 6. **usage statistics** (framework) keyed by the item text; anonymous-object items are keyed by the FQ name of the class (they would otherwise all be `object`);
 7. the **named-argument** items rank by the argument index of their first unpassed parameter.
 
-`KT-CMP-070` SHOULD: these relevance rules. Acceptance: cases 04/51..55.
+`KT-CMP-070` SHOULD: these relevance rules. Acceptance: the cases of this ID in `cases/04-*.cases.md`
 
 ## 4.9 Declaration-position completion
 
@@ -262,7 +262,7 @@ On top of the framework's classifier chain (`codeinsight/06` section 7) Kotlin c
   except for names listed above; the popup is not auto-shown after the identifier-start of a declaration (`codeinsight/06` CI-CMP-031).
 - `where T : <caret>`: type names; `where <caret>`: type parameter names of the declaration.
 
-`KT-CMP-080` SHOULD: override/implement completion, name suggestions, unresolved-name suggestions. Acceptance: cases 04/56..60.
+`KT-CMP-080` SHOULD: override/implement completion, name suggestions, unresolved-name suggestions. Acceptance: the cases of this ID in `cases/04-*.cases.md`
 
 ## 4.10 When-subject completion
 
@@ -274,7 +274,7 @@ In a `when (subject)` entry condition:
 - `else` is offered only if there is no `else` entry yet.
 A used entry is not offered again. Index lookups are restricted to names that *start* with the prefix unless the invocation count is at least 2 or the prefix is longer than 3 characters.
 
-`KT-CMP-090` SHOULD: as stated. Acceptance: cases 04/61..63.
+`KT-CMP-090` SHOULD: as stated. Acceptance: the cases of this ID in `cases/04-*.cases.md`
 
 ## 4.11 Character filter (Kotlin part of `codeinsight/06` CI-CMP-071)
 
@@ -289,7 +289,7 @@ While the lookup is open (auto-popup or explicit), typing:
 - in the **beginning of a function literal** (where the first token may be a parameter name) the special characters never select: they close the lookup.
 In a K2 mode, with registry `kotlin.k2.dot.add.enabled` (default on): typing `.` at an empty prefix right after another `.` extends the prefix instead.
 
-`KT-CMP-100` MUST: the table above. Acceptance: cases 04/64..68.
+`KT-CMP-100` MUST: the table above. Acceptance: the cases of this ID in `cases/04-*.cases.md`
 
 ## 4.12 Smart completion (expected-type completion)
 
@@ -299,7 +299,7 @@ members reached through **one level of chaining** (`holder.value`), lambdas for 
 `true`/`false` for `Boolean`, enum entries, objects, and items qualified by their owner for static members. It never offers named-argument items with no value. After insertion of a call
 as an argument the caret handles the closing `,`/`)` by the smart-completion tail handler (the tail character is inserted or overwritten).
 
-`KT-CMP-110` SHOULD: expected-type filtering and tail handling. Acceptance: cases 04/69..72.
+`KT-CMP-110` SHOULD: expected-type filtering and tail handling. Acceptance: the cases of this ID in `cases/04-*.cases.md`
 `KT-CMP-111` LATER: the full catalogue of smart-completion item kinds (chains of length two, "Ctrl+Shift+Space twice" for more, `it` suggestions for lambdas, `emptyList()`/`listOf()` for collection types).
 
 ## 4.13 Completion in Java files, KDoc, dumb mode, commands

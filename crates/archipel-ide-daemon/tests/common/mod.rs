@@ -22,6 +22,7 @@ impl Harness {
     pub fn new() -> Self {
         let mut registry = default_registry();
         tier_a::register(&mut registry);
+        tier_a::register_native_suppressors(&mut registry);
         let vfs = Arc::new(MemVfs::new());
         Self {
             host: AnalysisHost::new(HostConfig::testing(), vfs.clone(), registry),

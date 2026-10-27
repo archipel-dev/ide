@@ -312,6 +312,15 @@ impl LspManager {
         &self.registry
     }
 
+    /// Installs the providers the language packs contribute (`LANGUAGE_SERVER_PROVIDER`).
+    /// Running servers keep running; returns whether the registry changed.
+    pub fn set_contributed_providers(
+        &mut self,
+        providers: Vec<Arc<dyn crate::registry::LanguageServerProvider>>,
+    ) -> bool {
+        self.registry.set_contributed(providers)
+    }
+
     /// Stops all servers and switches to `root`, reloading `lsp.toml`.
     pub fn set_project(&mut self, root: Option<&Path>) {
         self.shutdown();

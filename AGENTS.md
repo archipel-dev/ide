@@ -54,7 +54,10 @@ lowers it. Features talk through topics and extension points, and the UI reads t
 `archipel-ide -> archipel-ide-ui -> archipel-ide-core -> {platform, command, project, plugins}`, with
 `archipel-ide-compat` (the old Jetthing names) at the bottom.
 Lower layers must not depend on higher layers. Language integrations belong behind
-plugin/service traits, never inside the platform core.
+plugin/service traits, never inside the platform core: a language is a **language pack**
+(`crates/archipel-ide-langpacks`) that registers extensions on the language extension points
+at start. Core, daemon and UI read the points and never name a language; see
+`docs/architecture/language-packs.md` ("How to add a language pack").
 
 
 ## Parity dashboard

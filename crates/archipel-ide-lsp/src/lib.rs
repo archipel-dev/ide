@@ -29,8 +29,9 @@ pub use manager::{
     RequestHandle, ServerInfo, ServerKey, ServerStatus, describe_progress,
 };
 pub use registry::{
-    JAVA_DEBUG_PLUGIN_ENV, LanguageServerProvider, LaunchContext, LspSettings, ProgramResolver,
-    ResolvedProgram, ServerRegistry, ServerSettings, ServerSpec,
+    JAVA_DEBUG_PLUGIN_ENV, LANGUAGE_SERVER_PROVIDER, LanguageServerProvider, LaunchContext,
+    LspSettings, ProgramResolver, ResolvedProgram, ServerRegistry, ServerSettings, ServerSpec,
+    builtin_provider, server_component,
 };
 pub use workspace_symbol::{WorkspaceSymbolHit, WorkspaceSymbolRequestHandle};
 

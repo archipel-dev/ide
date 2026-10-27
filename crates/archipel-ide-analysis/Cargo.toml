@@ -7,6 +7,7 @@ description = "Native code-analysis pipeline core: file identities, VFS facade, 
 
 [dependencies]
 archipel-ide-language = { path = "../archipel-ide-language" }
+archipel-ide-platform = { path = "../archipel-ide-platform" }
 archipel-ide-text = { path = "../archipel-ide-text" }
 parking_lot.workspace = true
 smallvec = "1.13"

@@ -64,15 +64,17 @@ impl Registration {
     }
 }
 
+#[derive(Clone)]
 struct Entry {
     registration: Registration,
     seq: usize,
-    /// An `Arc<T>` for the slot's `T`.
-    service: Box<dyn Any + Send + Sync>,
+    /// An `Arc<T>` for the slot's `T` (shared, so the registry can be cloned: a clone holds the
+    /// same service instances).
+    service: Arc<dyn Any + Send + Sync>,
 }
 
-/// See the module docs.
-#[derive(Default)]
+/// See the module docs. Cloning shares the service instances.
+#[derive(Default, Clone)]
 pub struct ServiceRegistry {
     slots: HashMap<TypeId, Vec<Entry>>,
     bases: HashMap<LanguageId, LanguageId>,
@@ -135,7 +137,7 @@ impl ServiceRegistry {
             .push(Entry {
                 registration,
                 seq: self.seq,
-                service: Box::new(service),
+                service: Arc::new(service),
             });
     }
 
@@ -207,7 +209,7 @@ impl ServiceRegistry {
 }
 
 fn arc<T: ?Sized + Send + Sync + 'static>(entry: &Entry) -> Option<Arc<T>> {
-    entry.service.downcast_ref::<Arc<T>>().cloned()
+    (*entry.service).downcast_ref::<Arc<T>>().cloned()
 }
 
 fn bucket(order: Order) -> u8 {

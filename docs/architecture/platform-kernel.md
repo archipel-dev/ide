@@ -186,8 +186,9 @@ let one = app.extensions().find_by_id(INSPECTIONS, "java.unusedImport");
   (plugin unload). `add_change_listener` tells consumers that cache the list.
 - `LoadingOrder::First` and `Last` pin to the ends; `Before(id)` and `After(id)` place next to
   another extension (a target that is not registered is ignored).
-- No extension point exists yet. The first ones (languages, file types, inspections, run
-  configuration types) arrive with the language packs and Phase 2.
+- The language extension points are declared (`archipel-ide-analysis::langext`, plus
+  `LANGUAGE_SERVER_PROVIDER` and `TOOLCHAIN_REQUIREMENT_PROVIDER` in their crates); see
+  [`language-packs.md`](language-packs.md). Run configuration types arrive with Phase 2.
 
 ## Migration recipe for the remaining fields
 

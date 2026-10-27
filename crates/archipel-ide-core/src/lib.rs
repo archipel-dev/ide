@@ -24,7 +24,7 @@ mod indexing_commands;
 mod todo_commands;
 pub use analysis_host::AnalysisServices;
 mod inspection_commands;
-mod java_commands;
+mod language_packs;
 /// Alt+Enter model types for the UI.
 pub mod intentions {
     pub use archipel_ide_analysis::inspect::Level;

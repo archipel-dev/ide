@@ -81,31 +81,13 @@ pub(crate) const MODULES: &[AnalysisModule] = &[
         services: none,
         commands: no_commands,
     },
-    // WP9 language tiers (`archipel-ide-lang-*`).
+    // WP9 language tiers: one pack per language (`archipel-ide-langpacks`); their extensions
+    // reach the registry through `IdeState::sync_language_packs`, only the import chooser
+    // commands are registered here.
     AnalysisModule {
-        id: "lang-java",
-        services: crate::java_commands::java_services,
-        commands: crate::java_commands::register_commands,
-    },
-    AnalysisModule {
-        id: "lang-rust",
+        id: "language-packs",
         services: none,
-        commands: no_commands,
-    },
-    AnalysisModule {
-        id: "lang-data",
-        services: none,
-        commands: no_commands,
-    },
-    AnalysisModule {
-        id: "lang-kotlin",
-        services: none,
-        commands: no_commands,
-    },
-    AnalysisModule {
-        id: "lang-web",
-        services: none,
-        commands: no_commands,
+        commands: crate::language_packs::register_commands,
     },
 ];
 

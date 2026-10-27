@@ -8,7 +8,7 @@
   "steps": [
     {"op": "wait", "until": "idle"},
     {"op": "waitFor", "pointer": "/projectModel/state", "equals": "ready", "timeoutMs": 300000},
-    {"op": "waitFor", "pointer": "/java/state", "equals": "Ready", "timeoutMs": 300000},
+    {"op": "waitFor", "pointer": "/languages/java/state", "equals": "Ready", "timeoutMs": 300000},
     {"op": "waitFor", "pointer": "/problems", "equals": 1, "timeoutMs": 120000},
     {"op": "assert", "pointer": "/activeTab", "equals": "src/test/java/com/example/AppTest.java"},
     {"op": "screenshot", "name": "36-native-unresolved-assertthat.png"},

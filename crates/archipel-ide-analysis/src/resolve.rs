@@ -209,6 +209,10 @@ pub trait ReferenceProvider: Send + Sync {
     /// Visit only these element types.
     fn interesting(&self) -> &TokenSet;
     fn references(&self, n: SyntaxNode<'_>, out: &mut Vec<Box<dyn Reference>>);
+    /// Priority for the merge rule (PLAT-PSI-111): default 0, higher +100, lower -100.
+    fn priority(&self) -> f32 {
+        0.0
+    }
 }
 
 /// How complete a resolver is (whether "unresolved" may be reported).

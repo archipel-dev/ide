@@ -305,6 +305,7 @@ name = "archipel-ide-analysis"
 version = "0.2.1"
 dependencies = [
  "archipel-ide-language",
+ "archipel-ide-platform",
  "archipel-ide-text",
  "parking_lot",
  "proptest",
@@ -400,8 +401,8 @@ dependencies = [
  "archipel-ide-git",
  "archipel-ide-gradle",
  "archipel-ide-index",
- "archipel-ide-java",
  "archipel-ide-keymap",
+ "archipel-ide-langpacks",
  "archipel-ide-language",
  "archipel-ide-lsp",
  "archipel-ide-markdown",
@@ -540,6 +541,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "archipel-ide-langpacks"
+version = "0.2.1"
+dependencies = [
+ "archipel-ide-analysis",
+ "archipel-ide-daemon",
+ "archipel-ide-java",
+ "archipel-ide-language",
+ "archipel-ide-lsp",
+ "archipel-ide-platform",
+ "archipel-ide-projectmodel",
+ "archipel-ide-toolchains",
+ "parking_lot",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tree-sitter",
+]
+
+[[package]]
 name = "archipel-ide-language"
 version = "0.2.1"
 dependencies = [
@@ -575,6 +594,7 @@ name = "archipel-ide-lsp"
 version = "0.2.1"
 dependencies = [
  "archipel-ide-compat",
+ "archipel-ide-platform",
  "lsp-types",
  "serde",
  "serde_json",
@@ -767,6 +787,7 @@ name = "archipel-ide-toolchains"
 version = "0.2.1"
 dependencies = [
  "archipel-ide-compat",
+ "archipel-ide-platform",
  "flate2",
  "lzma-rs",
  "serde",

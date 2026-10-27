@@ -383,27 +383,6 @@ impl QuickFix for RemoveUnusedImports {
     }
 }
 
-impl JavaService {
-    /// The service registered in `registry`.
-    pub fn from_registry(
-        registry: &archipel_ide_analysis::ServiceRegistry,
-    ) -> Option<Arc<JavaService>> {
-        registry.get::<JavaService>(archipel_ide_language::LanguageId::ANY)
-    }
-
-    /// Registers the service and the `java-resolve` pass.
-    pub fn register(self: &Arc<Self>, registry: &mut archipel_ide_analysis::ServiceRegistry) {
-        use archipel_ide_language::Registration;
-        registry.register::<dyn Pass>(
-            Registration::any("java-resolve").dumb_aware(true),
-            Arc::new(JavaResolvePass {
-                service: self.clone(),
-            }),
-        );
-        registry.register::<JavaService>(Registration::any("java").dumb_aware(true), self.clone());
-    }
-}
-
 /// What one analysis of a file produced, with the concrete fixes (for tests and previews).
 #[derive(Default)]
 pub struct Collected {

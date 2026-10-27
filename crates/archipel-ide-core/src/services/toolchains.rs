@@ -132,9 +132,10 @@ pub struct ToolchainRequirements {
 }
 
 impl ToolchainRequirements {
-    /// Detects the requirements of the project at `root` and which components are missing.
-    pub fn reload(&mut self, root: &Path, tools: &ToolchainState) {
-        self.requirements = archipel_ide_toolchains::providers::project_requirements(root);
+    /// Sets the detected requirements of the project (from the language packs'
+    /// `TOOLCHAIN_REQUIREMENT_PROVIDER` extensions) and recomputes which components are missing.
+    pub fn reload(&mut self, requirements: Vec<ProjectRequirement>, tools: &ToolchainState) {
+        self.requirements = requirements;
         self.refresh_missing(tools);
     }
 

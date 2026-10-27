@@ -18,8 +18,8 @@ archipel-ide-projectmodel = { path = "../archipel-ide-projectmodel" }
 archipel-ide-dap = { path = "../archipel-ide-dap" }
 archipel-ide-git = { path = "../archipel-ide-git" }
 archipel-ide-index = { path = "../archipel-ide-index" }
-archipel-ide-java = { path = "../archipel-ide-java" }
 archipel-ide-keymap = { path = "../archipel-ide-keymap" }
+archipel-ide-langpacks = { path = "../archipel-ide-langpacks" }
 archipel-ide-language = { path = "../archipel-ide-language" }
 archipel-ide-lsp = { path = "../archipel-ide-lsp" }
 archipel-ide-markdown = { path = "../archipel-ide-markdown" }

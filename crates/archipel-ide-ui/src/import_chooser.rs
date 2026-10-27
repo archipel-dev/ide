@@ -1,7 +1,8 @@
 //! The chooser popup of the import fixes (`Method to Import`, `Field to Import`, `Class to
 //! Import`, spec 05 section 5.4.2): a kit list popup with a title, `Class.member` rows and the
 //! package as the grey shortcut column, speed search on and no auto-select of a lone match.
-//! The rows are owned by the Java service; choosing one dispatches `java.chooseImport`.
+//! The rows are owned by the import fix provider of the language pack; choosing one dispatches
+//! its `<provider>.chooseImport` command.
 
 use crate::IdeApp;
 use archipel_kit::ui::popup::{BaseListPopupStep, ListPopup};
@@ -15,7 +16,7 @@ pub struct ImportChooser {
 }
 
 fn open_flag() -> egui::Id {
-    egui::Id::new("java_import_chooser_open")
+    egui::Id::new("import_chooser_open")
 }
 
 /// Whether the chooser was open last frame; the editor then leaves keys to the popup.
@@ -24,9 +25,9 @@ pub fn is_open(ctx: &egui::Context) -> bool {
 }
 
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
-    let chooser = app.state.java_service().and_then(|s| s.chooser());
+    let chooser = app.state.import_chooser();
     ctx.data_mut(|d| d.insert_temp(open_flag(), chooser.is_some()));
-    let Some(chooser) = chooser else {
+    let Some((provider, chooser)) = chooser else {
         app.import_chooser = None;
         return;
     };
@@ -50,7 +51,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
             labels,
             details,
         };
-        let mut popup = ListPopup::new("java_import_chooser", step);
+        let mut popup = ListPopup::new("import_chooser", step);
         popup.open(ctx);
         app.import_chooser = Some(ImportChooser { key, popup });
     }
@@ -63,11 +64,14 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     let response = c.popup.show_at(ctx, anchor + egui::vec2(-20.0, 20.0));
     if let Some(index) = response.chosen {
         app.import_chooser = None;
-        app.dispatch("java.chooseImport", json!({"index": index}));
+        app.dispatch(&format!("{provider}.chooseImport"), json!({"index": index}));
         ctx.memory_mut(|m| m.request_focus(crate::editor::editor_id()));
     } else if response.cancelled || !c.popup.is_open() {
         app.import_chooser = None;
-        app.dispatch("java.cancelChooser", serde_json::Value::Null);
+        app.dispatch(
+            &format!("{provider}.cancelChooser"),
+            serde_json::Value::Null,
+        );
         ctx.memory_mut(|m| m.request_focus(crate::editor::editor_id()));
     }
 }

@@ -166,45 +166,40 @@ impl ProjectRequirement {
     }
 }
 
-const REQUIREMENTS: &[(&[&str], ProjectRequirement)] = &[
-    (
-        &[
-            "build.gradle",
-            "build.gradle.kts",
-            "settings.gradle",
-            "settings.gradle.kts",
-            "pom.xml",
-        ],
-        ProjectRequirement {
-            language: "Java",
-            components: &["jdk", "jdtls", "java-debug"],
-            extensions: &["java", "gradle"],
-            file_names: &["pom.xml"],
-        },
-    ),
-    (
-        &["Cargo.toml"],
-        ProjectRequirement {
-            language: "Rust",
-            components: &["rust-analyzer"],
-            extensions: &["rs"],
-            file_names: &["Cargo.toml"],
-        },
-    ),
-    (
-        &[
-            "MODULE.bazel",
-            "WORKSPACE",
-            "WORKSPACE.bazel",
-            ".bazelversion",
-        ],
-        ProjectRequirement {
-            language: "Bazel",
-            components: &["bazelisk"],
-            extensions: &["bzl", "bazel"],
-            file_names: &["BUILD", "WORKSPACE", "MODULE.bazel", ".bazelversion"],
-        },
-    ),
+const JAVA: ProjectRequirement = ProjectRequirement {
+    language: "Java",
+    components: &["jdk", "jdtls", "java-debug"],
+    extensions: &["java", "gradle"],
+    file_names: &["pom.xml"],
+};
+
+const JAVA_MARKERS: &[&str] = &[
+    "build.gradle",
+    "build.gradle.kts",
+    "settings.gradle",
+    "settings.gradle.kts",
+    "pom.xml",
+];
+
+const RUST: ProjectRequirement = ProjectRequirement {
+    language: "Rust",
+    components: &["rust-analyzer"],
+    extensions: &["rs"],
+    file_names: &["Cargo.toml"],
+};
+
+const BAZEL: ProjectRequirement = ProjectRequirement {
+    language: "Bazel",
+    components: &["bazelisk"],
+    extensions: &["bzl", "bazel"],
+    file_names: &["BUILD", "WORKSPACE", "MODULE.bazel", ".bazelversion"],
+};
+
+const BAZEL_MARKERS: &[&str] = &[
+    "MODULE.bazel",
+    "WORKSPACE",
+    "WORKSPACE.bazel",
+    ".bazelversion",
 ];
 
 const GRADLE_MARKERS: &[&str] = &[
@@ -252,37 +247,121 @@ fn uses_kotlin(root: &std::path::Path) -> bool {
         })
 }
 
-/// Requirements of the project at `root`, from marker files in the root.
-pub fn project_requirements(root: &std::path::Path) -> Vec<ProjectRequirement> {
-    let mut requirements = base_requirements(root);
-    if uses_kotlin(root) {
-        let at = requirements
-            .iter()
-            .position(|r| r.language == "Java")
-            .map_or(requirements.len(), |index| index + 1);
-        requirements.insert(at, KOTLIN);
+fn marked(root: &std::path::Path, markers: &[&str]) -> bool {
+    markers.iter().any(|marker| root.join(marker).exists())
+}
+
+/// What a Java project (Gradle or Maven build) at `root` needs: a JDK, jdtls, java-debug, and
+/// a Gradle or Maven distribution when the build has no wrapper.
+pub fn java_requirement(root: &std::path::Path) -> Option<ProjectRequirement> {
+    if !marked(root, JAVA_MARKERS) {
+        return None;
+    }
+    let has = |name: &str| root.join(name).exists();
+    let gradle_without_wrapper =
+        marked(root, GRADLE_MARKERS) && !has("gradlew") && !has("gradlew.bat");
+    let maven_without_wrapper = has("pom.xml") && !has("mvnw") && !has("mvnw.cmd");
+    Some(if gradle_without_wrapper {
+        JAVA_GRADLE_WITHOUT_WRAPPER
+    } else if maven_without_wrapper {
+        JAVA_MAVEN_WITHOUT_WRAPPER
+    } else {
+        JAVA
+    })
+}
+
+/// Kotlin builds need the Kotlin language server.
+pub fn kotlin_requirement(root: &std::path::Path) -> Option<ProjectRequirement> {
+    uses_kotlin(root).then_some(KOTLIN)
+}
+
+pub fn rust_requirement(root: &std::path::Path) -> Option<ProjectRequirement> {
+    root.join("Cargo.toml").exists().then_some(RUST)
+}
+
+pub fn bazel_requirement(root: &std::path::Path) -> Option<ProjectRequirement> {
+    marked(root, BAZEL_MARKERS).then_some(BAZEL)
+}
+
+/// A contribution to the toolchain requirements of a project: what a project of one language
+/// needs, detected from marker files (the requirement half of a language pack,
+/// `PLAT-LANG-012`; see `docs/architecture/language-packs.md`).
+pub trait ToolchainRequirementProvider: Send + Sync {
+    fn requirement(&self, root: &std::path::Path) -> Option<ProjectRequirement>;
+
+    /// The language (display name of another requirement) this one is listed right after,
+    /// else it is listed at the end. Kotlin follows Java: its server comes after the JDK
+    /// components in the setup order.
+    fn listed_after(&self) -> Option<&'static str> {
+        None
+    }
+}
+
+/// A provider made of a function.
+pub struct FnRequirement {
+    pub detect: fn(&std::path::Path) -> Option<ProjectRequirement>,
+    pub listed_after: Option<&'static str>,
+}
+
+impl ToolchainRequirementProvider for FnRequirement {
+    fn requirement(&self, root: &std::path::Path) -> Option<ProjectRequirement> {
+        (self.detect)(root)
+    }
+
+    fn listed_after(&self) -> Option<&'static str> {
+        self.listed_after
+    }
+}
+
+/// Extension point the language packs contribute their [`ToolchainRequirementProvider`] to.
+pub const TOOLCHAIN_REQUIREMENT_PROVIDER: archipel_ide_platform::ExtensionPointName<
+    dyn ToolchainRequirementProvider,
+> = archipel_ide_platform::ExtensionPointName::new(
+    "dev.archipel.language.toolchainRequirementProvider",
+);
+
+/// The requirements of the project at `root` from `providers` in loading order.
+pub fn requirements_from(
+    providers: &[std::sync::Arc<dyn ToolchainRequirementProvider>],
+    root: &std::path::Path,
+) -> Vec<ProjectRequirement> {
+    let mut requirements: Vec<ProjectRequirement> = Vec::new();
+    for provider in providers {
+        let Some(requirement) = provider.requirement(root) else {
+            continue;
+        };
+        let at = provider
+            .listed_after()
+            .map_or(requirements.len(), |language| {
+                requirements
+                    .iter()
+                    .position(|r| r.language == language)
+                    .map_or(requirements.len(), |index| index + 1)
+            });
+        requirements.insert(at, requirement);
     }
     requirements
 }
 
-fn base_requirements(root: &std::path::Path) -> Vec<ProjectRequirement> {
-    let has = |name: &str| root.join(name).exists();
-    let gradle_without_wrapper =
-        GRADLE_MARKERS.iter().any(|marker| has(marker)) && !has("gradlew") && !has("gradlew.bat");
-    let maven_without_wrapper = has("pom.xml") && !has("mvnw") && !has("mvnw.cmd");
-    REQUIREMENTS
-        .iter()
-        .filter(|(markers, _)| markers.iter().any(|marker| has(marker)))
-        .map(|(_, requirement)| {
-            if requirement.language == "Java" && gradle_without_wrapper {
-                JAVA_GRADLE_WITHOUT_WRAPPER
-            } else if requirement.language == "Java" && maven_without_wrapper {
-                JAVA_MAVEN_WITHOUT_WRAPPER
-            } else {
-                requirement.clone()
-            }
-        })
-        .collect()
+/// Requirements of the project at `root` from the built-in detectors (Java, Kotlin, Rust,
+/// Bazel), without a language pack registry: what stand-alone use and the tests of this crate
+/// get. The IDE reads [`TOOLCHAIN_REQUIREMENT_PROVIDER`] instead.
+pub fn project_requirements(root: &std::path::Path) -> Vec<ProjectRequirement> {
+    let providers: Vec<std::sync::Arc<dyn ToolchainRequirementProvider>> = [
+        (java_requirement as fn(&_) -> _, None),
+        (rust_requirement, None),
+        (bazel_requirement, None),
+        (kotlin_requirement, Some("Java")),
+    ]
+    .into_iter()
+    .map(|(detect, listed_after)| {
+        std::sync::Arc::new(FnRequirement {
+            detect,
+            listed_after,
+        }) as std::sync::Arc<dyn ToolchainRequirementProvider>
+    })
+    .collect();
+    requirements_from(&providers, root)
 }
 
 #[cfg(test)]
@@ -336,10 +415,14 @@ mod tests {
         );
         // Every required component is in the built-in catalog.
         let catalog = builtin_catalog();
-        let all = REQUIREMENTS
-            .iter()
-            .map(|(_, requirement)| requirement)
-            .chain([&JAVA_GRADLE_WITHOUT_WRAPPER, &KOTLIN]);
+        let all = [
+            &JAVA,
+            &RUST,
+            &BAZEL,
+            &JAVA_GRADLE_WITHOUT_WRAPPER,
+            &JAVA_MAVEN_WITHOUT_WRAPPER,
+            &KOTLIN,
+        ];
         for requirement in all {
             for component in requirement.components {
                 assert!(catalog.get(component).is_some(), "{component}");

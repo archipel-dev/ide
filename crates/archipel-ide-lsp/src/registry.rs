@@ -125,7 +125,34 @@ pub trait LanguageServerProvider: Send + Sync {
     fn completion_relevance(&self, _item: &lsp_types::CompletionItem) -> i32 {
         0
     }
+
+    /// The toolchain component that provides this server (`rust-analyzer`, `jdtls`), for the
+    /// "Set up" action of a missing-server notice. `None`: not provisioned by the toolchains.
+    /// The default is the catalog entry of the server id ([`server_component`]).
+    fn toolchain_component(&self) -> Option<&'static str> {
+        server_component(self.spec().id)
+    }
 }
+
+/// The toolchain component that provides the well-known server `id` (the catalog of servers
+/// the toolchain service can provision).
+pub fn server_component(id: &str) -> Option<&'static str> {
+    match id {
+        "rust-analyzer" => Some("rust-analyzer"),
+        "jdtls" => Some("jdtls"),
+        "kotlin" => Some("kotlin-lsp"),
+        "taplo" => Some("taplo"),
+        _ => None,
+    }
+}
+
+/// The extension point language packs contribute their language server to (the mapping
+/// "language -> server", `PLAT-LANG-012`; see `docs/architecture/language-packs.md`).
+/// [`ServerRegistry::from_extensions`] reads it in loading order: an earlier extension wins
+/// for the same file types.
+pub const LANGUAGE_SERVER_PROVIDER: archipel_ide_platform::ExtensionPointName<
+    dyn LanguageServerProvider,
+> = archipel_ide_platform::ExtensionPointName::new("dev.archipel.language.languageServerProvider");
 
 /// Resolves `spec`'s executable from settings or `PATH`.
 pub fn default_launch(
@@ -251,35 +278,75 @@ impl LspSettings {
 /// Registry of language server providers.
 #[derive(Clone)]
 pub struct ServerRegistry {
-    providers: Vec<Arc<dyn LanguageServerProvider>>,
+    /// Registered by hand ([`ServerRegistry::register`]); these win over contributed ones.
+    explicit: Vec<Arc<dyn LanguageServerProvider>>,
+    /// The providers language packs contribute to [`LANGUAGE_SERVER_PROVIDER`], in loading
+    /// order ([`ServerRegistry::set_contributed`]).
+    contributed: Vec<Arc<dyn LanguageServerProvider>>,
+    /// Whether [`ServerRegistry::set_contributed`] has any effect (not for [`Self::empty`]).
+    accepts_contributions: bool,
 }
 
 impl Default for ServerRegistry {
+    /// The well-known servers of [`builtin_providers`]: what a stand-alone use of the LSP
+    /// crate (tests, tools) gets. The IDE replaces them with what its language packs
+    /// contribute ([`ServerRegistry::set_contributed`]).
     fn default() -> Self {
         Self {
-            providers: builtin_providers(),
+            explicit: Vec::new(),
+            contributed: builtin_providers(),
+            accepts_contributions: true,
         }
     }
 }
 
 impl ServerRegistry {
+    /// No providers, and none are accepted from language packs either.
     pub fn empty() -> Self {
         Self {
-            providers: Vec::new(),
+            explicit: Vec::new(),
+            contributed: Vec::new(),
+            accepts_contributions: false,
+        }
+    }
+
+    /// A registry of exactly what the extension registry holds (loading order).
+    pub fn from_extensions(extensions: &archipel_ide_platform::ExtensionRegistry) -> Self {
+        Self {
+            explicit: Vec::new(),
+            contributed: extensions.extension_list(LANGUAGE_SERVER_PROVIDER),
+            accepts_contributions: true,
         }
     }
 
     /// Adds a provider; later registrations take precedence for the same file types.
     pub fn register(&mut self, provider: Arc<dyn LanguageServerProvider>) {
-        self.providers.insert(0, provider);
+        self.explicit.insert(0, provider);
     }
 
-    pub fn providers(&self) -> &[Arc<dyn LanguageServerProvider>] {
-        &self.providers
+    /// Replaces the contributed providers (a language pack was installed or removed).
+    /// Returns whether anything changed. Servers that are already running are not stopped.
+    pub fn set_contributed(&mut self, providers: Vec<Arc<dyn LanguageServerProvider>>) -> bool {
+        let same = self.contributed.len() == providers.len()
+            && self
+                .contributed
+                .iter()
+                .zip(&providers)
+                .all(|(a, b)| Arc::ptr_eq(a, b));
+        if !self.accepts_contributions || same {
+            return false;
+        }
+        self.contributed = providers;
+        true
+    }
+
+    /// Every provider: registered by hand first, then contributed ones in loading order.
+    pub fn providers(&self) -> impl Iterator<Item = &Arc<dyn LanguageServerProvider>> {
+        self.explicit.iter().chain(&self.contributed)
     }
 
     pub fn get(&self, id: &str) -> Option<&Arc<dyn LanguageServerProvider>> {
-        self.providers.iter().find(|p| p.spec().id == id)
+        self.providers().find(|p| p.spec().id == id)
     }
 
     /// The provider and LSP language id for `path`.
@@ -287,8 +354,7 @@ impl ServerRegistry {
         &self,
         path: &Path,
     ) -> Option<(&Arc<dyn LanguageServerProvider>, &'static str)> {
-        self.providers
-            .iter()
+        self.providers()
             .find_map(|provider| Some((provider, provider.spec().language_id(path)?)))
     }
 }
@@ -678,17 +744,25 @@ pub fn builtin_specs() -> Vec<ServerSpec> {
     ]
 }
 
-pub fn builtin_providers() -> Vec<Arc<dyn LanguageServerProvider>> {
+/// The built-in provider of the server `id` (`"jdtls"`, `"rust-analyzer"`, ...). Language packs
+/// pick the servers of their language from this catalog.
+pub fn builtin_provider(id: &str) -> Option<Arc<dyn LanguageServerProvider>> {
     builtin_specs()
         .into_iter()
-        .map(|spec| -> Arc<dyn LanguageServerProvider> {
-            if spec.id == "jdtls" {
-                Arc::new(JdtlsProvider(spec))
-            } else {
-                Arc::new(SpecProvider(spec))
-            }
-        })
-        .collect()
+        .find(|spec| spec.id == id)
+        .map(provider_for)
+}
+
+fn provider_for(spec: ServerSpec) -> Arc<dyn LanguageServerProvider> {
+    if spec.id == "jdtls" {
+        Arc::new(JdtlsProvider(spec))
+    } else {
+        Arc::new(SpecProvider(spec))
+    }
+}
+
+pub fn builtin_providers() -> Vec<Arc<dyn LanguageServerProvider>> {
+    builtin_specs().into_iter().map(provider_for).collect()
 }
 
 #[cfg(test)]
@@ -874,6 +948,39 @@ mod tests {
         assert_eq!(
             config.initialization_options.unwrap()["completion"]["callable"]["snippets"],
             "add_parentheses"
+        );
+    }
+
+    #[test]
+    fn contributed_providers_follow_the_extension_registry() {
+        use archipel_ide_platform::{Application, ComponentManager, LoadingOrder};
+        let app = Application::new();
+        let pack = app.disposable();
+        let ext = app.extensions();
+        let rust = builtin_provider("rust-analyzer").unwrap();
+        ext.register(
+            LANGUAGE_SERVER_PROVIDER,
+            "rust-analyzer",
+            LoadingOrder::Anywhere,
+            rust,
+            Some(pack),
+        )
+        .unwrap();
+        let mut registry = ServerRegistry::from_extensions(ext);
+        let (provider, language) = registry.for_path(Path::new("a.rs")).unwrap();
+        assert_eq!(language, "rust");
+        assert_eq!(provider.toolchain_component(), Some("rust-analyzer"));
+        assert!(registry.for_path(Path::new("A.java")).is_none());
+        // Hand-registered providers win; `empty()` takes no contributions.
+        assert!(!ServerRegistry::empty().set_contributed(vec![]));
+        assert!(registry.set_contributed(vec![builtin_provider("jdtls").unwrap()]));
+        assert!(registry.for_path(Path::new("a.rs")).is_none());
+        assert!(registry.for_path(Path::new("A.java")).is_some());
+        app.dispose();
+        assert!(
+            ServerRegistry::from_extensions(ext)
+                .for_path(Path::new("a.rs"))
+                .is_none()
         );
     }
 

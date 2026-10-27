@@ -57,7 +57,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"variant":"string?"}"#,
             ),
-            |state: &IdeState| state.android_tooling().read().project.is_some(),
+            |state: &IdeState| state.android_tooling().is_android_project(),
             |state: &mut IdeState, params| {
                 let variant = params
                     .get("variant")

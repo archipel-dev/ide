@@ -33,7 +33,7 @@ pub struct State {
 
 /// Whether the welcome window replaces the IDE chrome.
 pub fn active(app: &IdeApp) -> bool {
-    !app.state.has_project() && app.state.plugin_host().app_mode.is_none()
+    !app.state.has_project() && app.state.plugin_host_service().app_mode().is_none()
 }
 
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
@@ -132,8 +132,8 @@ fn nav_column(app: &mut IdeApp, ui: &mut egui::Ui) {
     ui.add_space(16.0);
     let plugins = app
         .state
-        .plugin_host
-        .registry
+        .plugin_host_service()
+        .registry()
         .entries()
         .iter()
         .filter(|entry| entry.is_active())

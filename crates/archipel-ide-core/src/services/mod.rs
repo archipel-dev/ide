@@ -23,6 +23,7 @@
 //! | [`UpdateChecker`] | application | `IdeState::{updates, update_state, update_silent, update_executable, update_installer}` |
 //! | [`RecentProjectsManager`] | application | `IdeState::recent_projects` |
 //! | [`AgentsManager`] | application | `IdeState::agents` (sessions, thread tabs, review, balloons) |
+//! | [`PluginHostService`] | application | `IdeState::plugin_host` (registry, plugin tabs and tool window) |
 //! | [`AndroidTooling`] | application | `IdeState::android` (SDK, devices, Logcat, deploy, ...) |
 
 use parking_lot::{
@@ -114,6 +115,7 @@ mod find;
 mod git;
 mod keymap;
 mod notifications;
+mod plugins;
 mod project_model;
 mod recent_projects;
 mod remote;
@@ -137,6 +139,7 @@ pub use keymap::{KeymapManager, KeymapState};
 pub use notifications::{
     NOTIFICATION_TOPIC, NotificationListener, NotificationSource, Notifications,
 };
+pub use plugins::{PLUGIN_TOPIC, PluginHostService, PluginListener};
 pub use project_model::{PROJECT_MODEL_TOPIC, ProjectModelListener, ProjectModelService};
 pub use recent_projects::RecentProjectsManager;
 pub use remote::{
@@ -164,6 +167,7 @@ fn assert_sync() {
     sync::<archipel_ide_terminal::TerminalSession>();
     sync::<crate::AndroidState>();
     sync::<crate::agents::AgentsState>();
+    sync::<crate::PluginHostState>();
 }
 pub use update::{UPDATE_TOPIC, UpdateChecker, UpdateListener};
 pub(crate) use vcs::REBLAME_INTERVAL;

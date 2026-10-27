@@ -20,8 +20,8 @@
 //! What counts: `state.<field>` where `<field>` is a `pub` field of `IdeState` (read from
 //! `archipel-ide-core/src/lib.rs`, so the list cannot go stale), written `state.`, `app.state.` or
 //! `self.state.`. Method calls such as `state.settings()` are accessors and do not count.
-//! Everything from the first `#[cfg(test)]` of a file on is test code and is not counted.
-//! Comments are skipped.
+//! An inline `#[cfg(test)] mod x {` and everything after it, and files declared by `#[cfg(test)] mod x;`, are test code and are not counted.
+//! Comments are skipped. Method chains broken over several lines count as one line.
 
 // A baseline may reach zero, which makes "at least the baseline" trivially true.
 #![allow(clippy::absurd_extreme_comparisons)]
@@ -30,11 +30,16 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// The number of direct reads the UI may still have. Lower it when reads go; never raise it.
-const SUBSYSTEM_READ_BASELINE: usize = 0;
+///
+/// It was 0 while the counter stopped at the first `#[cfg(test)]` of a file (`src/lib.rs` has one
+/// at line 96, so nearly all of it was skipped) and could not see `app\n    .state\n    .field`
+/// broken over lines. Counting everything, 86 reads were there all along, most of them in
+/// `src/lib.rs` and `src/toolwindows.rs`.
+const SUBSYSTEM_READ_BASELINE: usize = 86;
 
 /// The number of calls of whole-subsystem handles the UI may still make. Lower it when calls go
 /// (a call becomes a `DataContext` key, a narrower accessor or a service call); never raise it.
-const HANDLE_BASELINE: usize = 132;
+const HANDLE_BASELINE: usize = 112;
 
 /// The `pub` fields of `pub struct IdeState`.
 fn ide_state_fields() -> Vec<String> {
@@ -140,6 +145,65 @@ fn handle_calls_in_line(line: &str, handles: &[String]) -> usize {
     calls
 }
 
+/// The code of a source file the ratchets look at: everything before an inline test module
+/// (`#[cfg(test)]` followed by `mod name {`), with method chains that rustfmt broke over several
+/// lines (`app\n    .state\n    .android_tooling()`) joined into one line, so a read cannot hide
+/// behind a line break.
+fn production_code(text: &str) -> Vec<String> {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut out: Vec<String> = Vec::new();
+    for (at, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("#[cfg(test)]") {
+            let next = lines.get(at + 1).map_or("", |next| next.trim_start());
+            if next.starts_with("mod ") && next.trim_end().ends_with('{') {
+                break;
+            }
+        }
+        if trimmed.starts_with('.')
+            && !trimmed.starts_with("..")
+            && let Some(previous) = out.last_mut()
+        {
+            previous.push_str(trimmed);
+            continue;
+        }
+        out.push((*line).to_owned());
+    }
+    out
+}
+
+/// Files that only exist for tests: `#[cfg(test)] mod name;` declares `name.rs` (or `name/`).
+fn test_only_files(files: &[PathBuf]) -> Vec<PathBuf> {
+    let mut names = Vec::new();
+    for file in files {
+        let text = std::fs::read_to_string(file).expect("source is readable");
+        let lines: Vec<&str> = text.lines().collect();
+        for (at, line) in lines.iter().enumerate() {
+            if line.trim() == "#[cfg(test)]"
+                && let Some(next) = lines.get(at + 1)
+                && let Some(name) = next
+                    .trim()
+                    .strip_prefix("mod ")
+                    .and_then(|rest| rest.strip_suffix(';'))
+            {
+                names.push(name.trim().to_owned());
+            }
+        }
+    }
+    files
+        .iter()
+        .filter(|file| {
+            file.components().any(|c| {
+                let part = c.as_os_str().to_string_lossy();
+                names
+                    .iter()
+                    .any(|name| *part == **name || *part == format!("{name}.rs"))
+            })
+        })
+        .cloned()
+        .collect()
+}
+
 /// Reads per field and file.
 fn count_reads() -> (usize, BTreeMap<String, usize>, BTreeMap<String, usize>) {
     let fields = ide_state_fields();
@@ -151,18 +215,16 @@ fn count_reads() -> (usize, BTreeMap<String, usize>, BTreeMap<String, usize>) {
     let mut total = 0;
     let mut per_field = BTreeMap::new();
     let mut per_file = BTreeMap::new();
-    for file in files {
-        let text = std::fs::read_to_string(&file).expect("source is readable");
+    let test_only = test_only_files(&files);
+    for file in files.iter().filter(|file| !test_only.contains(file)) {
+        let text = std::fs::read_to_string(file).expect("source is readable");
         let name = file
             .strip_prefix(env!("CARGO_MANIFEST_DIR"))
-            .unwrap_or(&file)
+            .unwrap_or(file)
             .display()
             .to_string();
-        for line in text.lines() {
-            if line.trim_start().starts_with("#[cfg(test)]") {
-                break;
-            }
-            for field in reads_in_line(line, &fields) {
+        for line in production_code(&text) {
+            for field in reads_in_line(&line, &fields) {
                 total += 1;
                 *per_field.entry(field.to_owned()).or_default() += 1;
                 *per_file.entry(name.clone()).or_default() += 1;
@@ -227,13 +289,13 @@ fn count_handle_calls() -> usize {
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
         &mut files,
     );
+    let test_only = test_only_files(&files);
     files
         .iter()
+        .filter(|file| !test_only.contains(file))
         .map(|file| {
-            std::fs::read_to_string(file)
-                .expect("source is readable")
-                .lines()
-                .take_while(|line| !line.trim_start().starts_with("#[cfg(test)]"))
+            production_code(&std::fs::read_to_string(file).expect("source is readable"))
+                .iter()
                 .map(|line| handle_calls_in_line(line, &handles))
                 .sum::<usize>()
         })

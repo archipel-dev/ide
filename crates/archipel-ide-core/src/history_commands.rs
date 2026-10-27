@@ -328,7 +328,7 @@ impl IdeState {
         tab.new_revision = Some("current".into());
         self.diff = Some(tab);
         self.diff_active = true;
-        self.plugin_host.active_tab = None;
+        self.plugin_host_service().set_active_tab(None);
         self.analysis.history.dialog = None;
         Ok(())
     }

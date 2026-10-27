@@ -60,7 +60,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.android_tooling().read().project.is_some(),
+            |state: &IdeState| state.android_tooling().is_android_project(),
             |state: &mut IdeState, _| {
                 let modules: Vec<Value> = state
                     .android_tooling().read()
@@ -88,7 +88,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"module":"string","variant":"string"}"#,
             ),
-            |state: &IdeState| state.android_tooling().read().project.is_some(),
+            |state: &IdeState| state.android_tooling().is_android_project(),
             |state: &mut IdeState, params| {
                 let module = string_param(&params, "module")?;
                 let variant = string_param(&params, "variant")?;

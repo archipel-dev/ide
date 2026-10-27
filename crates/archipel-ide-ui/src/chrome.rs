@@ -174,8 +174,8 @@ fn project_widget(app: &mut IdeApp, ui: &mut egui::Ui) -> Rect {
         ui.label(
             egui::RichText::new(widgets::pluralize(
                 app.state
-                    .plugin_host
-                    .registry
+                    .plugin_host_service()
+                    .registry()
                     .entries()
                     .iter()
                     .filter(|entry| entry.is_active())

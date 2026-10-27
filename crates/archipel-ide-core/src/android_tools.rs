@@ -183,7 +183,7 @@ impl IdeState {
 
     pub(crate) fn running_devices_opened(&mut self) {
         // Shares the right anchor with plugin tool windows.
-        self.plugin_host.tool_window = None;
+        self.plugin_host_service().set_tool_window(None);
         if !self.android_tooling().read().mirror.is_running() {
             let tooling = self.android_tooling();
             let mut guard = tooling.write();
@@ -202,7 +202,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"module":"string?","tab":"drawable|color|layout|mipmap|string?","query":"string?"}"#,
             ),
-            |state: &IdeState| state.android_tooling().read().project.is_some(),
+            |state: &IdeState| state.android_tooling().is_android_project(),
             |state: &mut IdeState, params| {
                 let modules = state.android_module_dirs();
                 let tooling = state.android_tooling();
@@ -240,7 +240,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.android_tooling().read().project.is_some(),
+            |state: &IdeState| state.android_tooling().is_android_project(),
             |state: &mut IdeState, _| {
                 state.refresh_resource_manager();
                 Ok(json!({"count": state.android_tooling().read().resource_manager.items.len()}))
@@ -256,7 +256,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"path":"string","line":"number?"}"#,
             ),
-            |state: &IdeState| state.android_tooling().read().project.is_some(),
+            |state: &IdeState| state.android_tooling().is_android_project(),
             |state: &mut IdeState, params| {
                 let path = PathBuf::from(string_param(&params, "path")?);
                 let line = params.get("line").and_then(Value::as_u64).unwrap_or(1) as usize;
@@ -332,7 +332,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.android_tooling().read().project.is_some(),
+            |state: &IdeState| state.android_tooling().is_android_project(),
             |state: &mut IdeState, _| {
                 let tooling = state.android_tooling();
                 let started = tooling.write().start_mirror();

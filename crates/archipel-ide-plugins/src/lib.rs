@@ -9,6 +9,7 @@ mod store;
 pub use archipel_ide_plugin_api::*;
 pub use store::{PluginStore, user_config_dir};
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -22,6 +23,68 @@ pub trait PluginLoader {
     fn kind(&self) -> PluginKind;
     /// Loads the plugin whose manifest is in `dir`.
     fn load(&self, manifest: &PluginManifest, dir: &Path) -> Result<Box<dyn Plugin>, PluginError>;
+}
+
+/// The loaded code of plugins: the compiled-in factories, the script runtimes and the live
+/// instances. Instances (a Lua state, a WASM store) belong to the thread that runs the UI and
+/// are not `Send`, so they live here, apart from the [`PluginRegistry`] (manifests, status,
+/// contributions and the user's choices), which is plain data a platform service can own.
+#[derive(Default)]
+pub struct PluginRuntime {
+    loaders: Vec<Rc<dyn PluginLoader>>,
+    code: HashMap<String, Code>,
+    instances: HashMap<String, Box<dyn Plugin>>,
+}
+
+impl PluginRuntime {
+    /// Registers the runtime for script plugins of `loader.kind()`.
+    pub fn add_loader(&mut self, loader: Rc<dyn PluginLoader>) {
+        self.loaders
+            .retain(|existing| existing.kind() != loader.kind());
+        self.loaders.push(loader);
+    }
+
+    /// Takes the instance out so it can run with a host borrowing the rest
+    /// of the application; return it with [`Self::restore_instance`].
+    pub fn take_instance(&mut self, id: &str) -> Option<Box<dyn Plugin>> {
+        self.instances.remove(id)
+    }
+
+    /// The loaded instance (absent while taken or for code-less plugins).
+    pub fn instance(&self, id: &str) -> Option<&dyn Plugin> {
+        self.instances.get(id).map(|instance| &**instance)
+    }
+
+    pub fn restore_instance(&mut self, id: &str, instance: Box<dyn Plugin>) {
+        self.instances.insert(id.to_owned(), instance);
+    }
+
+    /// Ensures an instance exists for a plugin with code (loading scripts).
+    pub fn ensure_instance(
+        &mut self,
+        registry: &PluginRegistry,
+        id: &str,
+    ) -> Result<(), PluginError> {
+        if let Some(entry) = registry.get(id)
+            && !self.instances.contains_key(id)
+            && let Some(code) = self.code.get(id).cloned()
+        {
+            self.instances
+                .insert(id.to_owned(), code.instantiate(&entry.manifest)?);
+        }
+        Ok(())
+    }
+
+    pub fn has_code(&self, id: &str) -> bool {
+        self.code.contains_key(id)
+    }
+
+    /// Drops the code and the instance of `id` without calling `deactivate` (the host
+    /// deactivates first).
+    pub fn forget(&mut self, id: &str) {
+        self.code.remove(id);
+        self.instances.remove(id);
+    }
 }
 
 /// Plugins compiled into the build plus the runtimes for script plugins.
@@ -79,13 +142,12 @@ impl PluginStatus {
     }
 }
 
+#[derive(Clone)]
 pub struct PluginEntry {
     pub manifest: PluginManifest,
     pub source: PluginSource,
     pub status: PluginStatus,
     pub contributions: Contributions,
-    instance: Option<Box<dyn Plugin>>,
-    code: Option<Code>,
 }
 
 impl PluginEntry {
@@ -109,7 +171,6 @@ pub struct PluginRegistry {
     /// Manifests that failed to load, with the path that was read.
     pub problems: Vec<(PathBuf, PluginError)>,
     pub store: PluginStore,
-    loaders: Vec<Rc<dyn PluginLoader>>,
     generation: u64,
 }
 
@@ -146,32 +207,32 @@ impl PluginRegistry {
         self.get(id).is_some_and(PluginEntry::is_active)
     }
 
-    /// Registers a compiled-in plugin.
-    pub fn add_bundled(&mut self, factory: PluginFactory) -> Result<(), PluginError> {
+    /// Registers a compiled-in plugin; its code and first instance go to `runtime`.
+    pub fn add_bundled(
+        &mut self,
+        runtime: &mut PluginRuntime,
+        factory: PluginFactory,
+    ) -> Result<(), PluginError> {
         let instance = factory();
         let manifest = instance.manifest().clone();
         manifest.validate()?;
+        let id = manifest.id.clone();
         self.insert(PluginEntry {
             status: self.initial_status(&manifest.id),
             manifest,
             source: PluginSource::Bundled,
             contributions: Contributions::default(),
-            instance: Some(instance),
-            code: Some(Code::Factory(factory)),
-        })
+        })?;
+        runtime.code.insert(id.clone(), Code::Factory(factory));
+        runtime.instances.insert(id, instance);
+        Ok(())
     }
 
-    /// Registers the runtime for script plugins of `loader.kind()`.
-    pub fn add_loader(&mut self, loader: Rc<dyn PluginLoader>) {
-        self.loaders
-            .retain(|existing| existing.kind() != loader.kind());
-        self.loaders.push(loader);
-    }
-
-    /// Forgets an entry (its instance is dropped without `deactivate`; the
-    /// host deactivates first).
-    pub fn remove(&mut self, id: &str) {
+    /// Forgets an entry and its code (its instance is dropped without `deactivate`; the host
+    /// deactivates first).
+    pub fn remove(&mut self, runtime: &mut PluginRuntime, id: &str) {
         self.entries.retain(|entry| entry.id() != id);
+        runtime.forget(id);
         self.touch();
     }
 
@@ -198,15 +259,23 @@ impl PluginRegistry {
     /// Loads every `<dir>/<plugin>/archipel-plugin.toml` (or
     /// `jetthing-plugin.toml`, or legacy `plugin.toml`) below `root`. Entries previously discovered from `root`
     /// are replaced. Problems are collected in [`Self::problems`].
-    pub fn discover(&mut self, root: &Path) {
+    pub fn discover(&mut self, runtime: &mut PluginRuntime, root: &Path) {
         // Entries still present on disk are kept as they are, so active
         // plugins survive a rediscovery; vanished ones are dropped.
+        let mut vanished = Vec::new();
         self.entries.retain(|entry| match &entry.source {
             PluginSource::Directory(dir) if dir.parent() == Some(root) => {
-                MANIFEST_FILES.iter().any(|name| dir.join(name).is_file())
+                let present = MANIFEST_FILES.iter().any(|name| dir.join(name).is_file());
+                if !present {
+                    vanished.push(entry.id().to_owned());
+                }
+                present
             }
             _ => true,
         });
+        for id in vanished {
+            runtime.forget(&id);
+        }
         self.problems.retain(|(path, _)| !path.starts_with(root));
         let Ok(dirs) = fs::read_dir(root) else {
             self.touch();
@@ -241,7 +310,7 @@ impl PluginRegistry {
                 continue;
             }
             let result = manifest.and_then(|manifest| {
-                let loader = self
+                let loader = runtime
                     .loaders
                     .iter()
                     .find(|loader| loader.kind() == manifest.kind)
@@ -266,14 +335,17 @@ impl PluginRegistry {
                         None,
                     ),
                 };
+                let id = manifest.id.clone();
                 self.insert(PluginEntry {
                     manifest,
                     source: PluginSource::Directory(dir.clone()),
                     status,
                     contributions: Contributions::default(),
-                    instance: None,
-                    code,
-                })
+                })?;
+                if let Some(code) = code {
+                    runtime.code.insert(id, code);
+                }
+                Ok(())
             });
             if let Err(error) = result {
                 self.problems.push((path, error));
@@ -321,38 +393,6 @@ impl PluginRegistry {
                 Some(_) => Some(format!("requires plugin {dependency}, which is not active")),
             }
         })
-    }
-
-    /// Takes the instance out so it can run with a host borrowing the rest
-    /// of the application; return it with [`Self::restore_instance`].
-    pub fn take_instance(&mut self, id: &str) -> Option<Box<dyn Plugin>> {
-        self.get_mut(id)?.instance.take()
-    }
-
-    /// The loaded instance (absent while taken or for code-less plugins).
-    pub fn instance(&self, id: &str) -> Option<&dyn Plugin> {
-        self.get(id)?.instance.as_deref()
-    }
-
-    pub fn restore_instance(&mut self, id: &str, instance: Box<dyn Plugin>) {
-        if let Some(entry) = self.get_mut(id) {
-            entry.instance = Some(instance);
-        }
-    }
-
-    /// Ensures an instance exists for a plugin with code (loading scripts).
-    pub fn ensure_instance(&mut self, id: &str) -> Result<(), PluginError> {
-        if let Some(entry) = self.get_mut(id)
-            && entry.instance.is_none()
-            && let Some(code) = entry.code.clone()
-        {
-            entry.instance = Some(code.instantiate(&entry.manifest)?);
-        }
-        Ok(())
-    }
-
-    pub fn has_code(&self, id: &str) -> bool {
-        self.get(id).is_some_and(|entry| entry.code.is_some())
     }
 
     pub fn set_status(&mut self, id: &str, status: PluginStatus) {
@@ -442,18 +482,27 @@ mod tests {
         .unwrap()
     }
 
-    fn bundled(registry: &mut PluginRegistry, id: &'static str, deps: &'static [&'static str]) {
+    fn bundled(
+        registry: &mut PluginRegistry,
+        runtime: &mut PluginRuntime,
+        id: &'static str,
+        deps: &'static [&'static str],
+    ) {
         registry
-            .add_bundled(Rc::new(move || Box::new(Dummy(manifest(id, deps)))))
+            .add_bundled(
+                runtime,
+                Rc::new(move || Box::new(Dummy(manifest(id, deps)))),
+            )
             .unwrap();
     }
 
     #[test]
     fn activation_order_respects_dependencies_and_disabled_state() {
         let mut registry = PluginRegistry::default();
-        bundled(&mut registry, "a.app", &["a.base"]);
-        bundled(&mut registry, "a.base", &[]);
-        bundled(&mut registry, "a.off", &[]);
+        let mut runtime = PluginRuntime::default();
+        bundled(&mut registry, &mut runtime, "a.app", &["a.base"]);
+        bundled(&mut registry, &mut runtime, "a.base", &[]);
+        bundled(&mut registry, &mut runtime, "a.off", &[]);
         registry.set_enabled("a.off", false).unwrap();
         assert_eq!(registry.pending_activation(), ["a.base", "a.app"]);
         assert!(
@@ -466,15 +515,18 @@ mod tests {
         assert_eq!(registry.dependency_problem("a.app"), None);
         assert!(
             registry
-                .add_bundled(Rc::new(|| Box::new(Dummy(manifest("a.app", &[])))))
+                .add_bundled(
+                    &mut runtime,
+                    Rc::new(|| Box::new(Dummy(manifest("a.app", &[])))),
+                )
                 .is_err()
         );
-        let mut instance = registry.take_instance("a.app").unwrap();
-        assert!(registry.take_instance("a.app").is_none());
+        let mut instance = runtime.take_instance("a.app").unwrap();
+        assert!(runtime.take_instance("a.app").is_none());
         let mut host = RecordingHost::new("a.app");
         assert!(instance.activate(&mut host).is_ok());
-        registry.restore_instance("a.app", instance);
-        assert!(registry.take_instance("a.app").is_some());
+        runtime.restore_instance("a.app", instance);
+        assert!(runtime.take_instance("a.app").is_some());
     }
 
     #[test]
@@ -494,7 +546,7 @@ mod tests {
             .unwrap();
         }
         let mut registry = PluginRegistry::default();
-        registry.discover(&root);
+        registry.discover(&mut PluginRuntime::default(), &root);
         assert!(registry.problems.is_empty(), "{:?}", registry.problems);
         assert!(registry.get("x.archipel").is_some());
         assert!(registry.get("x.jetthing").is_some());
@@ -533,9 +585,10 @@ mod tests {
         )
         .unwrap();
         let mut registry = PluginRegistry::default();
-        bundled(&mut registry, "a.app", &[]);
-        registry.discover(&root);
-        registry.discover(&root); // rediscovery replaces, does not duplicate
+        let mut runtime = PluginRuntime::default();
+        bundled(&mut registry, &mut runtime, "a.app", &[]);
+        registry.discover(&mut runtime, &root);
+        registry.discover(&mut runtime, &root); // rediscovery replaces, does not duplicate
         assert_eq!(registry.entries().len(), 3);
         assert_eq!(registry.get("a.app").unwrap().source, PluginSource::Bundled);
         assert_eq!(

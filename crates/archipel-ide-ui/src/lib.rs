@@ -391,17 +391,22 @@ impl IdeApp {
     }
 
     pub fn standalone(plugin: &str, plugins: PluginSet) -> Result<Self, String> {
-        let mut app = Self::with_plugin_set(None, Vec::new(), plugins);
-        plugin_ui::app_mode_error(&app.state.plugin_host.registry, plugin)?;
-        app.state.plugin_host.app_mode = Some(plugin.to_owned());
+        let app = Self::with_plugin_set(None, Vec::new(), plugins);
+        plugin_ui::app_mode_error(&app.state.plugin_host_service().registry(), plugin)?;
+        app.state
+            .plugin_host_service()
+            .set_app_mode(Some(plugin.to_owned()));
         Ok(app)
     }
 
     /// Window title for standalone app mode.
     pub fn app_title(&self) -> Option<String> {
-        let plugin = self.state.plugin_host.app_mode.as_deref()?;
-        let entry = self.state.plugin_host.registry.get(plugin)?;
-        Some(entry.manifest.app_title())
+        let plugins = self.state.plugin_host_service();
+        let plugin = plugins.app_mode()?;
+        plugins
+            .registry()
+            .get(&plugin)
+            .map(|entry| entry.manifest.app_title())
     }
 
     fn dispatch(&mut self, id: &str, params: Value) {
@@ -1041,7 +1046,7 @@ impl IdeApp {
             ctx.request_repaint_after(Duration::from_millis(30));
         }
         plugin_ui::sync(self, ctx);
-        if let Some(plugin) = self.state.plugin_host.app_mode.clone() {
+        if let Some(plugin) = self.state.plugin_host_service().app_mode().clone() {
             plugin_ui::handle_keybindings(self, ctx);
             chrome::window_resize_handles(ctx);
             plugin_ui::app_window(self, ctx, &plugin);

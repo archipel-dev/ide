@@ -55,9 +55,9 @@ IdeState
      ├─ application: Application
      │   ├─ services    ToolchainManager, SettingsService, Notifications, KeymapManager,
      │   │            UpdateChecker, RecentProjectsManager, CloneManager, ActionManager,
-     │   │            SearchEverywhereManager
+     │   │            SearchEverywhereManager, AndroidTooling, AgentsManager, PluginHostService
      │   ├─ bus         ProjectManager::TOPIC, TOOLCHAIN_TOPIC, NOTIFICATION_TOPIC, SETTINGS_TOPIC,
-     │   │            UPDATE_TOPIC, CLONE_TOPIC
+     │   │            UPDATE_TOPIC, CLONE_TOPIC, ANDROID_TOPIC, AGENTS_TOPIC, PLUGIN_TOPIC
      │   └─ project services declared for every project: ToolchainRequirementsService, GitRepositories,
     │      FindInProjectService, GitLogService, BlameAnnotations,
     │      LineStatusTracker, GitRemoteOperations
@@ -124,10 +124,20 @@ IdeState
 | `KeymapManager` | application | `IdeState::keymap` | subscribes `SETTINGS_TOPIC`: rebuilds itself |
 | `UpdateChecker` | application | `IdeState::{updates, update_state, update_silent, update_executable, update_installer}` | publishes `UPDATE_TOPIC` (`update_state_changed(state, message)`); balloon and status line follow |
 | `RecentProjectsManager` (`ServiceState<RecentProjects>`) | application | `IdeState::recent_projects` | |
+| `AndroidTooling` | application | `IdeState::android`: the SDK, the detected Android Gradle project, devices and emulators, Logcat, SDK manager, deploy, build variants, merged manifest, resource manager, device mirror, layout editor. Application scope because the SDK manager and the Device Manager also work on the welcome screen; `project_opened` re-detects | publishes `ANDROID_TOPIC` (`project_detected`, `sdk_changed`, `deploy_phase_changed`) |
+| `AgentsManager` | application | `IdeState::agents`: agent sessions (the `AgentsBackend` is `Send + Sync`), thread tabs, the Review selection, balloons. Agent tasks belong to the window and survive switching projects; the backend is only re-rooted (`set_project`) | publishes `AGENTS_TOPIC` (`agent_news`, `agent_selected`) after the state lock is released, so a listener may read the service |
+| `PluginHostService` | application | `IdeState::plugin_host`: the plugin registry (manifests, status, contributions, the user's store), the plugin tool window, plugin editor tabs, queued commands, standalone app mode. The running plugin code is *not* here (see below) | publishes `PLUGIN_TOPIC` (`plugin_status_changed`, `plugin_tool_window_changed`) |
 
 `SettingsService` now publishes `SETTINGS_TOPIC` (`settings_changed(&Settings)`) when a command
 calls `notify_changed()` after a set, reset, apply or load. The keymap and the Gradle options
 (`archipel_ide_gradle::set_options`) subscribe; nobody calls them after a settings change.
+
+**Plugin code is thread-bound.** A plugin instance (a Lua state, a WASM store) is not `Send`, so it
+cannot live in a service. `archipel_ide_plugins::PluginRegistry` is plain data and belongs to the
+service; the loaders, the code of each plugin and the live instances are a `PluginRuntime` that
+`IdeState` keeps on the UI thread (`plugin_runtime`). A plugin call takes its instance out of the
+runtime and runs with a host whose methods lock the service for one statement each, so no lock is
+held across plugin code.
 
 Left alone on purpose, because another change is working there: the LSP registry (`lsp`), the
 daemon and the problems model (`problems`, `analysis`, `code_actions`).
@@ -194,8 +204,10 @@ an `AnAction` for what only needs to ask the window to do something. A new fact 
 `IDE_STATE_FIELD_BASELINE`:
 
 1. `SUBSYSTEM_READ_BASELINE` counts `state.<field>` for every `pub` field of `IdeState` in
-   `archipel-ide-ui/src` (test modules and comments excluded). It is **0**: the UI does not name
-   a field of `IdeState`. Methods (`state.settings()`, `state.active_doc()`,
+   `archipel-ide-ui/src` (test modules and comments excluded; chains broken over lines count). It
+   is **86**, found when the counter was fixed to see code after the first `#[cfg(test)]` and
+   multi-line chains: most are in `src/lib.rs` and `src/toolwindows.rs` and are the next thing to
+   move behind accessors. The goal is 0: the UI does not name a field of `IdeState`. Methods (`state.settings()`, `state.active_doc()`,
    `state.project_root()`) are accessors and do not count.
 2. `HANDLE_BASELINE` counts calls of the *transitional handles* in
    `archipel-ide-core/src/views.rs` (`state.android()`, `state.agents_mut()`, ...). A handle hands
@@ -304,14 +316,29 @@ Do one feature at a time; every step keeps the tests green.
 6. The UI reads through service accessors, handles (`views.rs`) and `DataContext` keys; do not
    add `state.<field>` reaches in `archipel-ide-ui` (a lint fails; see "DataContext and actions").
 
-Pitfalls seen while moving the first four:
+Pitfalls seen while moving the first four (and Android, Agents and the plugin host):
+
+- A `let guard = service.read()` lives to the end of its *scope*, not to its last use. A UI frame
+  that holds one and then dispatches a command that writes the same service deadlocks (a panic
+  after ten seconds in debug builds). The compiler no longer protects you, as it did when the UI
+  borrowed `&app.state.x`: `drop(guard)` before dispatching, or copy what you need first. Prefer
+  service methods that return copies (`counts()`, `selected()`, `tab_title(i)`) to guards.
+- `if let Some(x) = service.write().q.pop() { ... service.write() ... }` and
+  `for x in &service.read().list { ... }` keep their guard for the whole body. Take the value into
+  a `let` first.
+- `.map_err(|e| { service.write().x = e; ... })` after `service.write().f()` writes twice in one
+  statement: bind the result of the first call, then handle the error.
+- Publish a topic after the state guard is released; a listener that reads the service would
+  otherwise deadlock (`AgentsManager::poll`, `AndroidTooling::set_deploy_phase`).
 
 - A guard held across a call that locks the same service for writing deadlocks. Take a guard in a
   block, copy out what you need, drop it, then call.
 - `ServiceState::read` is reentrant, `write` is not.
 - State that used to be reset in `open_project` (`self.git = None`) is now reset by the project's
   disposal; state that survives projects belongs in an application service.
-- Types that are not `Sync` (an `mpsc::Receiver`) need a `Mutex` around them to live in a service.
+- Types that are not `Sync` (an `mpsc::Receiver`) need a `Mutex` around them to live in a service
+  (`archipel_ide_android::Inbox` wraps a receiver that way); plugin instances are inherently
+  thread-bound and stay out of services (`PluginRuntime`).
 
 ## Checklist: remaining `IdeState` fields by future service
 
@@ -332,7 +359,7 @@ this list (so it cannot go stale) or if the struct grows. Tick a field when it h
 - [ ] `gradle_model`, `gradle_error`, `gradle_changes_pending`: Gradle import.
 - [ ] `bazel_targets`, `bazel_error`: Bazel import.
 - [ ] `detected_build`, `build_systems`: build system detection.
-- [ ] `android`: Android SDK and project state (project service).
+- [x] `android`: Android SDK and project state, now `AndroidTooling` (application service).
 
 **Editor (`FileEditorManager`, `EditorHistoryManager`)**
 - [ ] `documents`, `active_document`: open documents and the selected one.
@@ -391,11 +418,14 @@ this list (so it cannot go stale) or if the struct grows. Tick a field when it h
 - [x] `keymap`: `KeymapManager` (application service; reads `SettingsService`).
 - [x] `updates`, `update_state`, `update_silent`, `update_executable`, `update_installer`: update
   checking and installation (`UpdateChecker`).
-- [ ] `plugin_host`: plugin registry, plugin tool windows and tabs (`PluginManager`;
-  contributions become extensions).
-- [ ] `ai`, `agents`: AI assistant and agents (application and project services).
+- [x] `plugin_host`: plugin registry, plugin tool windows and tabs, now `PluginHostService`
+  (application service). Its non-`Send` half moved to `plugin_runtime`.
+- [ ] `plugin_runtime`: loaders, code and live instances of plugins (not `Send`: stays on the UI
+  thread; contributions become extensions).
+- [ ] `ai`: AI assistant (application and project services).
+- [x] `agents`: Agents mode, now `AgentsManager` (application service).
 
 **Already moved** (see "Services in place"): `toolchains`, `settings`, `update_notification`,
 `git`, `git_watcher`, `git_pending`, `vcs_stale`, and the ticked groups above (including `runner`,
 `build_window`, `run_configurations`, `edit_run_configurations`, `runnable_cache`, `debugger`, `spring`,
-`terminal`, `terminal_tabs`).
+`terminal`, `terminal_tabs`), `android`, `agents` and `plugin_host`.

@@ -70,7 +70,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 "{}",
             ),
             |state: &IdeState| {
-                state.android_tooling().read().project.is_some() && state.active_document.is_some()
+                state.android_tooling().is_android_project() && state.active_document.is_some()
             },
             |state: &mut IdeState, _| {
                 let reference = state.resource_at_caret().ok_or_else(|| {
@@ -110,7 +110,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"type":"string","name":"string"}"#,
             ),
-            |state: &IdeState| state.android_tooling().read().project.is_some(),
+            |state: &IdeState| state.android_tooling().is_android_project(),
             |state: &mut IdeState, params| {
                 let reference = ResourceRef {
                     kind: string_param(&params, "type")?,

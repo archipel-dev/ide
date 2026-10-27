@@ -235,7 +235,7 @@ fn runaway_commands_time_out_without_killing_the_plugin() {
 
 #[test]
 fn loader_registers_lua_plugins_with_the_registry() {
-    use archipel_ide_plugins::{PluginLoader, PluginRegistry, PluginStatus};
+    use archipel_ide_plugins::{PluginLoader, PluginRegistry, PluginRuntime, PluginStatus};
     use std::rc::Rc;
     let root =
         std::env::temp_dir().join(format!("archipel-ide-lua-registry-{}", std::process::id()));
@@ -247,14 +247,17 @@ fn loader_registers_lua_plugins_with_the_registry() {
         fs::copy(example_dir().join(file), target.join(file)).unwrap();
     }
     let mut registry = PluginRegistry::default();
+    let mut runtime = PluginRuntime::default();
     assert_eq!(LuaLoader.kind(), PluginKind::Lua);
-    registry.add_loader(Rc::new(LuaLoader));
-    registry.discover(&root);
+    runtime.add_loader(Rc::new(LuaLoader));
+    registry.discover(&mut runtime, &root);
     assert_eq!(
         registry.get("dev.archipel.hello-lua").unwrap().status,
         PluginStatus::Enabled
     );
-    registry.ensure_instance("dev.archipel.hello-lua").unwrap();
-    assert!(registry.instance("dev.archipel.hello-lua").is_some());
+    runtime
+        .ensure_instance(&registry, "dev.archipel.hello-lua")
+        .unwrap();
+    assert!(runtime.instance("dev.archipel.hello-lua").is_some());
     fs::remove_dir_all(&root).unwrap();
 }

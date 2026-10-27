@@ -333,7 +333,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 r#"{"serial":"string?"}"#,
             ),
             |state: &IdeState| {
-                state.android_tooling().read().project.is_some() && !state.execution().is_running()
+                state.android_tooling().is_android_project() && !state.execution().is_running()
             },
             |state: &mut IdeState, params| {
                 state
@@ -355,7 +355,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             .register(Command::new(
                 spec(id, label, "Android", None, r#"{"serial":"string?"}"#),
                 |state: &IdeState| {
-                    state.android_tooling().read().project.is_some()
+                    state.android_tooling().is_android_project()
                         && !state.android_tooling().read().deploy.is_busy()
                 },
                 move |state: &mut IdeState, params| {

@@ -295,7 +295,9 @@ pub struct IdeState {
     /// Markdown editor layout per file (Editor / Split / Preview).
     pub markdown_layouts:
         std::collections::HashMap<std::path::PathBuf, archipel_ide_markdown::Layout>,
-    pub plugin_host: PluginHostState,
+    /// The loaded plugin code. Instances are not `Send`, so they stay on the UI thread here;
+    /// the registry and the plugin views are the `PluginHostService`.
+    pub(crate) plugin_runtime: archipel_ide_plugins::PluginRuntime,
     /// Pinned tabs, closed-tab history and the tab limit.
     pub tabs: tabs::EditorTabs,
     /// Editor split tree: which tabs live in which group (PLATFORM-UI-004).
@@ -482,7 +484,7 @@ impl IdeState {
         if let Some(index) = self.documents.iter().position(|d| d.path == path) {
             self.active_document = Some(index);
             self.diff_active = false;
-            self.plugin_host.active_tab = None;
+            self.plugin_host_service().set_active_tab(None);
             // Opening a preview tab for real (double-click, Enter) keeps it.
             if self.tabs.preview.as_deref() == Some(path) {
                 self.tabs.preview = None;
@@ -498,7 +500,7 @@ impl IdeState {
         self.documents.push(document);
         self.active_document = Some(self.documents.len() - 1);
         self.diff_active = false;
-        self.plugin_host.active_tab = None;
+        self.plugin_host_service().set_active_tab(None);
         self.touch_recent(path);
         self.reveal_in_tree(path);
         self.status = format!("Opened {}", path.display());
@@ -579,7 +581,7 @@ impl IdeState {
         }
         self.active_document = Some(index);
         self.diff_active = false;
-        self.plugin_host.active_tab = None;
+        self.plugin_host_service().set_active_tab(None);
         let path = self.documents[index].path.clone();
         self.touch_recent(&path);
         self.close_completion();

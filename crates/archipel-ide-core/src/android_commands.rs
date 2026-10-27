@@ -110,7 +110,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"view":"android|project"}"#,
             ),
-            |state: &IdeState| state.android_tooling().read().project.is_some(),
+            |state: &IdeState| state.android_tooling().is_android_project(),
             |state: &mut IdeState, params| {
                 state.android_tooling().write().android_view =
                     match string_param(&params, "view")?.as_str() {
@@ -135,7 +135,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 "{}",
             ),
-            |state: &IdeState| state.android_tooling().read().project.is_some(),
+            |state: &IdeState| state.android_tooling().is_android_project(),
             |state: &mut IdeState, _| Ok(json!({ "nodes": state.android_view_nodes() })),
         ))
         .expect("unique built-in id");

@@ -116,8 +116,6 @@ macro_rules! handles {
 }
 
 handles! {
-    /// The plugin registry and the contributions of plugins.
-    plugin_host, plugin_host_mut: crate::PluginHostState;
     /// The AI assistant.
     ai, ai_mut: crate::AiState;
     /// Tool window layout.

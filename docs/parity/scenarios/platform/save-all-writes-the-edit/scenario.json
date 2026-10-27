@@ -1,0 +1,18 @@
+{
+  "title": "Save All writes the typed text to disk (PLAT-SAVE-024)",
+  "requires": [],
+  "open": "notes.txt",
+  "steps": [
+    {"op": "typeAt", "line": 1, "column": 1, "text": "edited "},
+    {"op": "save"},
+    {"op": "sleep", "ms": 300}
+  ],
+  "expect": {
+    "file": [{"path": "notes.txt", "contains": ["edited first line"]}]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "type at the start of the first line, Ctrl+S",
+    "notes": "docs/specs/platform/09-saving-and-autosave.md PLAT-SAVE-024: Save All writes every unsaved document at once"
+  }
+}

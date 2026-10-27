@@ -505,3 +505,63 @@ fn values_convert_from_json() {
     assert_eq!(SettingValue::from_json(&serde_json::json!({"a": 1})), None);
     assert_eq!(SettingValue::Int(3).to_json(), serde_json::json!(3));
 }
+
+/// PLAT-SAVE-010, 011, 012, 013: the rows of the "Files" group, their texts, order and defaults;
+/// the idle timeout is clamped into 1 to 300 instead of being rejected.
+#[test]
+fn plat_save_010_011_012_013_autosave_settings() {
+    let registry = SettingsRegistry::intellij();
+    let mut store = SettingsStore::default();
+    let files: Vec<(&str, &str)> = registry
+        .page_settings("preferences.general")
+        .into_iter()
+        .filter(|def| def.group.as_deref() == Some("Files"))
+        .map(|def| (def.id.as_str(), def.label.as_str()))
+        .collect();
+    assert_eq!(
+        files,
+        [
+            (ids::AUTOSAVE_IDLE, "Save files if the IDE is idle for"),
+            (ids::AUTOSAVE_IDLE_SECONDS, "seconds"),
+            (
+                ids::AUTOSAVE_FOCUS,
+                "Save files when switching to a different application or a built-in terminal"
+            ),
+            (ids::SAFE_WRITE, "Back up files before saving"),
+        ]
+    );
+    assert_eq!(store.get_bool(&registry, ids::AUTOSAVE_IDLE), Some(false));
+    assert_eq!(
+        store.get_int(&registry, ids::AUTOSAVE_IDLE_SECONDS),
+        Some(15)
+    );
+    assert_eq!(store.get_bool(&registry, ids::AUTOSAVE_FOCUS), Some(true));
+    assert_eq!(store.get_bool(&registry, ids::SAFE_WRITE), Some(true));
+    store
+        .set(
+            &registry,
+            ids::AUTOSAVE_IDLE_SECONDS,
+            SettingValue::Int(999),
+        )
+        .unwrap();
+    assert_eq!(
+        store.get_int(&registry, ids::AUTOSAVE_IDLE_SECONDS),
+        Some(300)
+    );
+    store
+        .set(&registry, ids::AUTOSAVE_IDLE_SECONDS, SettingValue::Int(-4))
+        .unwrap();
+    assert_eq!(
+        store.get_int(&registry, ids::AUTOSAVE_IDLE_SECONDS),
+        Some(1)
+    );
+    assert_eq!(
+        (AUTOSAVE_IDLE_MIN, AUTOSAVE_IDLE_MAX, AUTOSAVE_IDLE_DEFAULT),
+        (1, 300, 15)
+    );
+    // PLAT-SAVE-091: "Keep trailing spaces on caret line" is on by default.
+    assert_eq!(
+        store.get_bool(&registry, ids::KEEP_TRAILING_ON_CARET),
+        Some(true)
+    );
+}

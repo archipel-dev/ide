@@ -36,6 +36,11 @@ const GROUPS: [(&str, &str); 5] = [
 ];
 
 /// Ids of settings that Archipel IDE subsystems read.
+/// Range and default of the idle autosave timeout in seconds (PLAT-SAVE-010).
+pub const AUTOSAVE_IDLE_MIN: i64 = 1;
+pub const AUTOSAVE_IDLE_MAX: i64 = 300;
+pub const AUTOSAVE_IDLE_DEFAULT: i64 = 15;
+
 pub mod ids {
     pub const THEME: &str = "appearance.theme";
     pub const EDITOR_SCHEME: &str = "appearance.editorColorScheme";
@@ -81,6 +86,14 @@ pub mod ids {
     pub const CHECK_UPDATES: &str = "updates.checkOnStartup";
     pub const TERMINAL_SHELL: &str = "terminal.shellPath";
     pub const AUTOSAVE_FOCUS: &str = "system.saveOnFrameDeactivation";
+    /// Save files when the IDE has been idle (PLAT-SAVE-010).
+    pub const AUTOSAVE_IDLE: &str = "system.saveOnIdle";
+    /// Seconds of idleness before the idle save, 1 to 300 (PLAT-SAVE-010).
+    pub const AUTOSAVE_IDLE_SECONDS: &str = "system.saveOnIdleSeconds";
+    /// Back up files before saving: write a temporary sibling, then replace (PLAT-SAVE-012).
+    pub const SAFE_WRITE: &str = "system.safeWrite";
+    /// Keep trailing spaces on the caret line when saving (PLAT-SAVE-091).
+    pub const KEEP_TRAILING_ON_CARET: &str = "editor.general.keepTrailingSpacesOnCaretLine";
     pub const REOPEN_PROJECT: &str = "system.reopenLastProject";
 }
 
@@ -566,6 +579,14 @@ fn add_definitions(registry: &mut SettingsRegistry) {
         )
         .group("On Save"),
         SettingDef::new(
+            ids::KEEP_TRAILING_ON_CARET,
+            "preferences.editor",
+            "Keep trailing spaces on caret line",
+            Bool,
+            B(true),
+        )
+        .group("On Save"),
+        SettingDef::new(
             ids::ENSURE_NEWLINE,
             "preferences.editor",
             "Ensure every saved file ends with a line break",
@@ -658,14 +679,44 @@ fn add_definitions(registry: &mut SettingsRegistry) {
             I(5),
         )
         .group("Local History"),
+        // Group "Files", rows in the order of PLAT-SAVE-010..012; the page draws the idle
+        // row as one line and adds the comment of PLAT-SAVE-013 below the group.
+        SettingDef::new(
+            ids::AUTOSAVE_IDLE,
+            "preferences.general",
+            "Save files if the IDE is idle for",
+            Bool,
+            B(false),
+        )
+        .group("Files"),
+        SettingDef::new(
+            ids::AUTOSAVE_IDLE_SECONDS,
+            "preferences.general",
+            "seconds",
+            SettingKind::Int {
+                min: AUTOSAVE_IDLE_MIN,
+                max: AUTOSAVE_IDLE_MAX,
+            },
+            I(AUTOSAVE_IDLE_DEFAULT),
+        )
+        .clamped()
+        .group("Files"),
         SettingDef::new(
             ids::AUTOSAVE_FOCUS,
             "preferences.general",
-            "Save files if the IDE is switched to a different application",
+            "Save files when switching to a different application or a built-in terminal",
             Bool,
             B(true),
         )
-        .group("Autosave"),
+        .group("Files"),
+        SettingDef::new(
+            ids::SAFE_WRITE,
+            "preferences.general",
+            "Back up files before saving",
+            Bool,
+            B(true),
+        )
+        .group("Files"),
         SettingDef::new(
             ids::CHECK_UPDATES,
             "preferences.updates",

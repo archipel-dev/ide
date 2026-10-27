@@ -202,7 +202,7 @@ pub(super) fn settings_page(
     download: &mut Option<u32>,
 ) -> bool {
     let mut submit = false;
-    let progress = app.state.toolchains.progress();
+    let progress = app.state.toolchains().read().progress();
     let catalog_versions = app.state.spring.catalog.boot_versions.clone();
     let java_versions = app.state.spring.catalog.java_versions.clone();
     egui::Grid::new("new_project_spring_fields")

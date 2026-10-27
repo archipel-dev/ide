@@ -4,187 +4,15 @@
 //! Installs only start from `toolchain.install`, i.e. from an explicit user
 //! action (Set up / Install buttons, palette, CLI); nothing downloads silently.
 
+use crate::services::{TOOLCHAIN_TOPIC, ToolchainState};
 use crate::{IdeState, spec, string_param};
 use archipel_ide_command::{Command, CommandError, CommandRegistry};
-use archipel_ide_toolchains::providers::ProjectRequirement;
-use archipel_ide_toolchains::service::{JobId, ToolchainEvent, ToolchainService};
-use archipel_ide_toolchains::{
-    ToolVersion, ToolchainSettings, ToolchainStore, Toolchains, VersionRequest,
-};
+use archipel_ide_platform::ComponentManager;
+use archipel_ide_toolchains::service::{JobId, ToolchainEvent};
+use archipel_ide_toolchains::{ToolVersion, ToolchainSettings, Toolchains, VersionRequest};
 use serde_json::{Value, json};
-use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
-
-/// Provisioning state owned by the IDE.
-pub struct ToolchainState {
-    pub toolchains: Toolchains,
-    pub service: ToolchainService,
-    /// `toolchains.toml` that `toolchain.usePath` writes (user level).
-    pub user_settings: Option<PathBuf>,
-    /// Problem loading `toolchains.toml`, shown instead of failing project open.
-    pub settings_error: Option<String>,
-    /// What the open project needs, by language (from marker files).
-    pub requirements: Vec<ProjectRequirement>,
-    /// Requirements with components that cannot be found, cached for the UI.
-    missing: Vec<(ProjectRequirement, Vec<String>)>,
-    /// Languages whose "missing toolchain" bar was dismissed this session.
-    dismissed: BTreeSet<String>,
-    /// Install what an opened project is missing without asking. The app turns this on;
-    /// it stays off in tests and headless runs so they never download.
-    pub auto_setup: bool,
-}
-
-/// The "missing toolchain" editor notification for one language.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub struct ToolchainBanner {
-    pub language: String,
-    /// Missing component ids (requirements included), in setup order.
-    pub components: Vec<String>,
-    /// "Java project: JDK, Gradle and the Java language server are missing".
-    pub text: String,
-    /// Whether a setup of these components is running.
-    pub busy: bool,
-}
-
-impl Default for ToolchainState {
-    fn default() -> Self {
-        let store = ToolchainStore::new(archipel_ide_toolchains::default_root());
-        store.clean();
-        Self::new(
-            Toolchains::new(archipel_ide_toolchains::providers::builtin_catalog(), store),
-            ToolchainSettings::user_file(),
-        )
-    }
-}
-
-impl ToolchainState {
-    pub fn new(toolchains: Toolchains, user_settings: Option<PathBuf>) -> Self {
-        Self {
-            toolchains,
-            service: ToolchainService::default(),
-            user_settings,
-            settings_error: None,
-            requirements: Vec::new(),
-            missing: Vec::new(),
-            dismissed: BTreeSet::new(),
-            auto_setup: false,
-        }
-    }
-
-    /// Recomputes which required components cannot be found.
-    pub fn refresh_missing(&mut self) {
-        self.missing = self
-            .requirements
-            .iter()
-            .filter_map(|requirement| {
-                let missing = self.toolchains.missing(requirement.components);
-                // Setup order: dependencies (JDK) before what needs them (jdtls).
-                let mut ordered: Vec<String> = requirement
-                    .components
-                    .iter()
-                    .filter(|id| missing.iter().any(|m| m == *id))
-                    .map(|id| (*id).to_owned())
-                    .collect();
-                let extra: Vec<String> = missing
-                    .into_iter()
-                    .filter(|id| !ordered.contains(id))
-                    .collect();
-                ordered.extend(extra);
-                (!ordered.is_empty()).then(|| (requirement.clone(), ordered))
-            })
-            .collect();
-    }
-
-    /// The bar to show above an editor for `path`, if its language lacks tools.
-    pub fn banner_for(&self, path: &Path) -> Option<ToolchainBanner> {
-        let found = self.missing.iter().find(|(requirement, _)| {
-            requirement.applies_to(path) && !self.dismissed.contains(requirement.language)
-        })?;
-        self.banner(found)
-    }
-
-    /// The bar shown while no editor is open: the first language of the project
-    /// that lacks tools, so setup is offered as soon as the project opens.
-    pub fn project_banner(&self) -> Option<ToolchainBanner> {
-        let found = self
-            .missing
-            .iter()
-            .find(|(requirement, _)| !self.dismissed.contains(requirement.language))?;
-        self.banner(found)
-    }
-
-    fn banner(
-        &self,
-        (requirement, components): &(ProjectRequirement, Vec<String>),
-    ) -> Option<ToolchainBanner> {
-        let names: Vec<String> = components
-            .iter()
-            .map(|id| self.banner_name(id, requirement.language))
-            .collect();
-        let list = match names.as_slice() {
-            [one] => one.clone(),
-            [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
-            [] => return None,
-        };
-        let verb = if names.len() == 1 { "is" } else { "are" };
-        Some(ToolchainBanner {
-            language: requirement.language.to_owned(),
-            text: format!("{} project: {list} {verb} missing", requirement.language),
-            busy: self
-                .service
-                .jobs()
-                .iter()
-                .any(|job| components.contains(&job.component)),
-            components: components.clone(),
-        })
-    }
-
-    /// Reloads user and project `toolchains.toml` and the project's pins.
-    pub fn reload(&mut self, project_root: Option<&Path>) {
-        let project_file = project_root.map(ToolchainSettings::project_file);
-        let settings =
-            ToolchainSettings::load_from(self.user_settings.as_deref(), project_file.as_deref());
-        self.settings_error = settings.as_ref().err().map(ToString::to_string);
-        self.toolchains
-            .apply_project(project_root, settings.unwrap_or_default());
-        self.requirements = project_root
-            .map(archipel_ide_toolchains::providers::project_requirements)
-            .unwrap_or_default();
-        self.refresh_missing();
-    }
-
-    /// Status-bar text and fraction for the first running install.
-    pub fn progress(&self) -> Option<(String, Option<f32>)> {
-        let job = self.service.jobs().first()?;
-        // Component ids keep the status bar entry short (`jdtls`, `jdk`).
-        let mut text = job.describe(&job.component);
-        let more = self.service.jobs().len() - 1;
-        if more > 0 {
-            text.push_str(&format!(" (+{more})"));
-        }
-        Some((text, job.fraction()))
-    }
-
-    /// Component name in the bar: language servers read "the Java language server".
-    fn banner_name(&self, id: &str, language: &str) -> String {
-        let server = self.toolchains.catalog().get(id).is_some_and(|provider| {
-            provider.spec().kind == archipel_ide_toolchains::ComponentKind::LanguageServer
-        });
-        if server {
-            format!("the {language} language server")
-        } else {
-            self.component_name(id)
-        }
-    }
-
-    fn component_name(&self, id: &str) -> String {
-        self.toolchains
-            .catalog()
-            .get(id)
-            .map_or(id.to_owned(), |p| p.spec().name.clone())
-    }
-}
 
 impl IdeState {
     pub(crate) fn project_root(&self) -> Option<PathBuf> {
@@ -193,8 +21,9 @@ impl IdeState {
 
     /// Points the language servers at the current toolchain settings and pins.
     pub(crate) fn refresh_toolchain_resolver(&mut self) {
-        let resolver =
-            crate::toolchain_lsp::ToolchainServerResolver::new(self.toolchains.toolchains.clone());
+        let resolver = crate::toolchain_lsp::ToolchainServerResolver::new(
+            self.toolchains().read().toolchains.clone(),
+        );
         self.lsp.set_resolver(Some(std::sync::Arc::new(resolver)));
         self.sync_tool_environment();
     }
@@ -202,7 +31,7 @@ impl IdeState {
     /// Makes JDKs and build tools that are not on `PATH` (Archipel IDE-managed or
     /// configured in `toolchains.toml`) available to builds, runs and tests.
     pub(crate) fn sync_tool_environment(&self) {
-        archipel_ide_runner::set_tool_environment(tool_environment(&self.toolchains.toolchains));
+        sync_tool_environment(&self.toolchains().read());
     }
 
     /// Installs `components` and whatever they require that cannot be found.
@@ -211,18 +40,16 @@ impl IdeState {
         &mut self,
         components: &[&str],
     ) -> Result<Vec<(String, JobId)>, String> {
-        for component in components {
-            if self
-                .toolchains
-                .toolchains
-                .catalog()
-                .get(component)
-                .is_none()
-            {
-                return Err(format!("unknown toolchain component `{component}`"));
+        let missing = {
+            let tools = self.toolchains();
+            let tools = tools.read();
+            for component in components {
+                if tools.toolchains.catalog().get(component).is_none() {
+                    return Err(format!("unknown toolchain component `{component}`"));
+                }
             }
-        }
-        let missing = self.toolchains.toolchains.missing(components);
+            tools.toolchains.missing(components)
+        };
         let mut jobs = Vec::new();
         for component in missing {
             let job = self.install_toolchain(&component, None)?;
@@ -243,80 +70,128 @@ impl IdeState {
     /// Starts installing everything the open project is missing when automatic
     /// setup is on. Components that are already being installed are skipped.
     pub fn auto_setup_toolchains(&mut self) {
-        if !self.toolchains.auto_setup {
+        let tools = self.toolchains();
+        if !tools.read().auto_setup {
             return;
         }
-        let mut components: Vec<String> = Vec::new();
-        for (_, missing) in &self.toolchains.missing {
-            for id in missing {
-                let running = self
-                    .toolchains
+        let Some(requirements) = self.toolchain_requirements() else {
+            return;
+        };
+        let components: Vec<String> = {
+            let tools = tools.read();
+            let running = |id: &str| tools.service.jobs().iter().any(|job| job.component == id);
+            requirements
+                .read()
+                .missing_components()
+                .into_iter()
+                .filter(|id| !running(id))
+                .map(str::to_owned)
+                .collect()
+        };
+        if !components.is_empty() {
+            let ids: Vec<&str> = components.iter().map(String::as_str).collect();
+            if let Err(error) = self.setup_toolchains(&ids) {
+                self.status = error;
+            }
+        }
+        self.ensure_jdk_for_jdtls();
+    }
+
+    /// Installs a JDK new enough for the managed jdtls when the one at hand is too old
+    /// (jdtls 1.63 needs Java 25; a system JDK 21 cannot start it). Only with automatic
+    /// setup on, and once: a JDK install that is already running is left alone.
+    pub(crate) fn ensure_jdk_for_jdtls(&mut self) {
+        let tools = self.toolchains();
+        let required = {
+            let tools = tools.read();
+            if !tools.auto_setup
+                || tools
                     .service
                     .jobs()
                     .iter()
-                    .any(|job| &job.component == id);
-                if !running && !components.contains(id) {
-                    components.push(id.clone());
-                }
+                    .any(|job| job.component == "jdk")
+            {
+                return;
             }
-        }
-        if components.is_empty() {
+            crate::toolchain_lsp::jdtls_needs_jdk(&tools.toolchains)
+        };
+        let Some(required) = required else {
             return;
-        }
-        let ids: Vec<&str> = components.iter().map(String::as_str).collect();
-        if let Err(error) = self.setup_toolchains(&ids) {
-            self.status = error;
+        };
+        match self.install_toolchain("jdk", Some(VersionRequest::Version(required.to_string()))) {
+            Ok(_) => {
+                self.status = format!("Installing JDK {required} for the Java language server…")
+            }
+            Err(error) => {
+                self.status = format!("The Java language server needs JDK {required}: {error}")
+            }
         }
     }
 
     /// Applies finished installs to the status line. Call from the UI loop.
     pub fn poll_toolchains(&mut self) {
-        let events = self.toolchains.service.poll();
+        let events = self.toolchains().write().service.poll();
         self.apply_toolchain_events(&events);
     }
 
     fn apply_toolchain_events(&mut self, events: &[ToolchainEvent]) {
-        let mut installed_any = false;
+        let tools = self.toolchains();
         if events
             .iter()
             .any(|event| matches!(event, ToolchainEvent::Finished { .. }))
+            && let Some(requirements) = self.toolchain_requirements()
         {
-            self.toolchains.refresh_missing();
+            requirements.write().refresh_missing(&tools.read());
         }
+        let bus = self.application().message_bus().clone();
         for event in events {
             if let ToolchainEvent::Finished {
                 component, result, ..
             } = event
             {
-                let name = self.toolchains.component_name(component);
-                self.status = match result {
+                let name = tools.read().component_name(component);
+                match result {
                     Ok(installed) => {
-                        installed_any = true;
-                        format!("{name} {} installed", installed.version)
+                        let version = installed.version.to_string();
+                        self.status = format!("{name} {version} installed");
+                        bus.publish(TOOLCHAIN_TOPIC, |l| {
+                            l.component_installed(component, &version)
+                        });
                     }
-                    Err(error) => format!("{name} setup failed: {error}"),
-                };
+                    Err(error) => {
+                        let error = error.to_string();
+                        self.status = format!("{name} setup failed: {error}");
+                        bus.publish(TOOLCHAIN_TOPIC, |l| l.component_failed(component, &error));
+                    }
+                }
             }
         }
-        if installed_any {
-            self.sync_tool_environment();
+        self.dispatch_reactions();
+    }
+
+    /// What follows an installed component, once no install is running any more.
+    pub(crate) fn toolchain_installed(&mut self) {
+        if self.toolchains().read().service.is_busy() {
+            return;
+        }
+        // A freshly installed jdtls may need a newer JDK than the one at hand.
+        self.ensure_jdk_for_jdtls();
+        if self.toolchains().read().service.is_busy() {
+            return;
         }
         // Language servers that were missing can start now; wait until the
         // whole setup (e.g. jdtls and its JDK) has finished.
-        if installed_any
-            && !self.toolchains.service.is_busy()
-            && self.lsp.missing_servers().next().is_some()
-        {
+        if self.lsp.missing_servers().next().is_some() {
             let status = std::mem::take(&mut self.status);
             self.restart_language_servers();
             self.status = status;
         }
+        // The project model is imported once the tools the build needs are there.
+        if self.project_model().is_some_and(|m| m.read().auto_import) {
+            let _ = self.start_external_import(crate::project_model::ImportReason::Open);
+        }
         // A Gradle project imports itself once its JDK (and Gradle) are there.
-        if installed_any
-            && !self.toolchains.service.is_busy()
-            && self.is_gradle_project()
-            && !self.runner.is_running()
-        {
+        if self.is_gradle_project() && !self.runner.is_running() {
             let status = std::mem::take(&mut self.status);
             match self.start_gradle_sync() {
                 Ok(()) => self.status = format!("{status}; syncing Gradle project…"),
@@ -331,22 +206,21 @@ impl IdeState {
         component: &str,
         request: Option<VersionRequest>,
     ) -> Result<JobId, String> {
-        if self
-            .toolchains
-            .toolchains
-            .catalog()
-            .get(component)
-            .is_none()
-        {
+        let tools = self.toolchains();
+        let mut tools = tools.write();
+        if tools.toolchains.catalog().get(component).is_none() {
             return Err(format!("unknown toolchain component `{component}`"));
         }
-        let job = self
-            .toolchains
-            .service
-            .install(&self.toolchains.toolchains, component, request);
+        let state = &mut *tools;
+        let job = state.service.install(&state.toolchains, component, request);
         self.status = format!("Setting up {component}…");
         Ok(job)
     }
+}
+
+/// See [`IdeState::sync_tool_environment`].
+pub(crate) fn sync_tool_environment(tools: &ToolchainState) {
+    archipel_ide_runner::set_tool_environment(tool_environment(&tools.toolchains));
 }
 
 /// Build-side environment for the located JDK and Gradle: their `bin`
@@ -387,7 +261,14 @@ fn located_json(located: &archipel_ide_toolchains::Located) -> Value {
 
 fn component_param(state: &IdeState, params: &Value) -> Result<String, CommandError> {
     let id = string_param(params, "component")?;
-    if state.toolchains.toolchains.catalog().get(&id).is_none() {
+    if state
+        .toolchains()
+        .read()
+        .toolchains
+        .catalog()
+        .get(&id)
+        .is_none()
+    {
         return Err(CommandError::InvalidParams(format!(
             "unknown toolchain component `{id}`"
         )));
@@ -401,7 +282,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             spec("toolchain.list", "Toolchains", "Toolchains", None, "{}"),
             |_| true,
             |state: &mut IdeState, _| {
-                let toolchains = &state.toolchains.toolchains;
+                let tools = state.toolchains();
+                let tools = tools.read();
+                let toolchains = &tools.toolchains;
                 let components: Vec<Value> = toolchains
                     .catalog()
                     .specs()
@@ -422,7 +305,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     "root": toolchains.store().root(),
                     "platform": toolchains.platform().key(),
                     "components": components,
-                    "settingsError": state.toolchains.settings_error,
+                    "settingsError": tools.settings_error,
                 }))
             },
         ))
@@ -440,7 +323,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |state: &mut IdeState, params| {
                 let id = component_param(state, &params)?;
                 Ok(state
-                    .toolchains
+                    .toolchains()
+                    .read()
                     .toolchains
                     .locate(&id)
                     .as_ref()
@@ -461,7 +345,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |state: &mut IdeState, params| {
                 let ids = crate::string_array_param(&params, "components")?;
                 let ids: Vec<&str> = ids.iter().map(String::as_str).collect();
-                Ok(json!(state.toolchains.toolchains.missing(&ids)))
+                Ok(json!(state.toolchains().read().toolchains.missing(&ids)))
             },
         ))
         .expect("unique built-in id");
@@ -489,7 +373,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 }
                 // Headless use (CLI): block until the install finishes.
                 let (events, result) = state
-                    .toolchains
+                    .toolchains()
+                    .write()
                     .service
                     .wait(job, Duration::from_secs(60 * 60));
                 state.apply_toolchain_events(&events);
@@ -540,7 +425,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                             Some(result) => Some(result),
                             None => {
                                 let (events, outcome) = state
-                                    .toolchains
+                                    .toolchains()
+                                    .write()
                                     .service
                                     .wait(*job, Duration::from_secs(60 * 60));
                                 state.apply_toolchain_events(&events);
@@ -571,17 +457,17 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 None,
                 r#"{"job":"number?"}"#,
             ),
-            |state: &IdeState| state.toolchains.service.is_busy(),
+            |state: &IdeState| state.toolchains().read().service.is_busy(),
             |state: &mut IdeState, params| {
                 match params.get("job").and_then(Value::as_u64) {
                     Some(job) => {
-                        if !state.toolchains.service.cancel(job) {
+                        if !state.toolchains().write().service.cancel(job) {
                             return Err(CommandError::InvalidParams(format!(
                                 "no running setup job {job}"
                             )));
                         }
                     }
-                    None => state.toolchains.service.cancel_all(),
+                    None => state.toolchains().write().service.cancel_all(),
                 }
                 state.status = "Cancelling toolchain setup…".into();
                 Ok(Value::Null)
@@ -599,8 +485,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             |_| true,
             |state: &mut IdeState, _| {
-                let jobs: Vec<Value> = state
-                    .toolchains
+                let tools = state.toolchains();
+                let tools = tools.read();
+                let jobs: Vec<Value> = tools
                     .service
                     .jobs()
                     .iter()
@@ -609,7 +496,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                             "job": job.id,
                             "component": job.component,
                             "version": job.version,
-                            "text": job.describe(&state.toolchains.component_name(&job.component)),
+                            "text": job.describe(&tools.component_name(&job.component)),
                             "fraction": job.fraction(),
                         })
                     })
@@ -631,8 +518,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |state: &mut IdeState, params| {
                 let id = string_param(&params, "component")?;
                 let version = ToolVersion::new(string_param(&params, "version")?);
-                if state
-                    .toolchains
+                let tools = state.toolchains();
+                if tools
+                    .read()
                     .service
                     .jobs()
                     .iter()
@@ -642,16 +530,14 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                         "{id} is being set up; cancel the setup first"
                     )));
                 }
-                state
-                    .toolchains
+                tools
+                    .read()
                     .toolchains
                     .store()
                     .uninstall(&id, &version)
                     .map_err(|error| CommandError::Failed(error.to_string()))?;
-                state.status = format!(
-                    "Uninstalled {} {version}",
-                    state.toolchains.component_name(&id)
-                );
+                let name = tools.read().component_name(&id);
+                state.status = format!("Uninstalled {name} {version}");
                 Ok(Value::Null)
             },
         ))
@@ -673,7 +559,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     .and_then(Value::as_str)
                     .map(PathBuf::from);
                 if let Some(path) = &path {
-                    let toolchains = &state.toolchains.toolchains;
+                    let tools = state.toolchains();
+                    let tools = tools.read();
+                    let toolchains = &tools.toolchains;
                     let spec = toolchains
                         .catalog()
                         .get(&id)
@@ -695,17 +583,22 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                         )));
                     }
                 }
-                let file = state.toolchains.user_settings.clone().ok_or_else(|| {
-                    CommandError::Failed("no user configuration directory".into())
-                })?;
+                let file = state
+                    .toolchains()
+                    .read()
+                    .user_settings
+                    .clone()
+                    .ok_or_else(|| {
+                        CommandError::Failed("no user configuration directory".into())
+                    })?;
                 ToolchainSettings::update_file(&file, &id, |component| {
                     component.path = path.clone();
                 })
                 .map_err(|error| CommandError::Failed(error.to_string()))?;
                 let root = state.project_root();
-                state.toolchains.reload(root.as_deref());
+                state.reload_toolchains(root.as_deref());
                 state.refresh_toolchain_resolver();
-                let located = state.toolchains.toolchains.locate(&id);
+                let located = state.toolchains().read().toolchains.locate(&id);
                 Ok(located.as_ref().map_or(Value::Null, located_json))
             },
         ))
@@ -722,7 +615,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |_| true,
             |state: &mut IdeState, params| {
                 let path = PathBuf::from(string_param(&params, "path")?);
-                Ok(json!(state.toolchains.banner_for(&path)))
+                Ok(json!(state.toolchain_banner_for(&path)))
             },
         ))
         .expect("unique built-in id");
@@ -738,7 +631,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |_| true,
             |state: &mut IdeState, params| {
                 let language = string_param(&params, "language")?;
-                state.toolchains.dismissed.insert(language);
+                if let Some(requirements) = state.toolchain_requirements() {
+                    requirements.write().dismiss(&language);
+                }
                 Ok(Value::Null)
             },
         ))
@@ -753,7 +648,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 "{}",
             ),
             |_| true,
-            |state: &mut IdeState, _| Ok(json!(state.toolchains.toolchains.pins().pins)),
+            |state: &mut IdeState, _| Ok(json!(state.toolchains().read().toolchains.pins().pins)),
         ))
         .expect("unique built-in id");
 }
@@ -762,6 +657,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
 mod tests {
     use super::*;
     use crate::built_in_commands;
+    use archipel_ide_toolchains::ToolchainStore;
     use archipel_ide_toolchains::catalog::{IndexedRelease, ReleaseIndex};
     use archipel_ide_toolchains::download::sha256_hex;
     use archipel_ide_toolchains::{
@@ -770,6 +666,7 @@ mod tests {
     };
     use std::collections::BTreeMap;
     use std::io::{Read, Write};
+    use std::path::Path;
     use std::sync::Arc;
 
     fn archive(payload: &[u8]) -> Vec<u8> {
@@ -831,10 +728,12 @@ mod tests {
         let toolchains = Toolchains::new(catalog, ToolchainStore::new(dir.join("toolchains")))
             .with_platform(platform)
             .with_environment(Default::default(), BTreeMap::new());
-        IdeState {
-            toolchains: ToolchainState::new(toolchains, Some(dir.join("user/toolchains.toml"))),
-            ..IdeState::default()
-        }
+        let state = IdeState::default();
+        state.toolchains().replace(ToolchainState::new(
+            toolchains,
+            Some(dir.join("user/toolchains.toml")),
+        ));
+        state
     }
 
     fn temp(name: &str) -> PathBuf {
@@ -958,7 +857,14 @@ mod tests {
                 json!({"component": "demo"}),
             )
             .unwrap();
-        assert!(state.toolchains.toolchains.locate("demo").is_none());
+        assert!(
+            state
+                .toolchains()
+                .read()
+                .toolchains
+                .locate("demo")
+                .is_none()
+        );
 
         let project = dir.join("project");
         std::fs::create_dir_all(&project).unwrap();
@@ -986,7 +892,7 @@ mod tests {
             ComponentSpec::new("demo-ls", "Demo LS", ComponentKind::LanguageServer, "demo");
         spec.requires = vec!["demo".into()];
         let platform = Platform::parse("linux", "x86_64").unwrap();
-        let mut catalog = state.toolchains.toolchains.catalog().clone();
+        let mut catalog = state.toolchains().read().toolchains.catalog().clone();
         catalog.register(Arc::new(StaticProvider {
             spec,
             index: ReleaseIndex {
@@ -1006,7 +912,7 @@ mod tests {
                 }],
             },
         }));
-        state.toolchains.toolchains =
+        state.toolchains().write().toolchains =
             Toolchains::new(catalog, ToolchainStore::new(dir.join("toolchains")))
                 .with_platform(platform)
                 .with_environment(Default::default(), BTreeMap::new());
@@ -1072,10 +978,11 @@ mod tests {
         let toolchains = Toolchains::new(catalog, ToolchainStore::new(dir.join("toolchains")))
             .with_platform(Platform::parse("linux", "x86_64").unwrap())
             .with_environment(Default::default(), BTreeMap::new());
-        let mut state = IdeState {
-            toolchains: ToolchainState::new(toolchains, Some(dir.join("user/toolchains.toml"))),
-            ..IdeState::default()
-        };
+        let mut state = IdeState::default();
+        state.toolchains().replace(ToolchainState::new(
+            toolchains,
+            Some(dir.join("user/toolchains.toml")),
+        ));
         let project = dir.join("project");
         std::fs::create_dir_all(&project).unwrap();
         std::fs::write(project.join("settings.gradle"), "").unwrap();
@@ -1102,7 +1009,7 @@ mod tests {
         );
         // The same bar is offered while no editor is open.
         assert_eq!(
-            state.toolchains.project_banner().map(|banner| banner.text),
+            state.toolchain_project_banner().map(|banner| banner.text),
             Some(banner["text"].as_str().unwrap().to_owned())
         );
         assert_eq!(banner["busy"], false);
@@ -1134,7 +1041,7 @@ mod tests {
             "Java project: Gradle, the Java language server and Java debugger (java-debug) are missing"
         );
         // A configured JDK is handed to builds (bin on PATH, JAVA_HOME).
-        let environment = tool_environment(&state.toolchains.toolchains);
+        let environment = tool_environment(&state.toolchains().read().toolchains);
         assert_eq!(environment.path_dirs, [jdk.join("bin")]);
         if std::env::var_os("JAVA_HOME").is_none() {
             assert_eq!(

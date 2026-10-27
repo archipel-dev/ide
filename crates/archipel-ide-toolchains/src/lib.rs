@@ -28,6 +28,7 @@ pub mod catalog;
 pub mod discovery;
 pub mod download;
 pub mod extract;
+pub mod osgi;
 pub mod pinning;
 pub mod platform;
 pub mod providers;

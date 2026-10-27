@@ -307,6 +307,7 @@ impl IdeApp {
             && !self.state.runner.is_running()
             && !self.state.updates.is_busy()
             && self.state.analysis.index.is_idle()
+            && !self.state.project_model().is_some_and(|m| m.is_busy())
     }
 
     fn popup_visible(&self, ctx: &egui::Context) -> bool {
@@ -321,6 +322,7 @@ impl IdeApp {
             || self.state.refactor.rename.is_some()
             || egui::Popup::is_any_open(ctx)
             || self.state.docs.popup.is_some()
+            || self.state.code_actions.popup
     }
 
     fn completion_visible(&self) -> bool {
@@ -453,7 +455,7 @@ impl IdeApp {
                 "completion": self.completion_visible(),
                 "intentions": self.state.code_actions.popup,
                 "rename": self.state.refactor.rename.is_some(),
-                "notification": self.state.update_notification,
+                "notification": self.state.notifications().update_balloon(),
                 "about": self.state.about_open,
                 "history": self.state.analysis.history.dialog.is_some(),
                 "customize": self.state.first_run_open,
@@ -480,6 +482,20 @@ impl IdeApp {
                 "selected": self.find_popup.selected(),
             },
             "problems": active.map(|_| self.state.active_problems().len()),
+            // The Alt+Enter list (native fixes and the language server's
+            // actions in one) and the language servers' import state.
+            "intentions": {
+                "popup": self.state.code_actions.popup,
+                "rows": self.state.alert_texts(),
+            },
+            "lsp": {
+                "importing": self.state.lsp.servers().iter().any(|server| server.importing),
+                "servers": self.state.lsp.servers().iter().map(|server| json!({
+                    "id": server.id,
+                    "importing": server.importing,
+                    "progress": server.progress.iter().map(archipel_ide_lsp::describe_progress).collect::<Vec<_>>(),
+                })).collect::<Vec<_>>(),
+            },
             "history": {
                 "enabled": self.state.analysis.history.is_enabled(),
                 "revisions": self.state.analysis.history.dialog.as_ref().map(|d| d.revisions.len()),
@@ -500,6 +516,7 @@ impl IdeApp {
                     .map(|info| (info.id.0.to_owned(), json!(archipel_ide_index::progress::state_label(info.state))))
                     .collect::<serde_json::Map<_, _>>(),
             },
+            "projectModel": self.state.project_model().map_or(Value::Null, |m| m.snapshot(root.as_deref().unwrap_or(std::path::Path::new("")))),
             "run": {
                 "task": self.state.runner.plan().map(|plan| plan.name.clone()),
                 "running": self.state.runner.is_running(),
@@ -739,6 +756,49 @@ mod tests {
         assert_eq!(app.control_state(&ctx)["popups"]["about"], false);
         assert!(app.control_execute(&ctx, "app.about", Value::Null).ok);
         assert_eq!(app.control_state(&ctx)["popups"]["about"], true);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn state_snapshot_reports_the_imported_project_model() {
+        if archipel_ide_runner::find_program("cargo").is_none() {
+            return;
+        }
+        let dir =
+            std::env::temp_dir().join(format!("archipel-ide-control-model-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.join("tests")).unwrap();
+        std::fs::write(
+            dir.join("Cargo.toml"),
+            "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("src/main.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(dir.join("tests/it.rs"), "#[test]\nfn t() {}\n").unwrap();
+        let mut app = IdeApp::with_update_check(Some(dir.clone()), Vec::new(), false);
+        let ctx = egui::Context::default();
+        assert!(app.state.project_model().unwrap().is_importing());
+        // The harness waits for imports like it waits for indexing.
+        assert!(!app.background_idle());
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        while !app.background_idle() && std::time::Instant::now() < deadline {
+            app.state.poll_project_model();
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        let state = app.control_state(&ctx);
+        let model = &state["projectModel"];
+        assert_eq!(model["state"], "ready", "{model}");
+        assert_eq!(model["systems"], json!(["cargo"]));
+        assert_eq!(model["modules"][0]["name"], "demo");
+        assert!(
+            model["modules"][0]["sourceFolders"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|folder| folder["path"] == "tests" && folder["type"] == "testSource")
+        );
+        assert!(model["libraries"].is_number());
         let _ = std::fs::remove_dir_all(dir);
     }
 

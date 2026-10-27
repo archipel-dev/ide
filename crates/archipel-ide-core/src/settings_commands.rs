@@ -1,50 +1,18 @@
 //! Settings state and `settings.*` commands.
 
+use crate::services::Settings;
 use crate::{IdeState, spec, string_param};
 use archipel_ide_command::{Command, CommandError, CommandRegistry};
-use archipel_ide_settings::{SettingValue, SettingsRegistry, SettingsStore, ids};
+use archipel_ide_settings::{SettingValue, ids};
 use serde_json::{Value, json};
 use std::path::Path;
-
-/// The settings registry (pages and definitions) and the stored values.
-#[derive(Debug, Clone)]
-pub struct Settings {
-    pub registry: SettingsRegistry,
-    pub store: SettingsStore,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            registry: SettingsRegistry::intellij(),
-            store: SettingsStore::default(),
-        }
-    }
-}
-
-impl Settings {
-    pub fn bool(&self, id: &str) -> Option<bool> {
-        self.store.get_bool(&self.registry, id)
-    }
-
-    pub fn int(&self, id: &str) -> Option<i64> {
-        self.store.get_int(&self.registry, id)
-    }
-
-    pub fn float(&self, id: &str) -> Option<f64> {
-        self.store.get_float(&self.registry, id)
-    }
-
-    pub fn text(&self, id: &str) -> Option<String> {
-        self.store.get_text(&self.registry, id)
-    }
-}
 
 impl IdeState {
     /// Loads the per-user settings from `dir` (normally
     /// [`archipel_ide_settings::default_config_dir`]).
     pub fn load_user_settings(&mut self, dir: &Path) {
-        if let Err(error) = self.settings.store.load_application(dir) {
+        let loaded = self.settings().write().store.load_application(dir);
+        if let Err(error) = loaded {
             self.status = format!("{error}. Using defaults; the file is left unchanged.");
         }
         self.refresh_keymap();
@@ -52,7 +20,8 @@ impl IdeState {
     }
 
     pub(crate) fn load_project_settings(&mut self, root: &Path) {
-        if let Err(error) = self.settings.store.load_project(root) {
+        let loaded = self.settings().write().store.load_project(root);
+        if let Err(error) = loaded {
             self.status = format!("{error}. Using defaults; the file is left unchanged.");
         }
         self.sync_gradle_options();
@@ -61,21 +30,17 @@ impl IdeState {
     /// Hands Settings | Build Tools | Gradle to the Gradle integration.
     pub(crate) fn sync_gradle_options(&self) {
         use archipel_ide_gradle::{BuildRunner, Distribution, GradleOptions};
-        let path = |id| self.settings.text(id).filter(|v| !v.trim().is_empty());
+        let settings = self.settings();
+        let settings = settings.read();
+        let path = |id| settings.text(id).filter(|v| !v.trim().is_empty());
         archipel_ide_gradle::set_options(GradleOptions {
             build_run: BuildRunner::from_id(
-                &self
-                    .settings
-                    .text(ids::GRADLE_BUILD_RUN)
-                    .unwrap_or_default(),
+                &settings.text(ids::GRADLE_BUILD_RUN).unwrap_or_default(),
             ),
             distribution: Distribution::from_id(
-                &self
-                    .settings
-                    .text(ids::GRADLE_DISTRIBUTION)
-                    .unwrap_or_default(),
+                &settings.text(ids::GRADLE_DISTRIBUTION).unwrap_or_default(),
             ),
-            offline: self.settings.bool(ids::GRADLE_OFFLINE).unwrap_or(false),
+            offline: settings.bool(ids::GRADLE_OFFLINE).unwrap_or(false),
             user_home: path(ids::GRADLE_USER_HOME),
             jvm: path(ids::GRADLE_JVM),
         });
@@ -85,7 +50,8 @@ impl IdeState {
     pub(crate) fn persist_settings(&mut self) -> Result<(), CommandError> {
         self.refresh_keymap();
         self.sync_gradle_options();
-        self.settings
+        self.settings()
+            .read()
             .store
             .save()
             .map_err(|error| CommandError::Failed(error.to_string()))
@@ -94,7 +60,7 @@ impl IdeState {
 
 fn setting_id(state: &IdeState, params: &Value) -> Result<String, CommandError> {
     let id = string_param(params, "id")?;
-    if state.settings.registry.setting(&id).is_none() {
+    if state.settings().read().registry.setting(&id).is_none() {
         return Err(CommandError::InvalidParams(format!(
             "unknown setting `{id}`"
         )));
@@ -130,7 +96,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |_| true,
             |state: &mut IdeState, params| {
                 let page = match params.get("page").and_then(Value::as_str) {
-                    Some(page) if state.settings.registry.page(page).is_none() => {
+                    Some(page) if state.settings().read().registry.page(page).is_none() => {
                         return Err(CommandError::InvalidParams(format!(
                             "unknown settings page `{page}`"
                         )));
@@ -155,10 +121,11 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |_| true,
             |state: &mut IdeState, params| {
                 let id = setting_id(state, &params)?;
-                let value = state
-                    .settings
+                let settings = state.settings();
+                let settings = settings.read();
+                let value = settings
                     .store
-                    .get(&state.settings.registry, &id)
+                    .get(&settings.registry, &id)
                     .map_err(invalid)?;
                 Ok(json!({"id": id, "value": value.to_json()}))
             },
@@ -177,8 +144,12 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |state: &mut IdeState, params| {
                 let id = setting_id(state, &params)?;
                 let value = value_param(&params, "value")?;
-                let Settings { registry, store } = &mut state.settings;
-                store.set(registry, &id, value).map_err(invalid)?;
+                {
+                    let settings = state.settings();
+                    let mut settings = settings.write();
+                    let Settings { registry, store } = &mut *settings;
+                    store.set(registry, &id, value).map_err(invalid)?;
+                }
                 state.persist_settings()?;
                 Ok(Value::Null)
             },
@@ -196,8 +167,12 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |_| true,
             |state: &mut IdeState, params| {
                 let id = setting_id(state, &params)?;
-                let Settings { registry, store } = &mut state.settings;
-                store.reset(registry, &id).map_err(invalid)?;
+                {
+                    let settings = state.settings();
+                    let mut settings = settings.write();
+                    let Settings { registry, store } = &mut *settings;
+                    store.reset(registry, &id).map_err(invalid)?;
+                }
                 state.persist_settings()?;
                 Ok(Value::Null)
             },
@@ -221,15 +196,19 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                         CommandError::InvalidParams("expected object field `changes`".into())
                     })?;
                 // Validate everything before touching the store (all-or-nothing).
-                let Settings { registry, store } = &mut state.settings;
-                let mut next = store.clone();
-                for (id, value) in changes {
-                    let value = SettingValue::from_json(value).ok_or_else(|| {
-                        CommandError::InvalidParams(format!("unsupported value for `{id}`"))
-                    })?;
-                    next.set(registry, id, value).map_err(invalid)?;
+                {
+                    let settings = state.settings();
+                    let mut settings = settings.write();
+                    let Settings { registry, store } = &mut *settings;
+                    let mut next = store.clone();
+                    for (id, value) in changes {
+                        let value = SettingValue::from_json(value).ok_or_else(|| {
+                            CommandError::InvalidParams(format!("unsupported value for `{id}`"))
+                        })?;
+                        next.set(registry, id, value).map_err(invalid)?;
+                    }
+                    *store = next;
                 }
-                *store = next;
                 state.persist_settings()?;
                 state.status = match changes.len() {
                     1 => "1 setting changed".into(),
@@ -251,7 +230,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |_| true,
             |state: &mut IdeState, params| {
                 let query = string_param(&params, "query")?;
-                let registry = &state.settings.registry;
+                let settings = state.settings();
+                let settings = settings.read();
+                let registry = &settings.registry;
                 let result = registry.search(&query);
                 let pages: Vec<_> = result
                     .matching_pages
@@ -307,7 +288,7 @@ mod tests {
                 )
                 .is_err()
         );
-        assert_eq!(state.settings.int(ids::EDITOR_FONT_SIZE), Some(13));
+        assert_eq!(state.settings().read().int(ids::EDITOR_FONT_SIZE), Some(13));
         commands
             .execute(
                 "settings.apply",
@@ -315,7 +296,7 @@ mod tests {
                 json!({"changes": {ids::EDITOR_FONT_SIZE: 16, ids::SMOOTH_SCROLLING: false}}),
             )
             .unwrap();
-        assert_eq!(state.settings.int(ids::EDITOR_FONT_SIZE), Some(16));
+        assert_eq!(state.settings().read().int(ids::EDITOR_FONT_SIZE), Some(16));
         assert_eq!(state.status, "2 settings changed");
         let saved = std::fs::read_to_string(config.join("settings.toml")).unwrap();
         assert!(saved.contains("editor.font.size"));
@@ -335,7 +316,7 @@ mod tests {
                 json!({"id": ids::EDITOR_FONT_SIZE}),
             )
             .unwrap();
-        assert_eq!(state.settings.int(ids::EDITOR_FONT_SIZE), Some(13));
+        assert_eq!(state.settings().read().int(ids::EDITOR_FONT_SIZE), Some(13));
         assert!(
             commands
                 .execute(

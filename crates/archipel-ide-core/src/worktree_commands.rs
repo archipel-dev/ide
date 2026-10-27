@@ -10,8 +10,7 @@ use std::path::{Path, PathBuf};
 impl IdeState {
     fn to_repo_paths(&self, paths: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
         let git = self
-            .git
-            .as_ref()
+            .git_status()
             .ok_or("the project is not a Git repository")?;
         let project = self.project.as_ref().ok_or("no project is open")?;
         let git_root = git.root.canonicalize().unwrap_or_else(|_| git.root.clone());
@@ -43,22 +42,21 @@ impl IdeState {
 
     /// Message of the last commit, for the Amend toggle.
     pub fn last_commit_message(&self) -> Option<String> {
-        let git = self.git.as_ref()?;
+        let git = self.git_status()?;
         archipel_ide_git::last_commit_message(&git.root)
             .ok()
             .flatten()
     }
 
     pub fn stashes(&self) -> Vec<StashEntry> {
-        self.git
-            .as_ref()
+        self.git_status()
             .and_then(|git| archipel_ide_git::stash_list(&git.root).ok())
             .unwrap_or_default()
     }
 }
 
 pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
-    let has_git = |state: &IdeState| state.git.is_some();
+    let has_git = |state: &IdeState| state.has_git();
     registry
         .register(Command::new(
             spec(
@@ -70,8 +68,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ),
             |state: &IdeState| {
                 state
-                    .git
-                    .as_ref()
+                    .git_status()
                     .is_some_and(|git| !git.changes.is_empty())
             },
             |state: &mut IdeState, params| {
@@ -155,8 +152,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |state: &mut IdeState, params| {
                 let index = usize_param(&params, "index")?;
                 let root = state
-                    .git
-                    .as_ref()
+                    .git_status()
                     .ok_or_else(|| CommandError::Failed("not a Git repository".into()))?
                     .root
                     .clone();
@@ -234,7 +230,7 @@ mod tests {
             .execute("git.rollback", &mut state, json!({"paths": ["a.txt"]}))
             .unwrap();
         assert_eq!(state.documents[0].text.text(), "a\n");
-        assert!(state.git.as_ref().unwrap().changes.is_empty());
+        assert!(state.git_status().unwrap().changes.is_empty());
         assert!(!commands.is_enabled("git.rollback", &state));
 
         fs::write(root.join("a.txt"), "wip\n").unwrap();

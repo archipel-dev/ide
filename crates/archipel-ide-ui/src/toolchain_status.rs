@@ -6,7 +6,7 @@ use serde_json::json;
 
 /// "Downloading JDK 21.0.4… 45%" with a progress bar; click to cancel.
 pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::FontId) {
-    let Some((text, fraction)) = app.state.toolchains.progress() else {
+    let Some((text, fraction)) = app.state.toolchains().read().progress() else {
         return;
     };
     match fraction {

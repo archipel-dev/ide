@@ -34,7 +34,8 @@ pub fn main_toolbar(app: &mut IdeApp, ctx: &egui::Context) {
             let bar = ui.max_rect();
             let glow = app
                 .state
-                .settings
+                .settings()
+                .read()
                 .bool(archipel_ide_settings::ids::PROJECT_COLORS)
                 .unwrap_or(true)
                 .then(|| crate::toolbar_gradient::reserve(ctx));
@@ -192,7 +193,7 @@ fn project_widget(app: &mut IdeApp, ui: &mut egui::Ui) -> Rect {
 }
 
 fn vcs_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let Some(git) = app.state.git.as_ref() else {
+    let Some(git) = app.state.git_status() else {
         return;
     };
     let branch = git.branch.clone();
@@ -882,6 +883,7 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                     crate::lsp_status::status_widget(app, ui, font.clone());
                     crate::index_status::status_widget(app, ui, font.clone());
                     crate::toolchain_status::status_widget(app, ui, font.clone());
+                    crate::external_status::status_widget(app, ui, font.clone());
                     let active = app
                         .state
                         .active_document
@@ -983,7 +985,7 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                         )
                         .clicked()
                         {
-                            app.state.update_notification = true;
+                            app.state.notifications().show_update_balloon();
                         }
                     }
                     if app.state.runner.is_running() || app.state.search.is_running() {

@@ -7,8 +7,10 @@
 - UI controls dispatch commands; they do not own filesystem or project policy.
 - Prefer complete vertical slices with tests over empty crates or decorative controls.
 - Never claim parity without reproducible evidence recorded in `docs/parity/`.
-- Preserve clean-room boundaries: use public documentation, public source with compatible
-  licensing, and observable behavior; do not copy JetBrains code, artwork, or branding.
+- Preserve clean-room boundaries: do not copy JetBrains code, artwork, or branding. IntelliJ
+  behavior reaches the code only through the specifications in `docs/specs/`, written by a
+  separate specification team; implementers never read JetBrains source. See
+  `docs/specs/README.md`.
 - No new ad-hoc egui painting in `archipel-ide-ui`: use `archipel-kit` components, parts and
   behaviours; if the kit lacks something, add it there. See `docs/ui-migration.md`.
   `cargo xtask design-lint` fails on new `Color32::from_rgb*`, hex palettes, rounded
@@ -39,9 +41,16 @@ Commit messages and PR titles must be Conventional Commits (`feat`, `fix`, `perf
 `refactor`, `docs`, `test`, `chore`, `ci`; `!` for breaking); they drive automatic
 versioning. See `docs/contributing.md`.
 
+## Platform kernel
+
+New feature state is a service of the platform kernel (`archipel-ide-platform`, see
+`docs/architecture/platform-kernel.md`), not a field of `IdeState`. `cargo test -p archipel-ide-core`
+fails when `IdeState` grows beyond the baseline in `tests/ide_state_size.rs`; moving fields out
+lowers it. Features talk through topics and extension points, and the UI reads through services.
+
 ## Layering
 
-`archipel-ide -> archipel-ide-ui -> archipel-ide-core -> {command, project, plugins}`, with
+`archipel-ide -> archipel-ide-ui -> archipel-ide-core -> {platform, command, project, plugins}`, with
 `archipel-ide-compat` (the old Jetthing names) at the bottom.
 Lower layers must not depend on higher layers. Language integrations belong behind
 plugin/service traits, never inside the platform core.

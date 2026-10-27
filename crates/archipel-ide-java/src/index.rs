@@ -95,10 +95,17 @@ pub struct ClassHit {
     pub rank: u32,
     pub record: Arc<StubRecord>,
     pub path: Vec<String>,
+    /// A local or anonymous class of the current file (not in any index): its own stub.
+    pub local: Option<Arc<ClassStub>>,
+    /// Resolved supertypes of a local or anonymous class (resolved at its declaration site).
+    pub local_supers: Option<Arc<Vec<ClassHit>>>,
 }
 
 impl ClassHit {
     pub fn class(&self) -> &ClassStub {
+        if let Some(l) = &self.local {
+            return l;
+        }
         let mut c = &self.record.class;
         for name in &self.path {
             match c.inner_named(name) {
@@ -122,7 +129,7 @@ impl ClassHit {
         self.class().inner_named(name)?;
         let mut path = self.path.clone();
         path.push(name.to_string());
-        Some(ClassHit { unit: self.unit, rank: self.rank, record: self.record.clone(), path })
+        Some(ClassHit { unit: self.unit, rank: self.rank, record: self.record.clone(), path, local: None, local_supers: None })
     }
 }
 
@@ -740,7 +747,7 @@ impl JavaIndex {
 
     fn class_hit(&self, unit: u32, rank: u32, cref: &ClassRef) -> Option<ClassHit> {
         let record = self.record(unit, &cref.top)?;
-        Some(ClassHit { unit, rank, record, path: cref.path.clone() })
+        Some(ClassHit { unit, rank, record, path: cref.path.clone(), local: None, local_supers: None })
     }
 
     /// All classes with this FQN in scope, best first (`find_classes`, PLAT-IDX-091).

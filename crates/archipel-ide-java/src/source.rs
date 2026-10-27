@@ -64,8 +64,41 @@ pub fn is_class_kind(k: &str) -> bool {
     )
 }
 
-struct Builder<'a> {
-    src: &'a str,
+pub(crate) struct Builder<'a> {
+    pub(crate) src: &'a str,
+}
+
+/// The stub of a class-like declaration node (member, local or top-level), for classes
+/// that are not reachable through the file stub (local classes).
+pub fn class_stub_of(src: &str, node: Node<'_>, scope: &str) -> Option<ClassStub> {
+    Builder { src }.class(node, scope)
+}
+
+/// The stub of an anonymous class body whose base type text is `base`.
+pub fn anonymous_stub(src: &str, body: Node<'_>, base: &str, interface_hint: bool) -> ClassStub {
+    let b = Builder { src };
+    let mut stub = ClassStub {
+        name: String::new(),
+        qname: String::new(),
+        kind: ClassKind::Class,
+        flags: 0,
+        deprecated: false,
+        type_params: Vec::new(),
+        extends: vec![base.to_string()],
+        implements: Vec::new(),
+        permits: Vec::new(),
+        annotations: Vec::new(),
+        fields: Vec::new(),
+        methods: Vec::new(),
+        inner: Vec::new(),
+        record_components: Vec::new(),
+        source_file: None,
+        compiled: false,
+        is_static_member: false,
+    };
+    let _ = interface_hint;
+    b.members(body, &mut stub, false);
+    stub
 }
 
 fn collapse(s: &str) -> String {
@@ -86,12 +119,12 @@ fn collapse(s: &str) -> String {
 }
 
 impl Builder<'_> {
-    fn text(&self, n: Node<'_>) -> &str {
+    pub(crate) fn text(&self, n: Node<'_>) -> &str {
         &self.src[n.byte_range()]
     }
 
     /// Source text with whitespace collapsed and comments dropped, as written otherwise.
-    fn compact(&self, n: Node<'_>) -> String {
+    pub(crate) fn compact(&self, n: Node<'_>) -> String {
         if n.child_count() == 0 {
             return self.text(n).to_string();
         }

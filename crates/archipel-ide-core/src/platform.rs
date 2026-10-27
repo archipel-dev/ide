@@ -13,15 +13,16 @@
 use crate::build_window::BuildWindowFollower;
 use crate::services::Settings;
 use crate::services::{
-    ActionManager, AndroidTooling, BlameAnnotations, CloneManager, DEBUG_SESSION_TOPIC,
-    DebugSessionListener, EXECUTION_TOPIC, ExecutionListener, ExecutionManager, FIND_TOPIC,
-    FindInProjectService, FindListener, GIT_REPO_CHANGE, GitLogService, GitRemoteOperations,
-    GitRepositories, GitRepositoryChangeListener, KeymapManager, LineStatusTracker, Notifications,
-    ProjectModelService, REMOTE_TOPIC, RecentProjectsManager, RemoteOperationListener,
-    RemoteOutcome, SETTINGS_TOPIC, SearchEverywhereManager, SearchSummary, SettingsListener,
-    SettingsService, SpringStarters, TOOLCHAIN_TOPIC, TerminalService, ToolchainBanner,
-    ToolchainListener, ToolchainManager, ToolchainRequirementsService, ToolchainState,
-    UPDATE_TOPIC, UpdateChecker, UpdateListener, XDebuggerManager,
+    ActionManager, AgentsManager, AndroidTooling, BlameAnnotations, CloneManager,
+    DEBUG_SESSION_TOPIC, DebugSessionListener, EXECUTION_TOPIC, ExecutionListener,
+    ExecutionManager, FIND_TOPIC, FindInProjectService, FindListener, GIT_REPO_CHANGE,
+    GitLogService, GitRemoteOperations, GitRepositories, GitRepositoryChangeListener,
+    KeymapManager, LineStatusTracker, Notifications, ProjectModelService, REMOTE_TOPIC,
+    RecentProjectsManager, RemoteOperationListener, RemoteOutcome, SETTINGS_TOPIC,
+    SearchEverywhereManager, SearchSummary, SettingsListener, SettingsService, SpringStarters,
+    TOOLCHAIN_TOPIC, TerminalService, ToolchainBanner, ToolchainListener, ToolchainManager,
+    ToolchainRequirementsService, ToolchainState, UPDATE_TOPIC, UpdateChecker, UpdateListener,
+    XDebuggerManager,
 };
 use crate::{IdeState, UpdateState, settings_commands, toolchain_commands};
 use archipel_ide_dap::StackFrame;
@@ -246,6 +247,9 @@ fn register_core_services(application: &Application) {
             CloneManager::new(application.message_bus().clone())
         })),
         application.register_service(ServiceDescriptor::of_default::<ActionManager>()),
+        application.register_service(ServiceDescriptor::new(|application: &Application| {
+            AgentsManager::new(application.message_bus().clone())
+        })),
         application.register_service(ServiceDescriptor::new(|application: &Application| {
             AndroidTooling::new(application.message_bus().clone())
         })),
@@ -507,6 +511,12 @@ impl IdeState {
     /// Whether a Find in Files search is running.
     pub fn search_running(&self) -> bool {
         self.find().is_some_and(|find| find.is_running())
+    }
+
+    /// Agents mode: sessions, thread tabs, review and balloons (application service: agent tasks
+    /// belong to the window and survive switching projects).
+    pub fn agents_manager(&self) -> Arc<AgentsManager> {
+        self.application().service()
     }
 
     /// The Android SDK, devices, Logcat, deploys and tool windows (application service: the SDK

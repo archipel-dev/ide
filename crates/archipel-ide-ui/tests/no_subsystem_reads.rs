@@ -34,7 +34,7 @@ const SUBSYSTEM_READ_BASELINE: usize = 0;
 
 /// The number of calls of whole-subsystem handles the UI may still make. Lower it when calls go
 /// (a call becomes a `DataContext` key, a narrower accessor or a service call); never raise it.
-const HANDLE_BASELINE: usize = 168;
+const HANDLE_BASELINE: usize = 132;
 
 /// The `pub` fields of `pub struct IdeState`.
 fn ide_state_fields() -> Vec<String> {

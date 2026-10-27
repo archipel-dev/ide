@@ -22,6 +22,7 @@
 //! | [`KeymapManager`] | application | `IdeState::keymap` |
 //! | [`UpdateChecker`] | application | `IdeState::{updates, update_state, update_silent, update_executable, update_installer}` |
 //! | [`RecentProjectsManager`] | application | `IdeState::recent_projects` |
+//! | [`AgentsManager`] | application | `IdeState::agents` (sessions, thread tabs, review, balloons) |
 //! | [`AndroidTooling`] | application | `IdeState::android` (SDK, devices, Logcat, deploy, ...) |
 
 use parking_lot::{
@@ -105,6 +106,7 @@ pub(crate) fn lock<'a, T>(mutex: &'a Mutex<T>, what: &str) -> MutexGuard<'a, T> 
 }
 
 mod actions;
+mod agents;
 mod android;
 mod debugger;
 mod execution;
@@ -124,6 +126,7 @@ mod update;
 mod vcs;
 
 pub use actions::{ActionManager, ActionOptions};
+pub use agents::{AGENTS_TOPIC, AgentsListener, AgentsManager};
 pub use android::{ANDROID_TOPIC, AndroidListener, AndroidTooling};
 pub(crate) use debugger::Announced;
 pub use debugger::{DEBUG_SESSION_TOPIC, DebugSessionListener, XDebuggerManager};
@@ -160,6 +163,7 @@ fn assert_sync() {
     sync::<crate::debug_commands::DebuggerState>();
     sync::<archipel_ide_terminal::TerminalSession>();
     sync::<crate::AndroidState>();
+    sync::<crate::agents::AgentsState>();
 }
 pub use update::{UPDATE_TOPIC, UpdateChecker, UpdateListener};
 pub(crate) use vcs::REBLAME_INTERVAL;

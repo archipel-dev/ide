@@ -349,8 +349,6 @@ pub struct IdeState {
     pub tool_windows: ToolWindowLayout,
     /// Code or Agents arrangement of the window (documents and tabs are shared).
     pub workbench_mode: agents::WorkbenchMode,
-    /// Agents mode: sessions, grid, review and balloons (backend behind a trait).
-    pub agents: agents::AgentsState,
     /// Project-relative directories expanded in the Project tool window.
     pub expanded_dirs: BTreeSet<PathBuf>,
     /// Project view options, directory marks and the file clipboard.

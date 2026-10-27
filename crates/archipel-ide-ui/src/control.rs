@@ -430,11 +430,11 @@ impl IdeApp {
             "focus": focus,
             "mode": self.state.workbench_mode().id(),
             "agents": {
-                "screen": format!("{:?}", self.state.agents().screen).to_lowercase(),
-                "selected": self.state.agents().selected,
-                "returnTo": self.state.agents().return_to,
+                "screen": format!("{:?}", self.state.agents_manager().screen()).to_lowercase(),
+                "selected": self.state.agents_manager().selected(),
+                "returnTo": self.state.agents_manager().return_to(),
                 "statusText": crate::agents_ui::status_text(self),
-                "sessions": self.state.agents().sessions().iter().map(|s| json!({
+                "sessions": self.state.agents_manager().sessions().iter().map(|s| json!({
                     "id": s.id,
                     "name": s.name,
                     "profile": s.profile.id(),
@@ -442,9 +442,9 @@ impl IdeApp {
                     "parent": s.parent,
                     "unread": s.unread,
                 })).collect::<Vec<_>>(),
-                "threads": self.state.agents().threads,
-                "newThread": self.state.agents().new_thread,
-                "notices": self.state.agents().notices.len(),
+                "threads": self.state.agents_manager().threads(),
+                "newThread": self.state.agents_manager().new_thread(),
+                "notices": self.state.agents_manager().notices().len(),
             },
             "projectTree": {
                 "selected": self.tree_selection.as_deref().map(relative),

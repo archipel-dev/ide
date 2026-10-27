@@ -116,8 +116,6 @@ macro_rules! handles {
 }
 
 handles! {
-    /// Agents mode: sessions, grid, review.
-    agents, agents_mut: crate::agents::AgentsState;
     /// The plugin registry and the contributions of plugins.
     plugin_host, plugin_host_mut: crate::PluginHostState;
     /// The AI assistant.

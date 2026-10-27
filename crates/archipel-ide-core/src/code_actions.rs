@@ -274,6 +274,21 @@ impl IdeState {
         set
     }
 
+    /// The texts of the Alt+Enter rows the popup shows (top level, in order); empty
+    /// while it is closed. For the control socket's state.
+    pub fn alert_texts(&self) -> Vec<String> {
+        if !self.code_actions.popup {
+            return Vec::new();
+        }
+        let file = self
+            .active_document
+            .and_then(|index| self.documents.get(index))
+            .and_then(|document| self.analysis.host.lookup(&document.path));
+        file.and_then(|file| self.code_actions.alerts.peek(file))
+            .map(|set| set.top_level().map(|row| row.text.clone()).collect())
+            .unwrap_or_default()
+    }
+
     /// Chooses row `index` of [`IdeState::current_alerts`].
     pub fn apply_alert(&mut self, index: usize) -> Result<(), String> {
         let set = self

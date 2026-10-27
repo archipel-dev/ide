@@ -592,6 +592,11 @@ impl AlertCache {
         Ok(set)
     }
 
+    /// The last assembled set of `file`, whatever state it was computed for.
+    pub fn peek(&self, file: FileId) -> Option<Arc<AlertSet>> {
+        self.entries.get(&file).map(|(_, set)| set.clone())
+    }
+
     pub fn forget(&mut self, file: FileId) {
         self.entries.remove(&file);
     }

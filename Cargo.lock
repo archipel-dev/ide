@@ -282,7 +282,7 @@ dependencies = [
 [[package]]
 name = "archipel-icons"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#23229137a214f65c0e4d9d28075685cf128aa021"
+source = "git+https://github.com/archipel-dev/kit?branch=main#577ce543bef1ecb2ee5ab5532198924003ef9ae1"
 dependencies = [
  "egui",
 ]
@@ -900,7 +900,7 @@ dependencies = [
 [[package]]
 name = "archipel-kit"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#23229137a214f65c0e4d9d28075685cf128aa021"
+source = "git+https://github.com/archipel-dev/kit?branch=main#577ce543bef1ecb2ee5ab5532198924003ef9ae1"
 dependencies = [
  "archipel-icons",
  "egui",
@@ -915,7 +915,7 @@ dependencies = [
 [[package]]
 name = "archipel-kit-tui"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#23229137a214f65c0e4d9d28075685cf128aa021"
+source = "git+https://github.com/archipel-dev/kit?branch=main#577ce543bef1ecb2ee5ab5532198924003ef9ae1"
 dependencies = [
  "archipel-icons",
  "archipel-kit",
@@ -1639,7 +1639,7 @@ checksum = "fe6d2e5af09e8c8ad56c969f2157a3d4238cebc7c55f0a517728c38f7b200f81"
 dependencies = [
  "serde",
  "termcolor",
- "unicode-width 0.1.14",
+ "unicode-width 0.2.2",
 ]
 
 [[package]]

@@ -204,9 +204,9 @@ Priority: `MUST` (5.3, own row), `SHOULD` (implement after the MUST set; message
 quick fix named in its bundle entry; behaviour as in the description page of the inspection), `LATER` (reason given). `kind`: local / global, `+cleanup`.
 Default state `on`/`off` with the default level.
 
-`KT-INS-090` SHOULD: every inspection marked SHOULD in Appendix A, with its default state and level and the shared contract of 5.1. Acceptance: profile dump equals Appendix A for the implemented ones; each has at least one positive and one negative test.
+`KT-INS-200` SHOULD: every inspection marked SHOULD in Appendix A, with its default state and level and the shared contract of 5.1. Acceptance: profile dump equals Appendix A for the implemented ones; each has at least one positive and one negative test.
 
-`KT-INS-091` LATER: every inspection marked LATER in Appendix A (reason in the table).
+`KT-INS-201` LATER: every inspection marked LATER in Appendix A (reason in the table).
 
 ### Code
 

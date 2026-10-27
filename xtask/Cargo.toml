@@ -15,3 +15,5 @@ archipel-ide-control = { path = "../crates/archipel-ide-control" }
 serde.workspace = true
 serde_json.workspace = true
 archipel-ide-plugins = { path = "../crates/archipel-ide-plugins" }
+archipel-ide-toolchains = { path = "../crates/archipel-ide-toolchains" }
+regex = "1"

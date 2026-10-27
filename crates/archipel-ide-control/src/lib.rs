@@ -99,6 +99,10 @@ pub enum WaitCondition {
     Popup,
     /// The active editor or the status bar contains `text`.
     Text,
+    /// The code analysis of the active file has settled: the daemon has analyzed the
+    /// current text, its language server is ready and no markup changed for a moment
+    /// (IntelliJ's `DaemonCodeAnalyzer` idle). Implies [`WaitCondition::Idle`].
+    Analysis,
 }
 
 /// One response line: `{"ok":true,"result":…}` or `{"ok":false,"error":"…"}`.

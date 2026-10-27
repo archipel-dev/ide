@@ -12,7 +12,7 @@ requests:
   click <x> <y> [--button primary|secondary|middle] [--count N]
   move <x> <y>
   screenshot <path.png>
-  wait <idle|popup|text> [text] [--timeout MS]
+  wait <idle|popup|text|analysis> [text] [--timeout MS]
   raw <json-request>
 The socket defaults to $ARCHIPEL_CONTROL_SOCKET.";
 
@@ -197,6 +197,7 @@ fn parse_ui_args(args: Vec<String>) -> Result<(PathBuf, Request), String> {
                 "idle" => WaitCondition::Idle,
                 "popup" => WaitCondition::Popup,
                 "text" => WaitCondition::Text,
+                "analysis" => WaitCondition::Analysis,
                 other => return Err(format!("unknown wait condition {other:?}")),
             };
             let text = positional.next();

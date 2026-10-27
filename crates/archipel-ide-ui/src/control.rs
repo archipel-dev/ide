@@ -16,11 +16,15 @@ use eframe::egui;
 use serde_json::{Value, json};
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// Frames a `wait idle` needs without injected input, so focus changes and
 /// layout settle before a screenshot.
 const SETTLE_FRAMES: u32 = 3;
+/// How long the markup inputs must stay unchanged for `wait analysis`: a language server
+/// publishes diagnostics some time after the last edit and gives no signal for "done".
+const ANALYSIS_QUIET: Duration = Duration::from_millis(400);
+const ANALYSIS_QUIET_LSP: Duration = Duration::from_millis(2500);
 
 pub struct Control {
     server: ControlServer,
@@ -37,6 +41,8 @@ pub struct Control {
     /// focused, so injected keys reach widgets even when no window manager
     /// gives the window OS focus (Xvfb, CI).
     owns_focus: bool,
+    /// Markup inputs of the active file and when they last changed (`wait analysis`).
+    markup_stamp: ((u64, u64, u64), Instant),
 }
 
 /// Input applied during one frame; `done` is answered after its frame ran.
@@ -57,6 +63,7 @@ impl Control {
             frames_since_input: 0,
             input: VecDeque::new(),
             owns_focus: false,
+            markup_stamp: ((0, 0, 0), Instant::now()),
         }
     }
 
@@ -215,6 +222,10 @@ impl IdeApp {
             return;
         };
         control.frames_since_input = control.frames_since_input.saturating_add(1);
+        let stamp = self.state.markup_stamp();
+        if stamp != control.markup_stamp.0 {
+            control.markup_stamp = (stamp, Instant::now());
+        }
         for (pending, response) in control.after_frame.drain(..) {
             pending.respond(response);
         }
@@ -229,6 +240,20 @@ impl IdeApp {
                     control.screenshots.is_empty()
                         && control.frames_since_input >= SETTLE_FRAMES
                         && self.background_idle()
+                }
+                WaitCondition::Analysis => {
+                    let (native_ready, lsp_pending) = self.state.analysis_readiness();
+                    let quiet = if self.state.active_has_language_server() {
+                        ANALYSIS_QUIET_LSP
+                    } else {
+                        ANALYSIS_QUIET
+                    };
+                    control.screenshots.is_empty()
+                        && control.frames_since_input >= SETTLE_FRAMES
+                        && self.background_idle()
+                        && native_ready
+                        && !lsp_pending
+                        && control.markup_stamp.1.elapsed() >= quiet
                 }
                 WaitCondition::Popup => self.popup_visible(ctx),
                 WaitCondition::Text => text.as_deref().is_some_and(|text| self.shows_text(text)),
@@ -293,6 +318,8 @@ impl IdeApp {
             || self.state.about_open
             || self.state.first_run_open
             || self.completion_visible()
+            || self.state.code_actions.popup
+            || self.state.refactor.rename.is_some()
             || egui::Popup::is_any_open(ctx)
             || self.state.docs.popup.is_some()
     }
@@ -425,6 +452,8 @@ impl IdeApp {
                 "dialog": self.dialog.as_ref().map(|dialog| dialog.kind()),
                 "findBar": self.find.open,
                 "completion": self.completion_visible(),
+                "intentions": self.state.code_actions.popup,
+                "rename": self.state.refactor.rename.is_some(),
                 "notification": self.state.update_notification,
                 "about": self.state.about_open,
                 "history": self.state.analysis.history.dialog.is_some(),

@@ -22,3 +22,8 @@ Conventions:
   policy of ED-CARET section 3.2; `viewport-lines=N` fixes the viewport height; `line-separator=CRLF`
   means the file on disk uses CRLF (the document always holds `\n`).
 * `\t` in a block means a tab character; `·` is not used, spaces are literal.
+* `paste "<text>"` puts the text on the clipboard (as plain text, `\n` is a line break) and presses
+  Ctrl+V. `copy` and `cut` press Ctrl+C and Ctrl+X. `clipboard: <text>` may appear before `keys:` to
+  preset the clipboard.
+* A language of `java` means a `.java` file whose text is a complete compilation unit or a class body
+  as shown; the caret context decides the typed handlers.

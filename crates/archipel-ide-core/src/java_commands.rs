@@ -43,14 +43,22 @@ pub(crate) fn register_commands(registry: &mut archipel_ide_command::CommandRegi
         .expect("unique built-in id");
     registry
         .register(Command::new(
-            crate::spec("java.chooseImport", "Choose Import", "Code", None, r#"{"index":0}"#),
+            crate::spec(
+                "java.chooseImport",
+                "Choose Import",
+                "Code",
+                None,
+                r#"{"index":0}"#,
+            ),
             |state: &IdeState| state.java_service().is_some_and(|s| s.chooser().is_some()),
             |state: &mut IdeState, args: Value| {
                 let index = crate::usize_param(&args, "index").unwrap_or(0);
                 let command = state
                     .java_service()
                     .and_then(|s| s.choose(index))
-                    .ok_or_else(|| archipel_ide_command::CommandError::Failed("no such choice".into()))?;
+                    .ok_or_else(|| {
+                        archipel_ide_command::CommandError::Failed("no such choice".into())
+                    })?;
                 state
                     .execute_mod_command(&command)
                     .map(|m| json!({"message": m}))
@@ -60,7 +68,13 @@ pub(crate) fn register_commands(registry: &mut archipel_ide_command::CommandRegi
         .expect("unique built-in id");
     registry
         .register(Command::new(
-            crate::spec("java.cancelChooser", "Cancel Import Chooser", "Code", None, "{}"),
+            crate::spec(
+                "java.cancelChooser",
+                "Cancel Import Chooser",
+                "Code",
+                None,
+                "{}",
+            ),
             |_| true,
             |state: &mut IdeState, _| {
                 if let Some(s) = state.java_service() {
@@ -81,7 +95,9 @@ impl IdeState {
         let settings = self.settings();
         let mut settings = settings.write();
         let registry = &mut settings.registry;
-        if registry.setting(SETTING_JAVA_NATIVE).is_some() || registry.page(crate::INSPECTIONS_PAGE).is_none() {
+        if registry.setting(SETTING_JAVA_NATIVE).is_some()
+            || registry.page(crate::INSPECTIONS_PAGE).is_none()
+        {
             return;
         }
         let defs = [
@@ -121,7 +137,9 @@ impl IdeState {
     /// its Java pass again.
     pub(crate) fn poll_java(&mut self) -> bool {
         self.ensure_java_settings();
-        let Some(service) = self.java_service() else { return false };
+        let Some(service) = self.java_service() else {
+            return false;
+        };
         let (native, unused, exclude) = {
             let settings = self.settings();
             let settings = settings.read();
@@ -131,8 +149,17 @@ impl IdeState {
                 settings.text(SETTING_JAVA_EXCLUDE).unwrap_or_default(),
             )
         };
-        let mut wanted = JavaSettings { native, unused_imports: unused, imports: ImportSettings::default() };
-        wanted.imports.exclude = exclude.split(',').map(str::trim).filter(|s| !s.is_empty()).map(str::to_owned).collect();
+        let mut wanted = JavaSettings {
+            native,
+            unused_imports: unused,
+            imports: ImportSettings::default(),
+        };
+        wanted.imports.exclude = exclude
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+            .collect();
         let mut changed = false;
         if service.settings() != wanted {
             service.set_settings(wanted);
@@ -157,7 +184,10 @@ impl IdeState {
             None => (None, false),
         };
         let cache = self.analysis.index_cache_dir.clone().map(|dir| {
-            dir.join("index").join(format!("{:016x}", archipel_ide_lsp::registry::stable_hash(&root.to_string_lossy())))
+            dir.join("index").join(format!(
+                "{:016x}",
+                archipel_ide_lsp::registry::stable_hash(&root.to_string_lossy())
+            ))
         });
         changed |= service.sync(&root, model, loading, cache);
         if native {

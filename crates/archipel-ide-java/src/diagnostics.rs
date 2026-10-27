@@ -3,17 +3,19 @@
 
 use crate::analyze::ProblemKind;
 use crate::api::JavaProject;
-use crate::index::{JavaIndex, JavaIndexState};
-use archipel_ide_projectmodel::ProjectModel;
 use crate::env::{CurrentFile, Env};
 use crate::import_edit::{self, ImportSettings};
 use crate::import_fix::{self, ClassRefInfo, ImportClassFix, ImportStaticFix, Place, SearchInput};
+use crate::index::{JavaIndex, JavaIndexState};
 use crate::scope::ResolveScope;
 use archipel_ide_analysis::daemon::{Pass, PassCx, PassId, PassOutput};
 use archipel_ide_analysis::highlight::FixDescriptor;
 use archipel_ide_analysis::inspect::ProblemDescriptor;
 use archipel_ide_analysis::intention::{FixCx, QuickFix};
-use archipel_ide_analysis::{Cancelled, FileId, HighlightInfo, HighlightKind, ModCommand, Severity, TextEdit, ToolId};
+use archipel_ide_analysis::{
+    Cancelled, FileId, HighlightInfo, HighlightKind, ModCommand, Severity, TextEdit, ToolId,
+};
+use archipel_ide_projectmodel::ProjectModel;
 use parking_lot::RwLock;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -33,7 +35,11 @@ pub struct JavaSettings {
 
 impl Default for JavaSettings {
     fn default() -> Self {
-        Self { native: true, unused_imports: true, imports: ImportSettings::default() }
+        Self {
+            native: true,
+            unused_imports: true,
+            imports: ImportSettings::default(),
+        }
     }
 }
 
@@ -112,7 +118,13 @@ impl JavaService {
     /// changed model schedules an incremental sync; `loading` is the import in progress
     /// (JAVA-ERR-003). Returns true when the completeness of answers changed (the daemon must
     /// run again).
-    pub fn sync(&self, root: &Path, model: Option<Arc<ProjectModel>>, loading: bool, cache_dir: Option<PathBuf>) -> bool {
+    pub fn sync(
+        &self,
+        root: &Path,
+        model: Option<Arc<ProjectModel>>,
+        loading: bool,
+        cache_dir: Option<PathBuf>,
+    ) -> bool {
         let mut s = self.state.write();
         let root_changed = s.root != root;
         if root_changed {
@@ -143,7 +155,10 @@ impl JavaService {
         }
         if model_changed || s.loading != loading || s.project.is_none() {
             s.loading = loading;
-            s.project = s.model.clone().map(|m| JavaProject::new(index.clone(), m, loading));
+            s.project = s
+                .model
+                .clone()
+                .map(|m| JavaProject::new(index.clone(), m, loading));
         }
         let complete = s.project.as_ref().is_some_and(JavaProject::is_complete);
         let flipped = complete != s.complete || model_changed;
@@ -154,7 +169,10 @@ impl JavaService {
     pub fn status(&self) -> JavaStatus {
         let s = self.state.read();
         JavaStatus {
-            state: s.index.as_ref().map_or(JavaIndexState::Absent, JavaIndex::state),
+            state: s
+                .index
+                .as_ref()
+                .map_or(JavaIndexState::Absent, JavaIndex::state),
             model_loading: s.loading,
             native: s.settings.native,
         }
@@ -187,15 +205,25 @@ impl JavaService {
     pub fn document_seen(&self, path: &Path, rev: u64, text: impl FnOnce() -> Arc<str>) {
         let mut s = self.state.write();
         let Some(index) = s.index.clone() else { return };
-        let Some(project) = s.project.clone() else { return };
+        let Some(project) = s.project.clone() else {
+            return;
+        };
         let path = self.abs(&s.root, path);
         if !project.applies_to(&path) {
             return;
         }
         let now = std::time::Instant::now();
-        let entry = s.docs.entry(path.clone()).or_insert(DocState { rev, seen: now, indexed: false });
+        let entry = s.docs.entry(path.clone()).or_insert(DocState {
+            rev,
+            seen: now,
+            indexed: false,
+        });
         if entry.rev != rev {
-            *entry = DocState { rev, seen: now, indexed: false };
+            *entry = DocState {
+                rev,
+                seen: now,
+                indexed: false,
+            };
         }
         if entry.indexed || now.duration_since(entry.seen) < REINDEX_DELAY && entry.seen != now {
             return;
@@ -204,7 +232,12 @@ impl JavaService {
             return;
         }
         entry.indexed = true;
-        let module = project.files.module_for_file(&path).map(|m| (m.name.clone(), project.files.is_in_test_source_content(&path)));
+        let module = project.files.module_for_file(&path).map(|m| {
+            (
+                m.name.clone(),
+                project.files.is_in_test_source_content(&path),
+            )
+        });
         drop(s);
         let text = text();
         index.update_source(&path, &text, module.as_ref().map(|(m, t)| (m.as_str(), *t)));
@@ -213,7 +246,9 @@ impl JavaService {
     /// Files changed on disk (watcher): sources are reindexed from disk, deleted ones forgotten.
     pub fn paths_changed(&self, paths: &[PathBuf]) {
         let s = self.state.read();
-        let (Some(index), Some(project)) = (s.index.clone(), s.project.clone()) else { return };
+        let (Some(index), Some(project)) = (s.index.clone(), s.project.clone()) else {
+            return;
+        };
         let root = s.root.clone();
         drop(s);
         if !index.is_ready() {
@@ -221,13 +256,24 @@ impl JavaService {
         }
         for p in paths {
             let abs = self.abs(&root, p);
-            if abs.extension().and_then(|e| e.to_str()) != Some("java") || !project.files.is_in_source_content(&abs) {
+            if abs.extension().and_then(|e| e.to_str()) != Some("java")
+                || !project.files.is_in_source_content(&abs)
+            {
                 continue;
             }
             match std::fs::read(&abs) {
                 Ok(bytes) => {
-                    let module = project.files.module_for_file(&abs).map(|m| (m.name.clone(), project.files.is_in_test_source_content(&abs)));
-                    index.update_source(&abs, &String::from_utf8_lossy(&bytes), module.as_ref().map(|(m, t)| (m.as_str(), *t)));
+                    let module = project.files.module_for_file(&abs).map(|m| {
+                        (
+                            m.name.clone(),
+                            project.files.is_in_test_source_content(&abs),
+                        )
+                    });
+                    index.update_source(
+                        &abs,
+                        &String::from_utf8_lossy(&bytes),
+                        module.as_ref().map(|(m, t)| (m.as_str(), *t)),
+                    );
                 }
                 Err(_) => index.remove_source(&abs),
             }
@@ -235,26 +281,51 @@ impl JavaService {
     }
 
     fn abs(&self, root: &Path, p: &Path) -> PathBuf {
-        if p.is_absolute() { p.to_path_buf() } else { root.join(p) }
+        if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            root.join(p)
+        }
     }
 
     pub fn absolute(&self, p: &Path) -> PathBuf {
-        if p.is_absolute() { p.to_path_buf() } else { self.state.read().root.join(p) }
+        if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            self.state.read().root.join(p)
+        }
     }
 }
 
-fn place_for(path: &Path, text: &str, tree: &Tree, current: &CurrentFile, at: usize, scope: &ResolveScope) -> Place {
+fn place_for(
+    path: &Path,
+    text: &str,
+    tree: &Tree,
+    current: &CurrentFile,
+    at: usize,
+    scope: &ResolveScope,
+) -> Place {
     let top = {
         // The top-level class containing `at`.
         let root = tree.root_node();
         let mut found = None;
         let mut c = root.walk();
         for n in root.children(&mut c) {
-            if crate::source::is_class_kind(n.kind()) && n.start_byte() <= at && at <= n.end_byte() {
-                found = n.child_by_field_name("name").map(|x| text[x.byte_range()].to_string());
+            if crate::source::is_class_kind(n.kind()) && n.start_byte() <= at && at <= n.end_byte()
+            {
+                found = n
+                    .child_by_field_name("name")
+                    .map(|x| text[x.byte_range()].to_string());
             }
         }
-        found.and_then(|name| current.stub.classes.iter().find(|c| c.name == name).map(|c| c.qname.clone()))
+        found.and_then(|name| {
+            current
+                .stub
+                .classes
+                .iter()
+                .find(|c| c.name == name)
+                .map(|c| c.qname.clone())
+        })
     };
     Place {
         path: path.to_path_buf(),
@@ -267,7 +338,11 @@ fn place_for(path: &Path, text: &str, tree: &Tree, current: &CurrentFile, at: us
 }
 
 fn fix_descriptor(fix: Arc<dyn QuickFix>) -> FixDescriptor {
-    FixDescriptor { family: fix.family().into(), text: fix.name().into(), action: Some(fix) }
+    FixDescriptor {
+        family: fix.family().into(),
+        text: fix.name().into(),
+        action: Some(fix),
+    }
 }
 
 /// Removes the given import statements (all unused imports of the file, JAVA-IMP-071).
@@ -286,13 +361,20 @@ impl QuickFix for RemoveUnusedImports {
         let text = cx.syntax.text();
         let mut out = text.to_string();
         let (nodes, _) = import_edit::parse_imports(text);
-        let mut targets: Vec<_> = nodes.into_iter().filter(|n| self.ranges.iter().any(|r| r.start == n.range.start)).collect();
+        let mut targets: Vec<_> = nodes
+            .into_iter()
+            .filter(|n| self.ranges.iter().any(|r| r.start == n.range.start))
+            .collect();
         targets.sort_by_key(|n| std::cmp::Reverse(n.range.start));
         for n in targets {
             out = import_edit::delete_statement_public(&out, &n);
         }
         Ok(match import_edit::minimal_edit(text, &out) {
-            Some(e) => ModCommand::UpdateFile { file: cx.file, edits: vec![e], expected_rev: cx.syntax.rev() },
+            Some(e) => ModCommand::UpdateFile {
+                file: cx.file,
+                edits: vec![e],
+                expected_rev: cx.syntax.rev(),
+            },
             None => ModCommand::Nothing,
         })
     }
@@ -303,14 +385,21 @@ impl QuickFix for RemoveUnusedImports {
 
 impl JavaService {
     /// The service registered in `registry`.
-    pub fn from_registry(registry: &archipel_ide_analysis::ServiceRegistry) -> Option<Arc<JavaService>> {
+    pub fn from_registry(
+        registry: &archipel_ide_analysis::ServiceRegistry,
+    ) -> Option<Arc<JavaService>> {
         registry.get::<JavaService>(archipel_ide_language::LanguageId::ANY)
     }
 
     /// Registers the service and the `java-resolve` pass.
     pub fn register(self: &Arc<Self>, registry: &mut archipel_ide_analysis::ServiceRegistry) {
         use archipel_ide_language::Registration;
-        registry.register::<dyn Pass>(Registration::any("java-resolve").dumb_aware(true), Arc::new(JavaResolvePass { service: self.clone() }));
+        registry.register::<dyn Pass>(
+            Registration::any("java-resolve").dumb_aware(true),
+            Arc::new(JavaResolvePass {
+                service: self.clone(),
+            }),
+        );
         registry.register::<JavaService>(Registration::any("java").dumb_aware(true), self.clone());
     }
 }
@@ -325,12 +414,26 @@ pub struct Collected {
 }
 
 /// Everything the pass reports for one file.
-pub fn collect(project: &JavaProject, settings: &JavaSettings, path: &Path, text: &str, tree: &Tree) -> Vec<HighlightInfo> {
+pub fn collect(
+    project: &JavaProject,
+    settings: &JavaSettings,
+    path: &Path,
+    text: &str,
+    tree: &Tree,
+) -> Vec<HighlightInfo> {
     collect_detailed(project, settings, path, text, tree).infos
 }
 
-pub fn collect_detailed(project: &JavaProject, settings: &JavaSettings, path: &Path, text: &str, tree: &Tree) -> Collected {
-    let Some((analysis, current, scope)) = project.analyze_tree(path, text, tree) else { return Collected::default() };
+pub fn collect_detailed(
+    project: &JavaProject,
+    settings: &JavaSettings,
+    path: &Path,
+    text: &str,
+    tree: &Tree,
+) -> Collected {
+    let Some((analysis, current, scope)) = project.analyze_tree(path, text, tree) else {
+        return Collected::default();
+    };
     let mut extra = Collected::default();
     let env = Env::new(&project.index, &scope, Some(&current));
     let tool = ToolId::native(TOOL);
@@ -338,29 +441,72 @@ pub fn collect_detailed(project: &JavaProject, settings: &JavaSettings, path: &P
     let root = tree.root_node();
     for p in &analysis.problems {
         let (severity, kind) = match p.kind {
-            ProblemKind::Pending => (Severity::INFORMATION, HighlightKind::TextAttributes("PENDING_REF")),
+            ProblemKind::Pending => (
+                Severity::INFORMATION,
+                HighlightKind::TextAttributes("PENDING_REF"),
+            ),
             _ => (Severity::ERROR, HighlightKind::Unresolved),
         };
-        let mut info = HighlightInfo::new(p.range.clone(), severity, kind, tool.clone()).message(p.message.clone());
+        let mut info = HighlightInfo::new(p.range.clone(), severity, kind, tool.clone())
+            .message(p.message.clone());
         info.source = Some("Java".into());
         if project.is_complete() {
             match &p.kind {
-                ProblemKind::Method { name, args, qualified: false, .. } => {
-                    let place = place_for(path, text, tree, &current, p.range.start as usize, &scope);
-                    let input = SearchInput { name, args: Some(args), expected: &[] };
-                    if let Ok(cands) = import_fix::static_candidates(project, &env, &place, &input, &settings.imports)
-                        && !cands.is_empty()
+                ProblemKind::Method {
+                    name,
+                    args,
+                    qualified: false,
+                    ..
+                } => {
+                    let place =
+                        place_for(path, text, tree, &current, p.range.start as usize, &scope);
+                    let input = SearchInput {
+                        name,
+                        args: Some(args),
+                        expected: &[],
+                    };
+                    if let Ok(cands) = import_fix::static_candidates(
+                        project,
+                        &env,
+                        &place,
+                        &input,
+                        &settings.imports,
+                    ) && !cands.is_empty()
                     {
-                        let fix = Arc::new(ImportStaticFix { candidates: cands, settings: settings.imports.clone(), constant: false, always_on_demand: Vec::new() });
+                        let fix = Arc::new(ImportStaticFix {
+                            candidates: cands,
+                            settings: settings.imports.clone(),
+                            constant: false,
+                            always_on_demand: Vec::new(),
+                        });
                         extra.static_fixes.push((p.range.clone(), fix.clone()));
                         info.fixes.push(fix_descriptor(fix));
                     }
                 }
-                ProblemKind::Symbol { name, class_ref, annotation } => {
-                    let node = root.descendant_for_byte_range(p.range.start as usize, p.range.end as usize);
+                ProblemKind::Symbol {
+                    name,
+                    class_ref,
+                    annotation,
+                } => {
+                    let node = root
+                        .descendant_for_byte_range(p.range.start as usize, p.range.end as usize);
                     if let Some(node) = node {
-                        let place = place_for(path, text, tree, &current, p.range.start as usize, &scope);
-                        add_symbol_fixes(project, &env, settings, &place, &current, node, text, name, *class_ref, *annotation, &mut info, &mut extra);
+                        let place =
+                            place_for(path, text, tree, &current, p.range.start as usize, &scope);
+                        add_symbol_fixes(
+                            project,
+                            &env,
+                            settings,
+                            &place,
+                            &current,
+                            node,
+                            text,
+                            name,
+                            *class_ref,
+                            *annotation,
+                            &mut info,
+                            &mut extra,
+                        );
                     }
                 }
                 _ => {}
@@ -372,10 +518,18 @@ pub fn collect_detailed(project: &JavaProject, settings: &JavaSettings, path: &P
         let used = import_edit::unused_imports(text, &analysis.usage, &current.stub.package, &env);
         let ranges: Vec<_> = used.iter().map(|n| n.range.clone()).collect();
         for n in &used {
-            let mut info = HighlightInfo::new(n.range.start as u32..n.range.end as u32, Severity::WARNING, HighlightKind::Unused, ToolId::native("java-unused-import"))
-                .message("Unused import statement");
+            let mut info = HighlightInfo::new(
+                n.range.start as u32..n.range.end as u32,
+                Severity::WARNING,
+                HighlightKind::Unused,
+                ToolId::native("java-unused-import"),
+            )
+            .message("Unused import statement");
             info.source = Some("Java".into());
-            info.fixes.push(fix_descriptor(Arc::new(RemoveUnusedImports { ranges: ranges.clone() })));
+            info.fixes
+                .push(fix_descriptor(Arc::new(RemoveUnusedImports {
+                    ranges: ranges.clone(),
+                })));
             out.push(info);
         }
     }
@@ -399,20 +553,29 @@ fn add_symbol_fixes(
     extra: &mut Collected,
 ) {
     let parent = node.parent();
-    let mut cref = ClassRefInfo { annotation, ..ClassRefInfo::default() };
+    let mut cref = ClassRefInfo {
+        annotation,
+        ..ClassRefInfo::default()
+    };
     let mut eligible_class = class_ref;
     let mut eligible_const = false;
     if node.kind() == "identifier"
         && let Some(p) = parent
     {
         match p.kind() {
-            "field_access" if p.child_by_field_name("object").is_some_and(|o| o.id() == node.id()) => {
+            "field_access"
+                if p.child_by_field_name("object")
+                    .is_some_and(|o| o.id() == node.id()) =>
+            {
                 if let Some(f) = p.child_by_field_name("field") {
                     cref.qualified_member = Some((text[f.byte_range()].to_string(), true));
                     eligible_class = true;
                 }
             }
-            "method_invocation" if p.child_by_field_name("object").is_some_and(|o| o.id() == node.id()) => {
+            "method_invocation"
+                if p.child_by_field_name("object")
+                    .is_some_and(|o| o.id() == node.id()) =>
+            {
                 if let Some(f) = p.child_by_field_name("name") {
                     cref.qualified_member = Some((text[f.byte_range()].to_string(), true));
                     eligible_class = true;
@@ -428,7 +591,15 @@ fn add_symbol_fixes(
                 eligible_const = true;
             }
         }
-        if !matches!(p.kind(), "field_access" | "method_invocation" | "method_reference" | "expression_statement" | "marker_annotation" | "annotation") {
+        if !matches!(
+            p.kind(),
+            "field_access"
+                | "method_invocation"
+                | "method_reference"
+                | "expression_statement"
+                | "marker_annotation"
+                | "annotation"
+        ) {
             eligible_class = false;
         }
         if matches!(p.kind(), "field_access" | "method_invocation") && !eligible_class {
@@ -436,17 +607,20 @@ fn add_symbol_fixes(
         }
     }
     // Qualified type names: only the head can be imported.
-    if node.kind() == "type_identifier" {
-        if let Some(p) = parent {
-            if p.kind() == "generic_type" {
-                cref.type_args = true;
-            }
-            if p.kind() == "scoped_type_identifier" && p.child_by_field_name("scope").is_some_and(|s| s.id() != node.id()) {
-                eligible_class = false;
-            }
-            if p.kind() == "scoped_type_identifier" {
-                eligible_class = false;
-            }
+    if node.kind() == "type_identifier"
+        && let Some(p) = parent
+    {
+        if p.kind() == "generic_type" {
+            cref.type_args = true;
+        }
+        if p.kind() == "scoped_type_identifier"
+            && p.child_by_field_name("scope")
+                .is_some_and(|s| s.id() != node.id())
+        {
+            eligible_class = false;
+        }
+        if p.kind() == "scoped_type_identifier" {
+            eligible_class = false;
         }
     }
     if let Some(p) = parent
@@ -464,18 +638,38 @@ fn add_symbol_fixes(
         .collect();
     if eligible_const
         && !class_ref
-        && let Ok(cands) = import_fix::static_candidates(project, env, place, &SearchInput { name, args: None, expected: &[] }, &settings.imports)
+        && let Ok(cands) = import_fix::static_candidates(
+            project,
+            env,
+            place,
+            &SearchInput {
+                name,
+                args: None,
+                expected: &[],
+            },
+            &settings.imports,
+        )
         && !cands.is_empty()
     {
-        let fix = Arc::new(ImportStaticFix { candidates: cands, settings: settings.imports.clone(), constant: true, always_on_demand: Vec::new() });
+        let fix = Arc::new(ImportStaticFix {
+            candidates: cands,
+            settings: settings.imports.clone(),
+            constant: true,
+            always_on_demand: Vec::new(),
+        });
         extra.static_fixes.push((info.range.clone(), fix.clone()));
         info.fixes.push(fix_descriptor(fix));
     }
     if eligible_class
-        && let Ok(cands) = import_fix::class_candidates(project, env, place, name, &cref, &settings.imports)
+        && let Ok(cands) =
+            import_fix::class_candidates(project, env, place, name, &cref, &settings.imports)
         && !cands.is_empty()
     {
-        let fix = Arc::new(ImportClassFix { candidates: cands, settings: settings.imports.clone(), package: current.stub.package.clone() });
+        let fix = Arc::new(ImportClassFix {
+            candidates: cands,
+            settings: settings.imports.clone(),
+            package: current.stub.package.clone(),
+        });
         extra.class_fixes.push((info.range.clone(), fix.clone()));
         info.fixes.insert(0, fix_descriptor(fix));
     }
@@ -500,19 +694,35 @@ impl Pass for JavaResolvePass {
         false
     }
     fn collect(&self, cx: &PassCx<'_>) -> Result<PassOutput, Cancelled> {
-        let empty = |infos| PassOutput { file: cx.file, rev: cx.syntax.rev(), tool: ToolId::native(TOOL), range: 0..u32::MAX, infos };
+        let empty = |infos| PassOutput {
+            file: cx.file,
+            rev: cx.syntax.rev(),
+            tool: ToolId::native(TOOL),
+            range: 0..u32::MAX,
+            infos,
+        };
         if cx.syntax.lang().id != "java" {
             return Ok(empty(Vec::new()));
         }
         let settings = self.service.settings();
-        let Some(project) = self.service.project() else { return Ok(empty(Vec::new())) };
-        let Some(rel) = cx.snap.path(cx.file) else { return Ok(empty(Vec::new())) };
+        let Some(project) = self.service.project() else {
+            return Ok(empty(Vec::new()));
+        };
+        let Some(rel) = cx.snap.path(cx.file) else {
+            return Ok(empty(Vec::new()));
+        };
         let path = self.service.absolute(rel);
         if !settings.native || !project.applies_to(&path) {
             return Ok(empty(Vec::new()));
         }
         cx.cancel.check()?;
-        let infos = collect(&project, &settings, &path, cx.syntax.text(), cx.syntax.tree());
+        let infos = collect(
+            &project,
+            &settings,
+            &path,
+            cx.syntax.text(),
+            cx.syntax.tree(),
+        );
         cx.cancel.check()?;
         // The unused-import highlights live under their own tool id so each slice replaces atomically.
         Ok(empty(infos))
@@ -522,7 +732,11 @@ impl Pass for JavaResolvePass {
 /// A fix text for tests: applies the first candidate directly (headless mode, 5.4.2).
 pub fn first_choice(command: ModCommand) -> ModCommand {
     match command {
-        ModCommand::ChooseFrom { rows, .. } => rows.into_iter().next().map(|r| r.command).unwrap_or(ModCommand::Nothing),
+        ModCommand::ChooseFrom { rows, .. } => rows
+            .into_iter()
+            .next()
+            .map(|r| r.command)
+            .unwrap_or(ModCommand::Nothing),
         other => other,
     }
 }
@@ -532,4 +746,3 @@ pub fn apply_command(command: &ModCommand, file: FileId, text: &str) -> Option<S
     let edits: Vec<TextEdit> = command.edits_for(file).into_iter().cloned().collect();
     archipel_ide_analysis::modcommand::apply_edits(text, &edits).ok()
 }
-

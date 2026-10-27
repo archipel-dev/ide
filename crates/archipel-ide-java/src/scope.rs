@@ -57,26 +57,46 @@ impl ResolveScope {
     }
 
     /// The resolve scope of the Java file at `path` (JAVA-RES-029, 030, 033; PLAT-SCOPE-062).
-    pub fn for_file(index: &JavaIndex, model: &ProjectModel, files: &ProjectFileIndex, path: &Path) -> Self {
+    pub fn for_file(
+        index: &JavaIndex,
+        model: &ProjectModel,
+        files: &ProjectFileIndex,
+        path: &Path,
+    ) -> Self {
         let cat = index.inner.catalog.read();
         let Some(module) = files.module_for_file(path) else {
             // Outside every module: everything that is indexed, plus the file itself.
-            let mut s = Self { kind: ScopeKind::Everything, ..Self::default() };
+            let mut s = Self {
+                kind: ScopeKind::Everything,
+                ..Self::default()
+            };
             for (i, id) in cat.units.keys().enumerate() {
                 s.ranks.insert(*id, i as u32);
             }
             return s;
         };
         if !files.is_in_source_content(path) {
-            let mut s = Self { module: Some(module.name.clone()), kind: ScopeKind::FileOnly, ..Self::default() };
+            let mut s = Self {
+                module: Some(module.name.clone()),
+                kind: ScopeKind::FileOnly,
+                ..Self::default()
+            };
             if let Some(id) = cat.by_path.get(path) {
                 s.ranks.insert(*id, 0);
             }
             return s;
         }
         let test = files.is_in_test_source_content(path);
-        let kind = if test { ClasspathKind::TestCompile } else { ClasspathKind::ProductionCompile };
-        let mut s = Self { module: Some(module.name.clone()), test, ..Self::default() };
+        let kind = if test {
+            ClasspathKind::TestCompile
+        } else {
+            ClasspathKind::ProductionCompile
+        };
+        let mut s = Self {
+            module: Some(module.name.clone()),
+            test,
+            ..Self::default()
+        };
         let mut rank = 0u32;
         let mut put = |s: &mut Self, unit: u32| {
             s.ranks.entry(unit).or_insert_with(|| {
@@ -84,7 +104,11 @@ impl ResolveScope {
                 rank
             });
         };
-        for (i, m) in model.modules_with_dependencies(module, kind).into_iter().enumerate() {
+        for (i, m) in model
+            .modules_with_dependencies(module, kind)
+            .into_iter()
+            .enumerate()
+        {
             if let Some((prod, tests)) = cat.modules.get(&m.name) {
                 // Own tests only for test code; a dependency's tests are never on our classpath.
                 for u in prod {

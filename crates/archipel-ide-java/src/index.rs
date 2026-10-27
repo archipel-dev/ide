@@ -25,16 +25,16 @@ use crate::source;
 use crate::stub::*;
 use crate::unit::{self, UnitStubs};
 use archipel_ide_analysis::{FileId, IndexId};
+use archipel_ide_index::RedbStore;
 use archipel_ide_index::hash::content_hash;
 use archipel_ide_index::store::{DurableStore, FileRecord, MemStore};
-use archipel_ide_index::RedbStore;
 use archipel_ide_projectmodel::{JpsModuleSourceRootType, ProjectModel, SdkType};
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 
 pub mod ids {
     use archipel_ide_analysis::IndexId;
@@ -46,7 +46,16 @@ pub mod ids {
     pub const ANNOTATION: IndexId = IndexId("Java:Annotation");
     pub const SUPER_CLASS: IndexId = IndexId("Java:SuperClass");
     pub const PACKAGE: IndexId = IndexId("Java:Package");
-    pub const ALL: [IndexId; 8] = [STUB, CLASS, SHORT_NAME, METHOD, FIELD, ANNOTATION, SUPER_CLASS, PACKAGE];
+    pub const ALL: [IndexId; 8] = [
+        STUB,
+        CLASS,
+        SHORT_NAME,
+        METHOD,
+        FIELD,
+        ANNOTATION,
+        SUPER_CLASS,
+        PACKAGE,
+    ];
 }
 
 /// Version of the stub format and of every index; a change reindexes (JAVA-STUB-028).
@@ -61,7 +70,10 @@ pub struct NotReady;
 pub enum JavaIndexState {
     /// No project model has been synced.
     Absent,
-    Building { done: u32, total: u32 },
+    Building {
+        done: u32,
+        total: u32,
+    },
     Ready,
 }
 
@@ -129,7 +141,14 @@ impl ClassHit {
         self.class().inner_named(name)?;
         let mut path = self.path.clone();
         path.push(name.to_string());
-        Some(ClassHit { unit: self.unit, rank: self.rank, record: self.record.clone(), path, local: None, local_supers: None })
+        Some(ClassHit {
+            unit: self.unit,
+            rank: self.rank,
+            record: self.record.clone(),
+            path,
+            local: None,
+            local_supers: None,
+        })
     }
 }
 
@@ -215,7 +234,11 @@ fn enc<T: Serialize>(v: &T) -> Vec<u8> {
 }
 
 fn add(out: &mut Grouped, id: IndexId, key: &str, value: Vec<u8>) {
-    out.entry(id.0).or_default().entry(key.to_string()).or_default().push(value);
+    out.entry(id.0)
+        .or_default()
+        .entry(key.to_string())
+        .or_default()
+        .push(value);
 }
 
 /// The store keeps one value per (key, unit): several values of a key are one list.
@@ -270,14 +293,24 @@ pub fn entries_for(files: &[FileStub]) -> Entries {
                 add(&mut out, ids::CLASS, &c.qname, bytes.clone());
                 add(&mut out, ids::SHORT_NAME, &c.name, bytes.clone());
                 for (i, m) in c.methods.iter().enumerate() {
-                    let mref = MemberRef { class: cref.clone(), index: i as u32 };
+                    let mref = MemberRef {
+                        class: cref.clone(),
+                        index: i as u32,
+                    };
                     add(&mut out, ids::METHOD, &m.name, enc(&mref));
                 }
                 for (i, fl) in c.fields.iter().enumerate() {
-                    let mref = MemberRef { class: cref.clone(), index: i as u32 };
+                    let mref = MemberRef {
+                        class: cref.clone(),
+                        index: i as u32,
+                    };
                     add(&mut out, ids::FIELD, &fl.name, enc(&mref));
                 }
-                let mut annotations: Vec<&str> = c.annotations.iter().map(|a| annotation_short_name(a)).collect();
+                let mut annotations: Vec<&str> = c
+                    .annotations
+                    .iter()
+                    .map(|a| annotation_short_name(a))
+                    .collect();
                 annotations.sort_unstable();
                 annotations.dedup();
                 for a in annotations {
@@ -310,7 +343,8 @@ pub fn entries_for(files: &[FileStub]) -> Entries {
 /// "has private access" can be reported); saves most of the persisted size.
 fn prune_compiled(c: &mut ClassStub) {
     c.fields.retain(|f| f.flags & flags::PRIVATE == 0);
-    c.methods.retain(|m| m.flags & flags::PRIVATE == 0 || m.is_ctor);
+    c.methods
+        .retain(|m| m.flags & flags::PRIVATE == 0 || m.is_ctor);
     c.inner.iter_mut().for_each(prune_compiled);
 }
 
@@ -348,7 +382,9 @@ impl JavaIndex {
             persistent,
             log: Mutex::new(note.into_iter().collect()),
         };
-        Self { inner: Arc::new(inner) }
+        Self {
+            inner: Arc::new(inner),
+        }
     }
 
     pub fn in_memory() -> Self {
@@ -380,7 +416,11 @@ impl JavaIndex {
     }
 
     fn ready(&self) -> Result<(), NotReady> {
-        if self.is_ready() { Ok(()) } else { Err(NotReady) }
+        if self.is_ready() {
+            Ok(())
+        } else {
+            Err(NotReady)
+        }
     }
 
     /// Blocks until the indexes are ready (tests, headless tools).
@@ -408,7 +448,9 @@ impl JavaIndex {
         }
         let this = self.clone();
         self.inner.done.store(0, Ordering::Relaxed);
-        self.inner.total.store(plan.work.len() as u64, Ordering::Relaxed);
+        self.inner
+            .total
+            .store(plan.work.len() as u64, Ordering::Relaxed);
         std::thread::spawn(move || this.run(plan, generation));
     }
 
@@ -418,7 +460,9 @@ impl JavaIndex {
         let plan = self.plan(&model);
         self.inner.state.store(S_BUILDING, Ordering::Release);
         self.inner.done.store(0, Ordering::Relaxed);
-        self.inner.total.store(plan.work.len() as u64, Ordering::Relaxed);
+        self.inner
+            .total
+            .store(plan.work.len() as u64, Ordering::Relaxed);
         self.run(plan, generation);
     }
 
@@ -446,12 +490,28 @@ impl JavaIndex {
             }
             let id = this.unit_id(&path);
             seen.insert(path.clone(), id);
-            units.insert(id, UnitInfo { id, path: path.clone(), kind: kind.clone() });
-            work.push(Work { id, path, kind, release });
+            units.insert(
+                id,
+                UnitInfo {
+                    id,
+                    path: path.clone(),
+                    kind: kind.clone(),
+                },
+            );
+            work.push(Work {
+                id,
+                path,
+                kind,
+                release,
+            });
             id
         };
         for module in &model.modules {
-            let release: u32 = module.language_level.as_deref().and_then(|l| l.trim_start_matches("1.").parse().ok()).unwrap_or(21);
+            let release: u32 = module
+                .language_level
+                .as_deref()
+                .and_then(|l| l.trim_start_matches("1.").parse().ok())
+                .unwrap_or(21);
             let entry = modules.entry(module.name.clone()).or_default();
             let excluded: Vec<&PathBuf> = module.excluded_folders().collect();
             for folder in module.source_folders() {
@@ -469,7 +529,9 @@ impl JavaIndex {
                     .into_iter()
                     .filter_entry(|e| !excluded.iter().any(|x| e.path() == x.as_path()));
                 for e in walker.filter_map(Result::ok) {
-                    if e.file_type().is_file() && e.path().extension().and_then(|x| x.to_str()) == Some("java") {
+                    if e.file_type().is_file()
+                        && e.path().extension().and_then(|x| x.to_str()) == Some("java")
+                    {
                         let id = push(self, e.path().to_path_buf(), UnitKind::Source, release);
                         let list = if test { &mut entry.1 } else { &mut entry.0 };
                         if !list.contains(&id) {
@@ -482,7 +544,11 @@ impl JavaIndex {
         for lib in &model.libraries {
             let list = libraries.entry(lib.name.clone()).or_default();
             for root in &lib.classes {
-                let kind = if root.is_dir() { UnitKind::ClassDir } else { UnitKind::Jar };
+                let kind = if root.is_dir() {
+                    UnitKind::ClassDir
+                } else {
+                    UnitKind::Jar
+                };
                 if root.exists() {
                     let id = push(self, root.clone(), kind, 21);
                     if !list.contains(&id) {
@@ -508,9 +574,20 @@ impl JavaIndex {
         // Units that disappeared.
         let gone: Vec<u32> = {
             let cat = self.inner.catalog.read();
-            cat.by_path.iter().filter(|(p, id)| !seen.contains_key(*p) && **id != 0).map(|(_, id)| *id).collect()
+            cat.by_path
+                .iter()
+                .filter(|(p, id)| !seen.contains_key(*p) && **id != 0)
+                .map(|(_, id)| *id)
+                .collect()
         };
-        Plan { work, units, modules, libraries, sdks, gone }
+        Plan {
+            work,
+            units,
+            modules,
+            libraries,
+            sdks,
+            gone,
+        }
     }
 
     fn signature(path: &Path, kind: &UnitKind) -> (u64, Option<u64>) {
@@ -518,13 +595,21 @@ impl JavaIndex {
             UnitKind::ClassDir => {
                 // Listing signature: names, sizes and mtimes of the class files.
                 let mut acc: Vec<u8> = Vec::new();
-                for e in walkdir::WalkDir::new(path).sort_by_file_name().into_iter().filter_map(Result::ok) {
+                for e in walkdir::WalkDir::new(path)
+                    .sort_by_file_name()
+                    .into_iter()
+                    .filter_map(Result::ok)
+                {
                     if e.path().extension().and_then(|x| x.to_str()) == Some("class")
                         && let Ok(md) = e.metadata()
                     {
                         acc.extend(e.path().as_os_str().as_encoded_bytes());
                         acc.extend(md.len().to_le_bytes());
-                        let m = md.modified().ok().and_then(|t| FileRecord::mtime(Some(t))).unwrap_or(0);
+                        let m = md
+                            .modified()
+                            .ok()
+                            .and_then(|t| FileRecord::mtime(Some(t)))
+                            .unwrap_or(0);
                         acc.extend(m.to_le_bytes());
                     }
                 }
@@ -538,7 +623,14 @@ impl JavaIndex {
     }
 
     fn run(&self, plan: Plan, generation: u64) {
-        let Plan { work, units, modules, libraries, sdks, gone } = plan;
+        let Plan {
+            work,
+            units,
+            modules,
+            libraries,
+            sdks,
+            gone,
+        } = plan;
         let store = self.inner.store.clone();
         // Publish the catalog first: the scope can be computed while units are still being read.
         {
@@ -548,7 +640,11 @@ impl JavaIndex {
             cat.libraries = libraries;
             cat.sdks = sdks;
         }
-        let records: HashMap<u32, FileRecord> = store.load_files().into_iter().map(|r| (r.id.0, r)).collect();
+        let records: HashMap<u32, FileRecord> = store
+            .load_files()
+            .into_iter()
+            .map(|r| (r.id.0, r))
+            .collect();
         let cursor = AtomicU64::new(0);
         let workers = std::thread::available_parallelism().map_or(2, |n| n.get().clamp(1, 4));
         let upserts: Mutex<Vec<FileRecord>> = Mutex::new(Vec::new());
@@ -575,14 +671,29 @@ impl JavaIndex {
                             match result {
                                 Ok(hash) => {
                                     changed.fetch_add(1, Ordering::Relaxed);
-                                    upserts.lock().push(FileRecord { id: FileId(w.id), path: w.path.clone(), len, mtime_ns: mtime, hash });
+                                    upserts.lock().push(FileRecord {
+                                        id: FileId(w.id),
+                                        path: w.path.clone(),
+                                        len,
+                                        mtime_ns: mtime,
+                                        hash,
+                                    });
                                 }
                                 Err(e) => {
-                                    self.inner.log.lock().push(format!("{}: {e}", w.path.display()));
+                                    self.inner
+                                        .log
+                                        .lock()
+                                        .push(format!("{}: {e}", w.path.display()));
                                     for id in ids::ALL {
                                         store.remove_file(id, FileId(w.id));
                                     }
-                                    upserts.lock().push(FileRecord { id: FileId(w.id), path: w.path.clone(), len, mtime_ns: None, hash: 0 });
+                                    upserts.lock().push(FileRecord {
+                                        id: FileId(w.id),
+                                        path: w.path.clone(),
+                                        len,
+                                        mtime_ns: None,
+                                        hash: 0,
+                                    });
                                 }
                             }
                         }
@@ -603,7 +714,12 @@ impl JavaIndex {
         {
             let mut cat = self.inner.catalog.write();
             for id in &gone {
-                if let Some(p) = cat.by_path.iter().find(|(_, v)| **v == *id).map(|(p, _)| p.clone()) {
+                if let Some(p) = cat
+                    .by_path
+                    .iter()
+                    .find(|(_, v)| **v == *id)
+                    .map(|(p, _)| p.clone())
+                {
                     cat.by_path.remove(&p);
                 }
             }
@@ -629,7 +745,13 @@ impl JavaIndex {
                     return Ok(hash);
                 }
                 let text = String::from_utf8_lossy(&bytes);
-                (UnitStubs { files: vec![source::build_file_stub(&text)], skipped: 0 }, hash)
+                (
+                    UnitStubs {
+                        files: vec![source::build_file_stub(&text)],
+                        skipped: 0,
+                    },
+                    hash,
+                )
             }
             UnitKind::Jar => {
                 let u = unit::read_jar(&w.path, w.release)?;
@@ -647,7 +769,10 @@ impl JavaIndex {
         };
         let mut files = stubs.files;
         if w.kind != UnitKind::Source {
-            files.iter_mut().flat_map(|f| f.classes.iter_mut()).for_each(prune_compiled);
+            files
+                .iter_mut()
+                .flat_map(|f| f.classes.iter_mut())
+                .for_each(prune_compiled);
         }
         self.write_unit(w.id, &files, hash);
         Ok(hash)
@@ -658,7 +783,9 @@ impl JavaIndex {
         for index in ids::ALL {
             let list = entries.get(index.0).cloned().unwrap_or_default();
             self.inner.store.put(index, FileId(id), list);
-            self.inner.store.set_indexed_hash(index, FileId(id), Some(hash));
+            self.inner
+                .store
+                .set_indexed_hash(index, FileId(id), Some(hash));
         }
     }
 
@@ -668,7 +795,11 @@ impl JavaIndex {
         let id = self.unit_id(path);
         {
             let mut cat = self.inner.catalog.write();
-            cat.units.entry(id).or_insert(UnitInfo { id, path: path.to_path_buf(), kind: UnitKind::Source });
+            cat.units.entry(id).or_insert(UnitInfo {
+                id,
+                path: path.to_path_buf(),
+                kind: UnitKind::Source,
+            });
             if let Some((m, test)) = module {
                 let e = cat.modules.entry(m.to_string()).or_default();
                 let list = if test { &mut e.1 } else { &mut e.0 };
@@ -720,8 +851,16 @@ impl JavaIndex {
     /// Which module (and test or production code) or library a unit belongs to.
     pub fn origin(&self, unit: u32) -> UnitOrigin {
         let cat = self.inner.catalog.read();
-        let kind = cat.units.get(&unit).map(|u| u.kind.clone()).unwrap_or(UnitKind::Source);
-        let mut origin = UnitOrigin { kind, module: None, test: false };
+        let kind = cat
+            .units
+            .get(&unit)
+            .map(|u| u.kind.clone())
+            .unwrap_or(UnitKind::Source);
+        let mut origin = UnitOrigin {
+            kind,
+            module: None,
+            test: false,
+        };
         for (name, (prod, tests)) in &cat.modules {
             if prod.contains(&unit) {
                 origin.module = Some(name.clone());
@@ -773,7 +912,14 @@ impl JavaIndex {
 
     fn class_hit(&self, unit: u32, rank: u32, cref: &ClassRef) -> Option<ClassHit> {
         let record = self.record(unit, &cref.top)?;
-        Some(ClassHit { unit, rank, record, path: cref.path.clone(), local: None, local_supers: None })
+        Some(ClassHit {
+            unit,
+            rank,
+            record,
+            path: cref.path.clone(),
+            local: None,
+            local_supers: None,
+        })
     }
 
     /// All classes with this FQN in scope, best first (`find_classes`, PLAT-IDX-091).
@@ -792,11 +938,19 @@ impl JavaIndex {
 
     /// The best class with this FQN (`find_class`: the earliest on the classpath;
     /// a source copy beats a class-file copy of the same dependency, JAVA-RES-026).
-    pub fn find_class(&self, fqn: &str, scope: &ResolveScope) -> Result<Option<ClassHit>, NotReady> {
+    pub fn find_class(
+        &self,
+        fqn: &str,
+        scope: &ResolveScope,
+    ) -> Result<Option<ClassHit>, NotReady> {
         Ok(self.find_classes(fqn, scope)?.into_iter().next())
     }
 
-    pub fn classes_by_short_name(&self, name: &str, scope: &ResolveScope) -> Result<Vec<ClassHit>, NotReady> {
+    pub fn classes_by_short_name(
+        &self,
+        name: &str,
+        scope: &ResolveScope,
+    ) -> Result<Vec<ClassHit>, NotReady> {
         self.ready()?;
         let mut out = Vec::new();
         for (unit, rank, v) in self.hits(ids::SHORT_NAME, name, scope) {
@@ -815,31 +969,50 @@ impl JavaIndex {
             if let Ok(m) = postcard::from_bytes::<MemberRef>(&v)
                 && let Some(class) = self.class_hit(unit, rank, &m.class)
             {
-                out.push(MemberHit { class, index: m.index as usize });
+                out.push(MemberHit {
+                    class,
+                    index: m.index as usize,
+                });
             }
         }
         out
     }
 
     /// Methods and constructors named `name` (constructors are filtered by consumers).
-    pub fn methods_named(&self, name: &str, scope: &ResolveScope) -> Result<Vec<MemberHit>, NotReady> {
+    pub fn methods_named(
+        &self,
+        name: &str,
+        scope: &ResolveScope,
+    ) -> Result<Vec<MemberHit>, NotReady> {
         self.ready()?;
         Ok(self.members(ids::METHOD, name, scope))
     }
 
-    pub fn fields_named(&self, name: &str, scope: &ResolveScope) -> Result<Vec<MemberHit>, NotReady> {
+    pub fn fields_named(
+        &self,
+        name: &str,
+        scope: &ResolveScope,
+    ) -> Result<Vec<MemberHit>, NotReady> {
         self.ready()?;
         Ok(self.members(ids::FIELD, name, scope))
     }
 
     /// Classes annotated with an annotation of this short name (the consumer resolves to confirm).
-    pub fn annotated_with(&self, short: &str, scope: &ResolveScope) -> Result<Vec<ClassHit>, NotReady> {
+    pub fn annotated_with(
+        &self,
+        short: &str,
+        scope: &ResolveScope,
+    ) -> Result<Vec<ClassHit>, NotReady> {
         self.ready()?;
         Ok(self.refs(ids::ANNOTATION, short, scope))
     }
 
     /// Direct inheritor candidates by short name (JAVA-STUB-011).
-    pub fn inheritors_of(&self, short: &str, scope: &ResolveScope) -> Result<Vec<ClassHit>, NotReady> {
+    pub fn inheritors_of(
+        &self,
+        short: &str,
+        scope: &ResolveScope,
+    ) -> Result<Vec<ClassHit>, NotReady> {
         self.ready()?;
         Ok(self.refs(ids::SUPER_CLASS, short, scope))
     }

@@ -151,7 +151,11 @@ impl ClassStub {
         postcard::from_bytes(bytes).ok()
     }
     /// Visits this class and every nested class (pre-order) with the nesting path.
-    pub fn walk<'a>(&'a self, path: &mut Vec<&'a str>, f: &mut impl FnMut(&[&'a str], &'a ClassStub)) {
+    pub fn walk<'a>(
+        &'a self,
+        path: &mut Vec<&'a str>,
+        f: &mut impl FnMut(&[&'a str], &'a ClassStub),
+    ) {
         path.push(&self.name);
         f(path, self);
         for inner in &self.inner {
@@ -165,7 +169,11 @@ impl ClassStub {
 /// (`java.util.Map.Entry<K, V>[]` becomes `Entry`).
 pub fn short_type_name(text: &str) -> &str {
     let base = text.split('<').next().unwrap_or(text);
-    let base = base.trim().trim_end_matches("[]").trim_end_matches("...").trim();
+    let base = base
+        .trim()
+        .trim_end_matches("[]")
+        .trim_end_matches("...")
+        .trim();
     base.rsplit('.').next().unwrap_or(base)
 }
 

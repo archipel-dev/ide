@@ -30,7 +30,11 @@ pub fn split(text: &str) -> Parts {
         Some(i) => (t[..i].trim(), None),
         None => (t, None),
     };
-    Parts { base: base.replace(' ', ""), args, dims }
+    Parts {
+        base: base.replace(' ', ""),
+        args,
+        dims,
+    }
 }
 
 /// Splits `a, b<c, d>, e` at top-level commas.
@@ -62,7 +66,10 @@ pub fn split_args(args: &str) -> Vec<String> {
 }
 
 pub fn is_primitive(name: &str) -> bool {
-    matches!(name, "int" | "long" | "short" | "byte" | "char" | "boolean" | "float" | "double")
+    matches!(
+        name,
+        "int" | "long" | "short" | "byte" | "char" | "boolean" | "float" | "double"
+    )
 }
 
 pub fn boxed_name(prim: &str) -> &'static str {
@@ -145,7 +152,9 @@ pub fn display(text: &str) -> String {
         }
     }
     flush(&mut ident, &mut out);
-    out.replace(",  ", ", ").replace("?extends", "? extends").replace("?super", "? super")
+    out.replace(",  ", ", ")
+        .replace("?extends", "? extends")
+        .replace("?super", "? super")
 }
 
 /// The type of an expression as far as this slice computes it.
@@ -155,7 +164,10 @@ pub enum Ty {
     Null,
     Prim(String),
     /// A class type: FQN of the erasure (when resolved) and the presentable text.
-    Ref { fqn: Option<String>, display: String },
+    Ref {
+        fqn: Option<String>,
+        display: String,
+    },
     Array(Box<Ty>),
     /// A type variable in scope.
     Var(String),
@@ -174,6 +186,9 @@ impl Ty {
     }
 
     pub fn string() -> Ty {
-        Ty::Ref { fqn: Some("java.lang.String".into()), display: "String".into() }
+        Ty::Ref {
+            fqn: Some("java.lang.String".into()),
+            display: "String".into(),
+        }
     }
 }

@@ -106,7 +106,9 @@ public class CalcTest {
 ];
 
 fn is_resolve_message(m: &str) -> bool {
-    m.contains("cannot be resolved") || m.contains("is undefined for the type") || m.starts_with("Cannot resolve")
+    m.contains("cannot be resolved")
+        || m.contains("is undefined for the type")
+        || m.starts_with("Cannot resolve")
 }
 
 #[test]
@@ -122,14 +124,22 @@ fn native_resolve_errors_agree_with_jdtls() {
     let root = std::fs::canonicalize(&root).unwrap();
     let commands = built_in_commands();
     let mut state = IdeState::default();
-    commands.execute("project.open", &mut state, json!({"path": root})).unwrap();
-    let java: Vec<&str> = FILES.iter().map(|f| f.0).filter(|p| p.ends_with(".java")).collect();
+    commands
+        .execute("project.open", &mut state, json!({"path": root}))
+        .unwrap();
+    let java: Vec<&str> = FILES
+        .iter()
+        .map(|f| f.0)
+        .filter(|p| p.ends_with(".java"))
+        .collect();
     for f in &java {
-        commands.execute("editor.openFile", &mut state, json!({"path": f})).unwrap();
+        commands
+            .execute("editor.openFile", &mut state, json!({"path": f}))
+            .unwrap();
     }
     let deadline = Instant::now() + Duration::from_secs(600);
-    let mut report: Vec<String> = Vec::new();
-    let mut false_positives = 0;
+    let report: Vec<String>;
+    let false_positives: i32;
     loop {
         state.poll_project_model();
         state.poll_lsp();
@@ -142,23 +152,38 @@ fn native_resolve_errors_agree_with_jdtls() {
         let mut rows: Vec<String> = Vec::new();
         let mut fp = 0;
         for f in &java {
-            let Some(file) = state.analysis.host.lookup(Path::new(f)) else { all_ready = false; continue };
+            let Some(file) = state.analysis.host.lookup(Path::new(f)) else {
+                all_ready = false;
+                continue;
+            };
             let daemon = service.lock();
-            let Some(markup) = daemon.markup(file) else { all_ready = false; continue };
+            let Some(markup) = daemon.markup(file) else {
+                all_ready = false;
+                continue;
+            };
             let text = std::fs::read_to_string(root.join(f)).unwrap();
             let line_of = |off: u32| text[..off as usize].matches('\n').count() + 1;
             let mut native: BTreeSet<(usize, String)> = BTreeSet::new();
             let mut lsp: BTreeSet<(usize, String)> = BTreeSet::new();
-            let all = markup.iter().map(|i| (i, false)).chain(markup.shadowed().map(|(t, i)| (i, t.is_lsp() && false)));
+            let all = markup
+                .iter()
+                .map(|i| (i, false))
+                .chain(markup.shadowed().map(|(t, i)| (i, t.is_lsp() && false)));
             let _ = all;
-            let mut entries: Vec<(&archipel_ide_analysis::ToolId, &archipel_ide_analysis::HighlightInfo)> = markup.shadowed().collect();
+            let mut entries: Vec<(
+                &archipel_ide_analysis::ToolId,
+                &archipel_ide_analysis::HighlightInfo,
+            )> = markup.shadowed().collect();
             entries.extend(markup.iter().map(|i| (&i.tool, i)));
             for (tool, info) in entries {
                 if info.severity < archipel_ide_analysis::Severity::ERROR {
                     continue;
                 }
                 let msg = info.message.as_deref().unwrap_or("");
-                let key = (line_of(info.range.start), text[info.range.start as usize..info.range.end as usize].to_string());
+                let key = (
+                    line_of(info.range.start),
+                    text[info.range.start as usize..info.range.end as usize].to_string(),
+                );
                 if tool.as_str() == "native:java-resolve" {
                     native.insert(key);
                 } else if tool.is_lsp() && is_resolve_message(msg) {
@@ -170,15 +195,24 @@ fn native_resolve_errors_agree_with_jdtls() {
             if lsp.is_empty() && native.is_empty() && f.contains("Broken") {
                 all_ready = false;
             }
-            for k in native.difference(&lsp) {
+            // jdtls underlines a whole qualified name where native marks the first unknown
+            // segment: two errors agree when they are on one line and one range contains the other.
+            let same = |a: &(usize, String), b: &(usize, String)| {
+                a.0 == b.0 && (a.1.contains(&b.1) || b.1.contains(&a.1))
+            };
+            for k in native.iter().filter(|k| !lsp.iter().any(|l| same(k, l))) {
                 rows.push(format!("native-only {f}:{} {:?}", k.0, k.1));
                 fp += 1;
             }
-            for k in lsp.difference(&native) {
+            for k in lsp.iter().filter(|k| !native.iter().any(|n| same(k, n))) {
                 rows.push(format!("jdtls-only  {f}:{} {:?}", k.0, k.1));
             }
         }
-        if all_ready && native_total > 0 && lsp_total > 0 && state.lsp.servers().iter().all(|s| s.progress.is_empty()) {
+        if all_ready
+            && native_total > 0
+            && lsp_total > 0
+            && state.lsp.servers().iter().all(|s| s.progress.is_empty())
+        {
             report = rows;
             false_positives = fp;
             eprintln!("native {native_total}, jdtls {lsp_total}");
@@ -191,5 +225,8 @@ fn native_resolve_errors_agree_with_jdtls() {
     for r in &report {
         eprintln!("{r}");
     }
-    assert_eq!(false_positives, 0, "native reported references jdtls resolves");
+    assert_eq!(
+        false_positives, 0,
+        "native reported references jdtls resolves"
+    );
 }

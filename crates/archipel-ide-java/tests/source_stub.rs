@@ -26,15 +26,29 @@ fn st1_outline() {
     assert_eq!(
         f.imports,
         [
-            ImportStub { name: "java.util.List".into(), on_demand: false, is_static: false },
-            ImportStub { name: "org.junit.Assert".into(), on_demand: true, is_static: true },
+            ImportStub {
+                name: "java.util.List".into(),
+                on_demand: false,
+                is_static: false
+            },
+            ImportStub {
+                name: "org.junit.Assert".into(),
+                on_demand: true,
+                is_static: true
+            },
         ]
     );
     let c = &f.classes[0];
     assert_eq!(c.qname, "p.Sample");
     assert!(c.deprecated);
     assert_eq!(c.flags, flags::PUBLIC | flags::ABSTRACT);
-    assert_eq!(c.type_params, [TypeParamStub { name: "T".into(), bounds: vec!["Comparable<T>".into()] }]);
+    assert_eq!(
+        c.type_params,
+        [TypeParamStub {
+            name: "T".into(),
+            bounds: vec!["Comparable<T>".into()]
+        }]
+    );
     assert_eq!(c.extends, ["Base<T>"]);
     assert_eq!(c.implements, ["Runnable", "Comparable<Sample<T>>"]);
     assert_eq!(c.fields[0].name, "MAX");
@@ -45,8 +59,13 @@ fn st1_outline() {
     assert_eq!(m.name, "helper");
     assert!(m.varargs);
     assert_eq!(m.ret.as_deref(), Some("void"));
-    assert_eq!(m.params.iter().map(|p| (p.name.as_str(), p.ty.as_str())).collect::<Vec<_>>(),
-        [("x", "int"), ("list", "List<U>"), ("rest", "String[]")]);
+    assert_eq!(
+        m.params
+            .iter()
+            .map(|p| (p.name.as_str(), p.ty.as_str()))
+            .collect::<Vec<_>>(),
+        [("x", "int"), ("list", "List<U>"), ("rest", "String[]")]
+    );
     assert_eq!(m.throws, ["java.io.IOException"]);
     assert_eq!(m.annotations, ["@org.junit.Test"]);
     assert_eq!(c.inner[0].qname, "p.Sample.Inner");
@@ -62,7 +81,10 @@ fn st2_body_edits_keep_the_stub() {
     // Lambda stubs are LATER (JAVA-STUB-009); names are unchanged either way.
     assert_eq!(a.classes[0].methods, c.classes[0].methods);
     // A whitespace-only edit does not change the serialized stub either (PLAT-IDX-052).
-    let d = build_file_stub(&ST1.replace("public static final int MAX = 10;", "public   static final   int  MAX  =  10 ;"));
+    let d = build_file_stub(&ST1.replace(
+        "public static final int MAX = 10;",
+        "public   static final   int  MAX  =  10 ;",
+    ));
     assert_eq!(a.encode(), d.encode());
 }
 
@@ -87,7 +109,10 @@ class Old { /** @deprecated */ int a, b[]; @Deprecated void m() {} }
     let i = &f.classes[0];
     assert_eq!(i.kind, ClassKind::Interface);
     assert_eq!(i.extends, ["J", "K"]);
-    assert_eq!(i.fields[0].flags, flags::PUBLIC | flags::STATIC | flags::FINAL);
+    assert_eq!(
+        i.fields[0].flags,
+        flags::PUBLIC | flags::STATIC | flags::FINAL
+    );
     assert!(i.methods[0].flags & flags::ABSTRACT != 0);
     assert!(i.methods[1].flags & flags::DEFAULT != 0);
     assert!(i.inner[0].is_static_member);
@@ -112,7 +137,15 @@ class Old { /** @deprecated */ int a, b[]; @Deprecated void m() {} }
 
 #[test]
 fn broken_input_never_panics() {
-    for text in ["", "class", "package;", "class A { void m( { }", "import ;", "\u{0}\u{1}", "class A extends { int }"] {
+    for text in [
+        "",
+        "class",
+        "package;",
+        "class A { void m( { }",
+        "import ;",
+        "\u{0}\u{1}",
+        "class A extends { int }",
+    ] {
         let _ = build_file_stub(text);
     }
 }

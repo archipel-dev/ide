@@ -31,9 +31,10 @@ pub fn build_from_tree(tree: &Tree, text: &str) -> FileStub {
     for n in root.children(&mut cur) {
         match n.kind() {
             "package_declaration" => {
-                if let Some(name) = n.named_children(&mut n.walk()).find(|c| {
-                    matches!(c.kind(), "identifier" | "scoped_identifier")
-                }) {
+                if let Some(name) = n
+                    .named_children(&mut n.walk())
+                    .find(|c| matches!(c.kind(), "identifier" | "scoped_identifier"))
+                {
                     stub.package = b.compact(name);
                 }
             }
@@ -167,7 +168,9 @@ impl Builder<'_> {
             match ch.kind() {
                 "static" => is_static = true,
                 "asterisk" => on_demand = true,
-                "identifier" | "scoped_identifier" => name = Some(self.compact(ch).replace(' ', "")),
+                "identifier" | "scoped_identifier" => {
+                    name = Some(self.compact(ch).replace(' ', ""))
+                }
                 _ => {}
             }
         }
@@ -233,13 +236,18 @@ impl Builder<'_> {
         };
         let mut out = Vec::new();
         let mut c = tp.walk();
-        for p in tp.named_children(&mut c).filter(|p| p.kind() == "type_parameter") {
+        for p in tp
+            .named_children(&mut c)
+            .filter(|p| p.kind() == "type_parameter")
+        {
             let mut name = String::new();
             let mut bounds = Vec::new();
             let mut cc = p.walk();
             for ch in p.named_children(&mut cc) {
                 match ch.kind() {
-                    "type_identifier" | "identifier" if name.is_empty() => name = self.text(ch).to_string(),
+                    "type_identifier" | "identifier" if name.is_empty() => {
+                        name = self.text(ch).to_string()
+                    }
                     "type_bound" => {
                         let mut bc = ch.walk();
                         for t in ch.named_children(&mut bc) {
@@ -269,7 +277,8 @@ impl Builder<'_> {
     }
 
     fn dims(&self, n: Option<Node<'_>>) -> String {
-        n.map(|d| "[]".repeat(self.text(d).matches('[').count())).unwrap_or_default()
+        n.map(|d| "[]".repeat(self.text(d).matches('[').count()))
+            .unwrap_or_default()
     }
 
     fn params(&self, n: Node<'_>) -> (Vec<ParamStub>, bool) {
@@ -279,10 +288,21 @@ impl Builder<'_> {
         for p in n.named_children(&mut c) {
             match p.kind() {
                 "formal_parameter" => {
-                    let ty = p.child_by_field_name("type").map(|t| self.compact(t)).unwrap_or_default();
-                    let name = p.child_by_field_name("name").map(|t| self.text(t).to_string()).unwrap_or_default();
+                    let ty = p
+                        .child_by_field_name("type")
+                        .map(|t| self.compact(t))
+                        .unwrap_or_default();
+                    let name = p
+                        .child_by_field_name("name")
+                        .map(|t| self.text(t).to_string())
+                        .unwrap_or_default();
                     let dims = self.dims(p.child_by_field_name("dimensions"));
-                    out.push(ParamStub { name, ty: format!("{ty}{dims}"), varargs: false, generated: false });
+                    out.push(ParamStub {
+                        name,
+                        ty: format!("{ty}{dims}"),
+                        varargs: false,
+                        generated: false,
+                    });
                 }
                 "spread_parameter" => {
                     let mut ty = String::new();
@@ -300,7 +320,12 @@ impl Builder<'_> {
                         }
                     }
                     varargs = true;
-                    out.push(ParamStub { name, ty: format!("{ty}[]"), varargs: true, generated: false });
+                    out.push(ParamStub {
+                        name,
+                        ty: format!("{ty}[]"),
+                        varargs: true,
+                        generated: false,
+                    });
                 }
                 _ => {}
             }
@@ -310,22 +335,43 @@ impl Builder<'_> {
 
     fn is_constant_candidate(&self, n: Node<'_>) -> bool {
         match n.kind() {
-            "decimal_integer_literal" | "hex_integer_literal" | "octal_integer_literal"
-            | "binary_integer_literal" | "decimal_floating_point_literal"
-            | "hex_floating_point_literal" | "string_literal" | "character_literal" | "true"
-            | "false" | "null_literal" | "identifier" | "type_identifier" | "text_block" => true,
+            "decimal_integer_literal"
+            | "hex_integer_literal"
+            | "octal_integer_literal"
+            | "binary_integer_literal"
+            | "decimal_floating_point_literal"
+            | "hex_floating_point_literal"
+            | "string_literal"
+            | "character_literal"
+            | "true"
+            | "false"
+            | "null_literal"
+            | "identifier"
+            | "type_identifier"
+            | "text_block" => true,
             "field_access" | "scoped_identifier" => {
                 let mut c = n.walk();
-                let ok = n.named_children(&mut c).all(|ch| self.is_constant_candidate(ch));
-                ok
+
+                n.named_children(&mut c)
+                    .all(|ch| self.is_constant_candidate(ch))
             }
-            "parenthesized_expression" | "unary_expression" | "binary_expression" | "cast_expression"
+            "parenthesized_expression"
+            | "unary_expression"
+            | "binary_expression"
+            | "cast_expression"
             | "ternary_expression" => {
                 let mut c = n.walk();
-                let ok = n
-                    .named_children(&mut c)
-                    .all(|ch| self.is_constant_candidate(ch) || matches!(ch.kind(), "integral_type" | "floating_point_type" | "boolean_type" | "type_identifier"));
-                ok
+
+                n.named_children(&mut c).all(|ch| {
+                    self.is_constant_candidate(ch)
+                        || matches!(
+                            ch.kind(),
+                            "integral_type"
+                                | "floating_point_type"
+                                | "boolean_type"
+                                | "type_identifier"
+                        )
+                })
             }
             _ => false,
         }
@@ -336,11 +382,20 @@ impl Builder<'_> {
         if owner_is_interface {
             fl |= flags::PUBLIC | flags::STATIC | flags::FINAL;
         }
-        let base = n.child_by_field_name("type").map(|t| self.compact(t)).unwrap_or_default();
-        let deprecated = self.javadoc_deprecated(n) || ann.iter().any(|a| crate::stub::annotation_short_name(a) == "Deprecated");
+        let base = n
+            .child_by_field_name("type")
+            .map(|t| self.compact(t))
+            .unwrap_or_default();
+        let deprecated = self.javadoc_deprecated(n)
+            || ann
+                .iter()
+                .any(|a| crate::stub::annotation_short_name(a) == "Deprecated");
         let mut c = n.walk();
         for d in n.children_by_field_name("declarator", &mut c) {
-            let name = d.child_by_field_name("name").map(|t| self.text(t).to_string()).unwrap_or_default();
+            let name = d
+                .child_by_field_name("name")
+                .map(|t| self.text(t).to_string())
+                .unwrap_or_default();
             let dims = self.dims(d.child_by_field_name("dimensions"));
             let init = d
                 .child_by_field_name("value")
@@ -360,7 +415,10 @@ impl Builder<'_> {
 
     fn method(&self, n: Node<'_>, class_name: &str, interface: bool) -> MethodStub {
         let (mut fl, ann) = self.modifiers(n);
-        let is_ctor = matches!(n.kind(), "constructor_declaration" | "compact_constructor_declaration");
+        let is_ctor = matches!(
+            n.kind(),
+            "constructor_declaration" | "compact_constructor_declaration"
+        );
         let (params, varargs) = n
             .child_by_field_name("parameters")
             .map(|p| self.params(p))
@@ -371,7 +429,10 @@ impl Builder<'_> {
             .map(|t| self.type_list(t))
             .unwrap_or_default();
         let ret = (!is_ctor).then(|| {
-            let t = n.child_by_field_name("type").map(|t| self.compact(t)).unwrap_or_else(|| "void".into());
+            let t = n
+                .child_by_field_name("type")
+                .map(|t| self.compact(t))
+                .unwrap_or_else(|| "void".into());
             format!("{t}{}", self.dims(n.child_by_field_name("dimensions")))
         });
         if interface && fl & (flags::PRIVATE) == 0 {
@@ -384,7 +445,9 @@ impl Builder<'_> {
         let name = if is_ctor {
             class_name.to_string()
         } else {
-            n.child_by_field_name("name").map(|t| self.text(t).to_string()).unwrap_or_default()
+            n.child_by_field_name("name")
+                .map(|t| self.text(t).to_string())
+                .unwrap_or_default()
         };
         MethodStub {
             name,
@@ -393,7 +456,10 @@ impl Builder<'_> {
             ret,
             params,
             throws,
-            deprecated: self.javadoc_deprecated(n) || ann.iter().any(|a| crate::stub::annotation_short_name(a) == "Deprecated"),
+            deprecated: self.javadoc_deprecated(n)
+                || ann
+                    .iter()
+                    .any(|a| crate::stub::annotation_short_name(a) == "Deprecated"),
             annotations: ann,
             is_ctor,
             varargs,
@@ -403,7 +469,11 @@ impl Builder<'_> {
 
     fn class(&self, n: Node<'_>, scope: &str) -> Option<ClassStub> {
         let name = self.text(n.child_by_field_name("name")?).to_string();
-        let qname = if scope.is_empty() { name.clone() } else { format!("{scope}.{name}") };
+        let qname = if scope.is_empty() {
+            name.clone()
+        } else {
+            format!("{scope}.{name}")
+        };
         let kind = match n.kind() {
             "class_declaration" => ClassKind::Class,
             "interface_declaration" => ClassKind::Interface,
@@ -418,7 +488,10 @@ impl Builder<'_> {
             qname: qname.clone(),
             kind,
             flags: fl,
-            deprecated: self.javadoc_deprecated(n) || ann.iter().any(|a| crate::stub::annotation_short_name(a) == "Deprecated"),
+            deprecated: self.javadoc_deprecated(n)
+                || ann
+                    .iter()
+                    .any(|a| crate::stub::annotation_short_name(a) == "Deprecated"),
             type_params: self.type_params(n),
             extends: Vec::new(),
             implements: Vec::new(),
@@ -461,13 +534,22 @@ impl Builder<'_> {
                 "field_declaration" | "constant_declaration" => {
                     self.fields(m, interface, &mut stub.fields);
                 }
-                "method_declaration" | "constructor_declaration" | "compact_constructor_declaration" => {
-                    stub.methods.push(self.method(m, &stub.name.clone(), interface));
+                "method_declaration"
+                | "constructor_declaration"
+                | "compact_constructor_declaration" => {
+                    stub.methods
+                        .push(self.method(m, &stub.name.clone(), interface));
                 }
                 "annotation_type_element_declaration" => {
-                    let ty = m.child_by_field_name("type").map(|t| self.compact(t)).unwrap_or_default();
+                    let ty = m
+                        .child_by_field_name("type")
+                        .map(|t| self.compact(t))
+                        .unwrap_or_default();
                     stub.methods.push(MethodStub {
-                        name: m.child_by_field_name("name").map(|t| self.text(t).to_string()).unwrap_or_default(),
+                        name: m
+                            .child_by_field_name("name")
+                            .map(|t| self.text(t).to_string())
+                            .unwrap_or_default(),
                         flags: flags::ABSTRACT,
                         type_params: Vec::new(),
                         ret: Some(ty),
@@ -483,7 +565,10 @@ impl Builder<'_> {
                 "enum_constant" => {
                     let (_, ann) = self.modifiers(m);
                     stub.fields.push(FieldStub {
-                        name: m.child_by_field_name("name").map(|t| self.text(t).to_string()).unwrap_or_default(),
+                        name: m
+                            .child_by_field_name("name")
+                            .map(|t| self.text(t).to_string())
+                            .unwrap_or_default(),
                         flags: flags::PUBLIC | flags::STATIC | flags::FINAL,
                         ty: stub.name.clone(),
                         init: None,
@@ -498,7 +583,13 @@ impl Builder<'_> {
                         inner.is_static_member = interface
                             || matches!(stub.kind, ClassKind::Enum | ClassKind::Record)
                             || inner.flags & flags::STATIC != 0
-                            || matches!(inner.kind, ClassKind::Interface | ClassKind::Enum | ClassKind::Record | ClassKind::Annotation);
+                            || matches!(
+                                inner.kind,
+                                ClassKind::Interface
+                                    | ClassKind::Enum
+                                    | ClassKind::Record
+                                    | ClassKind::Annotation
+                            );
                         stub.inner.push(inner);
                     }
                 }

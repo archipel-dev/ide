@@ -3,14 +3,21 @@
 
 use archipel_ide_java::api::JavaProject;
 use archipel_ide_java::index::JavaIndex;
-use archipel_ide_projectmodel::{DependencyScope, JpsModuleSourceRootType, Library, Module, OrderEntry, ProjectModel, Sdk, SourceFolder};
+use archipel_ide_projectmodel::{
+    DependencyScope, JpsModuleSourceRootType, Library, Module, OrderEntry, ProjectModel, Sdk,
+    SourceFolder,
+};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub fn find_jar(group_path: &str, artifact: &str, prefer: Option<&str>) -> Option<PathBuf> {
     let home = std::env::var_os("HOME").map(PathBuf::from)?;
     let dir = home.join(".m2/repository").join(group_path).join(artifact);
-    let mut versions: Vec<_> = std::fs::read_dir(&dir).ok()?.filter_map(Result::ok).map(|e| e.path()).collect();
+    let mut versions: Vec<_> = std::fs::read_dir(&dir)
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .collect();
     versions.sort();
     versions.reverse();
     for v in versions {
@@ -33,7 +40,10 @@ pub struct Proj {
 }
 
 pub fn jdk_home() -> PathBuf {
-    std::env::var_os("JAVA_HOME").map(PathBuf::from).filter(|p| p.join("lib/modules").exists()).unwrap_or_else(|| PathBuf::from("/usr/lib/jvm/java-21-openjdk-amd64"))
+    std::env::var_os("JAVA_HOME")
+        .map(PathBuf::from)
+        .filter(|p| p.join("lib/modules").exists())
+        .unwrap_or_else(|| PathBuf::from("/usr/lib/jvm/java-21-openjdk-amd64"))
 }
 
 /// One module `app` with `files` (project-relative) and libraries `(name, jar, scope)`.
@@ -48,8 +58,14 @@ pub fn project(files: &[(&str, &str)], libs: &[(&str, PathBuf, DependencyScope)]
     let mut model = ProjectModel::new("demo", &root);
     let mut app = Module::new("app");
     app.content_entry_mut(&root)
-        .add_source_folder(SourceFolder::new(root.join("src/main/java"), JpsModuleSourceRootType::Source))
-        .add_source_folder(SourceFolder::new(root.join("src/test/java"), JpsModuleSourceRootType::TestSource));
+        .add_source_folder(SourceFolder::new(
+            root.join("src/main/java"),
+            JpsModuleSourceRootType::Source,
+        ))
+        .add_source_folder(SourceFolder::new(
+            root.join("src/test/java"),
+            JpsModuleSourceRootType::TestSource,
+        ));
     for (name, jar, scope) in libs {
         model.put_library(Library::new(*name).with_classes(jar));
         app.add_order_entry(OrderEntry::library(*name, *scope));
@@ -70,7 +86,15 @@ impl Proj {
     }
     pub fn analyze(&self, rel: &str, text: &str) -> Vec<(String, String)> {
         let a = self.project.analyze_text(&self.path(rel), text);
-        a.problems.iter().map(|p| (text[p.range.start as usize..p.range.end as usize].to_string(), p.message.clone())).collect()
+        a.problems
+            .iter()
+            .map(|p| {
+                (
+                    text[p.range.start as usize..p.range.end as usize].to_string(),
+                    p.message.clone(),
+                )
+            })
+            .collect()
     }
 }
 

@@ -14,25 +14,52 @@ pub struct ImportChooser {
     popup: ListPopup<usize>,
 }
 
+fn open_flag() -> egui::Id {
+    egui::Id::new("java_import_chooser_open")
+}
+
+/// Whether the chooser was open last frame; the editor then leaves keys to the popup.
+pub fn is_open(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(open_flag()).unwrap_or(false))
+}
+
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     let chooser = app.state.java_service().and_then(|s| s.chooser());
+    ctx.data_mut(|d| d.insert_temp(open_flag(), chooser.is_some()));
     let Some(chooser) = chooser else {
         app.import_chooser = None;
         return;
     };
     let key: Vec<String> = std::iter::once(chooser.title.clone())
-        .chain(chooser.rows.iter().map(|r| format!("{} {}", r.label, r.detail.clone().unwrap_or_default())))
+        .chain(
+            chooser
+                .rows
+                .iter()
+                .map(|r| format!("{} {}", r.label, r.detail.clone().unwrap_or_default())),
+        )
         .collect();
     if app.import_chooser.as_ref().is_none_or(|c| c.key != key) {
         let labels: Vec<String> = chooser.rows.iter().map(|r| r.label.clone()).collect();
         let details: Vec<Option<String>> = chooser.rows.iter().map(|r| r.detail.clone()).collect();
-        let step = ImportStep { inner: BaseListPopupStep::new(chooser.title.clone(), (0..labels.len()).collect::<Vec<usize>>()).speed_search(true), labels, details };
+        let step = ImportStep {
+            inner: BaseListPopupStep::new(
+                chooser.title.clone(),
+                (0..labels.len()).collect::<Vec<usize>>(),
+            )
+            .speed_search(true),
+            labels,
+            details,
+        };
         let mut popup = ListPopup::new("java_import_chooser", step);
         popup.open(ctx);
         app.import_chooser = Some(ImportChooser { key, popup });
     }
-    let anchor = app.caret_screen_pos.unwrap_or_else(|| ctx.content_rect().center());
-    let Some(c) = app.import_chooser.as_mut() else { return };
+    let anchor = app
+        .caret_screen_pos
+        .unwrap_or_else(|| ctx.content_rect().center());
+    let Some(c) = app.import_chooser.as_mut() else {
+        return;
+    };
     let response = c.popup.show_at(ctx, anchor + egui::vec2(-20.0, 20.0));
     if let Some(index) = response.chosen {
         app.import_chooser = None;

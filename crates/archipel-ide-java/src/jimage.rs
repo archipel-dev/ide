@@ -69,7 +69,9 @@ impl JImage {
         let mut entries = Vec::new();
         let mut skipped = 0;
         for i in 0..table {
-            let Some(loc_off) = le32(offsets, i * 4) else { break };
+            let Some(loc_off) = le32(offsets, i * 4) else {
+                break;
+            };
             let mut at = loc_off as usize;
             let mut attrs = [0u64; 8];
             while let Some(&b) = locations.get(at) {

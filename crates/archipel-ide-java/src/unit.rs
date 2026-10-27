@@ -58,9 +58,13 @@ pub fn read_jar(path: &Path, max_release: u32) -> Result<UnitStubs, String> {
     let mut zip = zip::ZipArchive::new(std::io::BufReader::new(file)).map_err(|e| e.to_string())?;
     let mut chosen: BTreeMap<String, (u32, usize)> = BTreeMap::new();
     for i in 0..zip.len() {
-        let Ok(entry) = zip.by_index_raw(i) else { continue };
+        let Ok(entry) = zip.by_index_raw(i) else {
+            continue;
+        };
         let name = entry.name().to_string();
-        let Some(stem) = name.strip_suffix(".class") else { continue };
+        let Some(stem) = name.strip_suffix(".class") else {
+            continue;
+        };
         let (release, class) = match stem.strip_prefix("META-INF/versions/") {
             Some(rest) => match rest.split_once('/') {
                 Some((v, c)) => match v.parse::<u32>() {
@@ -109,12 +113,17 @@ pub fn read_jar(path: &Path, max_release: u32) -> Result<UnitStubs, String> {
 pub fn read_class_dir(root: &Path) -> UnitStubs {
     let mut parsed = Vec::new();
     let mut skipped = 0;
-    for entry in walkdir::WalkDir::new(root).into_iter().filter_map(Result::ok) {
+    for entry in walkdir::WalkDir::new(root)
+        .into_iter()
+        .filter_map(Result::ok)
+    {
         let p = entry.path();
         if p.extension().and_then(|e| e.to_str()) != Some("class") {
             continue;
         }
-        let Ok(rel) = p.strip_prefix(root) else { continue };
+        let Ok(rel) = p.strip_prefix(root) else {
+            continue;
+        };
         let rel = rel.with_extension("").to_string_lossy().replace('\\', "/");
         if !valid_package_dir(&rel) {
             continue;
@@ -162,7 +171,9 @@ pub fn read_jdk_image(path: &Path) -> Result<UnitStubs, String> {
         // Nested classes of exported packages are read with their outer class; a quick
         // pre-filter on `$` keeps anonymous classes (`Foo$1`) out cheaply.
         if e.name.rsplit('/').next().is_some_and(|n| {
-            n.split('$').skip(1).any(|part| part.chars().next().is_some_and(|c| c.is_ascii_digit()))
+            n.split('$')
+                .skip(1)
+                .any(|part| part.chars().next().is_some_and(|c| c.is_ascii_digit()))
         }) {
             continue;
         }

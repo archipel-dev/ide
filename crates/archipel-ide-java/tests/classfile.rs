@@ -7,7 +7,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn javac(dir: &Path, files: &[(&str, &str)]) -> bool {
-    let mut args = vec!["-d".to_string(), dir.join("out").display().to_string(), "-g".into()];
+    let mut args = vec![
+        "-d".to_string(),
+        dir.join("out").display().to_string(),
+        "-g".into(),
+    ];
     for (name, text) in files {
         let p = dir.join("src").join(name);
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
@@ -63,17 +67,38 @@ fn reads_javac_output_into_stubs() {
     }
     let stubs = read_class_dir(&dir.path().join("out"));
     let all = all_classes(&stubs);
-    let get = |q: &str| all.iter().find(|c| c.qname == q).unwrap_or_else(|| panic!("no {q}: {:?}", all.iter().map(|c| &c.qname).collect::<Vec<_>>()));
+    let get = |q: &str| {
+        all.iter().find(|c| c.qname == q).unwrap_or_else(|| {
+            panic!(
+                "no {q}: {:?}",
+                all.iter().map(|c| &c.qname).collect::<Vec<_>>()
+            )
+        })
+    };
     let s = get("p.Sample");
     assert!(s.deprecated && s.has_flag(flags::PUBLIC) && s.has_flag(flags::ABSTRACT));
     assert_eq!(s.type_params[0].name, "T");
     assert_eq!(s.type_params[0].bounds, ["java.lang.Comparable<T>"]);
     assert_eq!(s.extends, ["p.Base<T>"]);
-    assert_eq!(s.implements, ["java.lang.Runnable", "java.lang.Comparable<p.Sample<T>>"]);
+    assert_eq!(
+        s.implements,
+        ["java.lang.Runnable", "java.lang.Comparable<p.Sample<T>>"]
+    );
     let max = s.fields.iter().find(|f| f.name == "MAX").unwrap();
     assert_eq!(max.init.as_deref(), Some("10"));
-    assert_eq!(s.fields.iter().find(|f| f.name == "NAME").unwrap().init.as_deref(), Some("\"a\\\"b\""));
-    assert_eq!(s.fields.iter().find(|f| f.name == "names").unwrap().ty, "java.util.List<java.lang.String>");
+    assert_eq!(
+        s.fields
+            .iter()
+            .find(|f| f.name == "NAME")
+            .unwrap()
+            .init
+            .as_deref(),
+        Some("\"a\\\"b\"")
+    );
+    assert_eq!(
+        s.fields.iter().find(|f| f.name == "names").unwrap().ty,
+        "java.util.List<java.lang.String>"
+    );
     let helper = s.methods.iter().find(|m| m.name == "helper").unwrap();
     assert!(helper.varargs && helper.has_flag_static());
     assert_eq!(helper.type_params[0].name, "U");
@@ -88,31 +113,66 @@ fn reads_javac_output_into_stubs() {
     assert_eq!(ctors.len(), 1);
     assert_eq!(ctors[0].params.len(), 1);
     // Bridge method compareTo(Object) is skipped; lambda$ bodies are skipped.
-    assert_eq!(s.methods.iter().filter(|m| m.name == "compareTo").count(), 1);
+    assert_eq!(
+        s.methods.iter().filter(|m| m.name == "compareTo").count(),
+        1
+    );
     assert!(s.methods.iter().all(|m| !m.name.starts_with("lambda$")));
     // Nesting from the InnerClasses table; anonymous classes skipped.
     let inner = s.inner_named("Inner").unwrap();
     assert_eq!(inner.qname, "p.Sample.Inner");
-    assert_eq!(inner.inner_named("Deep").unwrap().qname, "p.Sample.Inner.Deep");
-    assert!(s.inner.iter().all(|c| !c.name.chars().all(|ch| ch.is_ascii_digit())));
+    assert_eq!(
+        inner.inner_named("Deep").unwrap().qname,
+        "p.Sample.Inner.Deep"
+    );
+    assert!(
+        s.inner
+            .iter()
+            .all(|c| !c.name.chars().all(|ch| ch.is_ascii_digit()))
+    );
     let nested = get("p.Sample.Nested");
     assert_eq!(nested.implements, ["java.util.Map.Entry<K, V>"]);
     assert!(nested.is_static_member);
     let color = get("p.Sample.Color");
     assert_eq!(color.kind, ClassKind::Enum);
-    assert!(color.fields.iter().any(|f| f.name == "RED" && f.enum_constant));
-    assert!(color.methods.iter().any(|m| m.name == "values" && m.has_flag_static()));
+    assert!(
+        color
+            .fields
+            .iter()
+            .any(|f| f.name == "RED" && f.enum_constant)
+    );
+    assert!(
+        color
+            .methods
+            .iter()
+            .any(|m| m.name == "values" && m.has_flag_static())
+    );
     assert!(color.fields.iter().all(|f| f.name != "$VALUES"));
     // Enum constructor has no synthetic name/ordinal.
-    assert!(color.methods.iter().filter(|m| m.is_ctor).all(|m| m.params.is_empty()));
+    assert!(
+        color
+            .methods
+            .iter()
+            .filter(|m| m.is_ctor)
+            .all(|m| m.params.is_empty())
+    );
     let fnn = get("p.Sample.Fn");
     assert_eq!(fnn.kind, ClassKind::Interface);
     assert!(fnn.methods.iter().find(|m| m.name == "d").unwrap().flags & flags::DEFAULT != 0);
-    assert!(fnn.methods.iter().find(|m| m.name == "s").unwrap().has_flag_static());
+    assert!(
+        fnn.methods
+            .iter()
+            .find(|m| m.name == "s")
+            .unwrap()
+            .has_flag_static()
+    );
     let pt = get("p.Sample.Pt");
     assert_eq!(pt.kind, ClassKind::Record);
     assert_eq!(pt.record_components.len(), 2);
-    assert_eq!(pt.record_components[1].ty, "java.util.List<java.lang.String>");
+    assert_eq!(
+        pt.record_components[1].ty,
+        "java.util.List<java.lang.String>"
+    );
     // Package-private top-level class from the same file.
     assert!(all.iter().any(|c| c.qname == "p.Base"));
 }
@@ -153,28 +213,56 @@ fn reads_the_jdk_image() {
     let stubs = read_jdk_image(&modules).unwrap();
     let all = all_classes(&stubs);
     assert!(all.len() > 5000, "{}", all.len());
-    let get = |q: &str| all.iter().find(|c| c.qname == q).unwrap_or_else(|| panic!("no {q}"));
+    let get = |q: &str| {
+        all.iter()
+            .find(|c| c.qname == q)
+            .unwrap_or_else(|| panic!("no {q}"))
+    };
     let list = get("java.util.List");
     assert_eq!(list.kind, ClassKind::Interface);
-    assert!(list.methods.iter().any(|m| m.name == "of" && m.flags & flags::STATIC != 0));
+    assert!(
+        list.methods
+            .iter()
+            .any(|m| m.name == "of" && m.flags & flags::STATIC != 0)
+    );
     let entry = get("java.util.Map.Entry");
     assert_eq!(entry.kind, ClassKind::Interface);
     let optional = get("java.util.Optional");
-    assert!(optional.methods.iter().any(|m| m.name == "orElse" && m.params[0].ty == "T"));
+    assert!(
+        optional
+            .methods
+            .iter()
+            .any(|m| m.name == "orElse" && m.params[0].ty == "T")
+    );
     assert!(all.iter().any(|c| c.qname == "java.lang.ProcessHandle"));
     assert!(all.iter().any(|c| c.qname == "java.awt.List"));
     // Non-exported internals are not part of the API surface.
     assert!(all.iter().all(|c| !c.qname.starts_with("jdk.internal.")));
     // Parameter names come from debug info or are generated.
-    let max = get("java.lang.Math").methods.iter().find(|m| m.name == "max" && m.params[0].ty == "int").unwrap();
+    let max = get("java.lang.Math")
+        .methods
+        .iter()
+        .find(|m| m.name == "max" && m.params[0].ty == "int")
+        .unwrap();
     assert!(max.params.iter().all(|p| !p.name.is_empty()));
     // Strings are decoded.
-    assert_eq!(get("java.lang.Integer").fields.iter().find(|f| f.name == "MAX_VALUE").unwrap().init.as_deref(), Some("2147483647"));
+    assert_eq!(
+        get("java.lang.Integer")
+            .fields
+            .iter()
+            .find(|f| f.name == "MAX_VALUE")
+            .unwrap()
+            .init
+            .as_deref(),
+        Some("2147483647")
+    );
 }
 
 #[test]
 fn reads_assertj_from_a_jar() {
-    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+    let home = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_default();
     let dir = home.join(".m2/repository/org/assertj/assertj-core");
     let Some(jar) = std::fs::read_dir(&dir).ok().and_then(|d| {
         d.filter_map(Result::ok).find_map(|v| {
@@ -189,11 +277,26 @@ fn reads_assertj_from_a_jar() {
     };
     let stubs = archipel_ide_java::unit::read_jar(&jar, 21).unwrap();
     let all = all_classes(&stubs);
-    let assertions = all.iter().find(|c| c.qname == "org.assertj.core.api.Assertions").unwrap();
-    let at: Vec<_> = assertions.methods.iter().filter(|m| m.name == "assertThat").collect();
+    let assertions = all
+        .iter()
+        .find(|c| c.qname == "org.assertj.core.api.Assertions")
+        .unwrap();
+    let at: Vec<_> = assertions
+        .methods
+        .iter()
+        .filter(|m| m.name == "assertThat")
+        .collect();
     assert!(at.len() > 20);
     assert!(at.iter().all(|m| m.flags & flags::STATIC != 0));
-    let with = all.iter().find(|c| c.qname == "org.assertj.core.api.WithAssertions").unwrap();
+    let with = all
+        .iter()
+        .find(|c| c.qname == "org.assertj.core.api.WithAssertions")
+        .unwrap();
     assert_eq!(with.kind, ClassKind::Interface);
-    assert!(with.methods.iter().filter(|m| m.name == "assertThat").all(|m| m.flags & flags::DEFAULT != 0));
+    assert!(
+        with.methods
+            .iter()
+            .filter(|m| m.name == "assertThat")
+            .all(|m| m.flags & flags::DEFAULT != 0)
+    );
 }

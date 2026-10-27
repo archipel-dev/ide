@@ -50,7 +50,11 @@ impl StaticCandidate {
     }
     pub fn name(&self) -> &str {
         let c = self.class.class();
-        if self.is_field { &c.fields[self.member].name } else { &c.methods[self.member].name }
+        if self.is_field {
+            &c.fields[self.member].name
+        } else {
+            &c.methods[self.member].name
+        }
     }
     /// `org.assertj.core.api.Assertions.assertThat`
     pub fn qualified(&self) -> String {
@@ -59,7 +63,11 @@ impl StaticCandidate {
     /// `Assertions.assertThat` (nested: `Outer.Inner.member`).
     pub fn display(&self) -> String {
         let c = self.class.class();
-        let rel = c.qname.strip_prefix(&format!("{}.", self.class.package())).unwrap_or(&c.qname).to_string();
+        let rel = c
+            .qname
+            .strip_prefix(&format!("{}.", self.class.package()))
+            .unwrap_or(&c.qname)
+            .to_string();
         format!("{rel}.{}", self.name())
     }
     pub fn package(&self) -> &str {
@@ -67,7 +75,11 @@ impl StaticCandidate {
     }
     fn deprecated(&self) -> bool {
         let c = self.class.class();
-        let m = if self.is_field { c.fields[self.member].deprecated } else { c.methods[self.member].deprecated };
+        let m = if self.is_field {
+            c.fields[self.member].deprecated
+        } else {
+            c.methods[self.member].deprecated
+        };
         m || c.deprecated || self.class.record.class.deprecated
     }
     fn signature(&self) -> String {
@@ -76,7 +88,15 @@ impl StaticCandidate {
             c.fields[self.member].name.clone()
         } else {
             let m = &c.methods[self.member];
-            format!("{}({})", m.name, m.params.iter().map(|p| p.ty.as_str()).collect::<Vec<_>>().join(","))
+            format!(
+                "{}({})",
+                m.name,
+                m.params
+                    .iter()
+                    .map(|p| p.ty.as_str())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
         }
     }
 }
@@ -151,7 +171,11 @@ fn assignable(env: &Env<'_>, arg: &Ty, to: &PTy) -> Res<Option<bool>> {
         (Ty::Ref { fqn, .. }, PTy::Prim(q)) => match fqn.as_deref().and_then(ty::unboxed_name) {
             Some(u) => Some(ty::prim_widens(u, q)),
             None => {
-                if fqn.is_some() { Some(false) } else { None }
+                if fqn.is_some() {
+                    Some(false)
+                } else {
+                    None
+                }
             }
         },
         (Ty::Ref { fqn: Some(f), .. }, PTy::Ref(t)) => subtype(env, f, t)?,
@@ -161,7 +185,10 @@ fn assignable(env: &Env<'_>, arg: &Ty, to: &PTy) -> Res<Option<bool>> {
         },
         (Ty::Ref { fqn: Some(_), .. }, PTy::Array(_)) => Some(false),
         (Ty::Ref { fqn: None, .. }, _) => Some(true),
-        (Ty::Array(_), PTy::Ref(t)) => Some(matches!(t.as_str(), "java.lang.Object" | "java.lang.Cloneable" | "java.io.Serializable")),
+        (Ty::Array(_), PTy::Ref(t)) => Some(matches!(
+            t.as_str(),
+            "java.lang.Object" | "java.lang.Cloneable" | "java.io.Serializable"
+        )),
         (Ty::Array(_), PTy::Var(b)) => Some(b.as_deref().is_none_or(|b| b == "java.lang.Object")),
         (Ty::Array(_), PTy::Prim(_)) => Some(false),
         (Ty::Array(a), PTy::Array(t)) => match (&**a, &**t) {
@@ -200,7 +227,9 @@ pub fn applicable(env: &Env<'_>, owner: &ClassHit, m: &MethodStub, args: &[Ty]) 
         }
     }
     // Variable arity: the last parameter's element type takes the remaining arguments.
-    let Some(PTy::Array(elem)) = p.last().cloned() else { return Ok(false) };
+    let Some(PTy::Array(elem)) = p.last().cloned() else {
+        return Ok(false);
+    };
     for (i, a) in args.iter().enumerate() {
         let target: &PTy = if i + 1 < n { &p[i] } else { &elem };
         if assignable(env, a, target)? == Some(false) {
@@ -292,13 +321,30 @@ pub fn static_candidates(
                 }
             })
             .collect();
-        let Some(&first) = statics.first() else { continue };
-        let mut fallback = StaticCandidate { class: class.clone(), member: first, is_field: !method_flavor, fit: Fit::None };
+        let Some(&first) = statics.first() else {
+            continue;
+        };
+        let mut fallback = StaticCandidate {
+            class: class.clone(),
+            member: first,
+            is_field: !method_flavor,
+            fit: Fit::None,
+        };
         let mut best: Option<StaticCandidate> = None;
         let mut done = false;
         for i in statics {
-            let flags_i = if method_flavor { c.methods[i].flags } else { c.fields[i].flags };
-            let accessible = env.accessible(&class, flags_i, &place.package, place.top_class.as_deref(), false);
+            let flags_i = if method_flavor {
+                c.methods[i].flags
+            } else {
+                c.fields[i].flags
+            };
+            let accessible = env.accessible(
+                &class,
+                flags_i,
+                &place.package,
+                place.top_class.as_deref(),
+                false,
+            );
             if !accessible {
                 continue;
             }
@@ -307,11 +353,22 @@ pub fn static_candidates(
                 if !applicable(env, &class, m, input.args.unwrap_or(&[]))? {
                     continue;
                 }
-                expected_fit(env, &class, m.ret.as_deref(), &m.type_params, input.expected)?
+                expected_fit(
+                    env,
+                    &class,
+                    m.ret.as_deref(),
+                    &m.type_params,
+                    input.expected,
+                )?
             } else {
                 expected_fit(env, &class, Some(&c.fields[i].ty), &[], input.expected)?
             };
-            let cand = StaticCandidate { class: class.clone(), member: i, is_field: !method_flavor, fit };
+            let cand = StaticCandidate {
+                class: class.clone(),
+                member: i,
+                is_field: !method_flavor,
+                fit,
+            };
             match fit {
                 Fit::Applicable => {
                     applicable_list.push(cand);
@@ -330,7 +387,10 @@ pub fn static_candidates(
             continue;
         }
         if let Some(b) = best {
-            fallback = StaticCandidate { fit: Fit::Partly, ..b.clone() };
+            fallback = StaticCandidate {
+                fit: Fit::Partly,
+                ..b.clone()
+            };
             partly_list.push(b);
         }
         all.push(fallback);
@@ -354,17 +414,35 @@ pub fn static_candidates(
     }
     // Members that are inaccessible from the file and not project code are removed.
     result.retain(|c| {
-        let flags_c = if c.is_field { c.class.class().fields[c.member].flags } else { c.class.class().methods[c.member].flags };
-        env.accessible(&c.class, flags_c, &place.package, place.top_class.as_deref(), false) || is_project_source(project, &c.class)
+        let flags_c = if c.is_field {
+            c.class.class().fields[c.member].flags
+        } else {
+            c.class.class().methods[c.member].flags
+        };
+        env.accessible(
+            &c.class,
+            flags_c,
+            &place.package,
+            place.top_class.as_deref(),
+            false,
+        ) || is_project_source(project, &c.class)
     });
     Ok(result)
 }
 
-fn expected_fit(env: &Env<'_>, owner: &ClassHit, ret: Option<&str>, tparams: &[TypeParamStub], expected: &[Ty]) -> Res<Fit> {
+fn expected_fit(
+    env: &Env<'_>,
+    owner: &ClassHit,
+    ret: Option<&str>,
+    tparams: &[TypeParamStub],
+    expected: &[Ty],
+) -> Res<Fit> {
     if expected.is_empty() {
         return Ok(Fit::Applicable);
     }
-    let Some(ret) = ret else { return Ok(Fit::Applicable) };
+    let Some(ret) = ret else {
+        return Ok(Fit::Applicable);
+    };
     let mut m = MethodStub {
         name: String::new(),
         flags: 0,
@@ -381,12 +459,15 @@ fn expected_fit(env: &Env<'_>, owner: &ClassHit, ret: Option<&str>, tparams: &[T
     m.type_params = tparams.to_vec();
     let rt = param_ty(env, owner, &m, ret)?;
     if matches!(rt, PTy::Var(_) | PTy::Unknown) || ret == "void" {
-        return Ok(if ret == "void" { Fit::Applicable } else { Fit::Applicable });
+        return Ok(Fit::Applicable);
     }
     // Convert the return type to a `Ty` for the assignability test.
     let as_ty = match &rt {
         PTy::Prim(p) => Ty::Prim(p.clone()),
-        PTy::Ref(f) => Ty::Ref { fqn: Some(f.clone()), display: ty::display(f) },
+        PTy::Ref(f) => Ty::Ref {
+            fqn: Some(f.clone()),
+            display: ty::display(f),
+        },
         PTy::Array(_) => Ty::Unknown,
         _ => Ty::Unknown,
     };
@@ -406,12 +487,26 @@ fn expected_fit(env: &Env<'_>, owner: &ClassHit, ret: Option<&str>, tparams: &[T
 // ---- ordering (5.3) -----------------------------------------------------------------------------
 
 fn discouraged(fqn: &str) -> bool {
-    fqn.starts_with("com.sun.") || fqn.starts_with("sun.") || fqn.starts_with("org.omg.") || fqn == "java.awt.List" || fqn.starts_with("jdk.internal.")
+    fqn.starts_with("com.sun.")
+        || fqn.starts_with("sun.")
+        || fqn.starts_with("org.omg.")
+        || fqn == "java.awt.List"
+        || fqn.starts_with("jdk.internal.")
 }
 
 fn known_element(fqn: &str, place: &Place, is_class: bool) -> i32 {
     let (pkg, name) = fqn.rsplit_once('.').unwrap_or(("", fqn));
-    let mut v = if pkg == "java.lang" && matches!(name, "String" | "Class" | "System" | "Runnable" | "Exception" | "Throwable" | "RuntimeException")
+    let mut v = if pkg == "java.lang"
+        && matches!(
+            name,
+            "String"
+                | "Class"
+                | "System"
+                | "Runnable"
+                | "Exception"
+                | "Throwable"
+                | "RuntimeException"
+        )
         || pkg == "java.util" && matches!(name, "ArrayList" | "HashMap" | "HashSet")
     {
         8
@@ -445,7 +540,14 @@ fn known_element(fqn: &str, place: &Place, is_class: bool) -> i32 {
 }
 
 /// The proximity chain of 5.3.1 for ranks 3, 4, 9, 10, 11, 12 and 13 (higher is better).
-fn proximity(project: &JavaProject, place: &Place, class: &ClassHit, deprecated: bool, accessible: bool, is_class: bool) -> [i32; 7] {
+fn proximity(
+    project: &JavaProject,
+    place: &Place,
+    class: &ClassHit,
+    deprecated: bool,
+    accessible: bool,
+    is_class: bool,
+) -> [i32; 7] {
     let fqn = class.class().qname.as_str();
     let access = if !accessible {
         0
@@ -457,17 +559,31 @@ fn proximity(project: &JavaProject, place: &Place, class: &ClassHit, deprecated:
         3
     };
     let pkg = class.package();
-    let explicit = if place.imports.iter().any(|i| i.is_static && !i.on_demand && i.name.starts_with(&format!("{fqn}."))) {
+    let explicit = if place
+        .imports
+        .iter()
+        .any(|i| i.is_static && !i.on_demand && i.name.starts_with(&format!("{fqn}.")))
+    {
         11
     } else if pkg == place.package && class.path.is_empty() {
         9
-    } else if place.imports.iter().any(|i| !i.is_static && !i.on_demand && i.name == fqn) {
+    } else if place
+        .imports
+        .iter()
+        .any(|i| !i.is_static && !i.on_demand && i.name == fqn)
+    {
         8
     } else if pkg == "java.lang" {
         6
-    } else if place.imports.iter().any(|i| !i.is_static && i.on_demand && i.name == pkg) {
+    } else if place
+        .imports
+        .iter()
+        .any(|i| !i.is_static && i.on_demand && i.name == pkg)
+    {
         5
-    } else if place.imports.iter().any(|i| !i.is_static && !i.on_demand && i.name.rsplit_once('.').map(|(p, _)| p) == Some(pkg)) {
+    } else if place.imports.iter().any(|i| {
+        !i.is_static && !i.on_demand && i.name.rsplit_once('.').map(|(p, _)| p) == Some(pkg)
+    }) {
         1
     } else {
         0
@@ -484,11 +600,26 @@ fn proximity(project: &JavaProject, place: &Place, class: &ClassHit, deprecated:
         _ => 0,
     };
     let jdk = i32::from(origin.kind == UnitKind::Jdk);
-    [access, explicit, module, known_element(fqn, place, is_class), 1, dir, jdk]
+    [
+        access,
+        explicit,
+        module,
+        known_element(fqn, place, is_class),
+        1,
+        dir,
+        jdk,
+    ]
 }
 
 /// The comparator of 5.3 with the deterministic Archipel tie-break (JAVA-IMP-020).
-fn compare(project: &JavaProject, env: &Env<'_>, place: &Place, settings: &ImportSettings, a: &StaticCandidate, b: &StaticCandidate) -> Ordering {
+fn compare(
+    project: &JavaProject,
+    env: &Env<'_>,
+    place: &Place,
+    settings: &ImportSettings,
+    a: &StaticCandidate,
+    b: &StaticCandidate,
+) -> Ordering {
     // 1. not deprecated before deprecated
     let o = a.deprecated().cmp(&b.deprecated());
     if o != Ordering::Equal {
@@ -511,8 +642,18 @@ fn compare(project: &JavaProject, env: &Env<'_>, place: &Place, settings: &Impor
     // 4. proximity
     let acc = |c: &StaticCandidate| {
         let cl = c.class.class();
-        let f = if c.is_field { cl.fields[c.member].flags } else { cl.methods[c.member].flags };
-        env.accessible(&c.class, f, &place.package, place.top_class.as_deref(), false)
+        let f = if c.is_field {
+            cl.fields[c.member].flags
+        } else {
+            cl.methods[c.member].flags
+        };
+        env.accessible(
+            &c.class,
+            f,
+            &place.package,
+            place.top_class.as_deref(),
+            false,
+        )
     };
     let pa = proximity(project, place, &a.class, a.deprecated(), acc(a), false);
     let pb = proximity(project, place, &b.class, b.deprecated(), acc(b), false);
@@ -589,7 +730,7 @@ pub fn class_candidates(
     }
     // 4. inaccessible classes go when something accessible exists.
     let acc = |h: &ClassHit| env.class_accessible(h, &place.package, place.top_class.as_deref());
-    if found.iter().any(|h| acc(h)) {
+    if found.iter().any(&acc) {
         found.retain(|h| acc(h) || h.package() == place.package);
     }
     // 5. `Foo.bar`: classes with such a member.
@@ -598,8 +739,13 @@ pub fn class_candidates(
             .iter()
             .filter(|h| {
                 let c = h.class();
-                c.fields.iter().any(|f| f.name == *member && (!*is_static || f.flags & flags::STATIC != 0 || c.is_interface_like()))
-                    || c.methods.iter().any(|m| m.name == *member && (!*is_static || m.flags & flags::STATIC != 0))
+                c.fields.iter().any(|f| {
+                    f.name == *member
+                        && (!*is_static || f.flags & flags::STATIC != 0 || c.is_interface_like())
+                }) || c
+                    .methods
+                    .iter()
+                    .any(|m| m.name == *member && (!*is_static || m.flags & flags::STATIC != 0))
                     || c.inner_named(member).is_some()
             })
             .cloned()
@@ -613,12 +759,19 @@ pub fn class_candidates(
         found.retain(|h| h.package() == q);
     }
     if info.type_args {
-        let with: Vec<ClassHit> = found.iter().filter(|h| !h.class().type_params.is_empty()).cloned().collect();
+        let with: Vec<ClassHit> = found
+            .iter()
+            .filter(|h| !h.class().type_params.is_empty())
+            .cloned()
+            .collect();
         if !with.is_empty() {
             found = with;
         }
     }
-    let mut cands: Vec<ClassCandidate> = found.into_iter().map(|class| ClassCandidate { class }).collect();
+    let mut cands: Vec<ClassCandidate> = found
+        .into_iter()
+        .map(|class| ClassCandidate { class })
+        .collect();
     cands.sort_by(|a, b| {
         let dep = |c: &ClassCandidate| c.class.class().deprecated;
         dep(a)
@@ -663,15 +816,33 @@ impl ImportStaticFix {
     }
 
     fn edit_for(&self, text: &str, c: &StaticCandidate) -> Option<TextEdit> {
-        let out = import_edit::add_static_import(text, c.class_fqn(), c.name(), &self.settings, self.always_on_demand.iter().any(|p| p == c.class_fqn()));
+        let out = import_edit::add_static_import(
+            text,
+            c.class_fqn(),
+            c.name(),
+            &self.settings,
+            self.always_on_demand.iter().any(|p| p == c.class_fqn()),
+        );
         import_edit::minimal_edit(text, &out.text)
     }
 
     /// The command that applies candidate `index` to `text` at `rev`.
-    pub fn apply(&self, cx_file: archipel_ide_analysis::FileId, rev: archipel_ide_analysis::FileRev, text: &str, index: usize) -> ModCommand {
-        let Some(c) = self.candidates.get(index) else { return ModCommand::Nothing };
+    pub fn apply(
+        &self,
+        cx_file: archipel_ide_analysis::FileId,
+        rev: archipel_ide_analysis::FileRev,
+        text: &str,
+        index: usize,
+    ) -> ModCommand {
+        let Some(c) = self.candidates.get(index) else {
+            return ModCommand::Nothing;
+        };
         match self.edit_for(text, c) {
-            Some(edit) => ModCommand::UpdateFile { file: cx_file, edits: vec![edit], expected_rev: rev },
+            Some(edit) => ModCommand::UpdateFile {
+                file: cx_file,
+                edits: vec![edit],
+                expected_rev: rev,
+            },
             None => ModCommand::Nothing,
         }
     }
@@ -679,7 +850,11 @@ impl ImportStaticFix {
 
 impl QuickFix for ImportStaticFix {
     fn family(&self) -> &str {
-        if self.constant { "Import static constant" } else { "Import static method" }
+        if self.constant {
+            "Import static constant"
+        } else {
+            "Import static method"
+        }
     }
     fn name(&self) -> String {
         self.text()
@@ -694,7 +869,11 @@ impl QuickFix for ImportStaticFix {
             0 => Ok(ModCommand::Nothing),
             1 => Ok(self.apply(cx.file, rev, text, 0)),
             _ => Ok(ModCommand::ChooseFrom {
-                title: if self.constant { "Field to Import".into() } else { "Method to Import".into() },
+                title: if self.constant {
+                    "Field to Import".into()
+                } else {
+                    "Method to Import".into()
+                },
                 rows: self
                     .candidates
                     .iter()
@@ -718,11 +897,23 @@ pub struct ImportClassFix {
 }
 
 impl ImportClassFix {
-    pub fn apply(&self, file: archipel_ide_analysis::FileId, rev: archipel_ide_analysis::FileRev, text: &str, index: usize) -> ModCommand {
-        let Some(c) = self.candidates.get(index) else { return ModCommand::Nothing };
+    pub fn apply(
+        &self,
+        file: archipel_ide_analysis::FileId,
+        rev: archipel_ide_analysis::FileRev,
+        text: &str,
+        index: usize,
+    ) -> ModCommand {
+        let Some(c) = self.candidates.get(index) else {
+            return ModCommand::Nothing;
+        };
         let out = import_edit::add_class_import(text, c.fqn(), &self.package, &self.settings);
         match import_edit::minimal_edit(text, &out.text) {
-            Some(edit) => ModCommand::UpdateFile { file, edits: vec![edit], expected_rev: rev },
+            Some(edit) => ModCommand::UpdateFile {
+                file,
+                edits: vec![edit],
+                expected_rev: rev,
+            },
             None => ModCommand::Nothing,
         }
     }
@@ -750,7 +941,11 @@ impl QuickFix for ImportClassFix {
                     .candidates
                     .iter()
                     .enumerate()
-                    .map(|(i, c)| ChoiceRow { label: c.fqn().to_string(), detail: None, command: self.apply(cx.file, rev, text, i) })
+                    .map(|(i, c)| ChoiceRow {
+                        label: c.fqn().to_string(),
+                        detail: None,
+                        command: self.apply(cx.file, rev, text, i),
+                    })
                     .collect(),
             }),
         }

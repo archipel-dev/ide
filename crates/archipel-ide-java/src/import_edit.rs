@@ -33,7 +33,11 @@ pub struct ImportSettings {
 pub enum LayoutEntry {
     AllOther,
     AllOtherStatic,
-    Package { name: String, subpackages: bool, is_static: bool },
+    Package {
+        name: String,
+        subpackages: bool,
+        is_static: bool,
+    },
     Blank,
 }
 
@@ -50,8 +54,16 @@ impl Default for ImportSettings {
             layout: vec![
                 LayoutEntry::AllOther,
                 LayoutEntry::Blank,
-                LayoutEntry::Package { name: "javax".into(), subpackages: true, is_static: false },
-                LayoutEntry::Package { name: "java".into(), subpackages: true, is_static: false },
+                LayoutEntry::Package {
+                    name: "javax".into(),
+                    subpackages: true,
+                    is_static: false,
+                },
+                LayoutEntry::Package {
+                    name: "java".into(),
+                    subpackages: true,
+                    is_static: false,
+                },
                 LayoutEntry::Blank,
                 LayoutEntry::AllOtherStatic,
             ],
@@ -67,9 +79,14 @@ impl ImportSettings {
         self.exclude.iter().any(|e| {
             if let Some(star) = e.find('*') {
                 let prefix = &e[..star];
-                qualified.starts_with(prefix) && (prefix.ends_with('.') || prefix.is_empty() || qualified[prefix.len()..].starts_with('.') || star == e.len() - 1 && true)
+                qualified.starts_with(prefix)
+                    && (prefix.ends_with('.')
+                        || prefix.is_empty()
+                        || qualified[prefix.len()..].starts_with('.')
+                        || star == e.len() - 1 && true)
             } else {
-                qualified == e || (qualified.starts_with(e.as_str()) && qualified[e.len()..].starts_with('.'))
+                qualified == e
+                    || (qualified.starts_with(e.as_str()) && qualified[e.len()..].starts_with('.'))
             }
         })
     }
@@ -98,12 +115,18 @@ pub struct ImportNode {
 impl ImportNode {
     /// The text that orders the statement inside its layout entry (5.6.2 step 2).
     pub fn sort_key(&self) -> String {
-        if self.stub.on_demand { format!("{}.", self.stub.name) } else { self.stub.name.clone() }
+        if self.stub.on_demand {
+            format!("{}.", self.stub.name)
+        } else {
+            self.stub.name.clone()
+        }
     }
 }
 
 pub fn parse_imports(text: &str) -> (Vec<ImportNode>, Option<usize>) {
-    let Some(tree) = source::parse(text) else { return (Vec::new(), None) };
+    let Some(tree) = source::parse(text) else {
+        return (Vec::new(), None);
+    };
     let root = tree.root_node();
     let mut out = Vec::new();
     let mut package_end = None;
@@ -122,7 +145,9 @@ pub fn parse_imports(text: &str) -> (Vec<ImportNode>, Option<usize>) {
                     match ch.kind() {
                         "static" => is_static = true,
                         "asterisk" => on_demand = true,
-                        "identifier" | "scoped_identifier" => name = text[ch.byte_range()].split_whitespace().collect(),
+                        "identifier" | "scoped_identifier" => {
+                            name = text[ch.byte_range()].split_whitespace().collect()
+                        }
                         _ => {}
                     }
                 }
@@ -130,11 +155,25 @@ pub fn parse_imports(text: &str) -> (Vec<ImportNode>, Option<usize>) {
                 let mut leading = Vec::new();
                 for r in pending.drain(..) {
                     let gap = &text[r.end..n.start_byte()];
-                    if gap.matches('\n').count() <= 1 || out.last().is_none_or(|l: &ImportNode| l.range.end < r.start) && gap.trim().is_empty() && gap.matches('\n').count() <= 1 {
+                    if gap.matches('\n').count() <= 1
+                        || out
+                            .last()
+                            .is_none_or(|l: &ImportNode| l.range.end < r.start)
+                            && gap.trim().is_empty()
+                            && gap.matches('\n').count() <= 1
+                    {
                         leading.push(r);
                     }
                 }
-                out.push(ImportNode { stub: ImportStub { name, on_demand, is_static }, range: n.byte_range(), leading_comments: leading });
+                out.push(ImportNode {
+                    stub: ImportStub {
+                        name,
+                        on_demand,
+                        is_static,
+                    },
+                    range: n.byte_range(),
+                    leading_comments: leading,
+                });
             }
             _ => pending.clear(),
         }
@@ -147,16 +186,20 @@ pub fn entry_of(settings: &ImportSettings, stub: &ImportStub) -> usize {
     let statics_separate = settings.layout_static_imports_separately;
     let is_static = stub.is_static && statics_separate;
     // The "package" the entries match: the package of a class import, the class of a static one.
-    let subject: String = if stub.is_static {
-        stub.name.clone()
-    } else if stub.on_demand {
+    let subject: String = if stub.is_static || stub.on_demand {
         stub.name.clone()
     } else {
-        stub.name.rsplit_once('.').map(|(p, _)| p.to_string()).unwrap_or_default()
+        stub.name
+            .rsplit_once('.')
+            .map(|(p, _)| p.to_string())
+            .unwrap_or_default()
     };
     // For a single static import `a.B.m` the class is `a.B`.
     let subject = if stub.is_static && !stub.on_demand {
-        subject.rsplit_once('.').map(|(c, _)| c.to_string()).unwrap_or(subject)
+        subject
+            .rsplit_once('.')
+            .map(|(c, _)| c.to_string())
+            .unwrap_or(subject)
     } else {
         subject
     };
@@ -165,11 +208,18 @@ pub fn entry_of(settings: &ImportSettings, stub: &ImportStub) -> usize {
     let mut all_other_static = None;
     for (i, e) in settings.layout.iter().enumerate() {
         match e {
-            LayoutEntry::Package { name, subpackages, is_static: es } if *es == is_static => {
+            LayoutEntry::Package {
+                name,
+                subpackages,
+                is_static: es,
+            } if *es == is_static => {
                 let exact = subject == *name;
                 let below = *subpackages && subject.starts_with(&format!("{name}."));
                 if exact || below {
-                    let key = (u8::from(exact && !*subpackages) + u8::from(exact) , name.matches('.').count());
+                    let key = (
+                        u8::from(exact && !*subpackages) + u8::from(exact),
+                        name.matches('.').count(),
+                    );
                     if best.as_ref().is_none_or(|(_, k)| key > *k) {
                         best = Some((i, key));
                     }
@@ -236,7 +286,10 @@ pub fn minimal_edit(old: &str, new: &str) -> Option<TextEdit> {
     while !old.is_char_boundary(ob.len() - s) || !new.is_char_boundary(nb.len() - s) {
         s -= 1;
     }
-    Some(TextEdit::new(p as u32..(ob.len() - s) as u32, new[p..nb.len() - s].to_string()))
+    Some(TextEdit::new(
+        p as u32..(ob.len() - s) as u32,
+        new[p..nb.len() - s].to_string(),
+    ))
 }
 
 fn newline_of(text: &str) -> &'static str {
@@ -249,31 +302,73 @@ pub fn insert_import(text: &str, stub: &ImportStub, settings: &ImportSettings) -
     let nl = newline_of(text);
     let stmt = statement(stub);
     let entry = entry_of(settings, stub);
-    let key = if stub.on_demand { format!("{}.", stub.name) } else { stub.name.clone() };
-    let same_entry: Vec<&ImportNode> = imports.iter().filter(|i| entry_of(settings, &i.stub) == entry).collect();
+    let key = if stub.on_demand {
+        format!("{}.", stub.name)
+    } else {
+        stub.name.clone()
+    };
+    let same_entry: Vec<&ImportNode> = imports
+        .iter()
+        .filter(|i| entry_of(settings, &i.stub) == entry)
+        .collect();
     if let Some(first_greater) = same_entry.iter().find(|i| i.sort_key() > key) {
         // Before the first statement that sorts after it (with its leading comments).
-        let at = first_greater.leading_comments.first().map_or(first_greater.range.start, |r| r.start);
+        let at = first_greater
+            .leading_comments
+            .first()
+            .map_or(first_greater.range.start, |r| r.start);
         return format!("{}{}{}{}", &text[..at], stmt, nl, &text[at..]);
     }
     if let Some(last) = same_entry.last() {
-        return format!("{}{}{}{}", &text[..last.range.end], nl, stmt, &text[last.range.end..]);
+        return format!(
+            "{}{}{}{}",
+            &text[..last.range.end],
+            nl,
+            stmt,
+            &text[last.range.end..]
+        );
     }
     // Empty entry: after the previous non-empty entry, else before the next one.
-    let used: BTreeSet<usize> = imports.iter().map(|i| entry_of(settings, &i.stub)).collect();
+    let used: BTreeSet<usize> = imports
+        .iter()
+        .map(|i| entry_of(settings, &i.stub))
+        .collect();
     let prev = used.range(..entry).next_back().copied();
     let next = used.range(entry + 1..).next().copied();
     if let Some(p) = prev {
-        let last = imports.iter().filter(|i| entry_of(settings, &i.stub) == p).max_by_key(|i| i.range.end).expect("non-empty");
+        let last = imports
+            .iter()
+            .filter(|i| entry_of(settings, &i.stub) == p)
+            .max_by_key(|i| i.range.end)
+            .expect("non-empty");
         let blanks = blanks_between(settings, p, entry);
         let sep = nl.repeat(blanks + 1);
-        return format!("{}{}{}{}", &text[..last.range.end], sep, stmt, &text[last.range.end..]);
+        return format!(
+            "{}{}{}{}",
+            &text[..last.range.end],
+            sep,
+            stmt,
+            &text[last.range.end..]
+        );
     }
     if let Some(n) = next {
-        let first = imports.iter().filter(|i| entry_of(settings, &i.stub) == n).min_by_key(|i| i.range.start).expect("non-empty");
-        let at = first.leading_comments.first().map_or(first.range.start, |r| r.start);
+        let first = imports
+            .iter()
+            .filter(|i| entry_of(settings, &i.stub) == n)
+            .min_by_key(|i| i.range.start)
+            .expect("non-empty");
+        let at = first
+            .leading_comments
+            .first()
+            .map_or(first.range.start, |r| r.start);
         let blanks = blanks_between(settings, entry, n);
-        return format!("{}{}{}{}", &text[..at], stmt, nl.repeat(blanks + 1), &text[at..]);
+        return format!(
+            "{}{}{}{}",
+            &text[..at],
+            stmt,
+            nl.repeat(blanks + 1),
+            &text[at..]
+        );
     }
     // No imports at all: after the package statement, else at the top of the file.
     match package_end {
@@ -284,7 +379,10 @@ pub fn insert_import(text: &str, stub: &ImportStub, settings: &ImportSettings) -
 
 /// Removes the statement at `range` with its line.
 fn delete_statement(text: &str, node: &ImportNode) -> String {
-    let start_of = node.leading_comments.first().map_or(node.range.start, |r| r.start);
+    let start_of = node
+        .leading_comments
+        .first()
+        .map_or(node.range.start, |r| r.start);
     let line_start = text[..start_of].rfind('\n').map_or(0, |i| i + 1);
     let before_is_blank = text[line_start..start_of].trim().is_empty();
     let after = &text[node.range.end..];
@@ -303,7 +401,12 @@ pub fn delete_statement_public(text: &str, node: &ImportNode) -> String {
 
 /// Replaces the first of `nodes` by `stub` in place and deletes the others; plain insertion when
 /// there are none.
-fn collapse_into(text: &str, nodes: &[&ImportNode], stub: &ImportStub, settings: &ImportSettings) -> String {
+fn collapse_into(
+    text: &str,
+    nodes: &[&ImportNode],
+    stub: &ImportStub,
+    settings: &ImportSettings,
+) -> String {
     let Some(first) = nodes.iter().min_by_key(|n| n.range.start) else {
         return insert_import(text, stub, settings);
     };
@@ -334,51 +437,127 @@ pub struct AddOutcome {
 
 /// `import static <class>.<member>;` per 5.4.3 step 2: skip when equivalent, collapse to `.*`
 /// at the names threshold, else a single static import.
-pub fn add_static_import(text: &str, class: &str, member: &str, settings: &ImportSettings, always_on_demand: bool) -> AddOutcome {
+pub fn add_static_import(
+    text: &str,
+    class: &str,
+    member: &str,
+    settings: &ImportSettings,
+    always_on_demand: bool,
+) -> AddOutcome {
     let (imports, _) = parse_imports(text);
-    let on_demand_present = imports.iter().any(|i| i.stub.is_static && i.stub.on_demand && i.stub.name == class);
-    let single_present = imports.iter().any(|i| i.stub.is_static && !i.stub.on_demand && i.stub.name == format!("{class}.{member}"));
+    let on_demand_present = imports
+        .iter()
+        .any(|i| i.stub.is_static && i.stub.on_demand && i.stub.name == class);
+    let single_present = imports.iter().any(|i| {
+        i.stub.is_static && !i.stub.on_demand && i.stub.name == format!("{class}.{member}")
+    });
     if on_demand_present || single_present {
-        return AddOutcome { text: text.to_string(), unchanged: true };
+        return AddOutcome {
+            text: text.to_string(),
+            unchanged: true,
+        };
     }
     let same_class: Vec<&ImportNode> = imports
         .iter()
-        .filter(|i| i.stub.is_static && !i.stub.on_demand && i.stub.name.rsplit_once('.').map(|(c, _)| c) == Some(class))
+        .filter(|i| {
+            i.stub.is_static
+                && !i.stub.on_demand
+                && i.stub.name.rsplit_once('.').map(|(c, _)| c) == Some(class)
+        })
         .collect();
     let k = same_class.len();
     let collapse = always_on_demand || k + 1 >= settings.names_count_to_use_static_import_on_demand;
     if collapse {
-        let stub = ImportStub { name: class.to_string(), on_demand: true, is_static: true };
-        return AddOutcome { text: collapse_into(text, &same_class, &stub, settings), unchanged: false };
+        let stub = ImportStub {
+            name: class.to_string(),
+            on_demand: true,
+            is_static: true,
+        };
+        return AddOutcome {
+            text: collapse_into(text, &same_class, &stub, settings),
+            unchanged: false,
+        };
     }
-    let stub = ImportStub { name: format!("{class}.{member}"), on_demand: false, is_static: true };
-    AddOutcome { text: insert_import(text, &stub, settings), unchanged: false }
+    let stub = ImportStub {
+        name: format!("{class}.{member}"),
+        on_demand: false,
+        is_static: true,
+    };
+    AddOutcome {
+        text: insert_import(text, &stub, settings),
+        unchanged: false,
+    }
 }
 
 /// `import <fqn>;` for a class (5.6.3): not for `java.lang` and the own package (JAVA-IMP-044);
 /// on demand once the class-count threshold is reached or the package is always on demand.
-pub fn add_class_import(text: &str, fqn: &str, own_package: &str, settings: &ImportSettings) -> AddOutcome {
+pub fn add_class_import(
+    text: &str,
+    fqn: &str,
+    own_package: &str,
+    settings: &ImportSettings,
+) -> AddOutcome {
     let (package, _) = fqn.rsplit_once('.').unwrap_or(("", fqn));
     if package == "java.lang" || package == own_package || package.is_empty() {
-        return AddOutcome { text: text.to_string(), unchanged: true };
+        return AddOutcome {
+            text: text.to_string(),
+            unchanged: true,
+        };
     }
     let (imports, _) = parse_imports(text);
-    if imports.iter().any(|i| !i.stub.is_static && ((!i.stub.on_demand && i.stub.name == fqn) || (i.stub.on_demand && i.stub.name == package))) {
-        return AddOutcome { text: text.to_string(), unchanged: true };
+    if imports.iter().any(|i| {
+        !i.stub.is_static
+            && ((!i.stub.on_demand && i.stub.name == fqn)
+                || (i.stub.on_demand && i.stub.name == package))
+    }) {
+        return AddOutcome {
+            text: text.to_string(),
+            unchanged: true,
+        };
     }
-    let singles_from_package = imports.iter().filter(|i| !i.stub.is_static && !i.stub.on_demand && i.stub.name.rsplit_once('.').map(|(p, _)| p) == Some(package)).count();
-    let on_demand_pkg = settings.packages_to_use_import_on_demand.iter().any(|p| p == package);
-    let use_on_demand = !settings.use_single_class_imports || on_demand_pkg || singles_from_package + 1 >= settings.class_count_to_use_import_on_demand;
+    let singles_from_package = imports
+        .iter()
+        .filter(|i| {
+            !i.stub.is_static
+                && !i.stub.on_demand
+                && i.stub.name.rsplit_once('.').map(|(p, _)| p) == Some(package)
+        })
+        .count();
+    let on_demand_pkg = settings
+        .packages_to_use_import_on_demand
+        .iter()
+        .any(|p| p == package);
+    let use_on_demand = !settings.use_single_class_imports
+        || on_demand_pkg
+        || singles_from_package + 1 >= settings.class_count_to_use_import_on_demand;
     if use_on_demand {
         let nodes: Vec<&ImportNode> = imports
             .iter()
-            .filter(|i| !i.stub.is_static && !i.stub.on_demand && i.stub.name.rsplit_once('.').map(|(p, _)| p) == Some(package))
+            .filter(|i| {
+                !i.stub.is_static
+                    && !i.stub.on_demand
+                    && i.stub.name.rsplit_once('.').map(|(p, _)| p) == Some(package)
+            })
             .collect();
-        let stub = ImportStub { name: package.to_string(), on_demand: true, is_static: false };
-        return AddOutcome { text: collapse_into(text, &nodes, &stub, settings), unchanged: false };
+        let stub = ImportStub {
+            name: package.to_string(),
+            on_demand: true,
+            is_static: false,
+        };
+        return AddOutcome {
+            text: collapse_into(text, &nodes, &stub, settings),
+            unchanged: false,
+        };
     }
-    let stub = ImportStub { name: fqn.to_string(), on_demand: false, is_static: false };
-    AddOutcome { text: insert_import(text, &stub, settings), unchanged: false }
+    let stub = ImportStub {
+        name: fqn.to_string(),
+        on_demand: false,
+        is_static: false,
+    };
+    AddOutcome {
+        text: insert_import(text, &stub, settings),
+        unchanged: false,
+    }
 }
 
 // ---- Optimize Imports -----------------------------------------------------------------------
@@ -399,19 +578,37 @@ impl Optimized {
         if self.removed == 0 {
             return Some("Rearranged imports".into());
         }
-        let mut m = format!("Removed {} import{}", self.removed, if self.removed == 1 { "" } else { "s" });
+        let mut m = format!(
+            "Removed {} import{}",
+            self.removed,
+            if self.removed == 1 { "" } else { "s" }
+        );
         if self.added > 0 {
-            m.push_str(&format!(", added {} import{}", self.added, if self.added == 1 { "" } else { "s" }));
+            m.push_str(&format!(
+                ", added {} import{}",
+                self.added,
+                if self.added == 1 { "" } else { "s" }
+            ));
         }
         Some(m)
     }
 }
 
 /// Optimize Imports (JAVA-IMP-052..057). `usage` comes from the analysis of the same text.
-pub fn optimize(text: &str, usage: &Usage, own_package: &str, env: &Env<'_>, settings: &ImportSettings) -> Optimized {
+pub fn optimize(
+    text: &str,
+    usage: &Usage,
+    own_package: &str,
+    env: &Env<'_>,
+    settings: &ImportSettings,
+) -> Optimized {
     let (imports, package_end) = parse_imports(text);
     if imports.is_empty() {
-        return Optimized { text: text.to_string(), removed: 0, added: 0 };
+        return Optimized {
+            text: text.to_string(),
+            removed: 0,
+            added: 0,
+        };
     }
     let nl = newline_of(text);
     // 1. used names. Unresolved imports are kept as placeholders (JAVA-IMP-057).
@@ -423,10 +620,19 @@ pub fn optimize(text: &str, usage: &Usage, own_package: &str, env: &Env<'_>, set
     let mut placeholders: Vec<ImportStub> = Vec::new();
     for imp in &imports {
         let resolves = if imp.stub.is_static {
-            let class = if imp.stub.on_demand { imp.stub.name.clone() } else { imp.stub.name.rsplit_once('.').map(|(c, _)| c.to_string()).unwrap_or_default() };
+            let class = if imp.stub.on_demand {
+                imp.stub.name.clone()
+            } else {
+                imp.stub
+                    .name
+                    .rsplit_once('.')
+                    .map(|(c, _)| c.to_string())
+                    .unwrap_or_default()
+            };
             env.find_class(&class).ok().flatten().is_some()
         } else if imp.stub.on_demand {
-            env.package_exists(&imp.stub.name).unwrap_or(true) || env.find_class(&imp.stub.name).ok().flatten().is_some()
+            env.package_exists(&imp.stub.name).unwrap_or(true)
+                || env.find_class(&imp.stub.name).ok().flatten().is_some()
         } else {
             env.find_class(&imp.stub.name).ok().flatten().is_some()
         };
@@ -438,9 +644,18 @@ pub fn optimize(text: &str, usage: &Usage, own_package: &str, env: &Env<'_>, set
     for (i, imp) in imports.iter().enumerate() {
         let _ = i;
         if imp.stub.is_static && !imp.stub.on_demand {
-            let (class, member) = imp.stub.name.rsplit_once('.').unwrap_or(("", &imp.stub.name));
-            if usage.unresolved.contains(member) && !statics.get(class).is_some_and(|s| s.contains(member)) {
-                statics.entry(class.to_string()).or_default().insert(member.to_string());
+            let (class, member) = imp
+                .stub
+                .name
+                .rsplit_once('.')
+                .unwrap_or(("", &imp.stub.name));
+            if usage.unresolved.contains(member)
+                && !statics.get(class).is_some_and(|s| s.contains(member))
+            {
+                statics
+                    .entry(class.to_string())
+                    .or_default()
+                    .insert(member.to_string());
             }
         }
         if !imp.stub.is_static && !imp.stub.on_demand {
@@ -469,12 +684,23 @@ pub fn optimize(text: &str, usage: &Usage, own_package: &str, env: &Env<'_>, set
     // 3. on-demand decisions.
     let mut per_group: BTreeMap<(bool, String), Vec<String>> = BTreeMap::new();
     for (st, g, n) in &names {
-        per_group.entry((*st, g.clone())).or_default().push(n.clone());
+        per_group
+            .entry((*st, g.clone()))
+            .or_default()
+            .push(n.clone());
     }
     let mut on_demand: BTreeSet<(bool, String)> = BTreeSet::new();
     for ((st, g), ns) in &per_group {
-        let limit = if *st { settings.names_count_to_use_static_import_on_demand } else { settings.class_count_to_use_import_on_demand };
-        let always = !*st && settings.packages_to_use_import_on_demand.iter().any(|p| p == g);
+        let limit = if *st {
+            settings.names_count_to_use_static_import_on_demand
+        } else {
+            settings.class_count_to_use_import_on_demand
+        };
+        let always = !*st
+            && settings
+                .packages_to_use_import_on_demand
+                .iter()
+                .any(|p| p == g);
         if !settings.use_single_class_imports || ns.len() >= limit || always {
             on_demand.insert((*st, g.clone()));
         }
@@ -502,10 +728,26 @@ pub fn optimize(text: &str, usage: &Usage, own_package: &str, env: &Env<'_>, set
             continue;
         }
         for n in per_group.get(&(false, g.clone())).into_iter().flatten() {
-            let in_pkg = if own_package.is_empty() { n.clone() } else { format!("{own_package}.{n}") };
+            let in_pkg = if own_package.is_empty() {
+                n.clone()
+            } else {
+                format!("{own_package}.{n}")
+            };
             let clash_same_pkg = env.find_class(&in_pkg).ok().flatten().is_some();
-            let clash_lang = g != "java.lang" && env.find_class(&format!("java.lang.{n}")).ok().flatten().is_some();
-            let clash_other = on_demand.iter().any(|(s2, g2)| !*s2 && g2 != g && env.find_class(&format!("{g2}.{n}")).ok().flatten().is_some());
+            let clash_lang = g != "java.lang"
+                && env
+                    .find_class(&format!("java.lang.{n}"))
+                    .ok()
+                    .flatten()
+                    .is_some();
+            let clash_other = on_demand.iter().any(|(s2, g2)| {
+                !*s2 && g2 != g
+                    && env
+                        .find_class(&format!("{g2}.{n}"))
+                        .ok()
+                        .flatten()
+                        .is_some()
+            });
             // A name that is also provided by a different group in `names` (like Date from util and sql).
             let clash_used = names.iter().any(|(s2, g2, n2)| !*s2 && n2 == n && g2 != g);
             if clash_same_pkg || clash_lang || clash_other || clash_used {
@@ -516,16 +758,31 @@ pub fn optimize(text: &str, usage: &Usage, own_package: &str, env: &Env<'_>, set
     // 5. a group whose names all stayed single is not on demand.
     let mut final_stubs: Vec<ImportStub> = Vec::new();
     for ((st, g), ns) in &per_group {
-        let singles: Vec<&String> = ns.iter().filter(|n| force_single.contains(&(*st, g.clone(), (*n).clone()))).collect();
+        let singles: Vec<&String> = ns
+            .iter()
+            .filter(|n| force_single.contains(&(*st, g.clone(), (*n).clone())))
+            .collect();
         let is_on_demand = on_demand.contains(&(*st, g.clone())) && singles.len() < ns.len();
         if is_on_demand {
-            final_stubs.push(ImportStub { name: g.clone(), on_demand: true, is_static: *st });
+            final_stubs.push(ImportStub {
+                name: g.clone(),
+                on_demand: true,
+                is_static: *st,
+            });
             for n in singles {
-                final_stubs.push(ImportStub { name: format!("{g}.{n}"), on_demand: false, is_static: *st });
+                final_stubs.push(ImportStub {
+                    name: format!("{g}.{n}"),
+                    on_demand: false,
+                    is_static: *st,
+                });
             }
         } else {
             for n in ns {
-                final_stubs.push(ImportStub { name: format!("{g}.{n}"), on_demand: false, is_static: *st });
+                final_stubs.push(ImportStub {
+                    name: format!("{g}.{n}"),
+                    on_demand: false,
+                    is_static: *st,
+                });
             }
         }
     }
@@ -543,14 +800,29 @@ pub fn optimize(text: &str, usage: &Usage, own_package: &str, env: &Env<'_>, set
     let mut prev_entry: Option<usize> = None;
     // Comments attached to kept imports stay (JAVA-IMP-058).
     let comment_for = |stub: &ImportStub| -> Option<String> {
-        imports.iter().find(|i| i.stub == *stub && !i.leading_comments.is_empty()).map(|i| {
-            i.leading_comments.iter().map(|r| text[r.clone()].to_string()).collect::<Vec<_>>().join(nl)
-        })
+        imports
+            .iter()
+            .find(|i| i.stub == *stub && !i.leading_comments.is_empty())
+            .map(|i| {
+                i.leading_comments
+                    .iter()
+                    .map(|r| text[r.clone()].to_string())
+                    .collect::<Vec<_>>()
+                    .join(nl)
+            })
     };
     for (entry, mut list) in by_entry {
         list.sort_by(|a, b| {
-            let ka = if a.on_demand { format!("{}.", a.name) } else { a.name.clone() };
-            let kb = if b.on_demand { format!("{}.", b.name) } else { b.name.clone() };
+            let ka = if a.on_demand {
+                format!("{}.", a.name)
+            } else {
+                a.name.clone()
+            };
+            let kb = if b.on_demand {
+                format!("{}.", b.name)
+            } else {
+                b.name.clone()
+            };
             ka.cmp(&kb)
         });
         if let Some(p) = prev_entry {
@@ -568,7 +840,15 @@ pub fn optimize(text: &str, usage: &Usage, own_package: &str, env: &Env<'_>, set
         }
         prev_entry = Some(entry);
     }
-    let first = imports.iter().map(|i| i.leading_comments.first().map_or(i.range.start, |r| r.start)).min().unwrap_or(0);
+    let first = imports
+        .iter()
+        .map(|i| {
+            i.leading_comments
+                .first()
+                .map_or(i.range.start, |r| r.start)
+        })
+        .min()
+        .unwrap_or(0);
     let last = imports.iter().map(|i| i.range.end).max().unwrap_or(0);
     let mut new_text = if rendered.is_empty() {
         // Everything removed: drop the whole import block including one adjoining blank line.
@@ -589,12 +869,21 @@ pub fn optimize(text: &str, usage: &Usage, own_package: &str, env: &Env<'_>, set
     let old: BTreeSet<&ImportStub> = imports.iter().map(|i| &i.stub).collect();
     let (final_imports, _) = parse_imports(&new_text);
     let new: BTreeSet<&ImportStub> = final_imports.iter().map(|i| &i.stub).collect();
-    Optimized { removed: old.difference(&new).count(), added: new.difference(&old).count(), text: new_text }
+    Optimized {
+        removed: old.difference(&new).count(),
+        added: new.difference(&old).count(),
+        text: new_text,
+    }
 }
 
 /// The imports reported by the "Unused import" inspection (JAVA-IMP-070, 072, 074): not used,
 /// or from the file's own package. Empty when the analysis is not reliable (JAVA-IMP-076).
-pub fn unused_imports(text: &str, usage: &Usage, own_package: &str, env: &Env<'_>) -> Vec<ImportNode> {
+pub fn unused_imports(
+    text: &str,
+    usage: &Usage,
+    own_package: &str,
+    env: &Env<'_>,
+) -> Vec<ImportNode> {
     if usage.uncertain {
         return Vec::new();
     }
@@ -604,10 +893,22 @@ pub fn unused_imports(text: &str, usage: &Usage, own_package: &str, env: &Env<'_
         let st = &imp.stub;
         // Redundant: single or on-demand import of the file's own package.
         if !st.is_static {
-            let pkg = if st.on_demand { st.name.clone() } else { st.name.rsplit_once('.').map(|(p, _)| p.to_string()).unwrap_or_default() };
+            let pkg = if st.on_demand {
+                st.name.clone()
+            } else {
+                st.name
+                    .rsplit_once('.')
+                    .map(|(p, _)| p.to_string())
+                    .unwrap_or_default()
+            };
             if pkg == own_package && !own_package.is_empty() {
                 // A class of the own package named by a single import that is a nested class is not redundant.
-                let is_member = !st.on_demand && env.find_class(&st.name).ok().flatten().is_some_and(|h| !h.path.is_empty());
+                let is_member = !st.on_demand
+                    && env
+                        .find_class(&st.name)
+                        .ok()
+                        .flatten()
+                        .is_some_and(|h| !h.path.is_empty());
                 if !is_member {
                     out.push(imp);
                     continue;
@@ -619,7 +920,11 @@ pub fn unused_imports(text: &str, usage: &Usage, own_package: &str, env: &Env<'_
         if !used {
             // Unresolved names could belong to this import (JAVA-IMP-076).
             let short = st.name.rsplit('.').next().unwrap_or("");
-            let by_unresolved = if st.on_demand { usage.unresolved_any } else { usage.unresolved.contains(short) };
+            let by_unresolved = if st.on_demand {
+                usage.unresolved_any
+            } else {
+                usage.unresolved.contains(short)
+            };
             if !by_unresolved {
                 out.push(imp);
             }

@@ -25,8 +25,14 @@ struct Cur<'a> {
 
 impl<'a> Cur<'a> {
     fn take(&mut self, n: usize) -> Res<&'a [u8]> {
-        let end = self.at.checked_add(n).ok_or(ClassFileError::Malformed("length"))?;
-        let s = self.b.get(self.at..end).ok_or(ClassFileError::Malformed("eof"))?;
+        let end = self
+            .at
+            .checked_add(n)
+            .ok_or(ClassFileError::Malformed("length"))?;
+        let s = self
+            .b
+            .get(self.at..end)
+            .ok_or(ClassFileError::Malformed("eof"))?;
         self.at = end;
         Ok(s)
     }
@@ -343,7 +349,10 @@ fn float_text(v: f64, suffix: &str) -> String {
     if v.is_nan() {
         format!("0.0{suffix} / 0.0{suffix}")
     } else if v.is_infinite() {
-        format!("{}1.0{suffix} / 0.0{suffix}", if v < 0.0 { "-" } else { "" })
+        format!(
+            "{}1.0{suffix} / 0.0{suffix}",
+            if v < 0.0 { "-" } else { "" }
+        )
     } else if v == v.trunc() && v.abs() < 1e15 {
         format!("{v:.1}{suffix}")
     } else {
@@ -525,7 +534,6 @@ fn modifier_flags(access: u16, method: bool) -> u32 {
     f
 }
 
-
 /// Parameter names from the `LocalVariableTable` of a method's `Code` (debug info, `-g`),
 /// one per descriptor parameter; empty when absent.
 fn local_variable_names(code: &[u8], desc: &str, is_static: bool, pool: &Pool) -> Vec<String> {
@@ -622,7 +630,9 @@ pub fn parse_class(bytes: &[u8]) -> Res<Option<ParsedClass>> {
     let methods = read_members(&mut c, &pool)?;
     let attrs = read_attrs(&mut c, &pool)?;
 
-    if this.ends_with("module-info") || this.ends_with("package-info") || access & ACC_SYNTHETIC != 0
+    if this.ends_with("module-info")
+        || this.ends_with("package-info")
+        || access & ACC_SYNTHETIC != 0
     {
         return Ok(None);
     }
@@ -702,11 +712,16 @@ pub fn parse_class(bytes: &[u8]) -> Res<Option<ParsedClass>> {
         inner: Vec::new(),
         record_components: Vec::new(),
         source_file: find(&attrs, "SourceFile").map(|d| {
-            let idx = u16::from_be_bytes([d.first().copied().unwrap_or(0), d.get(1).copied().unwrap_or(0)]);
+            let idx = u16::from_be_bytes([
+                d.first().copied().unwrap_or(0),
+                d.get(1).copied().unwrap_or(0),
+            ]);
             pool.utf8(idx).to_string()
         }),
         compiled: true,
-        is_static_member: is_static_member || (is_interface || matches!(kind, ClassKind::Enum | ClassKind::Record)) && me_inner.is_some(),
+        is_static_member: is_static_member
+            || (is_interface || matches!(kind, ClassKind::Enum | ClassKind::Record))
+                && me_inner.is_some(),
     };
     // Supertypes and type parameters.
     if let Some(d) = find(&attrs, "Signature") {
@@ -753,7 +768,11 @@ pub fn parse_class(bytes: &[u8]) -> Res<Option<ParsedClass>> {
             stub.annotations.extend(annotations(d, &pool, &names));
         }
     }
-    if stub.annotations.iter().any(|a| a == "@java.lang.Deprecated") {
+    if stub
+        .annotations
+        .iter()
+        .any(|a| a == "@java.lang.Deprecated")
+    {
         stub.deprecated = true;
     }
     if let Some(d) = find(&attrs, "PermittedSubclasses") {
@@ -802,8 +821,8 @@ pub fn parse_class(bytes: &[u8]) -> Res<Option<ParsedClass>> {
                 ann.extend(annotations(d, &pool, &names));
             }
         }
-        let deprecated =
-            find(&f.attrs, "Deprecated").is_some() || ann.iter().any(|a| a == "@java.lang.Deprecated");
+        let deprecated = find(&f.attrs, "Deprecated").is_some()
+            || ann.iter().any(|a| a == "@java.lang.Deprecated");
         stub.fields.push(FieldStub {
             name: f.name.to_string(),
             flags: modifier_flags(f.access, false),
@@ -823,7 +842,11 @@ pub fn parse_class(bytes: &[u8]) -> Res<Option<ParsedClass>> {
         let is_ctor = m.name == "<init>";
         let sig_idx = find(&m.attrs, "Signature").map(|d| u16::from_be_bytes([d[0], d[1]]));
         let has_sig = sig_idx.is_some();
-        let src = if has_sig { pool.utf8(sig_idx.unwrap_or(0)) } else { m.desc };
+        let src = if has_sig {
+            pool.utf8(sig_idx.unwrap_or(0))
+        } else {
+            m.desc
+        };
         let mut p = SigParser {
             s: src.as_bytes(),
             at: 0,
@@ -872,11 +895,17 @@ pub fn parse_class(bytes: &[u8]) -> Res<Option<ParsedClass>> {
             let mut mc = Cur { b: d, at: 0 };
             if let Ok(n) = mc.u1() {
                 for _ in 0..n {
-                    let (Ok(ni), Ok(fl)) = (mc.u2(), mc.u2()) else { break };
+                    let (Ok(ni), Ok(fl)) = (mc.u2(), mc.u2()) else {
+                        break;
+                    };
                     if fl & 0x9000 != 0 {
                         continue; // synthetic or mandated
                     }
-                    given.push(if ni == 0 { String::new() } else { pool.utf8(ni).to_string() });
+                    given.push(if ni == 0 {
+                        String::new()
+                    } else {
+                        pool.utf8(ni).to_string()
+                    });
                 }
             }
         }
@@ -913,14 +942,18 @@ pub fn parse_class(bytes: &[u8]) -> Res<Option<ParsedClass>> {
                 ann.extend(annotations(d, &pool, &names));
             }
         }
-        let deprecated =
-            find(&m.attrs, "Deprecated").is_some() || ann.iter().any(|a| a == "@java.lang.Deprecated");
+        let deprecated = find(&m.attrs, "Deprecated").is_some()
+            || ann.iter().any(|a| a == "@java.lang.Deprecated");
         let mut mflags = modifier_flags(m.access, true);
         if is_interface && m.access & (ACC_ABSTRACT | ACC_STATIC | ACC_PRIVATE) == 0 {
             mflags |= flags::DEFAULT;
         }
         stub.methods.push(MethodStub {
-            name: if is_ctor { stub.name.clone() } else { m.name.to_string() },
+            name: if is_ctor {
+                stub.name.clone()
+            } else {
+                m.name.to_string()
+            },
             flags: mflags,
             type_params,
             ret: if is_ctor { None } else { Some(ret) },
@@ -945,7 +978,9 @@ pub fn parse_class(bytes: &[u8]) -> Res<Option<ParsedClass>> {
                 let len = rc.u4()? as usize;
                 let data = rc.take(len)?;
                 if an == "Signature" && data.len() >= 2 {
-                    sig = pool.utf8(u16::from_be_bytes([data[0], data[1]])).to_string();
+                    sig = pool
+                        .utf8(u16::from_be_bytes([data[0], data[1]]))
+                        .to_string();
                 }
             }
             let ty = SigParser {

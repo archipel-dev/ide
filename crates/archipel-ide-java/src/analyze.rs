@@ -12,7 +12,7 @@
 //! expression whose type is unknown. The same walk records which imports resolved a name
 //! (JAVA-RES-002) for the unused-import inspection (JAVA-IMP-070..076).
 
-use crate::env::{CurrentFile, Ctx, Env, NameRes, Res, TypeRes, Via};
+use crate::env::{Ctx, CurrentFile, Env, NameRes, Res, TypeRes, Via};
 use crate::index::ClassHit;
 use crate::source;
 use crate::stub::*;
@@ -27,9 +27,18 @@ pub const PENDING_MESSAGE: &str = "Not resolved until the project is fully loade
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProblemKind {
     /// `Cannot resolve symbol 'name'` (class, variable, field, package, import segment).
-    Symbol { name: String, class_ref: bool, annotation: bool },
+    Symbol {
+        name: String,
+        class_ref: bool,
+        annotation: bool,
+    },
     /// Call with zero candidates.
-    Method { name: String, args: Vec<Ty>, qualified: bool, call: Range<u32> },
+    Method {
+        name: String,
+        args: Vec<Ty>,
+        qualified: bool,
+        call: Range<u32>,
+    },
     /// The unresolved reference of the pending-model state.
     Pending,
 }
@@ -81,19 +90,45 @@ pub struct Analyzer<'a, 'e> {
 
 #[derive(Debug, Clone)]
 pub enum VarRes {
-    Local { type_text: Option<String>, init: Option<usize>, node_start: usize },
-    Field { owner: ClassHit, index: usize },
-    Component { owner: ClassHit, index: usize },
-    StaticImport { class: ClassHit, import: usize, ty: Option<String> },
-    NotFound { incomplete: bool },
+    Local {
+        type_text: Option<String>,
+        init: Option<usize>,
+        node_start: usize,
+    },
+    Field {
+        owner: ClassHit,
+        index: usize,
+    },
+    Component {
+        owner: ClassHit,
+        index: usize,
+    },
+    StaticImport {
+        class: ClassHit,
+        import: usize,
+        ty: Option<String>,
+    },
+    NotFound {
+        incomplete: bool,
+    },
 }
 
 fn range(n: Node<'_>) -> Range<u32> {
     n.start_byte() as u32..n.end_byte() as u32
 }
 
-pub fn analyze(env: &Env<'_>, text: &str, tree: &Tree, file: &CurrentFile, incomplete: bool) -> Analysis {
-    let lombok = file.stub.imports.iter().any(|i| i.name.starts_with("lombok"))
+pub fn analyze(
+    env: &Env<'_>,
+    text: &str,
+    tree: &Tree,
+    file: &CurrentFile,
+    incomplete: bool,
+) -> Analysis {
+    let lombok = file
+        .stub
+        .imports
+        .iter()
+        .any(|i| i.name.starts_with("lombok"))
         || text.contains("@lombok.");
     let mut a = Analyzer {
         env,
@@ -142,13 +177,21 @@ impl<'a, 'e> Analyzer<'a, 'e> {
     fn push_symbol_at(&mut self, r: Range<u32>, name: &str, class_ref: bool, annotation: bool) {
         self.unresolved(name);
         if self.incomplete {
-            self.out.problems.push(Problem { range: r, message: PENDING_MESSAGE.into(), kind: ProblemKind::Pending });
+            self.out.problems.push(Problem {
+                range: r,
+                message: PENDING_MESSAGE.into(),
+                kind: ProblemKind::Pending,
+            });
             return;
         }
         self.out.problems.push(Problem {
             range: r,
             message: format!("Cannot resolve symbol '{name}'"),
-            kind: ProblemKind::Symbol { name: name.to_string(), class_ref, annotation },
+            kind: ProblemKind::Symbol {
+                name: name.to_string(),
+                class_ref,
+                annotation,
+            },
         });
     }
 
@@ -168,8 +211,17 @@ impl<'a, 'e> Analyzer<'a, 'e> {
 
     /// A member used through static import `i`.
     fn mark_static(&mut self, i: usize, member: String) {
-        let Some(imp) = self.file.stub.imports.get(i) else { return };
-        let class = if imp.on_demand { imp.name.clone() } else { imp.name.rsplit_once('.').map(|(c, _)| c.to_string()).unwrap_or_default() };
+        let Some(imp) = self.file.stub.imports.get(i) else {
+            return;
+        };
+        let class = if imp.on_demand {
+            imp.name.clone()
+        } else {
+            imp.name
+                .rsplit_once('.')
+                .map(|(c, _)| c.to_string())
+                .unwrap_or_default()
+        };
         self.out.usage.used.insert(i);
         self.out.usage.statics.insert((class, member.clone()));
         self.out.usage.static_names.insert(member);
@@ -186,11 +238,17 @@ impl<'a, 'e> Analyzer<'a, 'e> {
     fn check_imports(&mut self) -> Res<()> {
         let root = self.tree.root_node();
         let mut cur = root.walk();
-        let nodes: Vec<Node<'_>> = root.children(&mut cur).filter(|n| n.kind() == "import_declaration").collect();
+        let nodes: Vec<Node<'_>> = root
+            .children(&mut cur)
+            .filter(|n| n.kind() == "import_declaration")
+            .collect();
         for n in nodes {
             let is_static = n.children(&mut n.walk()).any(|c| c.kind() == "static");
             let on_demand = n.children(&mut n.walk()).any(|c| c.kind() == "asterisk");
-            let Some(name) = n.children(&mut n.walk()).find(|c| matches!(c.kind(), "identifier" | "scoped_identifier")) else {
+            let Some(name) = n
+                .children(&mut n.walk())
+                .find(|c| matches!(c.kind(), "identifier" | "scoped_identifier"))
+            else {
                 continue;
             };
             let segs = scoped_segments(name);
@@ -198,7 +256,11 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 continue;
             }
             let names: Vec<String> = segs.iter().map(|s| self.txt(*s).to_string()).collect();
-            let class_segments = if is_static && !on_demand { names.len() - 1 } else { names.len() };
+            let class_segments = if is_static && !on_demand {
+                names.len() - 1
+            } else {
+                names.len()
+            };
             if on_demand && !is_static {
                 continue; // package or class on demand: not reported in this slice
             }
@@ -216,7 +278,10 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             match class_end {
                 Some(i) => {
                     // Member classes of the import (`a.B.C`): the rest must be member types.
-                    let mut h = self.env.find_class(&names[..i].join("."))?.expect("found above");
+                    let mut h = self
+                        .env
+                        .find_class(&names[..i].join("."))?
+                        .expect("found above");
                     let mut ok = true;
                     for (k, seg) in names[i..class_segments].iter().enumerate() {
                         match self.env.member_type(&h, seg)? {
@@ -233,10 +298,21 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                         let (ms, c1) = self.env.methods_named(&h, &member)?;
                         let (fs, c2, comp) = self.env.fields_named(&h, &member)?;
                         let ty = self.env.member_type(&h, &member)?;
-                        if ms.is_empty() && fs.is_empty() && !comp && ty.is_none() && c1 && c2 && !self.lombok
+                        if ms.is_empty()
+                            && fs.is_empty()
+                            && !comp
+                            && ty.is_none()
+                            && c1
+                            && c2
+                            && !self.lombok
                             && !self.env.has_synthetic_method(&h, &member)
                         {
-                            self.push_symbol(*segs.last().expect("non-empty"), &member, false, false);
+                            self.push_symbol(
+                                *segs.last().expect("non-empty"),
+                                &member,
+                                false,
+                                false,
+                            );
                         }
                     }
                 }
@@ -266,8 +342,13 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 self.javadoc(node)?;
                 return Ok(());
             }
-            "import_declaration" | "package_declaration" | "line_comment" | "string_literal"
-            | "text_block" | "character_literal" | "ERROR" => return Ok(()),
+            "import_declaration"
+            | "package_declaration"
+            | "line_comment"
+            | "string_literal"
+            | "text_block"
+            | "character_literal"
+            | "ERROR" => return Ok(()),
             "marker_annotation" | "annotation" => {
                 self.annotation(node)?;
                 // Arguments may contain references.
@@ -287,8 +368,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             "method_invocation" => return self.method_invocation(node),
             "field_access" => return self.field_access(node),
             "identifier" => {
-                if let Some(role) = self.ident_role(node) {
-                    let _ = role;
+                if self.ident_role(node).is_some() {
                     self.simple_name(node)?;
                 }
                 return Ok(());
@@ -322,10 +402,22 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         let p = n.parent()?;
         let field_of = |f: &str| p.child_by_field_name(f).is_some_and(|c| c.id() == n.id());
         let ok = match p.kind() {
-            "binary_expression" | "unary_expression" | "update_expression" | "parenthesized_expression"
-            | "ternary_expression" | "argument_list" | "array_initializer" | "return_statement"
-            | "throw_statement" | "yield_statement" | "expression_statement" | "synchronized_statement"
-            | "assert_statement" | "dimensions_expr" | "element_value_array_initializer" | "guard" => true,
+            "binary_expression"
+            | "unary_expression"
+            | "update_expression"
+            | "parenthesized_expression"
+            | "ternary_expression"
+            | "argument_list"
+            | "array_initializer"
+            | "return_statement"
+            | "throw_statement"
+            | "yield_statement"
+            | "expression_statement"
+            | "synchronized_statement"
+            | "assert_statement"
+            | "dimensions_expr"
+            | "element_value_array_initializer"
+            | "guard" => true,
             "assignment_expression" => true,
             "array_access" => true,
             "variable_declarator" | "resource" => field_of("value"),
@@ -336,9 +428,8 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             "lambda_expression" => field_of("body"),
             "field_access" => field_of("object"),
             "method_invocation" => field_of("object"),
-            "switch_expression" | "switch_statement" | "if_statement" | "while_statement" | "do_statement" => {
-                field_of("condition")
-            }
+            "switch_expression" | "switch_statement" | "if_statement" | "while_statement"
+            | "do_statement" => field_of("condition"),
             _ => false,
         };
         ok.then_some(())
@@ -351,7 +442,14 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             return Ok(());
         }
         let mut names: Vec<String> = Vec::new();
-        for tag in ["{@link ", "{@linkplain ", "{@value ", "@see ", "@throws ", "@exception "] {
+        for tag in [
+            "{@link ",
+            "{@linkplain ",
+            "{@value ",
+            "@see ",
+            "@throws ",
+            "@exception ",
+        ] {
             let mut rest = text;
             while let Some(i) = rest.find(tag) {
                 rest = &rest[i + tag.len()..];
@@ -379,7 +477,9 @@ impl<'a, 'e> Analyzer<'a, 'e> {
     }
 
     fn annotation(&mut self, n: Node<'_>) -> Res<()> {
-        let Some(name) = n.child_by_field_name("name") else { return Ok(()) };
+        let Some(name) = n.child_by_field_name("name") else {
+            return Ok(());
+        };
         let segs = scoped_segments(name);
         let names: Vec<String> = segs.iter().map(|s| self.txt(*s).to_string()).collect();
         self.resolve_type_chain(n, &segs, &names, true)
@@ -422,18 +522,24 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         for a in ancestors {
             let k = a.kind();
             let is_body_of_anon = k == "class_body"
-                && a.parent().is_some_and(|p| matches!(p.kind(), "object_creation_expression" | "enum_constant"));
+                && a.parent().is_some_and(|p| {
+                    matches!(p.kind(), "object_creation_expression" | "enum_constant")
+                });
             if kind_is_class(k) {
                 // Only the body is inside the class scope (header, modifiers and type parameters are not).
-                let in_body = a
-                    .child_by_field_name("body")
-                    .is_some_and(|b| b.start_byte() <= at.start_byte() && at.end_byte() <= b.end_byte());
+                let in_body = a.child_by_field_name("body").is_some_and(|b| {
+                    b.start_byte() <= at.start_byte() && at.end_byte() <= b.end_byte()
+                });
                 if !in_body {
                     // Keep the nesting bookkeeping consistent for nothing below this node.
                     continue;
                 }
-                let name = a.child_by_field_name("name").map(|n| self.txt(n).to_string()).unwrap_or_default();
-                if named_only && top.is_none() && a.parent().is_some_and(|p| p.kind() == "program") {
+                let name = a
+                    .child_by_field_name("name")
+                    .map(|n| self.txt(n).to_string())
+                    .unwrap_or_default();
+                if named_only && top.is_none() && a.parent().is_some_and(|p| p.kind() == "program")
+                {
                     if let Some(i) = self.file.stub.classes.iter().position(|c| c.name == name) {
                         top = Some(i);
                         chain.push(self.file.hit(i, Vec::new()));
@@ -478,7 +584,9 @@ impl<'a, 'e> Analyzer<'a, 'e> {
     }
 
     fn anonymous_base(&self, body: Node<'_>) -> String {
-        let Some(p) = body.parent() else { return "java.lang.Object".into() };
+        let Some(p) = body.parent() else {
+            return "java.lang.Object".into();
+        };
         match p.kind() {
             "object_creation_expression" => p
                 .child_by_field_name("type")
@@ -495,9 +603,21 @@ impl<'a, 'e> Analyzer<'a, 'e> {
     }
 
     fn make_local(&mut self, chain: &[ClassHit], at: Node<'_>, stub: ClassStub) -> Res<ClassHit> {
-        let top_idx = chain.first().and_then(|h| self.file.stub.classes.iter().position(|c| c.qname == h.record.class.qname)).unwrap_or(0);
+        let top_idx = chain
+            .first()
+            .and_then(|h| {
+                self.file
+                    .stub
+                    .classes
+                    .iter()
+                    .position(|c| c.qname == h.record.class.qname)
+            })
+            .unwrap_or(0);
         let mut hit = if self.file.stub.classes.is_empty() {
-            return Ok(chain.last().cloned().expect("a class encloses a local class"));
+            return Ok(chain
+                .last()
+                .cloned()
+                .expect("a class encloses a local class"));
         } else {
             self.file.hit(top_idx, Vec::new())
         };
@@ -507,10 +627,21 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             imports: &self.file.stub.imports,
             chain: chain.to_vec(),
             tparams: self.method_tparams(at),
-            file_tops: self.file.stub.classes.iter().map(|c| c.name.clone()).collect(),
+            file_tops: self
+                .file
+                .stub
+                .classes
+                .iter()
+                .map(|c| c.name.clone())
+                .collect(),
         };
         let mut supers = Vec::new();
-        let mut texts: Vec<String> = stub.extends.iter().chain(&stub.implements).cloned().collect();
+        let mut texts: Vec<String> = stub
+            .extends
+            .iter()
+            .chain(&stub.implements)
+            .cloned()
+            .collect();
         match stub.kind {
             ClassKind::Enum => texts.push("java.lang.Enum".into()),
             ClassKind::Record => texts.push("java.lang.Record".into()),
@@ -530,7 +661,10 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         if !complete {
             // Recorded as an extra pseudo-supertype that cannot be resolved: callers see the
             // incompleteness through a missing `local_supers` marker; mimic with a poisoned stub.
-            hit.local = Some(Arc::new(ClassStub { extends: stub.extends.clone(), ..stub.clone() }));
+            hit.local = Some(Arc::new(ClassStub {
+                extends: stub.extends.clone(),
+                ..stub.clone()
+            }));
             hit.local_supers = None;
             // An unresolvable supertype is found again by `supertypes`, which marks incomplete.
             return Ok(hit);
@@ -545,14 +679,18 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         let mut cur = Some(at);
         while let Some(n) = cur {
             let class_header = kind_is_class(n.kind())
-                && !n
-                    .child_by_field_name("body")
-                    .is_some_and(|b| b.start_byte() <= at.start_byte() && at.end_byte() <= b.end_byte());
-            if (matches!(n.kind(), "method_declaration" | "constructor_declaration") || class_header)
+                && !n.child_by_field_name("body").is_some_and(|b| {
+                    b.start_byte() <= at.start_byte() && at.end_byte() <= b.end_byte()
+                });
+            if (matches!(n.kind(), "method_declaration" | "constructor_declaration")
+                || class_header)
                 && let Some(tp) = n.child_by_field_name("type_parameters")
             {
                 let mut c = tp.walk();
-                for p in tp.named_children(&mut c).filter(|p| p.kind() == "type_parameter") {
+                for p in tp
+                    .named_children(&mut c)
+                    .filter(|p| p.kind() == "type_parameter")
+                {
                     if let Some(f) = p.named_child(0) {
                         out.push(self.txt(f).to_string());
                     }
@@ -581,13 +719,24 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         let mut child = at;
         let mut cur = at.parent();
         while let Some(a) = cur {
-            if matches!(a.kind(), "block" | "constructor_body" | "switch_block" | "switch_block_statement_group" | "switch_rule") {
+            if matches!(
+                a.kind(),
+                "block"
+                    | "constructor_body"
+                    | "switch_block"
+                    | "switch_block_statement_group"
+                    | "switch_rule"
+            ) {
                 let mut c = a.walk();
                 for sib in a.children(&mut c) {
                     if sib.start_byte() >= child.start_byte() {
                         break;
                     }
-                    if kind_is_class(sib.kind()) && sib.child_by_field_name("name").is_some_and(|n| self.txt(n) == name) {
+                    if kind_is_class(sib.kind())
+                        && sib
+                            .child_by_field_name("name")
+                            .is_some_and(|n| self.txt(n) == name)
+                    {
                         return true;
                     }
                 }
@@ -599,7 +748,13 @@ impl<'a, 'e> Analyzer<'a, 'e> {
     }
 
     /// Resolves a (qualified) type name; reports the first unresolved segment (JAVA-RES-005).
-    fn resolve_type_chain(&mut self, at: Node<'_>, segs: &[Node<'_>], names: &[String], annotation: bool) -> Res<()> {
+    fn resolve_type_chain(
+        &mut self,
+        at: Node<'_>,
+        segs: &[Node<'_>],
+        names: &[String],
+        annotation: bool,
+    ) -> Res<()> {
         if names.is_empty() {
             return Ok(());
         }
@@ -657,7 +812,12 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                     }
                 }
                 let at_seg = known.min(names.len() - 1);
-                self.push_symbol(segs[at_seg], &names[at_seg], at_seg + 1 == names.len(), annotation && at_seg + 1 == names.len());
+                self.push_symbol(
+                    segs[at_seg],
+                    &names[at_seg],
+                    at_seg + 1 == names.len(),
+                    annotation && at_seg + 1 == names.len(),
+                );
             }
         }
         Ok(())
@@ -702,12 +862,22 @@ impl<'a, 'e> Analyzer<'a, 'e> {
     }
 
     fn declarators(&self, decl: Node<'_>, name: &str) -> Option<VarRes> {
-        let ty = decl.child_by_field_name("type").map(|t| source::Builder { src: self.text }.compact(t));
+        let ty = decl
+            .child_by_field_name("type")
+            .map(|t| source::Builder { src: self.text }.compact(t));
         let mut c = decl.walk();
         for d in decl.children_by_field_name("declarator", &mut c) {
-            if d.child_by_field_name("name").is_some_and(|n| self.txt(n) == name) {
-                let dims = d.child_by_field_name("dimensions").map(|x| "[]".repeat(self.txt(x).matches('[').count())).unwrap_or_default();
-                let tt = ty.clone().filter(|t| t != "var").map(|t| format!("{t}{dims}"));
+            if d.child_by_field_name("name")
+                .is_some_and(|n| self.txt(n) == name)
+            {
+                let dims = d
+                    .child_by_field_name("dimensions")
+                    .map(|x| "[]".repeat(self.txt(x).matches('[').count()))
+                    .unwrap_or_default();
+                let tt = ty
+                    .clone()
+                    .filter(|t| t != "var")
+                    .map(|t| format!("{t}{dims}"));
                 return Some(VarRes::Local {
                     type_text: tt,
                     init: d.child_by_field_name("value").map(|v| v.id()),
@@ -728,7 +898,11 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         while let Some(a) = cur {
             let k = a.kind();
             match k {
-                "block" | "constructor_body" | "switch_block" | "switch_block_statement_group" | "switch_rule" => {
+                "block"
+                | "constructor_body"
+                | "switch_block"
+                | "switch_block_statement_group"
+                | "switch_rule" => {
                     let mut c = a.walk();
                     for sib in a.children(&mut c) {
                         if sib.start_byte() >= child.start_byte() {
@@ -750,82 +924,135 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                     }
                 }
                 "enhanced_for_statement" => {
-                    if a.child_by_field_name("name").is_some_and(|n| self.txt(n) == name)
-                        && a.child_by_field_name("body").is_some_and(|b| b.id() == child.id())
+                    if a.child_by_field_name("name")
+                        .is_some_and(|n| self.txt(n) == name)
+                        && a.child_by_field_name("body")
+                            .is_some_and(|b| b.id() == child.id())
                     {
-                        let t = a.child_by_field_name("type").map(|t| source::Builder { src: self.text }.compact(t)).filter(|t| t != "var");
-                        return Ok(VarRes::Local { type_text: t, init: None, node_start: a.start_byte() });
+                        let t = a
+                            .child_by_field_name("type")
+                            .map(|t| source::Builder { src: self.text }.compact(t))
+                            .filter(|t| t != "var");
+                        return Ok(VarRes::Local {
+                            type_text: t,
+                            init: None,
+                            node_start: a.start_byte(),
+                        });
                     }
                 }
                 "try_with_resources_statement" => {
                     if let Some(rs) = a.child_by_field_name("resources") {
                         let mut c = rs.walk();
                         for r in rs.named_children(&mut c).filter(|r| r.kind() == "resource") {
-                            if r.child_by_field_name("name").is_some_and(|n| self.txt(n) == name) && r.start_byte() < child.start_byte() {
-                                let t = r.child_by_field_name("type").map(|t| source::Builder { src: self.text }.compact(t)).filter(|t| t != "var");
-                                return Ok(VarRes::Local { type_text: t, init: r.child_by_field_name("value").map(|v| v.id()), node_start: r.start_byte() });
+                            if r.child_by_field_name("name")
+                                .is_some_and(|n| self.txt(n) == name)
+                                && r.start_byte() < child.start_byte()
+                            {
+                                let t = r
+                                    .child_by_field_name("type")
+                                    .map(|t| source::Builder { src: self.text }.compact(t))
+                                    .filter(|t| t != "var");
+                                return Ok(VarRes::Local {
+                                    type_text: t,
+                                    init: r.child_by_field_name("value").map(|v| v.id()),
+                                    node_start: r.start_byte(),
+                                });
                             }
                         }
                     }
                 }
                 "catch_clause" => {
                     let mut c = a.walk();
-                    for p in a.children(&mut c).filter(|p| p.kind() == "catch_formal_parameter") {
-                        if p.child_by_field_name("name").is_some_and(|n| self.txt(n) == name) {
-                            let t = p.children(&mut p.walk()).find(|x| x.kind() == "catch_type").map(|t| self.txt(t).to_string());
-                            return Ok(VarRes::Local { type_text: t.filter(|t| !t.contains('|')), init: None, node_start: p.start_byte() });
+                    for p in a
+                        .children(&mut c)
+                        .filter(|p| p.kind() == "catch_formal_parameter")
+                    {
+                        if p.child_by_field_name("name")
+                            .is_some_and(|n| self.txt(n) == name)
+                        {
+                            let t = p
+                                .children(&mut p.walk())
+                                .find(|x| x.kind() == "catch_type")
+                                .map(|t| self.txt(t).to_string());
+                            return Ok(VarRes::Local {
+                                type_text: t.filter(|t| !t.contains('|')),
+                                init: None,
+                                node_start: p.start_byte(),
+                            });
                         }
                     }
                 }
                 "lambda_expression" => {
                     if let Some(ps) = a.child_by_field_name("parameters") {
                         let found = match ps.kind() {
-                            "identifier" => (self.txt(ps) == name).then(|| None),
+                            "identifier" => (self.txt(ps) == name).then_some(None),
                             "inferred_parameters" => {
                                 let mut c = ps.walk();
                                 let hit = ps.named_children(&mut c).any(|i| self.txt(i) == name);
-                                hit.then(|| None)
+                                hit.then_some(None)
                             }
                             _ => self.param_named(ps, name).map(Some),
                         };
                         if let Some(t) = found {
-                            return Ok(VarRes::Local { type_text: t.flatten(), init: None, node_start: a.start_byte() });
+                            return Ok(VarRes::Local {
+                                type_text: t.flatten(),
+                                init: None,
+                                node_start: a.start_byte(),
+                            });
                         }
                     }
                     if self.pattern_names(a).contains(name) {
-                        return Ok(VarRes::Local { type_text: None, init: None, node_start: a.start_byte() });
+                        return Ok(VarRes::Local {
+                            type_text: None,
+                            init: None,
+                            node_start: a.start_byte(),
+                        });
                     }
                 }
                 "method_declaration" | "constructor_declaration" => {
                     if let Some(ps) = a.child_by_field_name("parameters")
                         && let Some(t) = self.param_named(ps, name)
                     {
-                        return Ok(VarRes::Local { type_text: t, init: None, node_start: a.start_byte() });
+                        return Ok(VarRes::Local {
+                            type_text: t,
+                            init: None,
+                            node_start: a.start_byte(),
+                        });
                     }
                     if self.pattern_names(a).contains(name) {
-                        return Ok(VarRes::Local { type_text: None, init: None, node_start: a.start_byte() });
+                        return Ok(VarRes::Local {
+                            type_text: None,
+                            init: None,
+                            node_start: a.start_byte(),
+                        });
                     }
                 }
-                "static_initializer" | "field_declaration" | "compact_constructor_declaration" => {
-                    if self.pattern_names(a).contains(name) {
-                        return Ok(VarRes::Local { type_text: None, init: None, node_start: a.start_byte() });
-                    }
+                "static_initializer" | "field_declaration" | "compact_constructor_declaration"
+                    if self.pattern_names(a).contains(name) =>
+                {
+                    return Ok(VarRes::Local {
+                        type_text: None,
+                        init: None,
+                        node_start: a.start_byte(),
+                    });
                 }
                 _ => {}
             }
             let is_anon_body = k == "class_body"
-                && a.parent().is_some_and(|p| matches!(p.kind(), "object_creation_expression" | "enum_constant"));
-            if kind_is_class(k) || is_anon_body {
-                if let Some(h) = chain.pop() {
-                    let (fields, complete, comp) = self.env.fields_named(&h, name)?;
-                    if let Some((owner, index)) = fields.into_iter().next() {
-                        return Ok(VarRes::Field { owner, index });
-                    }
-                    if comp {
-                        return Ok(VarRes::Component { owner: h, index: 0 });
-                    }
-                    incomplete |= !complete;
+                && a.parent().is_some_and(|p| {
+                    matches!(p.kind(), "object_creation_expression" | "enum_constant")
+                });
+            if (kind_is_class(k) || is_anon_body)
+                && let Some(h) = chain.pop()
+            {
+                let (fields, complete, comp) = self.env.fields_named(&h, name)?;
+                if let Some((owner, index)) = fields.into_iter().next() {
+                    return Ok(VarRes::Field { owner, index });
                 }
+                if comp {
+                    return Ok(VarRes::Component { owner: h, index: 0 });
+                }
+                incomplete |= !complete;
             }
             child = a;
             cur = a.parent();
@@ -837,13 +1064,19 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 continue;
             }
             if !imp.on_demand && imp.name.rsplit('.').next() == Some(name) {
-                let Some((cls, _)) = imp.name.rsplit_once('.') else { continue };
+                let Some((cls, _)) = imp.name.rsplit_once('.') else {
+                    continue;
+                };
                 match self.env.find_class(cls)? {
                     Some(h) => {
                         let (fields, _, _) = self.env.fields_named(&h, name)?;
                         if let Some((owner, idx)) = fields.into_iter().next() {
                             let ty = owner.class().fields[idx].ty.clone();
-                            return Ok(VarRes::StaticImport { class: owner, import: i, ty: Some(ty) });
+                            return Ok(VarRes::StaticImport {
+                                class: owner,
+                                import: i,
+                                ty: Some(ty),
+                            });
                         }
                     }
                     None => incomplete = true,
@@ -855,9 +1088,16 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 match self.env.find_class(&imp.name)? {
                     Some(h) => {
                         let (fields, complete, _) = self.env.fields_named(&h, name)?;
-                        if let Some((owner, idx)) = fields.into_iter().find(|(o, i)| o.class().fields[*i].flags & flags::STATIC != 0 || o.class().is_interface_like()) {
+                        if let Some((owner, idx)) = fields.into_iter().find(|(o, i)| {
+                            o.class().fields[*i].flags & flags::STATIC != 0
+                                || o.class().is_interface_like()
+                        }) {
                             let ty = owner.class().fields[idx].ty.clone();
-                            return Ok(VarRes::StaticImport { class: owner, import: i, ty: Some(ty) });
+                            return Ok(VarRes::StaticImport {
+                                class: owner,
+                                import: i,
+                                ty: Some(ty),
+                            });
                         }
                         incomplete |= !complete;
                     }
@@ -874,9 +1114,19 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         for p in params.named_children(&mut c) {
             match p.kind() {
                 "formal_parameter" | "receiver_parameter" => {
-                    if p.child_by_field_name("name").is_some_and(|n| self.txt(n) == name) {
-                        let dims = p.child_by_field_name("dimensions").map(|d| "[]".repeat(self.txt(d).matches('[').count())).unwrap_or_default();
-                        let t = p.child_by_field_name("type").map(|t| format!("{}{dims}", source::Builder { src: self.text }.compact(t))).filter(|t| t != "var");
+                    if p.child_by_field_name("name")
+                        .is_some_and(|n| self.txt(n) == name)
+                    {
+                        let dims = p
+                            .child_by_field_name("dimensions")
+                            .map(|d| "[]".repeat(self.txt(d).matches('[').count()))
+                            .unwrap_or_default();
+                        let t = p
+                            .child_by_field_name("type")
+                            .map(|t| {
+                                format!("{}{dims}", source::Builder { src: self.text }.compact(t))
+                            })
+                            .filter(|t| t != "var");
                         return Some(t);
                     }
                 }
@@ -888,7 +1138,12 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                         .and_then(|d| d.child_by_field_name("name"))
                         .is_some_and(|n| self.txt(n) == name);
                     if declared {
-                        let t = p.named_children(&mut p.walk()).find(|x| !matches!(x.kind(), "modifiers" | "variable_declarator")).map(|t| format!("{}[]", source::Builder { src: self.text }.compact(t)));
+                        let t = p
+                            .named_children(&mut p.walk())
+                            .find(|x| !matches!(x.kind(), "modifiers" | "variable_declarator"))
+                            .map(|t| {
+                                format!("{}[]", source::Builder { src: self.text }.compact(t))
+                            });
                         return Some(t);
                     }
                 }
@@ -905,7 +1160,9 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         let name = self.txt(n).to_string();
         // A leftmost qualifier may also be a type or a package; a standalone name is a variable.
         let is_qualifier = n.parent().is_some_and(|p| {
-            matches!(p.kind(), "field_access" | "method_invocation") && p.child_by_field_name("object").is_some_and(|o| o.id() == n.id())
+            matches!(p.kind(), "field_access" | "method_invocation")
+                && p.child_by_field_name("object")
+                    .is_some_and(|o| o.id() == n.id())
         });
         match self.resolve_variable(n, &name)? {
             VarRes::NotFound { incomplete } => {
@@ -948,12 +1205,16 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         let mut segs: Vec<Node<'_>> = Vec::new();
         let mut cur = n;
         loop {
-            let Some(field) = cur.child_by_field_name("field") else { return self.visit_children(n) };
+            let Some(field) = cur.child_by_field_name("field") else {
+                return self.visit_children(n);
+            };
             if field.kind() != "identifier" {
                 return self.visit_children(n); // `A.this`
             }
             segs.push(field);
-            let Some(obj) = cur.child_by_field_name("object") else { return self.visit_children(n) };
+            let Some(obj) = cur.child_by_field_name("object") else {
+                return self.visit_children(n);
+            };
             match obj.kind() {
                 "field_access" => cur = obj,
                 "identifier" => {
@@ -973,17 +1234,28 @@ impl<'a, 'e> Analyzer<'a, 'e> {
     }
 
     /// `a.b.c` where every part is a plain name. With `call` set, the last segment is a method name.
-    fn name_chain(&mut self, at: Node<'_>, segs: &[Node<'_>], call: Option<(Node<'_>, Vec<Ty>)>) -> Res<()> {
+    fn name_chain(
+        &mut self,
+        at: Node<'_>,
+        segs: &[Node<'_>],
+        call: Option<(Node<'_>, Vec<Ty>)>,
+    ) -> Res<()> {
         let names: Vec<String> = segs.iter().map(|s| self.txt(*s).to_string()).collect();
         let last_is_method = call.is_some();
-        let qual_len = if last_is_method { names.len() - 1 } else { names.len() };
+        let qual_len = if last_is_method {
+            names.len() - 1
+        } else {
+            names.len()
+        };
         // Head classification (JLS 6.5.2): variable, then type, then package.
         let head = &names[0];
         let mut cls: Option<ClassHit> = None;
         let mut next = 1;
         let mut head_ty: Option<Ty> = None;
         match self.resolve_variable(segs[0], head)? {
-            VarRes::Local { type_text, init, .. } => {
+            VarRes::Local {
+                type_text, init, ..
+            } => {
                 head_ty = Some(match type_text {
                     Some(t) => self.ty_of_text(&t, segs[0])?,
                     None => match init.and_then(|id| find_by_id(self.tree.root_node(), id)) {
@@ -998,7 +1270,11 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             }
             VarRes::Component { owner, .. } => {
                 let c = owner.class();
-                let t = c.record_components.iter().find(|p| &p.name == head).map(|p| p.ty.clone());
+                let t = c
+                    .record_components
+                    .iter()
+                    .find(|p| &p.name == head)
+                    .map(|p| p.ty.clone());
                 head_ty = Some(match t {
                     Some(t) => self.ty_in_class(&t, &owner)?,
                     None => Ty::Unknown,
@@ -1057,7 +1333,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                                 if known == 0 && qual_len == 1 && call.is_none() {
                                     // `a.b`: unknown head.
                                 }
-                                let at_seg = known.min(qual_len.saturating_sub(1).max(0));
+                                let at_seg = known.min(qual_len.saturating_sub(1));
                                 let _ = at_seg;
                                 // An unknown leftmost name is reported on the name; a known package
                                 // prefix moves the error to the next segment (JAVA-RES-027).
@@ -1121,7 +1397,14 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 (None, Some(t)) => Qualifier::Value(t.clone()),
                 _ => Qualifier::Unknown,
             };
-            self.check_qualified_call(at, call_node, segs[segs.len() - 1], &mname, &args, qualifier)?;
+            self.check_qualified_call(
+                at,
+                call_node,
+                segs[segs.len() - 1],
+                &mname,
+                &args,
+                qualifier,
+            )?;
         }
         Ok(())
     }
@@ -1145,9 +1428,15 @@ impl<'a, 'e> Analyzer<'a, 'e> {
 
     fn field_type_of(&mut self, t: &Ty, name: &str) -> Res<FieldLookup> {
         match t {
-            Ty::Array(_) => Ok(if name == "length" { FieldLookup::Found(Ty::Prim("int".into())) } else { FieldLookup::Unknown }),
+            Ty::Array(_) => Ok(if name == "length" {
+                FieldLookup::Found(Ty::Prim("int".into()))
+            } else {
+                FieldLookup::Unknown
+            }),
             Ty::Ref { fqn: Some(fqn), .. } => {
-                let Some(h) = self.env.find_class(fqn)? else { return Ok(FieldLookup::Unknown) };
+                let Some(h) = self.env.find_class(fqn)? else {
+                    return Ok(FieldLookup::Unknown);
+                };
                 let (fs, complete, comp) = self.env.fields_named(&h, name)?;
                 if let Some((owner, idx)) = fs.into_iter().next() {
                     let ft = owner.class().fields[idx].ty.clone();
@@ -1156,7 +1445,11 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 if comp {
                     return Ok(FieldLookup::Unknown);
                 }
-                Ok(if complete && !self.lombok { FieldLookup::Missing } else { FieldLookup::Unknown })
+                Ok(if complete && !self.lombok {
+                    FieldLookup::Missing
+                } else {
+                    FieldLookup::Unknown
+                })
             }
             _ => Ok(FieldLookup::Unknown),
         }
@@ -1174,7 +1467,12 @@ impl<'a, 'e> Analyzer<'a, 'e> {
 
     fn object_creation(&mut self, n: Node<'_>) -> Res<()> {
         // `outer.new Inner()`: the type is resolved relative to the outer instance: skip it.
-        let has_outer = n.child(0).is_some_and(|c| c.kind() == "object_creation_expression" || c.kind() == "identifier" || c.kind() == "field_access" || c.kind() == "method_invocation");
+        let has_outer = n.child(0).is_some_and(|c| {
+            c.kind() == "object_creation_expression"
+                || c.kind() == "identifier"
+                || c.kind() == "field_access"
+                || c.kind() == "method_invocation"
+        });
         let mut c = n.walk();
         let kids: Vec<Node<'_>> = n.children(&mut c).collect();
         for k in kids {
@@ -1187,7 +1485,9 @@ impl<'a, 'e> Analyzer<'a, 'e> {
     }
 
     fn method_invocation(&mut self, n: Node<'_>) -> Res<()> {
-        let Some(name_node) = n.child_by_field_name("name") else { return self.visit_children(n) };
+        let Some(name_node) = n.child_by_field_name("name") else {
+            return self.visit_children(n);
+        };
         let name = self.txt(name_node).to_string();
         let args_node = n.child_by_field_name("arguments");
         // Arguments are references too.
@@ -1199,7 +1499,10 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             Some(a) => {
                 let mut v = Vec::new();
                 let mut c = a.walk();
-                for arg in a.named_children(&mut c).filter(|x| !matches!(x.kind(), "line_comment" | "block_comment")) {
+                for arg in a
+                    .named_children(&mut c)
+                    .filter(|x| !matches!(x.kind(), "line_comment" | "block_comment"))
+                {
                     v.push(self.expr_ty(arg)?);
                 }
                 v
@@ -1214,7 +1517,10 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             Some(obj) => {
                 // Type arguments after the dot (`List.<String>of()`) are references.
                 let mut c = n.walk();
-                let targs: Vec<Node<'_>> = n.children(&mut c).filter(|x| x.kind() == "type_arguments").collect();
+                let targs: Vec<Node<'_>> = n
+                    .children(&mut c)
+                    .filter(|x| x.kind() == "type_arguments")
+                    .collect();
                 for t in targs {
                     self.visit(t)?;
                 }
@@ -1225,7 +1531,10 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                         let mut cur = obj;
                         let mut plain = true;
                         loop {
-                            let Some(f) = cur.child_by_field_name("field") else { plain = false; break };
+                            let Some(f) = cur.child_by_field_name("field") else {
+                                plain = false;
+                                break;
+                            };
                             if f.kind() != "identifier" {
                                 plain = false;
                                 break;
@@ -1250,21 +1559,41 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                         } else {
                             self.visit(obj)?;
                             let t = self.expr_ty(obj)?;
-                            self.check_qualified_call(n, n, name_node, &name, &args, Qualifier::Value(t))
+                            self.check_qualified_call(
+                                n,
+                                n,
+                                name_node,
+                                &name,
+                                &args,
+                                Qualifier::Value(t),
+                            )
                         }
                     }
-                    "this" | "super" => Ok(()),
+                    "super" => Ok(()),
                     _ => {
                         self.visit(obj)?;
                         let t = self.expr_ty(obj)?;
-                        self.check_qualified_call(n, n, name_node, &name, &args, Qualifier::Value(t))
+                        self.check_qualified_call(
+                            n,
+                            n,
+                            name_node,
+                            &name,
+                            &args,
+                            Qualifier::Value(t),
+                        )
                     }
                 }
             }
         }
     }
 
-    fn unqualified_call(&mut self, call: Node<'_>, name_node: Node<'_>, name: &str, args: &[Ty]) -> Res<()> {
+    fn unqualified_call(
+        &mut self,
+        call: Node<'_>,
+        name_node: Node<'_>,
+        name: &str,
+        args: &[Ty],
+    ) -> Res<()> {
         let chain = self.chain_at(call)?;
         let mut incomplete = false;
         for h in chain.iter().rev() {
@@ -1293,7 +1622,9 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                     None => incomplete = true,
                 }
             } else if imp.name.rsplit('.').next() == Some(name) {
-                let Some((cls, _)) = imp.name.rsplit_once('.') else { continue };
+                let Some((cls, _)) = imp.name.rsplit_once('.') else {
+                    continue;
+                };
                 match self.env.find_class(cls)? {
                     Some(h) => {
                         let (ms, complete) = self.env.methods_named(&h, name)?;
@@ -1319,10 +1650,21 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         Ok(())
     }
 
-    fn push_method(&mut self, call: Node<'_>, name_node: Node<'_>, name: &str, args: &[Ty], qualified: bool) {
+    fn push_method(
+        &mut self,
+        call: Node<'_>,
+        name_node: Node<'_>,
+        name: &str,
+        args: &[Ty],
+        qualified: bool,
+    ) {
         self.unresolved(name);
         if self.incomplete {
-            self.out.problems.push(Problem { range: range(name_node), message: PENDING_MESSAGE.into(), kind: ProblemKind::Pending });
+            self.out.problems.push(Problem {
+                range: range(name_node),
+                message: PENDING_MESSAGE.into(),
+                kind: ProblemKind::Pending,
+            });
             self.out.usage.uncertain = true;
             return;
         }
@@ -1330,11 +1672,24 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         self.out.problems.push(Problem {
             range: range(name_node),
             message: format!("Cannot resolve method '{name}({})'", list.join(", ")),
-            kind: ProblemKind::Method { name: name.to_string(), args: args.to_vec(), qualified, call: range(call) },
+            kind: ProblemKind::Method {
+                name: name.to_string(),
+                args: args.to_vec(),
+                qualified,
+                call: range(call),
+            },
         });
     }
 
-    fn check_qualified_call(&mut self, call: Node<'_>, _call2: Node<'_>, name_node: Node<'_>, name: &str, args: &[Ty], q: Qualifier) -> Res<()> {
+    fn check_qualified_call(
+        &mut self,
+        call: Node<'_>,
+        _call2: Node<'_>,
+        name_node: Node<'_>,
+        name: &str,
+        args: &[Ty],
+        q: Qualifier,
+    ) -> Res<()> {
         let (hit, is_type) = match &q {
             Qualifier::Class(h) => (h.clone(), true),
             Qualifier::Value(Ty::Ref { fqn: Some(fqn), .. }) => match self.env.find_class(fqn)? {
@@ -1362,7 +1717,12 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         self.out.problems.push(Problem {
             range: range(name_node),
             message,
-            kind: ProblemKind::Method { name: name.to_string(), args: args.to_vec(), qualified: true, call: range(call) },
+            kind: ProblemKind::Method {
+                name: name.to_string(),
+                args: args.to_vec(),
+                qualified: true,
+                call: range(call),
+            },
         });
         Ok(())
     }
@@ -1379,7 +1739,10 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         let base = match self.env.resolve_type_text(&parts.base, ctx)? {
             TypeRes::Class(h) => {
                 let shown = ty::display(text.trim_end_matches("[]").trim_end_matches("..."));
-                Ty::Ref { fqn: Some(h.class().qname.clone()), display: shown }
+                Ty::Ref {
+                    fqn: Some(h.class().qname.clone()),
+                    display: shown,
+                }
             }
             TypeRes::Prim(p) => Ty::Prim(p),
             TypeRes::TypeVar(v) => Ty::Var(v),
@@ -1387,7 +1750,10 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 if parts.base == "var" {
                     return Ok(Ty::Unknown);
                 }
-                Ty::Ref { fqn: None, display: ty::display(&parts.base) }
+                Ty::Ref {
+                    fqn: None,
+                    display: ty::display(&parts.base),
+                }
             }
         };
         let mut t = base;
@@ -1410,13 +1776,24 @@ impl<'a, 'e> Analyzer<'a, 'e> {
     pub fn expr_ty(&mut self, n: Node<'_>) -> Res<Ty> {
         Ok(match n.kind() {
             "string_literal" | "text_block" => Ty::string(),
-            "decimal_integer_literal" | "hex_integer_literal" | "octal_integer_literal" | "binary_integer_literal" => {
+            "decimal_integer_literal"
+            | "hex_integer_literal"
+            | "octal_integer_literal"
+            | "binary_integer_literal" => {
                 let t = self.txt(n);
-                if t.ends_with('l') || t.ends_with('L') { Ty::Prim("long".into()) } else { Ty::Prim("int".into()) }
+                if t.ends_with('l') || t.ends_with('L') {
+                    Ty::Prim("long".into())
+                } else {
+                    Ty::Prim("int".into())
+                }
             }
             "decimal_floating_point_literal" | "hex_floating_point_literal" => {
                 let t = self.txt(n);
-                if t.ends_with('f') || t.ends_with('F') { Ty::Prim("float".into()) } else { Ty::Prim("double".into()) }
+                if t.ends_with('f') || t.ends_with('F') {
+                    Ty::Prim("float".into())
+                } else {
+                    Ty::Prim("double".into())
+                }
             }
             "character_literal" => Ty::Prim("char".into()),
             "true" | "false" => Ty::Prim("boolean".into()),
@@ -1435,10 +1812,16 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             "object_creation_expression" => match n.child_by_field_name("type") {
                 Some(t) => {
                     let text = source::Builder { src: self.text }.compact(t);
-                    if text.contains("<>") { 
+                    if text.contains("<>") {
                         let base = text.replace("<>", "");
                         let t = self.ty_of_text(&base, n)?;
-                        match t { Ty::Ref { fqn, display } => Ty::Ref { fqn, display: format!("{display}") }, o => o }
+                        match t {
+                            Ty::Ref { fqn, display } => Ty::Ref {
+                                fqn,
+                                display: display.to_string(),
+                            },
+                            o => o,
+                        }
                     } else {
                         self.ty_of_text(&text, n)?
                     }
@@ -1464,12 +1847,23 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 None => Ty::Unknown,
             },
             "binary_expression" => {
-                let op = n.child_by_field_name("operator").map(|o| self.txt(o)).unwrap_or("");
+                let op = n
+                    .child_by_field_name("operator")
+                    .map(|o| self.txt(o))
+                    .unwrap_or("");
                 match op {
-                    "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||" => Ty::Prim("boolean".into()),
+                    "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||" => {
+                        Ty::Prim("boolean".into())
+                    }
                     "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" | ">>>" => {
-                        let l = match n.child_by_field_name("left") { Some(x) => self.expr_ty(x)?, None => Ty::Unknown };
-                        let r = match n.child_by_field_name("right") { Some(x) => self.expr_ty(x)?, None => Ty::Unknown };
+                        let l = match n.child_by_field_name("left") {
+                            Some(x) => self.expr_ty(x)?,
+                            None => Ty::Unknown,
+                        };
+                        let r = match n.child_by_field_name("right") {
+                            Some(x) => self.expr_ty(x)?,
+                            None => Ty::Unknown,
+                        };
                         if op == "+" && (l == Ty::string() || r == Ty::string()) {
                             Ty::string()
                         } else {
@@ -1483,19 +1877,32 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             "unary_expression" => match n.child_by_field_name("operand") {
                 Some(o) => {
                     let op = n.child(0).map(|c| self.txt(c)).unwrap_or("");
-                    if op == "!" { Ty::Prim("boolean".into()) } else { self.expr_ty(o)? }
+                    if op == "!" {
+                        Ty::Prim("boolean".into())
+                    } else {
+                        self.expr_ty(o)?
+                    }
                 }
                 None => Ty::Unknown,
             },
             "ternary_expression" => {
-                let a = match n.child_by_field_name("consequence") { Some(x) => self.expr_ty(x)?, None => Ty::Unknown };
-                let b = match n.child_by_field_name("alternative") { Some(x) => self.expr_ty(x)?, None => Ty::Unknown };
+                let a = match n.child_by_field_name("consequence") {
+                    Some(x) => self.expr_ty(x)?,
+                    None => Ty::Unknown,
+                };
+                let b = match n.child_by_field_name("alternative") {
+                    Some(x) => self.expr_ty(x)?,
+                    None => Ty::Unknown,
+                };
                 if a == b { a } else { Ty::Unknown }
             }
             "this" => {
                 let chain = self.chain_at(n)?;
                 match chain.last() {
-                    Some(h) if h.local.is_none() => Ty::Ref { fqn: Some(h.class().qname.clone()), display: h.class().name.clone() },
+                    Some(h) if h.local.is_none() => Ty::Ref {
+                        fqn: Some(h.class().qname.clone()),
+                        display: h.class().name.clone(),
+                    },
                     _ => Ty::Unknown,
                 }
             }
@@ -1509,11 +1916,22 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             "identifier" => {
                 let name = self.txt(n).to_string();
                 match self.resolve_variable(n, &name)? {
-                    VarRes::Local { type_text: Some(t), .. } => self.ty_of_text(&t, n)?,
-                    VarRes::Local { init: Some(id), type_text: None, node_start } => {
+                    VarRes::Local {
+                        type_text: Some(t), ..
+                    } => self.ty_of_text(&t, n)?,
+                    VarRes::Local {
+                        init: Some(id),
+                        type_text: None,
+                        node_start,
+                    } => {
                         // `var x = init;` (guard against self reference)
                         match find_by_id(self.tree.root_node(), id) {
-                            Some(init) if init.start_byte() != node_start && init.start_byte() < n.start_byte() => self.expr_ty(init)?,
+                            Some(init)
+                                if init.start_byte() != node_start
+                                    && init.start_byte() < n.start_byte() =>
+                            {
+                                self.expr_ty(init)?
+                            }
                             _ => Ty::Unknown,
                         }
                     }
@@ -1521,7 +1939,9 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                         let t = owner.class().fields[index].ty.clone();
                         self.ty_in_class(&t, &owner)?
                     }
-                    VarRes::StaticImport { ty: Some(t), class, .. } => self.ty_in_class(&t, &class)?,
+                    VarRes::StaticImport {
+                        ty: Some(t), class, ..
+                    } => self.ty_in_class(&t, &class)?,
                     _ => Ty::Unknown,
                 }
             }
@@ -1532,8 +1952,15 @@ impl<'a, 'e> Analyzer<'a, 'e> {
 
     /// The return type of a call when its candidates agree on it (no inference).
     fn call_ty(&mut self, n: Node<'_>) -> Res<Ty> {
-        let Some(name) = n.child_by_field_name("name").map(|x| self.txt(x).to_string()) else { return Ok(Ty::Unknown) };
-        let arity = n.child_by_field_name("arguments").map_or(0, |a| a.named_child_count());
+        let Some(name) = n
+            .child_by_field_name("name")
+            .map(|x| self.txt(x).to_string())
+        else {
+            return Ok(Ty::Unknown);
+        };
+        let arity = n
+            .child_by_field_name("arguments")
+            .map_or(0, |a| a.named_child_count());
         let hits: Vec<(ClassHit, usize)> = match n.child_by_field_name("object") {
             None => {
                 let chain = self.chain_at(n)?;
@@ -1555,7 +1982,10 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                         VarRes::NotFound { .. } => {
                             let ctx = self.ctx_at(obj)?;
                             match self.env.resolve_type_name(&oname, &ctx)? {
-                                NameRes::Class(h, _) => Ty::Ref { fqn: Some(h.class().qname.clone()), display: h.class().name.clone() },
+                                NameRes::Class(h, _) => Ty::Ref {
+                                    fqn: Some(h.class().qname.clone()),
+                                    display: h.class().name.clone(),
+                                },
                                 _ => Ty::Unknown,
                             }
                         }
@@ -1580,9 +2010,14 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 m.params.len() == arity || (m.varargs && arity + 1 >= m.params.len())
             })
             .collect();
-        let Some((h0, i0)) = fits.first() else { return Ok(Ty::Unknown) };
+        let Some((h0, i0)) = fits.first() else {
+            return Ok(Ty::Unknown);
+        };
         let ret0 = h0.class().methods[*i0].ret.clone().unwrap_or_default();
-        if !fits.iter().all(|(h, i)| h.class().methods[*i].ret.as_deref() == Some(ret0.as_str())) {
+        if !fits
+            .iter()
+            .all(|(h, i)| h.class().methods[*i].ret.as_deref() == Some(ret0.as_str()))
+        {
             return Ok(Ty::Unknown);
         }
         let m = &h0.class().methods[*i0];
@@ -1637,7 +2072,10 @@ pub fn scoped_segments(n: Node<'_>) -> Vec<Node<'_>> {
             let kids: Vec<Node<'_>> = n.named_children(&mut c).collect();
             for k in kids {
                 match k.kind() {
-                    "scoped_identifier" | "scoped_type_identifier" | "identifier" | "type_identifier" => out.extend(scoped_segments(k)),
+                    "scoped_identifier"
+                    | "scoped_type_identifier"
+                    | "identifier"
+                    | "type_identifier" => out.extend(scoped_segments(k)),
                     _ => {}
                 }
             }

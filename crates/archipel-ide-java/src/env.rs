@@ -13,6 +13,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 pub type Res<T> = Result<T, NotReady>;
+/// Fields found by name along a hierarchy: hits, completeness, component flag.
+pub type FieldsNamed = (Vec<(ClassHit, usize)>, bool, bool);
 
 /// The live state of the file being analyzed (its index entries may be stale).
 #[derive(Debug, Clone)]
@@ -28,9 +30,19 @@ impl CurrentFile {
         let records = stub
             .classes
             .iter()
-            .map(|c| Arc::new(StubRecord { package: stub.package.clone(), imports: stub.imports.clone(), class: c.clone() }))
+            .map(|c| {
+                Arc::new(StubRecord {
+                    package: stub.package.clone(),
+                    imports: stub.imports.clone(),
+                    class: c.clone(),
+                })
+            })
             .collect();
-        Self { unit, stub, records }
+        Self {
+            unit,
+            stub,
+            records,
+        }
     }
 
     pub fn unit_id(&self) -> u32 {
@@ -118,8 +130,18 @@ pub fn is_object(h: &ClassHit) -> bool {
 }
 
 impl<'a> Env<'a> {
-    pub fn new(index: &'a JavaIndex, scope: &'a ResolveScope, current: Option<&'a CurrentFile>) -> Self {
-        Self { index, scope, current, depth: Cell::new(0), supers: RefCell::new(HashMap::new()) }
+    pub fn new(
+        index: &'a JavaIndex,
+        scope: &'a ResolveScope,
+        current: Option<&'a CurrentFile>,
+    ) -> Self {
+        Self {
+            index,
+            scope,
+            current,
+            depth: Cell::new(0),
+            supers: RefCell::new(HashMap::new()),
+        }
     }
 
     fn guarded<T>(&self, default: T, f: impl FnOnce() -> Res<T>) -> Res<T> {
@@ -149,7 +171,11 @@ impl<'a> Env<'a> {
             }
         }
         let cur_unit = self.current.and_then(|c| c.unit);
-        Ok(self.index.find_classes(fqn, self.scope)?.into_iter().find(|h| Some(h.unit) != cur_unit))
+        Ok(self
+            .index
+            .find_classes(fqn, self.scope)?
+            .into_iter()
+            .find(|h| Some(h.unit) != cur_unit))
     }
 
     pub fn package_exists(&self, package: &str) -> Res<bool> {
@@ -168,10 +194,21 @@ impl<'a> Env<'a> {
         let mut chain = Vec::new();
         let record = hit.record.clone();
         let mut prefix: Vec<String> = Vec::new();
-        chain.push(ClassHit { path: Vec::new(), local: None, local_supers: None, ..hit.clone() });
+        chain.push(ClassHit {
+            path: Vec::new(),
+            local: None,
+            local_supers: None,
+            ..hit.clone()
+        });
         for name in &hit.path {
             prefix.push(name.clone());
-            chain.push(ClassHit { path: prefix.clone(), local: None, local_supers: None, record: record.clone(), ..hit.clone() });
+            chain.push(ClassHit {
+                path: prefix.clone(),
+                local: None,
+                local_supers: None,
+                record: record.clone(),
+                ..hit.clone()
+            });
         }
         if hit.local.is_some() {
             chain.push(hit.clone());
@@ -187,7 +224,10 @@ impl<'a> Env<'a> {
 
     pub fn supertypes(&self, hit: &ClassHit) -> Res<Rc<Supers>> {
         if let Some(sup) = &hit.local_supers {
-            return Ok(Rc::new(Supers { list: sup.to_vec(), complete: true }));
+            return Ok(Rc::new(Supers {
+                list: sup.to_vec(),
+                complete: true,
+            }));
         }
         let key = (hit.unit, hit.class().qname.clone());
         if hit.local.is_none()
@@ -196,7 +236,12 @@ impl<'a> Env<'a> {
             return Ok(s.clone());
         }
         let class = hit.class();
-        let mut texts: Vec<String> = class.extends.iter().chain(class.implements.iter()).cloned().collect();
+        let mut texts: Vec<String> = class
+            .extends
+            .iter()
+            .chain(class.implements.iter())
+            .cloned()
+            .collect();
         match class.kind {
             ClassKind::Enum => texts.push("java.lang.Enum".into()),
             ClassKind::Record => texts.push("java.lang.Record".into()),
@@ -210,7 +255,10 @@ impl<'a> Env<'a> {
             ctx.chain.pop();
         }
         ctx.tparams = class.type_params.iter().map(|t| t.name.clone()).collect();
-        let mut out = Supers { list: Vec::new(), complete: true };
+        let mut out = Supers {
+            list: Vec::new(),
+            complete: true,
+        };
         self.guarded((), || {
             for t in &texts {
                 match self.resolve_type_text(t, &ctx)? {
@@ -299,7 +347,7 @@ impl<'a> Env<'a> {
     }
 
     /// Fields named `name` (enum constants, record components, inherited ones), with completeness.
-    pub fn fields_named(&self, hit: &ClassHit, name: &str) -> Res<(Vec<(ClassHit, usize)>, bool, bool)> {
+    pub fn fields_named(&self, hit: &ClassHit, name: &str) -> Res<FieldsNamed> {
         let (all, complete) = self.hierarchy(hit)?;
         let mut out = Vec::new();
         let mut component = false;
@@ -321,7 +369,9 @@ impl<'a> Env<'a> {
 
     /// Resolves a simple type name in the scope walk of spec 02 section 2.3.2 and 2.5.
     pub fn resolve_type_name(&self, name: &str, ctx: &Ctx<'_>) -> Res<NameRes> {
-        self.guarded(NameRes::Incomplete, || self.resolve_type_name_inner(name, ctx))
+        self.guarded(NameRes::Incomplete, || {
+            self.resolve_type_name_inner(name, ctx)
+        })
     }
 
     fn resolve_type_name_inner(&self, name: &str, ctx: &Ctx<'_>) -> Res<NameRes> {
@@ -348,7 +398,11 @@ impl<'a> Env<'a> {
         }
         // Stage A.
         if ctx.file_tops.iter().any(|n| n == name) {
-            let fqn = if ctx.package.is_empty() { name.to_string() } else { format!("{}.{name}", ctx.package) };
+            let fqn = if ctx.package.is_empty() {
+                name.to_string()
+            } else {
+                format!("{}.{name}", ctx.package)
+            };
             if let Some(h) = self.find_class(&fqn)? {
                 return Ok(NameRes::Class(h, Via::File));
             }
@@ -366,7 +420,9 @@ impl<'a> Env<'a> {
             if !imp.is_static || imp.on_demand || imp.name.rsplit('.').next() != Some(name) {
                 continue;
             }
-            let Some((cls, _)) = imp.name.rsplit_once('.') else { continue };
+            let Some((cls, _)) = imp.name.rsplit_once('.') else {
+                continue;
+            };
             if let Some(owner) = self.find_class(cls)?
                 && let Some(m) = self.member_type(&owner, name)?
             {
@@ -374,12 +430,17 @@ impl<'a> Env<'a> {
             }
         }
         // Stage B.
-        let fqn = if ctx.package.is_empty() { name.to_string() } else { format!("{}.{name}", ctx.package) };
+        let fqn = if ctx.package.is_empty() {
+            name.to_string()
+        } else {
+            format!("{}.{name}", ctx.package)
+        };
         if let Some(h) = self.find_class(&fqn)? {
             return Ok(NameRes::Class(h, Via::Package));
         }
         for (i, imp) in ctx.imports.iter().enumerate() {
-            if imp.is_static && imp.on_demand
+            if imp.is_static
+                && imp.on_demand
                 && let Some(owner) = self.find_class(&imp.name)?
                 && let Some(m) = self.member_type(&owner, name)?
                 && m.class().flags & flags::STATIC != 0
@@ -401,9 +462,7 @@ impl<'a> Env<'a> {
                 unknown_import = true;
             }
         }
-        if let Some(h) = self.find_class(&format!("java.lang.{name}"))
-            .ok()
-            .flatten()
+        if let Some(h) = self.find_class(&format!("java.lang.{name}")).ok().flatten()
             && !found.iter().any(|(f, _)| f.qname() == h.qname())
         {
             found.push((h, Via::JavaLang));
@@ -480,7 +539,14 @@ impl<'a> Env<'a> {
     /// Whether a member with `member_flags` declared in `owner` is accessible from code in
     /// `place_package` inside the top-level class `place_top` (JLS 6.6, JAVA-RES-043);
     /// `subclass` tells whether the place is in a subclass of the owner (protected).
-    pub fn accessible(&self, owner: &ClassHit, member_flags: u32, place_package: &str, place_top: Option<&str>, subclass: bool) -> bool {
+    pub fn accessible(
+        &self,
+        owner: &ClassHit,
+        member_flags: u32,
+        place_package: &str,
+        place_top: Option<&str>,
+        subclass: bool,
+    ) -> bool {
         let owner_class = owner.class();
         let implicit_public = owner_class.is_interface_like() && member_flags & flags::PRIVATE == 0;
         if member_flags & flags::PUBLIC != 0 || implicit_public {
@@ -493,23 +559,38 @@ impl<'a> Env<'a> {
         if same_package {
             return true;
         }
-        member_flags & flags::PROTECTED != 0 && subclass && self.class_accessible(owner, place_package, place_top)
+        member_flags & flags::PROTECTED != 0
+            && subclass
+            && self.class_accessible(owner, place_package, place_top)
     }
 
-    pub fn class_accessible(&self, c: &ClassHit, place_package: &str, place_top: Option<&str>) -> bool {
+    pub fn class_accessible(
+        &self,
+        c: &ClassHit,
+        place_package: &str,
+        place_top: Option<&str>,
+    ) -> bool {
         let class = c.class();
         let outer_ok = if c.path.is_empty() {
             true
         } else {
             let mut path = c.path.clone();
             path.pop();
-            let outer = ClassHit { path, local: None, local_supers: None, ..c.clone() };
+            let outer = ClassHit {
+                path,
+                local: None,
+                local_supers: None,
+                ..c.clone()
+            };
             self.class_accessible(&outer, place_package, place_top)
         };
         if !outer_ok {
             return false;
         }
-        if c.path.is_empty() || !c.record.class.is_interface_like() || class.flags & flags::PRIVATE != 0 {
+        if c.path.is_empty()
+            || !c.record.class.is_interface_like()
+            || class.flags & flags::PRIVATE != 0
+        {
             if class.flags & flags::PRIVATE != 0 {
                 return place_top.is_some_and(|t| t == c.record.class.qname);
             }

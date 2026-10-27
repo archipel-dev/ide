@@ -88,7 +88,7 @@ member could supply a name, and no error is reported on an expression whose type
 range and kind with jdtls entries, and the setting `java.native.analysis` (Settings | Editor |
 Inspections) makes the native entry win (`Shared::native_wins`). See
 [`docs/analysis/java-differential.md`](../analysis/java-differential.md) for the differential result
-that decides the default.
+that decides the default (on, with the setting kept).
 
 The Alt+Enter rows carry `Priority::Top` (`QuickFix::priority`), so the import fix of an error under the
 caret is the first row. Several candidates open the titled chooser (`ModCommand::ChooseFrom`), shown by a

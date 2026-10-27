@@ -23,12 +23,18 @@ pub struct JavaProject {
 impl JavaProject {
     pub fn new(index: JavaIndex, model: Arc<ProjectModel>, model_loading: bool) -> Self {
         let files = Arc::new(model.file_index());
-        Self { index, model, files, model_loading }
+        Self {
+            index,
+            model,
+            files,
+            model_loading,
+        }
     }
 
     /// Whether native Java analysis applies to `path`: the file is Java code of some module.
     pub fn applies_to(&self, path: &Path) -> bool {
-        path.extension().and_then(|e| e.to_str()) == Some("java") && self.files.module_for_file(path).is_some()
+        path.extension().and_then(|e| e.to_str()) == Some("java")
+            && self.files.module_for_file(path).is_some()
     }
 
     pub fn scope_for(&self, path: &Path) -> ResolveScope {
@@ -47,7 +53,9 @@ impl JavaProject {
         let unit = self.index.unit_for_path(path);
         let current = CurrentFile::new(unit, stub);
         let env = Env::new(&self.index, &scope, Some(&current));
-        let Some(tree) = source::parse(text) else { return Analysis::default() };
+        let Some(tree) = source::parse(text) else {
+            return Analysis::default();
+        };
         let incomplete = !self.is_complete() || scope.kind == ScopeKind::Everything;
         if scope.kind == ScopeKind::Everything {
             return Analysis::default();
@@ -58,7 +66,12 @@ impl JavaProject {
 
 impl JavaProject {
     /// Like [`Self::analyze_text`] with a tree the host already parsed.
-    pub fn analyze_tree(&self, path: &Path, text: &str, tree: &tree_sitter::Tree) -> Option<(Analysis, CurrentFile, ResolveScope)> {
+    pub fn analyze_tree(
+        &self,
+        path: &Path,
+        text: &str,
+        tree: &tree_sitter::Tree,
+    ) -> Option<(Analysis, CurrentFile, ResolveScope)> {
         let scope = self.scope_for(path);
         if scope.kind == ScopeKind::Everything {
             return None;

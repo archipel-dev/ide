@@ -72,9 +72,19 @@ struct Feed {
 #[derive(Debug, Default)]
 pub struct ExternalDiagnostics {
     feed: Mutex<Feed>,
+    /// What the publisher looked at last (it skips a sync when nothing moved).
+    sync_key: Mutex<Option<u64>>,
 }
 
 impl ExternalDiagnostics {
+    /// Records the publisher's input key; false when it is the one seen last.
+    pub fn changed_since_last_sync(&self, key: u64) -> bool {
+        let mut last = self.sync_key.lock();
+        let changed = *last != Some(key);
+        *last = Some(key);
+        changed
+    }
+
     /// Replaces the entry of `path`; true when it changed.
     pub fn publish(&self, path: &Path, file: ExternalFile) -> bool {
         let mut feed = self.feed.lock();

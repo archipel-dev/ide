@@ -282,8 +282,6 @@ pub struct IdeState {
     pub(crate) tree_cache: Option<project_view::TreeCache>,
     pub(crate) problems_cache:
         std::collections::HashMap<std::path::PathBuf, problems::ActiveProblemsCache>,
-    /// Mirrors the language servers' diagnostics into the daemon.
-    pub(crate) external_sync: external_diagnostics::ExternalSync,
     pub documents: Vec<Document>,
     pub active_document: Option<usize>,
     /// The native analysis world (host, snapshots, services); synced with

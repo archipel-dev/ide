@@ -21,12 +21,6 @@ use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-/// The mirror's bookkeeping: what the last sync looked at.
-#[derive(Debug, Default)]
-pub(crate) struct ExternalSync {
-    key: Option<u64>,
-}
-
 /// An LSP diagnostic as the feed stores it. Ranges are byte offsets in the
 /// text of `document` (an empty range is widened to the neighbouring
 /// character, so it can be drawn).
@@ -85,11 +79,10 @@ impl IdeState {
             }
             hasher.finish()
         };
-        if self.external_sync.key == Some(key) {
+        let feed = service.shared().external.clone();
+        if !feed.changed_since_last_sync(key) {
             return;
         }
-        self.external_sync.key = Some(key);
-        let feed = service.shared().external.clone();
         let Some(project) = &self.project else {
             feed.retain(|_| false);
             return;

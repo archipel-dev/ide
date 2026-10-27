@@ -816,7 +816,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-tui"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "archipel-ide-actions",
  "archipel-ide-command",

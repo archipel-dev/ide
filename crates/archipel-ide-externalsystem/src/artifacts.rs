@@ -48,7 +48,8 @@ mod tests {
 
     #[test]
     fn finds_maven_layout_siblings() {
-        let root = std::env::temp_dir().join(format!("archipel-artifacts-m2-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("archipel-artifacts-m2-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let dir = root.join("org/acme/lib/1.0");
         touch(&dir.join("lib-1.0.jar"));
@@ -61,7 +62,8 @@ mod tests {
 
     #[test]
     fn finds_gradle_cache_siblings_in_other_hash_directories() {
-        let root = std::env::temp_dir().join(format!("archipel-artifacts-gr-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("archipel-artifacts-gr-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let version = root.join("modules-2/files-2.1/org.acme/lib/1.0");
         touch(&version.join("aaa/lib-1.0.jar"));

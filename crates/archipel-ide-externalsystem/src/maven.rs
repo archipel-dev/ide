@@ -46,7 +46,10 @@ impl ProjectResolver for MavenProjectResolver {
         let reactor = read_reactor(&request.root)?;
         let mut classpaths = Classpaths::default();
         let mut notes = Vec::new();
-        if reactor.iter().any(|p| p.packaging != "pom" || !p.dependencies.is_empty()) {
+        if reactor
+            .iter()
+            .any(|p| p.packaging != "pom" || !p.dependencies.is_empty())
+        {
             match resolve_classpaths(request, &reactor) {
                 Ok(found) => classpaths = found,
                 Err(ImportError::Cancelled) => return Err(ImportError::Cancelled),
@@ -116,7 +119,10 @@ pub fn parse_pom(text: &str) -> Result<Pom, String> {
     let mut execution_goals: Vec<String> = Vec::new();
     let mut execution_sources: Vec<String> = Vec::new();
     loop {
-        match reader.read_event().map_err(|e| format!("invalid POM: {e}"))? {
+        match reader
+            .read_event()
+            .map_err(|e| format!("invalid POM: {e}"))?
+        {
             Event::Start(start) => {
                 let name = String::from_utf8_lossy(start.name().as_ref()).into_owned();
                 stack.push(name);
@@ -152,7 +158,8 @@ pub fn parse_pom(text: &str) -> Result<Pom, String> {
                             pom.added_sources.extend(execution_sources.iter().cloned());
                         }
                         if execution_goals.iter().any(|g| g == "add-test-source") {
-                            pom.added_test_sources.extend(execution_sources.iter().cloned());
+                            pom.added_test_sources
+                                .extend(execution_sources.iter().cloned());
                         }
                     }
                     _ => {}
@@ -284,7 +291,8 @@ fn read_project(
     seen.push(key);
     let text = std::fs::read_to_string(&pom_file)
         .map_err(|e| ImportError::Io(format!("{}: {e}", pom_file.display())))?;
-    let pom = parse_pom(&text).map_err(|e| ImportError::Invalid(format!("{}: {e}", pom_file.display())))?;
+    let pom = parse_pom(&text)
+        .map_err(|e| ImportError::Invalid(format!("{}: {e}", pom_file.display())))?;
 
     // Build settings and properties are inherited from the reactor parent.
     let mut properties = inherited.map(|p| p.properties.clone()).unwrap_or_default();
@@ -362,7 +370,11 @@ fn read_project(
                 .unwrap_or_else(|| default.to_owned()),
         )
     };
-    let source_directory = dir_of(&pom.source_directory, parent_build.map(|b| b.0), "src/main/java");
+    let source_directory = dir_of(
+        &pom.source_directory,
+        parent_build.map(|b| b.0),
+        "src/main/java",
+    );
     let test_source_directory = dir_of(
         &pom.test_source_directory,
         parent_build.map(|b| b.1),
@@ -389,10 +401,14 @@ fn read_project(
     };
     let resources = resource_dirs(&pom.resources, "src/main/resources");
     let test_resources = resource_dirs(&pom.test_resources, "src/test/resources");
-    let language_level = ["maven.compiler.release", "maven.compiler.source", "java.version"]
-        .iter()
-        .find_map(|key| properties.get(*key))
-        .map(|v| interpolate(v, &directory_str));
+    let language_level = [
+        "maven.compiler.release",
+        "maven.compiler.source",
+        "java.version",
+    ]
+    .iter()
+    .find_map(|key| properties.get(*key))
+    .map(|v| interpolate(v, &directory_str));
 
     let project = ReactorProject {
         dir: dir.clone(),
@@ -429,12 +445,16 @@ fn read_project(
     for_children.version = out.last().map(|p| p.version.clone()).unwrap_or_default();
     if let Some(parent) = inherited {
         for_children.source_directory = pick(&pom.source_directory, Some(&parent.source_directory));
-        for_children.test_source_directory =
-            pick(&pom.test_source_directory, Some(&parent.test_source_directory));
+        for_children.test_source_directory = pick(
+            &pom.test_source_directory,
+            Some(&parent.test_source_directory),
+        );
         for_children.directory = pick(&pom.directory, Some(&parent.directory));
         for_children.output_directory = pick(&pom.output_directory, Some(&parent.output_directory));
-        for_children.test_output_directory =
-            pick(&pom.test_output_directory, Some(&parent.test_output_directory));
+        for_children.test_output_directory = pick(
+            &pom.test_output_directory,
+            Some(&parent.test_output_directory),
+        );
     }
     for module in &pom.modules {
         let child = dir.join(module);
@@ -459,7 +479,7 @@ pub struct Classpaths {
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ScopedClasspath {
-    /// `includeScope=compile`: compile, provided, system.
+    /// `-DincludeScope=compile`: compile, provided, system.
     pub compile: Vec<PathBuf>,
     /// `includeScope=runtime`: compile, runtime.
     pub runtime: Vec<PathBuf>,
@@ -506,7 +526,8 @@ fn maven_plan(
     scope: &str,
     offline: bool,
 ) -> Result<TaskPlan, ImportError> {
-    let program = Maven::program(&request.root).map_err(|e| ImportError::ToolMissing(e.to_string()))?;
+    let program =
+        Maven::program(&request.root).map_err(|e| ImportError::ToolMissing(e.to_string()))?;
     let mut args = vec!["-q".to_owned(), "--fail-at-end".to_owned(), "-B".to_owned()];
     if offline {
         args.push("-o".into());
@@ -523,8 +544,11 @@ fn maven_plan(
     args.extend([
         "dependency:build-classpath".to_owned(),
         format!("-Dmdep.outputFile={}", classpath_file(scope)),
-        format!("-Dmdep.includeScope={scope}"),
-        format!("-Dmdep.pathSeparator={}", if cfg!(windows) { ';' } else { ':' }),
+        format!("-DincludeScope={scope}"),
+        format!(
+            "-Dmdep.pathSeparator={}",
+            if cfg!(windows) { ';' } else { ':' }
+        ),
     ]);
     Ok(TaskPlan::new("Maven Sync", program, args, &request.root))
 }
@@ -631,7 +655,9 @@ fn local_repositories() -> Vec<PathBuf> {
         {
             let value = settings[start + "<localRepository>".len()..start + end].trim();
             if !value.is_empty() {
-                repos.push(PathBuf::from(value.replace("${user.home}", &home.display().to_string())));
+                repos.push(PathBuf::from(
+                    value.replace("${user.home}", &home.display().to_string()),
+                ));
             }
         }
         repos.push(home.join(".m2/repository"));
@@ -685,7 +711,14 @@ pub fn to_data_nodes(
     classpaths: &Classpaths,
     notes: &[String],
 ) -> DataNode {
-    to_data_nodes_with(root, reactor, classpaths, notes, &local_repositories(), detect_jdk())
+    to_data_nodes_with(
+        root,
+        reactor,
+        classpaths,
+        notes,
+        &local_repositories(),
+        detect_jdk(),
+    )
 }
 
 pub(crate) fn to_data_nodes_with(
@@ -739,7 +772,10 @@ pub(crate) fn to_data_nodes_with(
             }
             content.store_path(
                 T::SourceGenerated,
-                maven.directory.join("generated-sources").join("annotations"),
+                maven
+                    .directory
+                    .join("generated-sources")
+                    .join("annotations"),
             );
             content.store_path(
                 T::TestGenerated,
@@ -755,10 +791,10 @@ pub(crate) fn to_data_nodes_with(
         // Module dependencies declared in the POM (direct), then everything the classpath adds.
         let mut module_deps: Vec<(String, DependencyScope)> = Vec::new();
         for dep in &maven.dependencies {
-            let Some(target) = reactor
-                .iter()
-                .find(|p| p.artifact_id == dep.artifact_id && (dep.group_id.is_empty() || p.group_id == dep.group_id))
-            else {
+            let Some(target) = reactor.iter().find(|p| {
+                p.artifact_id == dep.artifact_id
+                    && (dep.group_id.is_empty() || p.group_id == dep.group_id)
+            }) else {
                 continue;
             };
             let scope = DependencyScope::from_id(match dep.scope.as_str() {

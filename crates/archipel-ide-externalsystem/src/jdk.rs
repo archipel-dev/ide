@@ -31,10 +31,9 @@ pub fn sdk_at(home: &Path) -> SdkData {
     SdkData {
         name: format!(
             "JDK {}",
-            version.as_deref().unwrap_or_else(|| home
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("home"))
+            version
+                .as_deref()
+                .unwrap_or_else(|| home.file_name().and_then(|n| n.to_str()).unwrap_or("home"))
         ),
         kind: SdkType::Jdk,
         home: home.to_owned(),
@@ -59,7 +58,11 @@ mod tests {
     fn reads_the_release_file() {
         let home = std::env::temp_dir().join(format!("archipel-jdk-{}", std::process::id()));
         std::fs::create_dir_all(&home).unwrap();
-        std::fs::write(home.join("release"), "IMPLEMENTOR=\"x\"\nJAVA_VERSION=\"21.0.12\"\n").unwrap();
+        std::fs::write(
+            home.join("release"),
+            "IMPLEMENTOR=\"x\"\nJAVA_VERSION=\"21.0.12\"\n",
+        )
+        .unwrap();
         let sdk = sdk_at(&home);
         assert_eq!(sdk.version.as_deref(), Some("21.0.12"));
         assert_eq!(sdk.name, "JDK 21.0.12");

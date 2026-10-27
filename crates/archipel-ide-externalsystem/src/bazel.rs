@@ -46,12 +46,20 @@ impl ProjectResolver for BazelProjectResolver {
     }
 
     fn is_build_input(&self, path: &Path) -> bool {
-        path.file_name().and_then(|n| n.to_str()).is_some_and(|name| {
-            matches!(
-                name,
-                "BUILD" | "BUILD.bazel" | "MODULE.bazel" | "WORKSPACE" | "WORKSPACE.bazel" | ".bazelrc" | ".bazelversion"
-            ) || name.ends_with(".bzl")
-        })
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|name| {
+                matches!(
+                    name,
+                    "BUILD"
+                        | "BUILD.bazel"
+                        | "MODULE.bazel"
+                        | "WORKSPACE"
+                        | "WORKSPACE.bazel"
+                        | ".bazelrc"
+                        | ".bazelversion"
+                ) || name.ends_with(".bzl")
+            })
     }
 
     fn resolve(&self, request: &ResolveRequest) -> Result<DataNode, ImportError> {
@@ -88,7 +96,11 @@ impl ProjectResolver for BazelProjectResolver {
 
 /// Jars of the `rules_jvm_external` repositories in the output base, keyed by the flat
 /// `group_artifact` name used in `@maven//:` labels.
-fn external_jars(program: &str, root: &Path, request: &ResolveRequest) -> BTreeMap<String, PathBuf> {
+fn external_jars(
+    program: &str,
+    root: &Path,
+    request: &ResolveRequest,
+) -> BTreeMap<String, PathBuf> {
     let plan = TaskPlan::new("Bazel Info", program, ["info", "output_base"], root);
     let Ok(captured) = run_plan(&plan, &request.cancel, Duration::from_secs(60)) else {
         return BTreeMap::new();
@@ -151,7 +163,13 @@ pub fn jar_key(jar: &Path) -> Option<String> {
 
 fn flat_name(text: &str) -> String {
     text.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
@@ -255,7 +273,10 @@ pub fn parse_query_xml(xml: &str) -> Result<Vec<Rule>, ImportError> {
 /// `//a/b:c` to `(a/b, c)`; `//:c` to `("", c)`; `:c` is relative to `package`.
 pub fn split_label<'a>(label: &'a str, package: &'a str) -> Option<(&'a str, &'a str)> {
     if let Some(rest) = label.strip_prefix("//") {
-        return Some(rest.split_once(':').unwrap_or((rest, rest.rsplit('/').next()?)));
+        return Some(
+            rest.split_once(':')
+                .unwrap_or((rest, rest.rsplit('/').next()?)),
+        );
     }
     label.strip_prefix(':').map(|name| (package, name))
 }
@@ -287,8 +308,12 @@ pub fn infer_source_root(workspace: &Path, file: &str) -> PathBuf {
     };
     let package = text.lines().find_map(|line| {
         let line = line.trim();
-        line.strip_prefix("package ")
-            .map(|rest| rest.trim_end_matches(';').trim().trim_matches('`').to_owned())
+        line.strip_prefix("package ").map(|rest| {
+            rest.trim_end_matches(';')
+                .trim()
+                .trim_matches('`')
+                .to_owned()
+        })
     });
     let Some(package) = package.filter(|p| !p.is_empty()) else {
         return dir;
@@ -400,7 +425,11 @@ pub fn to_data_nodes(
                         workspace.join(prefix)
                     }
                 }
-                None => workspace.join(&file).parent().unwrap_or(workspace).to_owned(),
+                None => workspace
+                    .join(&file)
+                    .parent()
+                    .unwrap_or(workspace)
+                    .to_owned(),
             };
             if !resource_roots.contains(&root) {
                 resource_roots.push(root);
@@ -413,7 +442,10 @@ pub fn to_data_nodes(
             for link in &bazel_links {
                 content.store_path(ExternalSystemSourceType::Excluded, link);
             }
-            content.store_path(ExternalSystemSourceType::Excluded, workspace.join(".archipel"));
+            content.store_path(
+                ExternalSystemSourceType::Excluded,
+                workspace.join(".archipel"),
+            );
         }
         module.add(NodeData::ContentRoot(content));
 
@@ -471,7 +503,9 @@ pub fn to_data_nodes(
     if skipped > 0 {
         project.add(NodeData::Diagnostic(DiagnosticData {
             severity: Severity::Info,
-            message: format!("Bazel: {skipped} JVM targets without sources were not imported as modules"),
+            message: format!(
+                "Bazel: {skipped} JVM targets without sources were not imported as modules"
+            ),
         }));
     }
     project

@@ -1,7 +1,9 @@
 //! The data services applied to hand-built node trees.
 
 use archipel_ide_externalsystem::*;
-use archipel_ide_projectmodel::{DependencyScope, JpsModuleSourceRootType, ModuleType, OrderEntry, SdkType};
+use archipel_ide_projectmodel::{
+    DependencyScope, JpsModuleSourceRootType, ModuleType, OrderEntry, SdkType,
+};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -37,15 +39,25 @@ fn tree() -> DataNode {
     }));
     let mut lib = LibraryData::new("Gradle: org.assertj:assertj-core:3.26.0");
     lib.binary.push("/m2/assertj-core-3.26.0.jar".into());
-    lib.source.push("/m2/assertj-core-3.26.0-sources.jar".into());
+    lib.source
+        .push("/m2/assertj-core-3.26.0-sources.jar".into());
     root.add(NodeData::Library(lib));
 
     let mut app = module(":app", "demo.app", "/w/demo/app");
     let mut content = ContentRootData::new("/w/demo/app");
-    content.store_path(ExternalSystemSourceType::Source, "/w/demo/app/src/main/java");
+    content.store_path(
+        ExternalSystemSourceType::Source,
+        "/w/demo/app/src/main/java",
+    );
     content.store_path(ExternalSystemSourceType::Test, "/w/demo/app/src/test/java");
-    content.store_path(ExternalSystemSourceType::TestResource, "/w/demo/app/src/test/resources");
-    content.store_path(ExternalSystemSourceType::SourceGenerated, "/w/demo/app/build/gen");
+    content.store_path(
+        ExternalSystemSourceType::TestResource,
+        "/w/demo/app/src/test/resources",
+    );
+    content.store_path(
+        ExternalSystemSourceType::SourceGenerated,
+        "/w/demo/app/build/gen",
+    );
     content.store_path(ExternalSystemSourceType::Excluded, "/w/demo/app/build");
     app.add(NodeData::ContentRoot(content));
     app.add(NodeData::ModuleDependency(ModuleDependencyData {
@@ -81,14 +93,23 @@ fn services_build_the_model_from_nodes() {
     let model = Arc::new(models.model);
     assert_eq!(model.name, "demo");
     assert_eq!(model.project_sdk.as_deref(), Some("JDK 21"));
-    assert!(model.sdk("JDK 21").unwrap().sources.is_empty(), "missing src.zip is not attached");
+    assert!(
+        model.sdk("JDK 21").unwrap().sources.is_empty(),
+        "missing src.zip is not attached"
+    );
     let app = model.module("demo.app").unwrap();
     assert_eq!(app.external_project.as_ref().unwrap().system, "gradle");
     assert_eq!(app.external_project.as_ref().unwrap().id, ":app");
     assert_eq!(app.language_level.as_deref(), Some("21"));
-    assert!(app.order_entries.contains(&OrderEntry::module("demo.lib", DependencyScope::Compile)));
+    assert!(
+        app.order_entries
+            .contains(&OrderEntry::module("demo.lib", DependencyScope::Compile))
+    );
     assert_eq!(
-        app.order_entries.iter().filter(|e| matches!(e, OrderEntry::Library { .. })).count(),
+        app.order_entries
+            .iter()
+            .filter(|e| matches!(e, OrderEntry::Library { .. }))
+            .count(),
         1
     );
     let library_scope = app
@@ -99,7 +120,11 @@ fn services_build_the_model_from_nodes() {
             _ => None,
         })
         .unwrap();
-    assert_eq!(library_scope, DependencyScope::Runtime, "test + runtime keeps the wider of the two that is not test");
+    assert_eq!(
+        library_scope,
+        DependencyScope::Runtime,
+        "test + runtime keeps the wider of the two that is not test"
+    );
     let types: Vec<_> = app.source_folders().map(|f| f.root_type).collect();
     assert_eq!(
         types,
@@ -113,7 +138,10 @@ fn services_build_the_model_from_nodes() {
     assert_eq!(app.excluded_folders().count(), 1);
     // The unknown library is reported, not silently dropped.
     assert!(
-        models.diagnostics.iter().any(|d| d.message.contains("missing:lib:1")),
+        models
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("missing:lib:1")),
         "{:?}",
         models.diagnostics
     );
@@ -145,9 +173,17 @@ fn two_systems_share_one_model_and_disambiguate_names() {
     let mut cargo = project(ProjectSystemId::Cargo, "native", "/w/demo");
     cargo.add_child(module("pkg-1", "demo.app", "/w/demo/native"));
     let models = ProjectDataManager::new().import_data(&[tree(), cargo]);
-    let names: Vec<_> = models.model.modules.iter().map(|m| m.name.as_str()).collect();
+    let names: Vec<_> = models
+        .model
+        .modules
+        .iter()
+        .map(|m| m.name.as_str())
+        .collect();
     assert_eq!(names, ["demo.app", "demo.lib", "demo.app (Cargo)"]);
-    assert_eq!(models.model.name, "demo", "the first project names the model");
+    assert_eq!(
+        models.model.name, "demo",
+        "the first project names the model"
+    );
 }
 
 #[test]
@@ -167,7 +203,12 @@ fn custom_services_can_be_registered() {
     let mut manager = ProjectDataManager::new();
     manager.register(Box::new(Count));
     let models = manager.import_data(&[tree()]);
-    assert!(models.diagnostics.iter().any(|d| d.message == "2 modules seen"));
+    assert!(
+        models
+            .diagnostics
+            .iter()
+            .any(|d| d.message == "2 modules seen")
+    );
 }
 
 struct FakeResolver {
@@ -205,15 +246,25 @@ fn import_pipeline_reports_failures_and_empty_projects() {
     assert!(empty.model.is_empty() && empty.systems.is_empty());
     assert_eq!(empty.model.name, "empty");
 
-    registry.register(Arc::new(FakeResolver { applicable: true, fail: true }));
+    registry.register(Arc::new(FakeResolver {
+        applicable: true,
+        fail: true,
+    }));
     let error = import_project(&registry, &manager, &request).unwrap_err();
     assert!(error.to_string().contains("no gradle"));
 
-    registry.register(Arc::new(FakeResolver { applicable: true, fail: false }));
+    registry.register(Arc::new(FakeResolver {
+        applicable: true,
+        fail: false,
+    }));
     let result = import_project(&registry, &manager, &request).unwrap();
     assert_eq!(result.systems, [ProjectSystemId::Gradle]);
     assert_eq!(result.model.modules.len(), 2);
-    assert_eq!(result.errors().count(), 1, "the failed resolver is a diagnostic");
+    assert_eq!(
+        result.errors().count(),
+        1,
+        "the failed resolver is a diagnostic"
+    );
     assert!(registry.is_build_input(&root, &root.join("build.gradle")));
     assert!(!registry.is_build_input(&root, &root.join("Other.java")));
 }
@@ -221,7 +272,10 @@ fn import_pipeline_reports_failures_and_empty_projects() {
 #[test]
 fn cancelled_imports_stop_early() {
     let mut registry = ExternalSystemRegistry::empty();
-    registry.register(Arc::new(FakeResolver { applicable: true, fail: false }));
+    registry.register(Arc::new(FakeResolver {
+        applicable: true,
+        fail: false,
+    }));
     let request = ResolveRequest::new("/w/x");
     request.cancel.cancel();
     let error = import_project(&registry, &ProjectDataManager::new(), &request).unwrap_err();

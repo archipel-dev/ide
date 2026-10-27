@@ -44,7 +44,10 @@ pub fn import_project(
     let mut first_error = None;
     for resolver in &resolvers {
         request.cancel.check()?;
-        request.progress(&format!("{}: importing", resolver.system_id().display_name()));
+        request.progress(&format!(
+            "{}: importing",
+            resolver.system_id().display_name()
+        ));
         match resolver.resolve(request) {
             Ok(tree) => {
                 systems.push(resolver.system_id());

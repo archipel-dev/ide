@@ -18,17 +18,18 @@ impl Captured {
         self.code == Some(0)
     }
 
-    /// The last lines of stderr (or stdout), for error messages.
+    /// The last lines of stderr (or stdout when stderr has nothing but JVM notices).
     pub fn tail(&self) -> String {
-        let text = if self.stderr.trim().is_empty() {
-            &self.stdout
-        } else {
-            &self.stderr
+        let useful = |text: &str| -> Vec<String> {
+            text.lines()
+                .filter(|line| !line.starts_with("Picked up ") && !line.trim().is_empty())
+                .map(str::to_owned)
+                .collect()
         };
-        let lines: Vec<&str> = text
-            .lines()
-            .filter(|line| !line.starts_with("Picked up "))
-            .collect();
+        let mut lines = useful(&self.stderr);
+        if lines.is_empty() {
+            lines = useful(&self.stdout);
+        }
         lines[lines.len().saturating_sub(12)..].join("\n")
     }
 }

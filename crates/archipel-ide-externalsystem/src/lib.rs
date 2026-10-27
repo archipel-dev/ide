@@ -13,8 +13,8 @@ pub mod bazel;
 pub mod cargo;
 mod data;
 pub mod gradle;
-pub mod jdk;
 mod import;
+pub mod jdk;
 pub mod maven;
 pub mod process;
 mod resolver;
@@ -26,6 +26,4 @@ pub use resolver::{
     CancelToken, ExternalSystemRegistry, ImportError, ImportSettings, NoProgress, ProgressListener,
     ProjectResolver, ResolveRequest,
 };
-pub use service::{
-    ImportItem, ModifiableModelsProvider, ProjectDataManager, ProjectDataService,
-};
+pub use service::{ImportItem, ModifiableModelsProvider, ProjectDataManager, ProjectDataService};

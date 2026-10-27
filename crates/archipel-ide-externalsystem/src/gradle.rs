@@ -176,9 +176,15 @@ pub fn to_data_nodes(model: &GradleModel) -> DataNode {
             .clone()
             .unwrap_or_else(|| gradle.dir.join("build"));
         content.store_path(ExternalSystemSourceType::Excluded, build_dir);
-        content.store_path(ExternalSystemSourceType::Excluded, gradle.dir.join(".gradle"));
+        content.store_path(
+            ExternalSystemSourceType::Excluded,
+            gradle.dir.join(".gradle"),
+        );
         if gradle.path == ":" {
-            content.store_path(ExternalSystemSourceType::Excluded, gradle.dir.join(".archipel"));
+            content.store_path(
+                ExternalSystemSourceType::Excluded,
+                gradle.dir.join(".archipel"),
+            );
         }
         if let NodeData::Module(data) = &mut module.data {
             data.compile_output = production_output;
@@ -295,7 +301,9 @@ type Classified<'a> = Vec<(DepKey, DependencyScope, &'a DependencyModel)>;
 
 fn classify(set: &SourceSetModel) -> Classified<'_> {
     fn keyed(deps: &[DependencyModel]) -> Vec<(DepKey, &DependencyModel)> {
-        deps.iter().filter_map(|d| key_of(d).map(|k| (k, d))).collect()
+        deps.iter()
+            .filter_map(|d| key_of(d).map(|k| (k, d)))
+            .collect()
     }
     let compile = keyed(&set.compile_classpath);
     let runtime = keyed(&set.runtime_classpath);

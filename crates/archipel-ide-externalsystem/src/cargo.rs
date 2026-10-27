@@ -38,7 +38,9 @@ impl ProjectResolver for CargoProjectResolver {
 
     fn resolve(&self, request: &ResolveRequest) -> Result<DataNode, ImportError> {
         let cargo = find_program("cargo")
-            .ok_or_else(|| ImportError::ToolMissing("Install Rust with rustup (https://rustup.rs).".into()))?
+            .ok_or_else(|| {
+                ImportError::ToolMissing("Install Rust with rustup (https://rustup.rs).".into())
+            })?
             .display()
             .to_string();
         let attempts: &[bool] = if request.settings.offline_only {
@@ -94,8 +96,7 @@ fn rust_sdk(cargo: &str, request: &ResolveRequest) -> Option<SdkData> {
             .map(|c| c.stdout.trim().to_owned())
     };
     let sysroot = PathBuf::from(run(&["--print", "sysroot"])?);
-    let version = run(&["--version"])
-        .and_then(|v| v.split_whitespace().nth(1).map(str::to_owned));
+    let version = run(&["--version"]).and_then(|v| v.split_whitespace().nth(1).map(str::to_owned));
     Some(SdkData {
         name: format!("Rust {}", version.as_deref().unwrap_or("toolchain")),
         kind: SdkType::Rust,
@@ -202,11 +203,7 @@ fn edges(node: &Node, wanted: EdgeKind) -> impl Iterator<Item = &str> {
 }
 
 /// Packages reachable from `member` starting with `first`-kind edges, then normal edges.
-fn closure<'a>(
-    nodes: &'a HashMap<&str, &'a Node>,
-    member: &str,
-    first: EdgeKind,
-) -> Vec<&'a str> {
+fn closure<'a>(nodes: &'a HashMap<&str, &'a Node>, member: &str, first: EdgeKind) -> Vec<&'a str> {
     let mut out: Vec<&str> = Vec::new();
     let mut seen: BTreeSet<&str> = BTreeSet::new();
     let mut queue: Vec<&str> = nodes
@@ -227,8 +224,11 @@ fn closure<'a>(
 }
 
 pub fn to_data_nodes(root: &Path, metadata: &Metadata, sdk: Option<SdkData>) -> DataNode {
-    let packages: HashMap<&str, &Package> =
-        metadata.packages.iter().map(|p| (p.id.as_str(), p)).collect();
+    let packages: HashMap<&str, &Package> = metadata
+        .packages
+        .iter()
+        .map(|p| (p.id.as_str(), p))
+        .collect();
     let nodes: HashMap<&str, &Node> = metadata
         .resolve
         .iter()
@@ -309,7 +309,9 @@ pub fn to_data_nodes(root: &Path, metadata: &Metadata, sdk: Option<SdkData>) -> 
                 .iter()
                 .any(|(k, p)| *k == kind && folder.starts_with(p))
             {
-                content.folders.retain(|(k, p)| !(*k == kind && p.starts_with(&folder)));
+                content
+                    .folders
+                    .retain(|(k, p)| !(*k == kind && p.starts_with(&folder)));
                 content.store_path(kind, folder);
             }
         }

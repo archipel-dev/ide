@@ -117,7 +117,10 @@ impl ProjectDataManager {
         let mut models = ModifiableModelsProvider::new();
         for project in projects {
             let NodeData::Project(data) = &project.data else {
-                models.report(Severity::Error, "resolver returned a node that is not a project");
+                models.report(
+                    Severity::Error,
+                    "resolver returned a node that is not a project",
+                );
                 continue;
             };
             let system = data.system;
@@ -269,9 +272,7 @@ impl ProjectDataService for ContentRootDataService {
                     ExternalSystemSourceType::Source => JpsModuleSourceRootType::Source,
                     ExternalSystemSourceType::Test => JpsModuleSourceRootType::TestSource,
                     ExternalSystemSourceType::Resource => JpsModuleSourceRootType::Resource,
-                    ExternalSystemSourceType::TestResource => {
-                        JpsModuleSourceRootType::TestResource
-                    }
+                    ExternalSystemSourceType::TestResource => JpsModuleSourceRootType::TestResource,
                     ExternalSystemSourceType::SourceGenerated => JpsModuleSourceRootType::Generated,
                     ExternalSystemSourceType::TestGenerated => {
                         JpsModuleSourceRootType::GeneratedTest
@@ -283,7 +284,11 @@ impl ProjectDataService for ContentRootDataService {
                 };
                 entry.add_source_folder(SourceFolder::new(path, root_type));
             }
-            match module.content_entries.iter_mut().find(|e| e.root == entry.root) {
+            match module
+                .content_entries
+                .iter_mut()
+                .find(|e| e.root == entry.root)
+            {
                 Some(existing) => {
                     for folder in entry.source_folders {
                         existing.add_source_folder(folder);
@@ -342,7 +347,9 @@ impl ProjectDataService for ModuleDependencyDataService {
             let NodeData::ModuleDependency(data) = &item.node.data else {
                 continue;
             };
-            let Some(target) = models.module_name(item.system, &data.target).map(str::to_owned)
+            let Some(target) = models
+                .module_name(item.system, &data.target)
+                .map(str::to_owned)
             else {
                 models.report(
                     Severity::Warning,
@@ -390,12 +397,15 @@ impl ProjectDataService for LibraryDependencyDataService {
                 continue;
             };
             // The same library can appear on several classpaths: the widest scope wins.
-            let existing = module.order_entries.iter_mut().find_map(|entry| match entry {
-                OrderEntry::Library { library, scope, .. } if *library == data.library => {
-                    Some(scope)
-                }
-                _ => None,
-            });
+            let existing = module
+                .order_entries
+                .iter_mut()
+                .find_map(|entry| match entry {
+                    OrderEntry::Library { library, scope, .. } if *library == data.library => {
+                        Some(scope)
+                    }
+                    _ => None,
+                });
             match existing {
                 Some(scope) => *scope = widest(*scope, data.scope),
                 None => {

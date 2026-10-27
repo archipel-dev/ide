@@ -235,7 +235,7 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
             app.dispatch("debug.stop", Value::Null);
         }
     } else {
-        let can_debug = app.commands.is_enabled("debug.start", &app.state);
+        let can_debug = app.action_enabled("debug.start");
         let color = if can_debug {
             theme::RUN_GREEN
         } else {
@@ -257,7 +257,7 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
             app.dispatch("debug.start", Value::Null);
         }
     }
-    let can_build = app.commands.is_enabled("build.project", &app.state);
+    let can_build = app.action_enabled("build.project");
     let build_tip = match &detected {
         None if app.state.project.is_some() => "No supported build system detected".to_owned(),
         _ => format!(
@@ -276,7 +276,7 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
     } else {
         "run.project"
     };
-    let can_run = app.commands.is_enabled(run_command, &app.state);
+    let can_run = app.action_enabled(run_command);
     let run_color = if can_run {
         *theme::RUN_GREEN
     } else {
@@ -385,7 +385,7 @@ fn run_widget(app: &mut IdeApp, ui: &mut egui::Ui) {
                 );
             }
             ui.separator();
-            let enabled = app.commands.is_enabled("runConfig.edit", &app.state);
+            let enabled = app.action_enabled("runConfig.edit");
             if ui
                 .add_enabled(enabled, egui::Button::new("Edit Configurations…"))
                 .clicked()

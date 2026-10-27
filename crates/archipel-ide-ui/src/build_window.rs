@@ -210,7 +210,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
             .layout(egui::Layout::top_down(egui::Align::Center)),
     );
     toolbar.spacing_mut().item_spacing.y = 2.0;
-    let rerun = app.commands.is_enabled("run.rerun", &app.state);
+    let rerun = app.action_enabled("run.rerun");
     if toolbar
         .add_enabled_ui(rerun, |ui| icons::button(ui, Icon::Rerun, "Rerun"))
         .inner
@@ -237,7 +237,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         && kind == TaskKind::Test
         && (running || !app.state.execution().runner().tests().is_empty());
     if test_mode {
-        let failed = app.commands.is_enabled("test.rerunFailed", &app.state);
+        let failed = app.action_enabled("test.rerunFailed");
         if toolbar
             .add_enabled_ui(failed, |ui| {
                 icons::button_colored(ui, Icon::Rerun, *theme::ERROR, "Rerun Failed Tests", false)
@@ -269,7 +269,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
     if icons::button(&mut toolbar, Icon::ScrollEnd, "Scroll to the End").clicked() {
         app.dispatch(scroll_end, Value::Null);
     }
-    let can_clear = app.commands.is_enabled(clear, &app.state);
+    let can_clear = app.action_enabled(clear);
     if toolbar
         .add_enabled_ui(can_clear, |ui| icons::button(ui, Icon::Close, "Clear All"))
         .inner

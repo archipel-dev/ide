@@ -8,6 +8,7 @@
 //! | [`MessageBus`], [`Topic`], [`MessageBusConnection`] | `MessageBus`, `Topic`, `MessageBusConnection` |
 //! | [`ExtensionPointName`], [`ExtensionRegistry`], [`LoadingOrder`] | `ExtensionPointName`, `ExtensionsArea`, `LoadingOrder` |
 //! | [`Disposable`], [`Disposer`] | `Disposable`, `Disposer` |
+//! | [`DataContext`], [`DataKey`], [`DataProvider`] | `DataContext`, `DataKey`, `DataProvider` |
 //!
 //! No UI toolkit appears here, and there is no global mutable state: everything hangs off an
 //! [`Application`] value.
@@ -15,6 +16,7 @@
 mod application;
 mod bus;
 mod component;
+mod data;
 mod disposer;
 mod extension;
 mod service;
@@ -24,6 +26,7 @@ pub use application::{
 };
 pub use bus::{BusSender, MessageBus, MessageBusConnection, Topic};
 pub use component::ComponentManager;
+pub use data::{Caret, DataContext, DataKey, DataProvider, keys as data_keys};
 pub use disposer::{Disposable, DisposableId, Disposed, Disposer};
 pub use extension::{ExtensionError, ExtensionPointName, ExtensionRegistry, LoadingOrder};
 pub use service::{ServiceContainer, ServiceDescriptor, ServiceError, ServiceState};

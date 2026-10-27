@@ -6,9 +6,10 @@
 //! of the workbench popups below.
 
 use crate::{IdeApp, popups, toolwindows};
-use archipel_ide_core::ToolWindow;
-use archipel_ide_core::keymap_commands::{BindingScope, command_for_action};
+use archipel_ide_actions::ActionPlace;
+use archipel_ide_core::keymap_commands::command_for_action;
 use archipel_ide_keymap::{KeyStroke, Lookup, Modifier, Modifiers, Notation, Shortcut};
+use archipel_ide_platform::data_keys;
 use eframe::egui;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -33,6 +34,9 @@ pub enum UiAction {
     NewKotlinFile,
     Push,
     Exit,
+    Copy,
+    Cut,
+    Paste,
 }
 
 pub fn ui_action(action: &str) -> Option<UiAction> {
@@ -54,8 +58,41 @@ pub fn ui_action(action: &str) -> Option<UiAction> {
         "Kotlin.NewFile" => UiAction::NewKotlinFile,
         "Vcs.Push" => UiAction::Push,
         "Exit" => UiAction::Exit,
+        "$Copy" => UiAction::Copy,
+        "$Cut" => UiAction::Cut,
+        "$Paste" => UiAction::Paste,
         _ => return None,
     })
+}
+
+/// Every reference action id the window implements itself, with its action.
+pub fn ui_action_ids() -> impl Iterator<Item = (&'static str, UiAction)> {
+    const IDS: [&str; 22] = [
+        "GotoLine",
+        "FileStructurePopup",
+        "Find",
+        "Replace",
+        "FindNext",
+        "FindPrevious",
+        "FindInPath",
+        "FindSelectionInPath",
+        "SaveAll",
+        "NewProject",
+        "WelcomeScreen.DefaultNewProjectAction",
+        "OpenFile",
+        "ManageRecentProjects",
+        "NewFile",
+        "NewDir",
+        "NewClass",
+        "Kotlin.NewFile",
+        "Vcs.Push",
+        "Exit",
+        "$Copy",
+        "$Cut",
+        "$Paste",
+    ];
+    IDS.into_iter()
+        .filter_map(|id| ui_action(id).map(|action| (id, action)))
 }
 
 /// Clipboard and selection actions that the focused editor or text field handles
@@ -183,23 +220,6 @@ impl IdeApp {
         )
     }
 
-    fn ui_action_available(&self, action: UiAction) -> bool {
-        let document = self.state.active_document.is_some();
-        match action {
-            UiAction::GotoLine | UiAction::FileStructure | UiAction::Find | UiAction::Replace => {
-                document
-            }
-            UiAction::FindNext | UiAction::FindPrevious => document && !self.find.query.is_empty(),
-            UiAction::NewFile
-            | UiAction::NewDirectory
-            | UiAction::NewJavaClass
-            | UiAction::NewKotlinFile => self.state.project.is_some(),
-            UiAction::Push => self.state.has_git(),
-            UiAction::ManageProjects => self.state.project.is_some(),
-            _ => true,
-        }
-    }
-
     pub(crate) fn run_ui_action(&mut self, action: UiAction, ctx: &egui::Context) {
         match action {
             UiAction::GotoLine => self.open_dialog(popups::Dialog::GotoLine {
@@ -252,10 +272,19 @@ impl IdeApp {
             }
             UiAction::Push => crate::push_dialog::open(self),
             UiAction::Exit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            // Clipboard actions go through the editor so the system clipboard is updated.
+            UiAction::Copy => {
+                crate::editor::handle_request(self, ctx, crate::editor::EditorRequest::Copy)
+            }
+            UiAction::Cut => {
+                crate::editor::handle_request(self, ctx, crate::editor::EditorRequest::Cut)
+            }
+            UiAction::Paste => ctx.send_viewport_cmd(egui::ViewportCommand::RequestPaste),
         }
     }
 
-    /// Runs the first applicable action; returns whether the key was handled.
+    /// Runs the first applicable action; returns whether the key was handled. Each action
+    /// decides from the context whether the key is its business (see `CommandAction::update`).
     fn run_keymap_actions(
         &mut self,
         actions: &[String],
@@ -267,103 +296,34 @@ impl IdeApp {
             if terminal_focused && !TERMINAL_ACTIONS.contains(&action.as_str()) {
                 continue;
             }
-            if let Some(ui) = ui_action(action) {
-                if self.ui_action_available(ui) {
-                    self.run_ui_action(ui, ctx);
-                    return true;
-                }
-                continue;
+            let effect = self.with_data_values(
+                |data| data.with_value(&data_keys::EDITOR_FOCUSED, editor_focused),
+                |registry, data| registry.perform(action, ActionPlace::Keymap, data),
+            );
+            if let Some(effect) = effect {
+                self.apply_effect(effect, ActionPlace::Keymap, ctx);
+                return true;
             }
-            let Some(binding) = command_for_action(action) else {
-                continue;
-            };
-            if binding.scope == BindingScope::Menu
-                || (binding.scope == BindingScope::Editor && !editor_focused)
-            {
-                continue;
-            }
-            // Diff navigation only applies while the diff tab is active; otherwise the
-            // key falls through to the next action bound to it.
-            let diff_tab = self.state.diff_active && self.state.diff.is_some();
-            if binding.command.starts_with("diff.") && !diff_tab {
-                continue;
-            }
-            let mut params = serde_json::from_str(binding.params).unwrap_or(Value::Null);
-            if binding.command == "navigate.switcher" {
-                // Ctrl+Shift+Tab walks the Switcher backwards.
-                params = serde_json::json!({"backward": ctx.input(|input| input.modifiers.shift)});
-            }
-            // Debugger keys (F7/F8/F9, ...) stay free outside a debug session.
-            if binding.command.starts_with("debug.")
-                && binding.command != "debug.start"
-                && !self.commands.is_enabled(binding.command, &self.state)
-            {
-                continue;
-            }
-            if binding.command == "navigate.declaration"
-                && self.state.android.project.is_some()
-                && self.state.resource_at_caret().is_some()
-            {
-                // `R.x.y` references resolve against the merged Android resources.
-                self.dispatch("android.resources.gotoDeclaration", Value::Null);
-            } else if binding.command == "code.showIntentions" {
-                crate::intentions_ui::reset_selection(ctx);
-                self.dispatch(binding.command, params);
-            } else if matches!(binding.command, "navigate.back" | "navigate.forward") {
-                self.dispatch(binding.command, params);
-                ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
-            } else if binding.command == "editor.close" && diff_tab {
-                self.dispatch("diff.close", Value::Null);
-            } else if binding.command == "run.project" && self.state.android.project.is_some() {
-                // Android apps run by deploying 'app' (like the toolbar Run button).
-                self.dispatch("android.app.deploy", Value::Null);
-            } else if binding.command == "toolwindow.toggle"
-                && params.get("id").and_then(Value::as_str) == Some("terminal")
-            {
-                self.toggle_tool_window(ToolWindow::Terminal);
-            } else {
-                // Disabled commands still consume the key and report why (as before).
-                self.dispatch(binding.command, params);
-            }
-            return true;
         }
         false
     }
 
-    /// Whether a menu item for `action` is enabled.
-    pub(crate) fn menu_action_enabled(&self, action: &str) -> bool {
-        if action == "$Paste" {
-            return self.state.active_document.is_some();
-        }
-        if let Some(ui) = ui_action(action) {
-            return self.ui_action_available(ui);
-        }
-        command_for_action(action)
-            .is_some_and(|binding| self.commands.is_enabled(binding.command, &self.state))
-    }
-
-    /// Runs `action` from a menu (any scope).
-    pub(crate) fn run_menu_action(&mut self, action: &str, ctx: &egui::Context) {
-        // Clipboard actions go through the editor so the system clipboard is updated.
-        match action {
-            "$Copy" => {
-                return crate::editor::handle_request(
-                    self,
-                    ctx,
-                    crate::editor::EditorRequest::Copy,
-                );
-            }
-            "$Cut" => {
-                return crate::editor::handle_request(self, ctx, crate::editor::EditorRequest::Cut);
-            }
-            "$Paste" => return ctx.send_viewport_cmd(egui::ViewportCommand::RequestPaste),
+    /// Dispatches a command that a key press started, with the window's reactions to it.
+    pub(crate) fn dispatch_from_key(
+        &mut self,
+        command: &str,
+        mut params: Value,
+        ctx: &egui::Context,
+    ) {
+        match command {
+            // Ctrl+Shift+Tab walks the Switcher backwards.
+            "navigate.switcher" => params = crate::actions::switcher_params(ctx),
+            "code.showIntentions" => crate::intentions_ui::reset_selection(ctx),
             _ => {}
         }
-        if let Some(ui) = ui_action(action) {
-            self.run_ui_action(ui, ctx);
-        } else if let Some(binding) = command_for_action(action) {
-            let params = serde_json::from_str(binding.params).unwrap_or(Value::Null);
-            self.dispatch(binding.command, params);
+        self.dispatch(command, params);
+        if matches!(command, "navigate.back" | "navigate.forward") {
+            ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
         }
     }
 

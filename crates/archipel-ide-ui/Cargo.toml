@@ -29,6 +29,7 @@ archipel-ide-gradle = { path = "../archipel-ide-gradle" }
 archipel-ide-language = { path = "../archipel-ide-language" }
 archipel-ide-lsp = { path = "../archipel-ide-lsp" }
 archipel-ide-markdown = { path = "../archipel-ide-markdown" }
+archipel-ide-platform = { path = "../archipel-ide-platform" }
 archipel-ide-plugins = { path = "../archipel-ide-plugins" }
 archipel-ide-runner = { path = "../archipel-ide-runner" }
 archipel-ide-project = { path = "../archipel-ide-project" }

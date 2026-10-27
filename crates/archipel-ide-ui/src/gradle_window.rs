@@ -218,7 +218,7 @@ fn content(app: &mut IdeApp, ui: &mut egui::Ui) {
     widgets::toolbar_row(ui, |ui| {
         ui.add_space(theme::layout::TOOLBAR_LEAD);
         ui.spacing_mut().item_spacing.x = 2.0;
-        let can_sync = app.commands.is_enabled("gradle.sync", &app.state);
+        let can_sync = app.action_enabled("gradle.sync");
         if syncing {
             ui.add_sized(
                 vec2(26.0, 26.0),
@@ -267,7 +267,7 @@ fn content(app: &mut IdeApp, ui: &mut egui::Ui) {
                 json!({"id": archipel_ide_settings::ids::GRADLE_OFFLINE, "value": !offline}),
             );
         }
-        let can_run = app.commands.is_enabled("gradle.runTask", &app.state);
+        let can_run = app.action_enabled("gradle.runTask");
         if ui
             .add_enabled_ui(can_run, |ui| {
                 icons::button(ui, Icon::Structure, "Analyze Dependencies")
@@ -422,7 +422,7 @@ fn empty_state(app: &mut IdeApp, ui: &mut egui::Ui, syncing: bool) {
             );
         }
         ui.add_space(6.0);
-        let enabled = app.commands.is_enabled("gradle.sync", &app.state);
+        let enabled = app.action_enabled("gradle.sync");
         if ui
             .add_enabled(enabled, egui::Button::new("Sync All Gradle Projects"))
             .clicked()

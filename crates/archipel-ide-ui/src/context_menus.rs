@@ -7,7 +7,7 @@
 //! mutable access to the app; the chosen action runs afterwards.
 
 use crate::{IdeApp, keybindings, popups::Dialog};
-use archipel_ide_actions::{Catalog, MenuItem, filter_menu};
+use archipel_ide_actions::{ActionPlace, Catalog, MenuItem, filter_menu};
 use archipel_ide_core::project_view::DirMark;
 use eframe::egui;
 use serde_json::json;
@@ -36,22 +36,6 @@ impl Target {
         }
     }
 }
-
-/// Actions that only make sense for a target (they act on its path or tab).
-const TARGET_ACTIONS: [&str; 12] = [
-    "RenameElement",
-    "$Delete",
-    "CopyAbsolutePath",
-    "CopyFileName",
-    "CopyContentRootPath",
-    "ProjectViewEditSource",
-    "$Paste",
-    "CloseContent",
-    "CloseAllEditorsButActive",
-    "CloseAllEditors",
-    "CloseAllToTheLeft",
-    "CloseAllToTheRight",
-];
 
 fn applies(action: &str, target: &Target) -> bool {
     match target {
@@ -83,7 +67,8 @@ fn applies(action: &str, target: &Target) -> bool {
         }
         Target::Editor => {
             action == "$Paste"
-                || (!TARGET_ACTIONS.contains(&action) && keybindings::is_implemented(action))
+                || (!crate::actions::is_target_action(action)
+                    && keybindings::is_implemented(action))
         }
         Target::Tab(_) => matches!(
             action,
@@ -241,36 +226,6 @@ impl IdeApp {
         tidy_separators(items);
     }
 
-    fn context_action_enabled(&self, action: &str, target: &Target) -> bool {
-        let documents = self.state.documents.len();
-        match (action, target) {
-            ("$Paste", Target::Tree { .. }) => self.state.project_view.clipboard.is_some(),
-            ("LocalHistory", _) => false,
-            (id, Target::Tree { .. }) if id.starts_with("jt.") => true,
-            ("$Paste", Target::Editor) => self.state.active_document.is_some(),
-            ("CloseAllEditorsButActive", Target::Tab(_)) => documents > 1,
-            ("CloseAllToTheLeft", Target::Tab(index)) => *index > 0,
-            ("CloseAllToTheRight", Target::Tab(index)) => index + 1 < documents,
-            (
-                "CloseAllEditors"
-                | "CloseAllUnmodifiedEditors"
-                | "PinActiveEditorTab"
-                | "PinActiveTabToggle",
-                Target::Tab(_),
-            ) => true,
-            ("ReopenClosedTab", Target::Tab(_)) => !self.state.tabs.closed.is_empty(),
-            (_, Target::Tree { .. } | Target::Tab(_)) if TARGET_ACTIONS.contains(&action) => true,
-            ("$Cut" | "$Copy" | "SafeDelete" | "Move" | "RenameFile", Target::Tree { .. }) => true,
-            (
-                "RevealIn" | "Terminal.OpenInTerminal" | "SynchronizeCurrentFile",
-                Target::Tree { .. },
-            ) => true,
-            ("FindInPath", Target::Tree { .. }) => true,
-            ("ReformatCode" | "OptimizeImports", Target::Tree { .. }) => true,
-            _ => self.menu_action_enabled(action),
-        }
-    }
-
     /// Absolute path of a target, if it has one.
     fn target_path(&self, target: &Target) -> Option<(PathBuf, PathBuf)> {
         let root = self.state.project.as_ref()?.root().to_owned();
@@ -340,7 +295,7 @@ impl IdeApp {
                             archipel_ide_core::SearchScopeKind::Project
                         },
                     );
-                    self.run_menu_action(action, ctx);
+                    self.run_action(action, ActionPlace::ContextMenu, ctx);
                 }
             }
             "RevealIn"
@@ -386,7 +341,7 @@ impl IdeApp {
                 // Acts on the editor: open the file first, then run the command.
                 if let Target::Tree { path, .. } = target {
                     self.dispatch("editor.openFile", json!({"path": path}));
-                    self.run_menu_action(action, ctx);
+                    self.run_action(action, ActionPlace::ContextMenu, ctx);
                 }
             }
             id if id.starts_with("jt.mark.") => {
@@ -461,7 +416,9 @@ impl IdeApp {
                     self.dispatch("editor.openInRightSplit", json!({"path": path}));
                 }
             }
-            _ => self.run_menu_action(action, ctx),
+            _ => {
+                self.run_action(action, ActionPlace::ContextMenu, ctx);
+            }
         }
     }
 }

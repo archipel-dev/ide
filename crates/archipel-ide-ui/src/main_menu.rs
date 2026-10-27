@@ -7,11 +7,10 @@
 //! that have no reference action are appended to the matching menu.
 
 use crate::{IdeApp, icons, keybindings, theme};
-use archipel_ide_actions::{Catalog, MenuItem, filter_menu};
+use archipel_ide_actions::{ActionPlace, Catalog, MenuItem, filter_menu};
 use archipel_ide_command::CommandSpec;
 use archipel_ide_core::keymap_commands::ACTION_COMMANDS;
 use eframe::egui::{self, RichText};
-use serde_json::Value;
 use std::collections::BTreeSet;
 
 /// Command categories whose parameterless commands are offered in each top-level menu
@@ -302,7 +301,12 @@ fn recent_projects(app: &mut IdeApp, ui: &mut egui::Ui) {
 
 fn action_item(app: &mut IdeApp, ui: &mut egui::Ui, id: &str, label: &str) {
     let implemented = keybindings::is_implemented(id);
-    let enabled = implemented && app.menu_action_enabled(id);
+    let presentation = app.action_presentation(id, ActionPlace::MainMenu);
+    if implemented && !presentation.visible {
+        return;
+    }
+    let enabled = implemented && presentation.enabled;
+    let label = presentation.text.as_deref().unwrap_or(label);
     let button =
         egui::Button::new(label).shortcut_text(app.action_shortcut(id).unwrap_or_default());
     let response = ui.add_enabled(enabled, button);
@@ -310,15 +314,19 @@ fn action_item(app: &mut IdeApp, ui: &mut egui::Ui, id: &str, label: &str) {
         response.on_disabled_hover_text("Not available in Archipel IDE yet");
     } else if response.clicked() {
         let ctx = ui.ctx().clone();
-        app.run_menu_action(id, &ctx);
+        app.run_action(id, ActionPlace::MainMenu, &ctx);
         ui.close();
     }
 }
 
 fn command_item(app: &mut IdeApp, ui: &mut egui::Ui, spec: &CommandSpec) {
-    let enabled = app.commands.is_enabled(&spec.id, &app.state);
-    let button = egui::Button::new(&spec.label).shortcut_text(app.command_shortcut(spec));
-    if ui.add_enabled(enabled, button).clicked() {
+    let presentation = app.action_presentation(&spec.id, ActionPlace::MainMenu);
+    if !presentation.visible {
+        return;
+    }
+    let label = presentation.text.as_deref().unwrap_or(&spec.label);
+    let button = egui::Button::new(label).shortcut_text(app.command_shortcut(spec));
+    if ui.add_enabled(presentation.enabled, button).clicked() {
         // Stash and unstash gather options in the Git dialogs.
         match spec.id.as_str() {
             "git.stash" => {
@@ -338,7 +346,10 @@ fn command_item(app: &mut IdeApp, ui: &mut egui::Ui, spec: &CommandSpec) {
                 });
                 app.dialog_focus = true;
             }
-            _ => app.dispatch(&spec.id, Value::Null),
+            _ => {
+                let ctx = ui.ctx().clone();
+                app.run_action(&spec.id, ActionPlace::MainMenu, &ctx);
+            }
         }
         ui.close();
     }

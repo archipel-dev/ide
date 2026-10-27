@@ -396,8 +396,7 @@ fn commits_pane(app: &IdeApp, ui: &mut egui::Ui, actions: &mut Vec<(&'static str
         if icons::button(ui, Icon::Refresh, "Refresh").clicked() {
             actions.push(("git.log.refresh", Value::Null));
         }
-        let can_pick =
-            log.selected.is_some() && app.commands.is_enabled("git.cherryPick", &app.state);
+        let can_pick = log.selected.is_some() && app.action_enabled("git.cherryPick");
         if ui
             .add_enabled_ui(can_pick, |ui| {
                 icons::button(ui, Icon::Rollback, "Cherry-Pick the selected commit")

@@ -5,6 +5,12 @@
 //! and the children of each group. The keymap page uses it to name actions; the
 //! main menu and context menus are built from its groups.
 
+mod anaction;
+
+pub use anaction::{
+    ACTIONS, ActionEffect, ActionPlace, ActionRegistry, AnAction, AnActionEvent, Presentation,
+};
+
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::sync::LazyLock;

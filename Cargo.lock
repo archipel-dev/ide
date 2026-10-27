@@ -282,6 +282,7 @@ dependencies = [
 name = "archipel-ide-actions"
 version = "0.2.1"
 dependencies = [
+ "archipel-ide-platform",
  "serde",
  "serde_json",
 ]
@@ -824,6 +825,7 @@ dependencies = [
  "archipel-ide-language",
  "archipel-ide-lsp",
  "archipel-ide-markdown",
+ "archipel-ide-platform",
  "archipel-ide-plugins",
  "archipel-ide-project",
  "archipel-ide-runner",

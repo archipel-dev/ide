@@ -93,7 +93,7 @@ fn content(app: &mut IdeApp, ui: &mut egui::Ui) {
                 egui::Spinner::new().size(14.0).color(theme::ACCENT),
             );
         } else {
-            let can_sync = app.commands.is_enabled("bazel.sync", &app.state);
+            let can_sync = app.action_enabled("bazel.sync");
             if ui
                 .add_enabled_ui(can_sync, |ui| {
                     icons::button(ui, Icon::Refresh, "Sync Bazel Project")
@@ -105,7 +105,7 @@ fn content(app: &mut IdeApp, ui: &mut egui::Ui) {
             }
         }
         ui.add_space(6.0);
-        let can_run = selected.is_some() && app.commands.is_enabled("bazel.runTarget", &app.state);
+        let can_run = selected.is_some() && app.action_enabled("bazel.runTarget");
         for (command, icon, color, tooltip) in [
             ("build", Icon::Build, icons::ICON, "Build Target"),
             ("run", Icon::Run, theme::RUN_GREEN, "Run Target"),
@@ -159,7 +159,7 @@ fn content(app: &mut IdeApp, ui: &mut egui::Ui) {
                 }
             }
             ui.add_space(6.0);
-            let enabled = app.commands.is_enabled("bazel.sync", &app.state);
+            let enabled = app.action_enabled("bazel.sync");
             if ui
                 .add_enabled(enabled, egui::Button::new("Sync Bazel Project"))
                 .clicked()

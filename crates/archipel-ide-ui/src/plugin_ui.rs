@@ -42,6 +42,7 @@ pub fn sync(app: &mut IdeApp, ctx: &egui::Context) {
             &mut app.plugin_commands,
             &mut app.state,
         );
+        app.sync_command_actions();
         app.plugin_generation = app.state.plugin_host.registry.generation();
     }
     // Commands queued while running these may queue more; bound the loop.

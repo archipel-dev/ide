@@ -21,8 +21,8 @@ fn availability_id() -> egui::Id {
 /// Records availability for this frame (call before the editor renders).
 pub fn tick(app: &IdeApp, ctx: &egui::Context) {
     let available = Availability {
-        enabled: app.commands.is_enabled("ai.action.explain", &app.state),
-        fix_problems: app.commands.is_enabled("ai.action.fixProblems", &app.state),
+        enabled: app.action_enabled("ai.action.explain"),
+        fix_problems: app.action_enabled("ai.action.fixProblems"),
     };
     ctx.data_mut(|data| data.insert_temp(availability_id(), available));
 }
@@ -65,7 +65,7 @@ pub fn editor_menu(ui: &mut egui::Ui) -> Option<(&'static str, Value)> {
 
 /// "✦ Fix with AI" link shown next to a failed build/run status.
 pub fn build_link(app: &mut IdeApp, ui: &mut egui::Ui) {
-    if !app.commands.is_enabled("ai.action.fixBuild", &app.state) {
+    if !app.action_enabled("ai.action.fixBuild") {
         return;
     }
     ui.add_space(8.0);

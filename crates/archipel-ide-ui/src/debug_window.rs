@@ -127,7 +127,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
             if index == 2 {
                 ui.add_space(8.0);
             }
-            let enabled = app.commands.is_enabled(id, &app.state);
+            let enabled = app.action_enabled(id);
             let color = if enabled {
                 color
             } else {

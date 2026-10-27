@@ -5,12 +5,14 @@
 
 use crate::icons::{self, Icon, TypeKind};
 use crate::{IdeApp, theme};
+use archipel_ide_actions::{ActionPlace, Presentation};
 use archipel_ide_core::quick_nav::{
     ActionCandidate, Hit, Ranked, SearchSources, SearchTab, SymbolEntry, file_name, search,
 };
 use archipel_ide_language::structure::SymbolKind;
+use archipel_ide_platform::data_keys;
 use eframe::egui::{self, Rect, Sense, vec2};
-use serde_json::{Value, json};
+use serde_json::json;
 use std::time::Duration;
 
 const MAX_ROWS: usize = 40;
@@ -62,36 +64,48 @@ const UI_ACTIONS: [(&str, &str); 3] = [
 const UI_ACTION_PREFIX: &str = "ui:";
 
 fn actions(app: &IdeApp, include_disabled: bool) -> Vec<ActionCandidate> {
-    let ui_actions = UI_ACTIONS
-        .iter()
-        .map(|(action, label)| ActionCandidate {
-            enabled: app.menu_action_enabled(action),
-            shortcut: app.action_shortcut(action).unwrap_or_default(),
-            id: format!("{UI_ACTION_PREFIX}{action}"),
-            label: (*label).into(),
-            category: "File".into(),
-        })
-        .filter(|candidate| include_disabled || candidate.enabled);
-    app.commands
-        .specs()
-        .into_iter()
-        .filter(IdeApp::parameterless)
-        .filter(|spec| include_disabled || app.commands.is_enabled(&spec.id, &app.state))
-        // Android actions only apply to Android projects; the SDK manager is global.
-        .filter(|spec| {
-            spec.category != "Android"
-                || app.state.android.project.is_some()
-                || app.commands.is_enabled(&spec.id, &app.state)
-        })
-        .map(|spec| ActionCandidate {
-            enabled: app.commands.is_enabled(&spec.id, &app.state),
-            shortcut: app.command_shortcut(&spec),
-            id: spec.id,
-            label: spec.label,
-            category: spec.category,
-        })
-        .chain(ui_actions)
-        .collect()
+    // One context for the whole list: every candidate asks the registry for its presentation.
+    app.with_data(|registry, data| {
+        let present = |id: &str| {
+            registry
+                .update(id, ActionPlace::FindAction, data)
+                .unwrap_or_else(Presentation::disabled)
+        };
+        let ui_actions = UI_ACTIONS
+            .iter()
+            .map(|(action, label)| (present(action), action, label))
+            .filter(|(presentation, ..)| presentation.visible)
+            .map(|(presentation, action, label)| ActionCandidate {
+                enabled: presentation.enabled,
+                shortcut: app.action_shortcut(action).unwrap_or_default(),
+                id: format!("{UI_ACTION_PREFIX}{action}"),
+                label: presentation.text.unwrap_or_else(|| (*label).into()),
+                category: "File".into(),
+            })
+            .filter(|candidate| include_disabled || candidate.enabled);
+        app.commands
+            .specs()
+            .into_iter()
+            .filter(IdeApp::parameterless)
+            .map(|spec| (present(&spec.id), spec))
+            .filter(|(presentation, _)| presentation.visible)
+            .filter(|(presentation, _)| include_disabled || presentation.enabled)
+            // Android actions only apply to Android projects; the SDK manager is global.
+            .filter(|(presentation, spec)| {
+                spec.category != "Android"
+                    || data.flag(&data_keys::ANDROID_PROJECT)
+                    || presentation.enabled
+            })
+            .map(|(presentation, spec)| ActionCandidate {
+                enabled: presentation.enabled,
+                shortcut: app.command_shortcut(&spec),
+                id: spec.id,
+                label: presentation.text.unwrap_or(spec.label),
+                category: spec.category,
+            })
+            .chain(ui_actions)
+            .collect()
+    })
 }
 
 fn items(app: &mut IdeApp) -> Vec<Ranked<Hit>> {
@@ -528,10 +542,8 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                 if action.enabled {
                     let id = action.id.clone();
                     app.palette.open = false;
-                    match id.strip_prefix(UI_ACTION_PREFIX) {
-                        Some(action) => app.run_menu_action(action, ctx),
-                        None => app.dispatch(&id, Value::Null),
-                    }
+                    let id = id.strip_prefix(UI_ACTION_PREFIX).unwrap_or(&id);
+                    app.run_action(id, ActionPlace::FindAction, ctx);
                 }
             }
             Hit::File { path, line } => {

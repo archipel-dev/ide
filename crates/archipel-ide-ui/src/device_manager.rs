@@ -87,7 +87,7 @@ pub fn device_selector(app: &mut IdeApp, ui: &mut egui::Ui) {
             }
         }
         ui.separator();
-        let can_run = app.commands.is_enabled("android.app.run", &app.state)
+        let can_run = app.action_enabled("android.app.run")
             && hub.selected_device().is_some_and(|d| d.is_online());
         let run_label = match hub.selected_device() {
             Some(device) => format!("Run 'app' on {}", device.display_name()),

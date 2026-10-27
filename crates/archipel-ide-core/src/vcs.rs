@@ -259,8 +259,8 @@ impl IdeState {
         let git = self
             .git_status()
             .ok_or("the project is not a Git repository")?;
-        let commit = self
-            .git_log
+        let log = self.git_log_snapshot();
+        let commit = log
             .commits
             .iter()
             .find(|commit| commit.hash == hash)

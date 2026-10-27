@@ -638,7 +638,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
             }
         }
         Dialog::RecentLocations { selected } => {
-            let locations = app.state.quick_nav.locations.clone();
+            let locations = app.state.recent_locations();
             if !locations.is_empty() {
                 if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)) {
                     *selected = (*selected + 1) % locations.len();

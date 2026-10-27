@@ -974,16 +974,13 @@ impl IdeApp {
     /// Copies the query and toggles of a search started outside the Find
     /// inputs into them; typing an unsubmitted query is left alone.
     fn sync_find_inputs(&mut self) {
-        let state = (&self.state.search_query, &self.state.search_options);
-        if state == (&self.find_synced.0, &self.find_synced.1) {
+        let (query, options) = (self.state.search_query(), self.state.search_options());
+        if (&query, &options) == (&self.find_synced.0, &self.find_synced.1) {
             return;
         }
-        self.find_synced = (
-            self.state.search_query.clone(),
-            self.state.search_options.clone(),
-        );
-        self.search_input = self.state.search_query.clone();
-        self.find_options = self.state.search_options.clone();
+        self.find_synced = (query.clone(), options.clone());
+        self.search_input = query;
+        self.find_options = options;
     }
 }
 
@@ -1045,19 +1042,19 @@ fn find(app: &mut IdeApp, ui: &mut egui::Ui) {
                 find_params(&app.search_input, &app.find_options, scope.as_deref()),
             );
         }
-        let count = app.state.search_results.len();
+        let count = app.state.search_result_count();
         let mut summary = widgets::pluralize(count, "match", "matches");
-        if app.state.search.is_running() {
+        if app.state.search_running() {
             summary.push('…');
-        } else if app.state.search_truncated {
+        } else if app.state.search_truncated() {
             summary.push_str(" (limit reached)");
         }
-        if !app.state.search_query.is_empty() {
+        if !app.state.search_query().is_empty() {
             ui.label(RichText::new(summary).color(theme::TEXT_SECONDARY));
         }
     });
     ui.add_space(4.0);
-    let results = app.state.search_results.clone();
+    let results = app.state.search_results();
     let mut open = None;
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])

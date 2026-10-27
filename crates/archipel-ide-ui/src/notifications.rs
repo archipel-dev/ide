@@ -54,7 +54,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                 .inner_margin(egui::Margin::same(theme::layout::DIALOG_PADDING as i8))
                 .show(ui, |ui| {
                     ui.set_width(width - 28.0);
-                    let (title, body) = match &app.state.update_state {
+                    let (title, body) = match &app.state.update_state() {
                         UpdateState::Available { version, .. } => (
                             format!("Archipel IDE {version} is available"),
                             format!("You are using {CURRENT_VERSION}."),
@@ -110,7 +110,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                             .on_hover_cursor(egui::CursorIcon::PointingHand)
                             .clicked()
                         };
-                        match &app.state.update_state {
+                        match &app.state.update_state() {
                             UpdateState::Available { release, .. } => {
                                 let installable = archipel_ide_core::update_installable().is_ok();
                                 if installable {

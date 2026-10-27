@@ -2,11 +2,60 @@
 //! `PropertiesComponent` and the `Configurable` registry): the registry of pages and
 //! definitions, and the stored values with their application/project layering.
 
-use archipel_ide_platform::ServiceState;
+use archipel_ide_platform::{MessageBus, ServiceState, Topic};
 use archipel_ide_settings::{SettingValue, SettingsError, SettingsRegistry, SettingsStore};
+use parking_lot::{RwLockReadGuard, RwLockWriteGuard};
 
-/// The application service: `application.service::<SettingsService>()`.
-pub type SettingsService = ServiceState<Settings>;
+/// Reports that stored settings changed (IntelliJ: `SettingsChangeListener`,
+/// `ApplicationActivationListener`-style option sync). Derived state subscribes instead of being
+/// called by whoever changed a setting: the keymap, the Gradle options.
+pub trait SettingsListener: Send + Sync {
+    /// Settings were set, reset, applied or (re)loaded. `settings` is the new state; reading it
+    /// is allowed, writing it is not (the publisher holds it).
+    fn settings_changed(&self, _settings: &Settings) {}
+}
+
+/// On the application's message bus.
+pub const SETTINGS_TOPIC: Topic<dyn SettingsListener> = Topic::new("SettingsListener");
+
+/// The application service: `application.service::<SettingsService>()`. Whoever changes the
+/// stored values calls [`SettingsService::notify_changed`] once the change is complete.
+pub struct SettingsService {
+    bus: MessageBus,
+    state: ServiceState<Settings>,
+}
+
+impl SettingsService {
+    pub fn new(bus: MessageBus) -> Self {
+        Self {
+            bus,
+            state: ServiceState::new(Settings::default()),
+        }
+    }
+
+    pub fn read(&self) -> RwLockReadGuard<'_, Settings> {
+        self.state.read()
+    }
+
+    pub fn write(&self) -> RwLockWriteGuard<'_, Settings> {
+        self.state.write()
+    }
+
+    pub fn with<R>(&self, f: impl FnOnce(&Settings) -> R) -> R {
+        self.state.with(f)
+    }
+
+    pub fn with_mut<R>(&self, f: impl FnOnce(&mut Settings) -> R) -> R {
+        self.state.with_mut(f)
+    }
+
+    /// Announces [`SETTINGS_TOPIC`]. Call without holding a write guard.
+    pub fn notify_changed(&self) {
+        let settings = self.state.read();
+        self.bus
+            .publish(SETTINGS_TOPIC, |l| l.settings_changed(&settings));
+    }
+}
 
 /// The settings registry (pages and definitions) and the stored values.
 #[derive(Debug, Clone)]

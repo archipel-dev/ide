@@ -56,7 +56,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         });
         return;
     }
-    if !app.state.git_log.loaded {
+    if !app.state.git_log_snapshot().loaded {
         app.dispatch("git.log.refresh", Value::Null);
     }
     let mut actions: Vec<(&'static str, Value)> = Vec::new();
@@ -64,7 +64,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
     let area = ui.available_rect_before_wrap();
     ui.allocate_rect(area, Sense::hover());
     let branches_rect = Rect::from_min_size(area.min, vec2(BRANCHES_WIDTH, area.height()));
-    let details_left = if app.state.git_log.hide_details {
+    let details_left = if app.state.git_log_snapshot().hide_details {
         area.right()
     } else {
         (area.right() - DETAILS_WIDTH).max(branches_rect.right() + 200.0)
@@ -87,7 +87,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         ui.set_clip_rect(ui.clip_rect().intersect(commits_rect));
         commits_pane(app, ui, &mut actions);
     });
-    if !app.state.git_log.hide_details {
+    if !app.state.git_log_snapshot().hide_details {
         ui.scope_builder(egui::UiBuilder::new().max_rect(details_rect), |ui| {
             ui.set_clip_rect(ui.clip_rect().intersect(details_rect));
             details_pane(app, ui, &mut actions);
@@ -100,7 +100,7 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
 
 /// The `Log` tab and one closable `History: <file>` tab per opened file history.
 fn tab_strip(app: &IdeApp, ui: &mut egui::Ui, actions: &mut Vec<(&'static str, Value)>) {
-    let log = &app.state.git_log;
+    let log = &*app.state.git_log_snapshot();
     let active = log.active_history_tab();
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0), Sense::hover());
     let mut left = rect.left() + 12.0;
@@ -181,7 +181,7 @@ fn tab_strip(app: &IdeApp, ui: &mut egui::Ui, actions: &mut Vec<(&'static str, V
 }
 
 fn branches_pane(app: &IdeApp, ui: &mut egui::Ui, actions: &mut Vec<(&'static str, Value)>) {
-    let log = &app.state.git_log;
+    let log = &*app.state.git_log_snapshot();
     let font = egui::FontId::proportional(theme::UI_FONT_SIZE);
     egui::ScrollArea::vertical()
         .id_salt("git_log_branches")
@@ -272,7 +272,7 @@ fn group(ui: &mut egui::Ui, title: &str) {
 }
 
 fn commits_pane(app: &IdeApp, ui: &mut egui::Ui, actions: &mut Vec<(&'static str, Value)>) {
-    let log = &app.state.git_log;
+    let log = &*app.state.git_log_snapshot();
     ui.add_space(4.0);
     widgets::toolbar_row(ui, |ui| {
         ui.add_space(theme::layout::CONTENT_INSET);
@@ -603,7 +603,7 @@ fn commit_row(ui: &egui::Ui, rect: Rect, commit: &CommitInfo, graph_width: f32, 
 }
 
 fn details_pane(app: &IdeApp, ui: &mut egui::Ui, actions: &mut Vec<(&'static str, Value)>) {
-    let log = &app.state.git_log;
+    let log = &*app.state.git_log_snapshot();
     let Some(details) = &log.details else {
         ui.add_space(12.0);
         ui.vertical_centered(|ui| {

@@ -149,7 +149,7 @@ impl IdeApp {
     /// Label of the first shortcut bound to `action` in the active keymap.
     pub(crate) fn action_shortcut(&self, action: &str) -> Option<String> {
         self.state
-            .keymap
+            .keymap_state()
             .keymap
             .shortcuts(action)
             .iter()
@@ -389,7 +389,7 @@ impl IdeApp {
             let pending = self.pending_chord.take();
             let mut strokes: Vec<KeyStroke> = pending.iter().cloned().collect();
             strokes.push(stroke.clone());
-            let lookup = self.state.keymap.keymap.lookup(&strokes);
+            let lookup = self.state.keymap_state().keymap.lookup(&strokes);
             let modified = stroke.modifiers.ctrl || stroke.modifiers.alt || stroke.modifiers.meta;
             let consumed = match lookup {
                 Lookup::Actions(actions) => {
@@ -437,7 +437,7 @@ impl IdeApp {
     pub(crate) fn run_double_modifier(&mut self, modifier: Modifier, ctx: &egui::Context) {
         let actions = self
             .state
-            .keymap
+            .keymap_state()
             .keymap
             .actions_for(&Shortcut::DoubleModifier(modifier))
             .to_vec();

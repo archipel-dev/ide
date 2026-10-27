@@ -2,10 +2,9 @@
 
 use crate::{IdeState, spec, string_param};
 use archipel_ide_command::{Command, CommandError, CommandRegistry};
-use archipel_ide_keymap::{Keymap, KeymapSet, Overrides, Shortcut};
+use archipel_ide_keymap::{KeymapSet, Shortcut};
 use archipel_ide_settings::{SettingValue, ids};
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
 
 /// Where a keymap-dispatched command applies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -251,92 +250,25 @@ pub fn actions_for_command(command: &str) -> impl Iterator<Item = &'static str> 
         .map(|binding| binding.action)
 }
 
-/// The effective keymap: the selected bundled keymap plus the user's overrides for it.
-#[derive(Debug, Clone)]
-pub struct KeymapState {
-    pub keymap: Keymap,
-    /// Overrides of all keymaps, keyed by keymap id (persisted in `keymap.overrides`).
-    pub overrides: BTreeMap<String, Overrides>,
-    pub error: Option<String>,
-}
-
-impl Default for KeymapState {
-    fn default() -> Self {
-        let mut state = Self {
-            keymap: Keymap::new("", BTreeMap::new()),
-            overrides: BTreeMap::new(),
-            error: None,
-        };
-        state.rebuild(archipel_ide_keymap::Desktop::detect().default_keymap());
-        state
-    }
-}
-
-impl KeymapState {
-    fn rebuild(&mut self, id: &str) {
-        let overrides = self.overrides.get(id).cloned().unwrap_or_default();
-        match KeymapSet::shared().and_then(|set| set.keymap(id, &overrides)) {
-            Ok(keymap) => {
-                self.keymap = keymap;
-                self.error = None;
-            }
-            Err(error) => self.error = Some(error.to_string()),
-        }
-    }
-
-    /// Parses `keymap<TAB>action<TAB>shortcut…` lines; malformed lines are skipped and
-    /// reported.
-    fn parse_overrides(lines: &[String]) -> (BTreeMap<String, Overrides>, Option<String>) {
-        let mut overrides: BTreeMap<String, Overrides> = BTreeMap::new();
-        let mut error = None;
-        for line in lines {
-            let Some((keymap, rest)) = line.split_once('\t') else {
-                continue;
-            };
-            match Overrides::from_lines(&[rest.to_owned()]) {
-                Ok(parsed) => overrides
-                    .entry(keymap.to_owned())
-                    .or_default()
-                    .actions
-                    .extend(parsed.actions),
-                Err(parse) => error = Some(format!("ignored keymap override: {parse}")),
-            }
-        }
-        (overrides, error)
-    }
-
-    fn override_lines(&self) -> Vec<String> {
-        self.overrides
-            .iter()
-            .flat_map(|(keymap, overrides)| {
-                overrides
-                    .to_lines()
-                    .into_iter()
-                    .map(move |line| format!("{keymap}\t{line}"))
-            })
-            .collect()
-    }
-}
+pub use crate::services::KeymapState;
 
 impl IdeState {
-    /// Rebuilds the keymap from the `keymap.active` and `keymap.overrides` settings.
-    pub fn refresh_keymap(&mut self) {
-        let id = self.settings().read().text(ids::KEYMAP).unwrap_or_else(|| {
-            archipel_ide_keymap::Desktop::detect()
-                .default_keymap()
-                .into()
-        });
-        let lines = self.settings().read().list(ids::KEYMAP_OVERRIDES);
-        let (overrides, error) = KeymapState::parse_overrides(&lines);
-        self.keymap.overrides = overrides;
-        self.keymap.rebuild(&id);
-        if let Some(error) = error.or_else(|| self.keymap.error.clone()) {
-            self.status = error;
+    /// The effective keymap (application service; follows the settings by itself).
+    pub fn keymap_state(&self) -> std::sync::Arc<KeymapState> {
+        self.keymap().snapshot()
+    }
+
+    /// Announces changed settings: the keymap and the Gradle options rebuild themselves, and a
+    /// problem the keymap found (a broken override) lands in the status bar.
+    pub(crate) fn settings_changed(&mut self) {
+        self.settings().notify_changed();
+        if let Some(notice) = self.keymap().take_notice() {
+            self.status = notice;
         }
     }
 
     fn save_keymap_overrides(&mut self) -> Result<(), CommandError> {
-        let lines = self.keymap.override_lines();
+        let lines = self.keymap_state().override_lines();
         {
             let settings = self.settings();
             let mut settings = settings.write();
@@ -345,7 +277,7 @@ impl IdeState {
                 .and_then(|_| settings.store.save())
                 .map_err(|error| CommandError::Failed(error.to_string()))?;
         }
-        self.refresh_keymap();
+        self.settings_changed();
         Ok(())
     }
 
@@ -355,19 +287,21 @@ impl IdeState {
         action: &str,
         shortcuts: Vec<Shortcut>,
     ) -> Result<(), CommandError> {
-        let id = self.keymap.keymap.id.clone();
+        let id = self.keymap_state().keymap.id.clone();
         let bundled = KeymapSet::shared()
             .ok()
             .and_then(|set| set.get(&id))
             .and_then(|keymap| keymap.bindings.get(action))
             .cloned()
             .unwrap_or_default();
-        let overrides = self.keymap.overrides.entry(id).or_default();
-        if shortcuts == bundled {
-            overrides.actions.remove(action);
-        } else {
-            overrides.actions.insert(action.to_owned(), shortcuts);
-        }
+        self.keymap().with_state_mut(|state| {
+            let overrides = state.overrides.entry(id).or_default();
+            if shortcuts == bundled {
+                overrides.actions.remove(action);
+            } else {
+                overrides.actions.insert(action.to_owned(), shortcuts);
+            }
+        });
         self.save_keymap_overrides()
     }
 }
@@ -402,8 +336,8 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |_| true,
             |state: &mut IdeState, params| {
                 let shortcut = shortcut_param(&params)?;
-                let actions: Vec<_> = state
-                    .keymap
+                let keymap = state.keymap_state();
+                let actions: Vec<_> = keymap
                     .keymap
                     .actions_for(&shortcut)
                     .iter()
@@ -414,7 +348,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                         })
                     })
                     .collect();
-                Ok(json!({"keymap": state.keymap.keymap.id, "actions": actions}))
+                Ok(json!({"keymap": keymap.keymap.id, "actions": actions}))
             },
         ))
         .expect("unique built-in id");
@@ -435,11 +369,14 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                     .get("removeConflicts")
                     .and_then(Value::as_bool)
                     .unwrap_or(false);
-                let conflicts = state.keymap.keymap.conflicts_with(&action, &shortcut);
+                let conflicts = state
+                    .keymap_state()
+                    .keymap
+                    .conflicts_with(&action, &shortcut);
                 if remove {
                     for other in &conflicts {
                         let kept: Vec<_> = state
-                            .keymap
+                            .keymap_state()
                             .keymap
                             .shortcuts(other)
                             .iter()
@@ -449,7 +386,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                         state.set_action_shortcuts(other, kept)?;
                     }
                 }
-                let mut shortcuts = state.keymap.keymap.shortcuts(&action).to_vec();
+                let mut shortcuts = state.keymap_state().keymap.shortcuts(&action).to_vec();
                 if !shortcuts.contains(&shortcut) {
                     shortcuts.push(shortcut);
                 }
@@ -472,7 +409,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 let action = string_param(&params, "action")?;
                 let shortcut = shortcut_param(&params)?;
                 let shortcuts: Vec<_> = state
-                    .keymap
+                    .keymap_state()
                     .keymap
                     .shortcuts(&action)
                     .iter()
@@ -496,10 +433,12 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |_| true,
             |state: &mut IdeState, params| {
                 let action = string_param(&params, "action")?;
-                let id = state.keymap.keymap.id.clone();
-                if let Some(overrides) = state.keymap.overrides.get_mut(&id) {
-                    overrides.actions.remove(&action);
-                }
+                let id = state.keymap_state().keymap.id.clone();
+                state.keymap().with_state_mut(|keymap| {
+                    if let Some(overrides) = keymap.overrides.get_mut(&id) {
+                        overrides.actions.remove(&action);
+                    }
+                });
                 state.save_keymap_overrides()?;
                 Ok(Value::Null)
             },
@@ -564,14 +503,14 @@ mod tests {
     #[test]
     fn keymap_follows_the_setting() {
         let state = state_with("Default for KDE");
-        assert_eq!(state.keymap.keymap.id, "Default for KDE");
+        assert_eq!(state.keymap_state().keymap.id, "Default for KDE");
         assert_eq!(
-            state.keymap.keymap.shortcuts("ReformatCode"),
+            state.keymap_state().keymap.shortcuts("ReformatCode"),
             &["Alt+Shift+L".parse::<Shortcut>().unwrap()]
         );
         let state = state_with("Mac OS X 10.5+");
         assert_eq!(
-            state.keymap.keymap.shortcuts("ShowSettings"),
+            state.keymap_state().keymap.shortcuts("ShowSettings"),
             &["Cmd+,".parse::<Shortcut>().unwrap()]
         );
     }
@@ -597,7 +536,7 @@ mod tests {
         );
         assert!(
             state
-                .keymap
+                .keymap_state()
                 .keymap
                 .shortcuts("ShowSettings")
                 .contains(&"Ctrl+D".parse().unwrap())
@@ -616,7 +555,13 @@ mod tests {
                 json!({"action": "ShowSettings", "shortcut": "Ctrl+D", "removeConflicts": true}),
             )
             .unwrap();
-        assert!(state.keymap.keymap.shortcuts("EditorDuplicate").is_empty());
+        assert!(
+            state
+                .keymap_state()
+                .keymap
+                .shortcuts("EditorDuplicate")
+                .is_empty()
+        );
         let found = commands
             .execute("keymap.lookup", &mut state, json!({"shortcut": "Ctrl+D"}))
             .unwrap();
@@ -637,7 +582,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(
-            state.keymap.keymap.shortcuts("EditorDuplicate"),
+            state.keymap_state().keymap.shortcuts("EditorDuplicate"),
             &["Ctrl+D".parse::<Shortcut>().unwrap()]
         );
         // Reset and unbind removed their overrides; the other actions that lost Ctrl+D

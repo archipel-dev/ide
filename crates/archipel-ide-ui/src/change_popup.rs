@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 /// Width of the change bar; it sits between the line numbers and the text.
 const MARKER_WIDTH: f32 = 4.0;
 /// Right edge of the marker relative to the gutter's right edge.
-const MARKER_INSET: f32 = 7.0;
+const MARKER_INSET: f32 = 1.0;
 
 /// Observed dark-theme gutter marker colours.
 pub const ADDED: Color32 = Color32::from_rgb(0x54, 0x91, 0x59);

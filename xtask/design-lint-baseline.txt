@@ -20,7 +20,6 @@ crates/archipel-ide-ui/src/find_popup.rs rounded-fill 5
 crates/archipel-ide-ui/src/findbar.rs rounded-fill 1
 crates/archipel-ide-ui/src/git_log_ui.rs rgb-color 6
 crates/archipel-ide-ui/src/git_log_ui.rs rounded-fill 1
-crates/archipel-ide-ui/src/icons.rs rgb-color 2
 crates/archipel-ide-ui/src/intentions_ui.rs rgb-color 2
 crates/archipel-ide-ui/src/intentions_ui.rs rounded-fill 4
 crates/archipel-ide-ui/src/layout_editor_ui.rs rgb-color 4
@@ -39,7 +38,6 @@ crates/archipel-ide-ui/src/popups.rs rounded-fill 4
 crates/archipel-ide-ui/src/problems_ui.rs rounded-fill 4
 crates/archipel-ide-ui/src/resource_manager_ui.rs rgb-color 1
 crates/archipel-ide-ui/src/resource_manager_ui.rs rounded-fill 3
-crates/archipel-ide-ui/src/settings_dialog.rs rounded-fill 1
 crates/archipel-ide-ui/src/switcher.rs rounded-fill 2
 crates/archipel-ide-ui/src/terminal_ui.rs rgb-color 2
 crates/archipel-ide-ui/src/toolbar_gradient.rs rgb-color 1

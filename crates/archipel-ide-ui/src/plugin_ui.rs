@@ -205,7 +205,7 @@ pub fn right_side(app: &mut IdeApp, ctx: &egui::Context) {
         .show(ctx, |ui| {
             ui.add_space(6.0);
             ui.vertical_centered(|ui| {
-                ui.spacing_mut().item_spacing.y = 4.0;
+                ui.spacing_mut().item_spacing.y = chrome::stripe_gap();
                 for (window, icon) in built_in {
                     chrome::stripe_button(app, ui, window, icon);
                 }

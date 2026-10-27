@@ -19,6 +19,8 @@ use std::collections::BTreeSet;
 
 const TREE_WIDTH: f32 = 236.0;
 const TREE_ROW: f32 = 25.0;
+/// Left inset of the tree's content; the selection itself spans the full width.
+const TREE_INSET: f32 = 8.0;
 const FOOTER_HEIGHT: f32 = 54.0;
 
 pub struct SettingsDialog {
@@ -281,7 +283,7 @@ fn draw(dialog: &mut SettingsDialog, context: PageContext<'_>, ctx: &egui::Conte
 
             let mut tree_ui = ui.new_child(
                 egui::UiBuilder::new()
-                    .max_rect(tree_rect.shrink2(vec2(8.0, 8.0)))
+                    .max_rect(tree_rect.shrink2(vec2(0.0, 8.0)))
                     .layout(egui::Layout::top_down(egui::Align::Min)),
             );
             tree(&mut tree_ui, dialog, registry, &search, searching);
@@ -317,6 +319,23 @@ fn draw(dialog: &mut SettingsDialog, context: PageContext<'_>, ctx: &egui::Conte
             if let Some(button) = footer_buttons(&mut footer_ui, dialog) {
                 outcome = button;
             }
+            // The round help button at the left (UI-DLG-001).
+            let mut help_ui = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(footer)
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
+            );
+            if help_ui
+                .add(archipel_kit::action_system::ActionButton::new(
+                    archipel_kit::Glyph::Help,
+                    "Help",
+                ))
+                .clicked()
+            {
+                help_ui.ctx().open_url(egui::OpenUrl::new_tab(
+                    "https://github.com/archipel-dev/ide/tree/main/docs/help",
+                ));
+            }
         });
     outcome
 }
@@ -329,7 +348,12 @@ fn tree(
     searching: bool,
 ) {
     let id = egui::Id::new("settings_search");
-    let response = search_field(ui, id, &mut dialog.search, "", TREE_WIDTH - 50.0);
+    let response = ui
+        .horizontal(|ui| {
+            ui.add_space(TREE_INSET);
+            search_field(ui, id, &mut dialog.search, "", TREE_WIDTH - 50.0)
+        })
+        .inner;
     if std::mem::take(&mut dialog.focus_search) {
         response.request_focus();
     }
@@ -443,8 +467,9 @@ fn tree_row(
     } else {
         Color32::TRANSPARENT
     };
-    ui.painter().rect_filled(rect, 4.0, fill);
-    let x = rect.left() + 4.0 + depth as f32 * 16.0;
+    // Full-bleed selection, panel edge to divider, square (UI-DLG-004).
+    ui.painter().rect_filled(rect, 0.0, fill);
+    let x = rect.left() + TREE_INSET + 4.0 + depth as f32 * 16.0;
     let chevron = Rect::from_min_size(pos2(x, rect.center().y - 7.0), vec2(14.0, 14.0));
     if has_children {
         icons::paint(
@@ -988,21 +1013,20 @@ fn value_editor(
                 .find(|option| &option.id == selected)
                 .map(|option| option.label.as_str())
                 .unwrap_or(selected);
-            let mut choice = None;
-            egui::ComboBox::from_id_salt(("setting", id))
-                .selected_text(label)
-                .width(200.0)
-                .show_ui(ui, |ui| {
-                    for option in options {
-                        if ui
-                            .selectable_label(&option.id == selected, &option.label)
-                            .clicked()
-                        {
-                            choice = Some(SettingValue::Text(option.id.clone()));
-                        }
-                    }
-                });
-            choice
+            // UI-DLG-005: the kit's 28 px combo (filled, bordered, chevron at the right).
+            let mut shown = label.to_owned();
+            ui.add(
+                archipel_kit::openapi::ui::ComboBox::new(
+                    ("setting", id),
+                    &mut shown,
+                    options.iter().map(|option| option.label.clone()),
+                )
+                .width(200.0),
+            );
+            (shown != label)
+                .then(|| options.iter().find(|option| option.label == shown))
+                .flatten()
+                .map(|option| SettingValue::Text(option.id.clone()))
         }
         (SettingKind::Int { min, max }, SettingValue::Int(number)) => {
             number_field(ui, id, &number.to_string(), |text| {
@@ -1079,23 +1103,21 @@ fn number_field(
 }
 
 fn footer_buttons(ui: &mut egui::Ui, dialog: &mut SettingsDialog) -> Option<Outcome> {
+    use archipel_kit::ui::Button;
     let mut outcome = None;
-    ui.spacing_mut().item_spacing.x = 10.0;
-    let size = vec2(72.0, 28.0);
+    // UI-DLG-001/002: the kit's 72x28 buttons, 12 px apart, OK primary without a border.
+    ui.spacing_mut().item_spacing.x = 12.0;
     let modified = dialog.draft.is_modified();
     if ui
-        .add_enabled(modified, egui::Button::new("Apply").min_size(size))
+        .add(Button::secondary("Apply").enabled(modified).mnemonic('A'))
         .clicked()
     {
         outcome = Some(Outcome::Apply);
     }
-    if ui.add(egui::Button::new("Cancel").min_size(size)).clicked() {
+    if ui.add(Button::secondary("Cancel")).clicked() {
         outcome = Some(Outcome::Cancel);
     }
-    let ok = egui::Button::new(RichText::new("OK").color(Color32::WHITE))
-        .fill(theme::ACCENT)
-        .min_size(size);
-    if ui.add(ok).clicked() {
+    if ui.add(Button::primary("OK")).clicked() {
         outcome = Some(Outcome::Ok);
     }
     if let Some(error) = &dialog.error {

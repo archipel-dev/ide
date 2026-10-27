@@ -82,3 +82,23 @@ kit `Tabs`/`Tab` component and `EditorColors`.
   derived value (font metrics times the New UI line spacing); implement it as "22 px at 13 px JetBrains Mono, 100 %".
 - Text rendering: reference LCD antialiasing; Archipel grayscale. Not a spec item (see `00`).
 - Open question: the 1 px vertical rule at +65 may be the New UI "gutter/editor" separator or a vertical indent line of the root block; it is full-height in all captures.
+
+## After the ui-parity pass (New UI Dark capture `u04`, window 1440x900)
+
+Captures: `docs/parity/evidence/archipel-ide/ui/after/`. Geometry applies to every look.
+
+| Value | IntelliJ | Archipel now | Remaining diff |
+|---|---|---|---|
+| Line pitch | 22 | 22 (numbers' centers 93.5, 115.5, ...) | 0 |
+| Line number right edge | +23 | +23 | 0 |
+| Run icon | 12x14 at +30..41 | 16 px box centered at +36 (glyph about 11 px) | check glyph bbox against 12x14 |
+| Fold chevron | 5x8 at +50..54 | 5x8 at +50..54 | 0 |
+| Gutter rule | 1 px at +65 | 1 px `#313438` at +65 | 0 |
+| Text start | +68..69 | +69 | 0 |
+| Indent guides | `#313438`, per indent level | `#313438` at every level from the block's own, 4 columns apart | caret-block guide `#666870` missing |
+| Non-current line number | `#4B5059` | `#4B5059` (kit scheme; the old `#5D5F66` was a stale capture) | 0 |
+| Error stripe | 30 px, 1 px left rule `#393B40`, editor bg | 30 px, rule in the kit group-separator color (`#43454A` in New UI Dark), editor bg, 14x2 ticks, check in its top | rule 1 level lighter than `#393B40` |
+| Chrome column right of the editor | none | none | 0 |
+| Horizontal scrollbar at rest | none | none (width follows the longest line seen) | 0 |
+| Search result highlight (editor) | `#2D543F` | kit `TEXT_SEARCH_RESULT` `#114957` | scheme value differs; kit |
+| Tab strip, pill vs underline | see above | unchanged (kit `Tabs`, `new_ui` look has the underline) | Islands look keeps pills by design |

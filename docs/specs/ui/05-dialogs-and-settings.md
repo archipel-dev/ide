@@ -36,3 +36,13 @@ Reference dialogs sit in a 19 px OS title bar (openbox); sizes below are the dia
 | Extra rows | Theme, scheme + gear, Zoom... | adds "UI look" combo, no "Use custom font" combo row | content differs |
 
 `ic: platform/platform-resources/src/themes/expUI/expUI_dark.theme.json` (`Button`, `ComboBox`, `TextField`, `CheckBox`: borderInsets 4, icon 24).
+
+## After the ui-parity pass (`u08`)
+
+| Value | IntelliJ | Archipel now | Remaining diff |
+|---|---|---|---|
+| Buttons | 72x28, OK primary no border, gap 12 | kit `Button` 72x28, gap 12 | 0 |
+| Combo | 28 px, filled, bordered | kit `ComboBox` | 0 |
+| Tree selection | full-bleed, square | full-bleed, square | 0 |
+| Help button | present | present (kit action button, opens the help index) | round 22 px style differs |
+| Footer strip | rule + Gray3 strip | rule only | strip missing |

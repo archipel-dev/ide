@@ -485,8 +485,61 @@ fn collect(items: &[MenuItem], visit: &mut impl FnMut(&str)) {
 
 /// Draws `model` into an open context menu; sets `chosen` when an item is clicked.
 pub fn show(ui: &mut egui::Ui, model: &Model, chosen: &mut Option<String>) {
-    ui.set_min_width(240.0);
+    fit_width(ui, &model.items, model);
     render(ui, &model.items, model, chosen);
+}
+
+/// Text start of a menu row from the menu's left edge (UI-POP-020: icon column, then text).
+const TEXT_OFFSET: f32 = 36.0;
+/// Least space between the longest label and its shortcut (UI-POP-023).
+const SHORTCUT_GAP: f32 = 24.0;
+/// Space after the shortcut or the sub-menu arrow.
+const RIGHT_PADDING: f32 = 26.0;
+
+/// Makes the menu as wide as its widest row (UI-POP-023) instead of the popup's room.
+fn fit_width(ui: &mut egui::Ui, items: &[MenuItem], model: &Model) {
+    let font = egui::FontId::proportional(crate::theme::UI_FONT_SIZE);
+    let text_width = |text: &str| {
+        ui.painter()
+            .layout_no_wrap(text.to_owned(), font.clone(), egui::Color32::PLACEHOLDER)
+            .size()
+            .x
+    };
+    let width = items
+        .iter()
+        .map(|item| match item {
+            MenuItem::Action { id, label } => {
+                let shortcut = model.shortcuts.get(id).filter(|s| !s.is_empty());
+                text_width(label) + shortcut.map_or(0.0, |s| SHORTCUT_GAP + text_width(s))
+            }
+            MenuItem::Submenu { label, .. } => text_width(label) + SHORTCUT_GAP,
+            MenuItem::Separator(_) => 0.0,
+        })
+        .fold(0.0_f32, f32::max)
+        + TEXT_OFFSET
+        + RIGHT_PADDING;
+    let width = width.ceil().max(MIN_MENU_WIDTH);
+    ui.set_min_width(width);
+    ui.set_max_width(width);
+}
+
+/// Narrowest menu.
+const MIN_MENU_WIDTH: f32 = 160.0;
+
+/// The icon of an action's row, for the actions that have one in the reference menus.
+fn icon_of(id: &str) -> Option<archipel_kit::Glyph> {
+    use archipel_kit::Glyph;
+    Some(match id {
+        "$Copy" => Glyph::Copy,
+        "$Paste" => Glyph::Paste,
+        "$Delete" | "SafeDelete" => Glyph::Delete,
+        "FindInPath" => Glyph::FindInFiles,
+        "RenameElement" => Glyph::Edit,
+        "Run" | "RunClass" => Glyph::Run,
+        "Debug" | "DebugClass" => Glyph::Debug,
+        "Synchronize" => Glyph::Refresh,
+        _ => return None,
+    })
 }
 
 fn render(ui: &mut egui::Ui, items: &[MenuItem], model: &Model, chosen: &mut Option<String>) {
@@ -495,6 +548,9 @@ fn render(ui: &mut egui::Ui, items: &[MenuItem], model: &Model, chosen: &mut Opt
             MenuItem::Action { id, label } => {
                 let mut item = archipel_kit::action_system::ActionMenuItem::new(label)
                     .enabled(model.enabled.contains(id));
+                if let Some(icon) = icon_of(id) {
+                    item = item.icon(icon);
+                }
                 if let Some(shortcut) = model.shortcuts.get(id).filter(|s| !s.is_empty()) {
                     item = item.shortcut(shortcut);
                 }
@@ -509,7 +565,7 @@ fn render(ui: &mut egui::Ui, items: &[MenuItem], model: &Model, chosen: &mut Opt
                 let entry =
                     ui.add(archipel_kit::action_system::ActionMenuItem::new(label).shortcut("›"));
                 egui::containers::menu::SubMenu::new().show(ui, &entry, |ui| {
-                    ui.set_min_width(200.0);
+                    fit_width(ui, items, model);
                     render(ui, items, model, chosen);
                 });
             }

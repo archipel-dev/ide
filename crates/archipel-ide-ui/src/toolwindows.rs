@@ -8,7 +8,7 @@ use archipel_ide_core::project_view::{RowKind, TreeRow};
 use archipel_ide_core::{Anchor, ToolWindow};
 use archipel_ide_git::ChangeKind;
 use archipel_kit::Tone;
-use archipel_kit::action_system::ActionMenuItem;
+use archipel_kit::action_system::{ActionButton, ActionMenuItem};
 use archipel_kit::behaviour::{DragSource, DropTarget, PopupHandler};
 use eframe::egui::{self, Color32, Rect, RichText, vec2};
 use serde_json::{Value, json};
@@ -23,12 +23,18 @@ pub fn terminal_input_id() -> egui::Id {
     egui::Id::new("terminal_input")
 }
 
+/// Width of a left tool window before the user resizes it: 28.8 % of the window, at least
+/// 280 px (UI-TW-006: 460 px at 1600).
+fn default_left_width(window_width: f32) -> f32 {
+    (window_width * 0.288).round().max(280.0)
+}
+
 pub fn left(app: &mut IdeApp, ctx: &egui::Context) {
     let Some(window) = app.state.tool_windows().visible(Anchor::Left) else {
         return;
     };
     egui::SidePanel::left("left_tool_window")
-        .default_width(280.0)
+        .default_width(default_left_width(ctx.content_rect().width()))
         .min_width(160.0)
         .resizable(true)
         .show_separator_line(false)
@@ -233,6 +239,8 @@ fn project_tree(app: &mut IdeApp, ui: &mut egui::Ui) {
                     ui,
                     widgets::TreeRow {
                         icon: Some((Icon::Folder, *icons::ICON)),
+                        // The root shows its chevron, open (UI-TW-008).
+                        expanded: Some(true),
                         tone: Some(Tone::Strong),
                         secondary: Some((&root_path, *theme::TEXT_INFO)),
                         ..widgets::TreeRow::new(&root_name)
@@ -265,9 +273,9 @@ fn project_tree(app: &mut IdeApp, ui: &mut egui::Ui) {
             let depth = tree_row.depth + 1;
             let selected = app.tree_selection.as_deref() == Some(path.as_path());
             let tint = if tree_row.excluded {
-                Some(icons::EXCLUDED.gamma_multiply(0.14))
+                Some(*theme::FILE_YELLOW)
             } else if tree_row.role.is_test() {
-                Some(icons::TEST_ROOT.gamma_multiply(0.10))
+                Some(*theme::FILE_GREEN)
             } else {
                 None
             };
@@ -459,10 +467,15 @@ fn project_tree(app: &mut IdeApp, ui: &mut egui::Ui) {
 
 /// The ⋮ menu of the Project header ("Tree Appearance" options).
 fn project_options_menu(app: &mut IdeApp, ui: &mut egui::Ui) {
-    ui.menu_button("…", |ui| {
+    // A kebab icon button like the other header actions (UI-TW-005), not a bordered box.
+    let more = ui.add(ActionButton::new(
+        archipel_kit::Glyph::MoreVertical,
+        "Options",
+    ));
+    egui::Popup::menu(&more).show(|ui| {
         let compact = app.state.project_view.compact_packages;
         if ui
-            .checkbox(&mut { compact }, "Compact Middle Packages")
+            .add(ActionMenuItem::new("Compact Middle Packages").checked(compact))
             .clicked()
         {
             app.dispatch("project.toggleCompactPackages", Value::Null);
@@ -1162,14 +1175,42 @@ pub(crate) fn highlighted_preview(
     preview: &str,
     highlights: &[std::ops::Range<usize>],
 ) -> egui::text::LayoutJob {
+    preview_job(
+        preview,
+        highlights,
+        egui::FontId::monospace(theme::EDITOR_FONT_SIZE),
+        (*theme::editor::SEARCH_RESULT, *theme::TEXT_BRIGHT),
+    )
+}
+
+/// Result row of the Find in Files popup (UI-POP-040/041): UI font, matches on the
+/// search-match yellow with dark text.
+pub(crate) fn popup_preview(
+    preview: &str,
+    highlights: &[std::ops::Range<usize>],
+) -> egui::text::LayoutJob {
+    preview_job(
+        preview,
+        highlights,
+        egui::FontId::proportional(theme::UI_FONT_SIZE),
+        (*theme::SEARCH_MATCH, theme::search_match_text()),
+    )
+}
+
+fn preview_job(
+    preview: &str,
+    highlights: &[std::ops::Range<usize>],
+    font_id: egui::FontId,
+    (background, color): (Color32, Color32),
+) -> egui::text::LayoutJob {
     let plain = egui::TextFormat {
-        font_id: egui::FontId::monospace(theme::EDITOR_FONT_SIZE),
+        font_id,
         color: *theme::editor::TEXT,
         ..Default::default()
     };
     let matched = egui::TextFormat {
-        background: *theme::editor::SEARCH_RESULT,
-        color: *theme::TEXT_BRIGHT,
+        background,
+        color,
         ..plain.clone()
     };
     let chars: Vec<char> = preview.chars().collect();
@@ -1315,6 +1356,13 @@ mod tests {
         // Out-of-range or overlapping highlights never panic.
         let job = highlighted_preview("ab", &[1..9, 0..1]);
         assert_eq!(job.text, "ab");
+    }
+
+    /// UI-TW-006: the Project window opens 460 px wide in a 1600 px window.
+    #[test]
+    fn ui_tw_006_default_left_width_is_28_8_percent() {
+        assert!((default_left_width(1600.0) - 460.0).abs() <= 1.0);
+        assert_eq!(default_left_width(800.0), 280.0, "never narrower than 280");
     }
 
     #[test]

@@ -144,7 +144,7 @@ fn assert_spring_project(result: &ImportResult, root: &PathBuf, module: &str) {
         jar.name
     );
     assert!(index.is_in_library_classes(&jar.classes[0]));
-    // Lombok is compile only (provided / annotation processor), the driver is runtime.
+    // Lombok is compile only (provided / annotation processor).
     let scope = |part: &str| {
         module.order_entries.iter().find_map(|e| match e {
             OrderEntry::Library { library, scope, .. } if library.contains(part) => Some(*scope),
@@ -160,7 +160,15 @@ fn assert_spring_project(result: &ImportResult, root: &PathBuf, module: &str) {
         scope("lombok")
     );
     assert_eq!(scope("assertj-core"), Some(DependencyScope::Test));
-    assert_eq!(scope("h2"), Some(DependencyScope::Runtime));
+    // Gradle sees h2 through `spring-boot-h2console` at compile scope; Maven declares it runtime.
+    assert!(
+        matches!(
+            scope("h2"),
+            Some(DependencyScope::Runtime | DependencyScope::Compile)
+        ),
+        "{:?}",
+        scope("h2")
+    );
     let with_sources = model
         .libraries
         .iter()

@@ -53,11 +53,11 @@ pub fn menu(app: &mut IdeApp, ui: &mut egui::Ui) {
         return;
     };
     let current = git.branch.clone();
-    if !app.state.git_log.loaded {
+    if !app.state.git_log_snapshot().loaded {
         // Branch lists come from the log state; load them on first open.
         app.dispatch("git.log.refresh", Value::Null);
     }
-    let branches = app.state.git_log.branches.clone();
+    let branches = app.state.git_log_snapshot().branches.clone();
     let pending = app.state.git_pending();
     ui.set_min_width(260.0);
     let mut action: Option<(&'static str, Value)> = None;
@@ -106,7 +106,7 @@ pub fn menu(app: &mut IdeApp, ui: &mut egui::Ui) {
     if ui.add_enabled(!busy, egui::Button::new("Fetch")).clicked() {
         action = Some(("git.fetch", Value::Null));
     }
-    if let Some(progress) = &app.state.remote_progress {
+    if let Some(progress) = &app.state.remote_progress() {
         ui.label(RichText::new(progress).color(theme::TEXT_SECONDARY));
     }
     ui.separator();

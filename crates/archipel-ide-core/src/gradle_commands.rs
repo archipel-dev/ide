@@ -136,7 +136,8 @@ impl IdeState {
 
     /// Applies the result of a finished sync.
     pub(crate) fn finish_gradle_sync(&mut self) {
-        match self.execution().runner().state() {
+        let task_state = self.execution().runner().state().clone();
+        match &task_state {
             TaskState::Exited(0) => {
                 self.load_gradle_model();
                 self.create_gradle_run_configurations();

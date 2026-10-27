@@ -278,7 +278,7 @@ fn render(app: &mut IdeApp, ui: &mut egui::Ui, items: &[MenuItem]) {
 
 /// The recently opened projects (most recent first) at the top of Recent Projects.
 fn recent_projects(app: &mut IdeApp, ui: &mut egui::Ui) {
-    let entries: Vec<_> = app.state.recent_projects.entries().to_vec();
+    let entries: Vec<_> = app.state.recent_projects().read().entries().to_vec();
     if entries.is_empty() {
         ui.add_enabled(false, egui::Button::new("No recent projects"));
     }

@@ -249,7 +249,8 @@ impl IdeState {
         if self.android.deploy.pending.is_some() && !self.execution().is_running() {
             changed = true;
             let (plan, root) = self.android.deploy.pending.take().expect("pending deploy");
-            match self.execution().runner().state().clone() {
+            let task_state = self.execution().runner().state().clone();
+            match task_state {
                 TaskState::Exited(0) => {
                     if let Err(error) =
                         self.start_deploy_job(plan, &root, None, Steps::InstallAndLaunch)

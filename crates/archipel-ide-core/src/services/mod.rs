@@ -13,6 +13,15 @@
 //! | [`XDebuggerManager`] | project | `IdeState::debugger` (breakpoints, watches, the session) |
 //! | [`TerminalService`] | project | `IdeState::{terminal, terminal_tabs}` |
 //! | [`SpringStarters`] | application | `IdeState::spring` (starter catalog of the New Project wizard) |
+//! | [`FindInProjectService`] | project | `IdeState::{search, search_results, search_query, ...}` (Find in Files) |
+//! | [`SearchEverywhereManager`] | application | `IdeState::quick_nav` |
+//! | [`ActionManager`] | application | `IdeState::include_disabled_actions` |
+//! | [`GitLogService`], [`BlameAnnotations`], [`LineStatusTracker`] | project | `IdeState::{git_log, annotations, line_changes}` |
+//! | [`GitRemoteOperations`] | project | `IdeState::{remote_job, remote_progress, remote_error}` |
+//! | [`CloneManager`] | application | `IdeState::{clone_job, clone_progress, clone_error}` |
+//! | [`KeymapManager`] | application | `IdeState::keymap` |
+//! | [`UpdateChecker`] | application | `IdeState::{updates, update_state, update_silent, update_executable, update_installer}` |
+//! | [`RecentProjectsManager`] | application | `IdeState::recent_projects` |
 
 use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard,
@@ -94,25 +103,42 @@ pub(crate) fn lock<'a, T>(mutex: &'a Mutex<T>, what: &str) -> MutexGuard<'a, T> 
     }
 }
 
+mod actions;
 mod debugger;
 mod execution;
+mod find;
 mod git;
+mod keymap;
 mod notifications;
 mod project_model;
+mod recent_projects;
+mod remote;
+mod search_everywhere;
 mod settings;
 mod spring;
 mod terminal;
 mod toolchains;
+mod update;
+mod vcs;
 
+pub use actions::{ActionManager, ActionOptions};
 pub(crate) use debugger::Announced;
 pub use debugger::{DEBUG_SESSION_TOPIC, DebugSessionListener, XDebuggerManager};
 pub use execution::{EXECUTION_TOPIC, ExecutionListener, ExecutionManager};
+pub use find::{FIND_TOPIC, FindInProjectService, FindListener, FindState, SearchSummary};
 pub use git::{GIT_REPO_CHANGE, GitRepositories, GitRepositoryChangeListener};
+pub use keymap::{KeymapManager, KeymapState};
 pub use notifications::{
     NOTIFICATION_TOPIC, NotificationListener, NotificationSource, Notifications,
 };
 pub use project_model::{PROJECT_MODEL_TOPIC, ProjectModelListener, ProjectModelService};
-pub use settings::{Settings, SettingsService};
+pub use recent_projects::RecentProjectsManager;
+pub use remote::{
+    CLONE_TOPIC, CloneJob, CloneListener, CloneManager, CloneOutcome, GitRemoteOperations,
+    REMOTE_TOPIC, RemoteOperationListener, RemoteOutcome,
+};
+pub use search_everywhere::SearchEverywhereManager;
+pub use settings::{SETTINGS_TOPIC, Settings, SettingsListener, SettingsService};
 pub use spring::SpringStarters;
 pub use terminal::{TERMINAL_TOPIC, TerminalListener, TerminalService, TerminalState};
 pub use toolchains::{
@@ -131,3 +157,8 @@ fn assert_sync() {
     sync::<crate::debug_commands::DebuggerState>();
     sync::<archipel_ide_terminal::TerminalSession>();
 }
+pub use update::{UPDATE_TOPIC, UpdateChecker, UpdateListener};
+pub(crate) use vcs::REBLAME_INTERVAL;
+pub use vcs::{
+    BlameAnnotations, GitLogService, LINE_STATUS_TOPIC, LineStatusListener, LineStatusTracker,
+};

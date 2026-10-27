@@ -351,7 +351,7 @@ pub fn find_header(app: &mut IdeApp, ui: &mut egui::Ui) -> bool {
             app.state.navigation.usages = None;
             app.state.navigation.usages_selected = false;
         }
-    } else if app.state.search.is_running() && button(ui, Icon::Stop, *theme::STOP_RED, "Cancel") {
+    } else if app.state.search_running() && button(ui, Icon::Stop, *theme::STOP_RED, "Cancel") {
         app.dispatch("search.cancel", Value::Null);
     }
     usages_selected

@@ -15,8 +15,7 @@ impl IdeState {
         if let Err(error) = loaded {
             self.status = format!("{error}. Using defaults; the file is left unchanged.");
         }
-        self.refresh_keymap();
-        self.sync_gradle_options();
+        self.settings_changed();
     }
 
     pub(crate) fn load_project_settings(&mut self, root: &Path) {
@@ -24,38 +23,35 @@ impl IdeState {
         if let Err(error) = loaded {
             self.status = format!("{error}. Using defaults; the file is left unchanged.");
         }
-        self.sync_gradle_options();
+        self.settings_changed();
     }
 
-    /// Hands Settings | Build Tools | Gradle to the Gradle integration.
-    pub(crate) fn sync_gradle_options(&self) {
-        use archipel_ide_gradle::{BuildRunner, Distribution, GradleOptions};
-        let settings = self.settings();
-        let settings = settings.read();
-        let path = |id| settings.text(id).filter(|v| !v.trim().is_empty());
-        archipel_ide_gradle::set_options(GradleOptions {
-            build_run: BuildRunner::from_id(
-                &settings.text(ids::GRADLE_BUILD_RUN).unwrap_or_default(),
-            ),
-            distribution: Distribution::from_id(
-                &settings.text(ids::GRADLE_DISTRIBUTION).unwrap_or_default(),
-            ),
-            offline: settings.bool(ids::GRADLE_OFFLINE).unwrap_or(false),
-            user_home: path(ids::GRADLE_USER_HOME),
-            jvm: path(ids::GRADLE_JVM),
-        });
-    }
-
-    /// Saves the settings and updates state derived from them (the keymap).
+    /// Saves the settings and announces them; derived state (the keymap, the Gradle options)
+    /// follows the [`crate::services::SETTINGS_TOPIC`] event.
     pub(crate) fn persist_settings(&mut self) -> Result<(), CommandError> {
-        self.refresh_keymap();
-        self.sync_gradle_options();
+        self.settings_changed();
         self.settings()
             .read()
             .store
             .save()
             .map_err(|error| CommandError::Failed(error.to_string()))
     }
+}
+
+/// Hands Settings | Build Tools | Gradle to the Gradle integration. Subscribed to
+/// [`crate::services::SETTINGS_TOPIC`] by the platform.
+pub(crate) fn apply_gradle_options(settings: &Settings) {
+    use archipel_ide_gradle::{BuildRunner, Distribution, GradleOptions};
+    let path = |id| settings.text(id).filter(|v| !v.trim().is_empty());
+    archipel_ide_gradle::set_options(GradleOptions {
+        build_run: BuildRunner::from_id(&settings.text(ids::GRADLE_BUILD_RUN).unwrap_or_default()),
+        distribution: Distribution::from_id(
+            &settings.text(ids::GRADLE_DISTRIBUTION).unwrap_or_default(),
+        ),
+        offline: settings.bool(ids::GRADLE_OFFLINE).unwrap_or(false),
+        user_home: path(ids::GRADLE_USER_HOME),
+        jvm: path(ids::GRADLE_JVM),
+    });
 }
 
 fn setting_id(state: &IdeState, params: &Value) -> Result<String, CommandError> {

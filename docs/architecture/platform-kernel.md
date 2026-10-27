@@ -53,12 +53,17 @@ Differences worth knowing:
 IdeState
  └─ platform: Platform                      (crates/archipel-ide-core/src/platform.rs)
      ├─ application: Application
-     │   ├─ services    ToolchainManager, SettingsService, Notifications
-     │   ├─ bus         ProjectManager::TOPIC, TOOLCHAIN_TOPIC, NOTIFICATION_TOPIC
-     │   └─ project services declared for every project: ToolchainRequirementsService, GitRepositories
+     │   ├─ services    ToolchainManager, SettingsService, Notifications, KeymapManager,
+     │   │            UpdateChecker, RecentProjectsManager, CloneManager, ActionManager,
+     │   │            SearchEverywhereManager
+     │   ├─ bus         ProjectManager::TOPIC, TOOLCHAIN_TOPIC, NOTIFICATION_TOPIC, SETTINGS_TOPIC,
+     │   │            UPDATE_TOPIC, CLONE_TOPIC
+     │   └─ project services declared for every project: ToolchainRequirementsService, GitRepositories,
+    │      FindInProjectService, GitLogService, BlameAnnotations,
+    │      LineStatusTracker, GitRemoteOperations
      └─ project: Option<Project>            (None on the welcome screen)
          ├─ services    created lazily, disposed on close
-         └─ bus         GIT_REPO_CHANGE
+         └─ bus         GIT_REPO_CHANGE, FIND_TOPIC, LINE_STATUS_TOPIC, REMOTE_TOPIC
 ```
 
 - `open_project` and `close_project` on `IdeState` call `Platform::open_project` and
@@ -67,8 +72,9 @@ IdeState
   fires `project_closed`. Opening a project while another is open closes the old one first.
 - `IdeState` reaches services through thin accessors in `platform.rs`:
   `state.settings()`, `state.toolchains()`, `state.notifications()`, `state.git()`,
-  `state.git_status()`, `state.toolchain_requirements()`, `state.execution()`, `state.debugger()`,
-  `state.terminal()`, `state.spring()`. Commands and the UI use these (or
+  `state.git_status()`, `state.toolchain_requirements()`, `state.find()`, `state.keymap()`,
+  `state.updates()`, `state.git_log()`, `state.execution()`, `state.debugger()`, `state.terminal()`,
+  `state.spring()` and so on. Commands and the UI use these (or
   `state.application().service::<T>()` and `state.platform_project()`).
 - **Run, debug and terminal without a project.** The Run, debug and Terminal services are project
   services, but the UI asks for them on the welcome screen too. Their accessors return the
@@ -84,8 +90,9 @@ IdeState
 - **Reactions.** A feature that still lives on `IdeState` needs `&mut IdeState` to react to an
   event, which a bus listener cannot have. Its listener records a `Reaction` in a queue and
   `IdeState::dispatch_reactions` runs it right after the publisher returns. Today:
-  `VcsChanged` (invalidate line changes, Git log and blame; rescan the tree if files were added or
-  removed; refresh the open diff) and `ToolchainInstalled` (restart language servers that were
+  `VcsChanged` (rescan the tree if files were added or removed; refresh the open diff; the line
+  changes, Git log and blame invalidate themselves), `SearchFinished`, `RemoteFinished`,
+  `UpdateMessage` (status line), `ToolchainInstalled` (restart language servers that were
   missing, start the Gradle sync once the install queue is idle), `RunExited` (a task exited on
   its own: continue a debug session that waited for its build, finish a Gradle or Bazel sync,
   status bar text) and `DebugPaused` (reveal the execution point in the editor and show the
@@ -106,6 +113,21 @@ IdeState
 | `XDebuggerManager` | project, disposable | `IdeState::debugger`: breakpoints, options, watches, the DAP session | publishes `DEBUG_SESSION_TOPIC` (`session_started`, `session_paused`, `session_resumed`, `session_stopped`) |
 | `TerminalService` | project, disposable | `IdeState::{terminal, terminal_tabs}`: the shells of the Terminal tool window | publishes `TERMINAL_TOPIC` (`terminal_exited`) |
 | `SpringStarters` | application | `IdeState::spring`: starter catalog of the New Project wizard | |
+| `FindInProjectService` | project | `IdeState::{search, search_results, search_query, search_scope_kind, custom_scopes, search_custom_scope, search_background, search_options, search_files_scanned, search_truncated}`: Find in Files | publishes `FIND_TOPIC` (`search_finished(summary)`); the status line follows |
+| `SearchEverywhereManager` (`ServiceState<QuickNavState>`) | application | `IdeState::quick_nav`: Search Everywhere, Recent Locations, Switcher. Application scope because the popup works on the welcome screen; `project_opened` resets it | |
+| `ActionManager` (`ServiceState<ActionOptions>`) | application | `IdeState::include_disabled_actions` | |
+| `GitLogService` | project | `IdeState::git_log` (snapshots are `Arc<GitLogState>`) | subscribes `GIT_REPO_CHANGE`: marks the log stale |
+| `BlameAnnotations` | project | `IdeState::annotations` | subscribes `GIT_REPO_CHANGE`: re-blame |
+| `LineStatusTracker` | project | `IdeState::line_changes` | subscribes `GIT_REPO_CHANGE`: drops `HEAD` texts, publishes `LINE_STATUS_TOPIC` (`line_status_invalidated`) |
+| `GitRemoteOperations` | project | `IdeState::{remote_job, remote_progress, remote_error}` | publishes `REMOTE_TOPIC` (`remote_operation_finished(outcome)`) |
+| `CloneManager` | application | `IdeState::{clone_job, clone_progress, clone_error}` (a clone runs before a project exists) | publishes `CLONE_TOPIC` (`clone_finished(outcome)`) |
+| `KeymapManager` | application | `IdeState::keymap` | subscribes `SETTINGS_TOPIC`: rebuilds itself |
+| `UpdateChecker` | application | `IdeState::{updates, update_state, update_silent, update_executable, update_installer}` | publishes `UPDATE_TOPIC` (`update_state_changed(state, message)`); balloon and status line follow |
+| `RecentProjectsManager` (`ServiceState<RecentProjects>`) | application | `IdeState::recent_projects` | |
+
+`SettingsService` now publishes `SETTINGS_TOPIC` (`settings_changed(&Settings)`) when a command
+calls `notify_changed()` after a set, reset, apply or load. The keymap and the Gradle options
+(`archipel_ide_gradle::set_options`) subscribe; nobody calls them after a settings change.
 
 Left alone on purpose, because another change is working there: the LSP registry (`lsp`), the
 daemon and the problems model (`problems`, `analysis`, `code_actions`).
@@ -254,18 +276,18 @@ this list (so it cannot go stale) or if the struct grows. Tick a field when it h
   trees, navigation history and requests.
 
 **Search and navigation (`SearchEverywhere`, `FindManager`)**
-- [ ] `search`, `search_results`, `search_query`, `search_scope_kind`, `custom_scopes`,
+- [x] `search`, `search_results`, `search_query`, `search_scope_kind`, `custom_scopes`,
   `search_custom_scope`, `search_background`, `search_options`, `search_files_scanned`,
   `search_truncated`: Find in Files.
-- [ ] `quick_nav`: Search Everywhere, Recent Locations, Switcher.
-- [ ] `include_disabled_actions`: Find Action option (`ActionManager`).
+- [x] `quick_nav`: Search Everywhere, Recent Locations, Switcher.
+- [x] `include_disabled_actions`: Find Action option (`ActionManager`).
 
 **VCS (project services next to `GitRepositories`)**
-- [ ] `git_log`: Git Log tab state.
-- [ ] `annotations`: blame annotations.
-- [ ] `line_changes`: gutter change markers (`LineStatusTracker`).
-- [ ] `remote_job`, `remote_progress`, `remote_error`: fetch, pull and push.
-- [ ] `clone_job`, `clone_progress`, `clone_error`: Get from VCS clone.
+- [x] `git_log`: Git Log tab state.
+- [x] `annotations`: blame annotations.
+- [x] `line_changes`: gutter change markers (`LineStatusTracker`).
+- [x] `remote_job`, `remote_progress`, `remote_error`: fetch, pull and push.
+- [x] `clone_job`, `clone_progress`, `clone_error`: Get from VCS clone.
 
 **Run and build (`RunManager`, `ExecutionManager`, `XDebuggerManager`)**
 - [x] `runner`: the task service, now `ExecutionManager::runner()` (project service).
@@ -287,16 +309,17 @@ this list (so it cannot go stale) or if the struct grows. Tick a field when it h
 - [ ] `injected_dialog_paths`: paths queued for the next native file dialog (tests, control socket).
 - [ ] `settings_request`: settings page the UI should open.
 - [ ] `about_open`, `first_run_open`, `first_run_dir`, `crash_report`: dialogs and first-run state.
-- [ ] `recent_projects`: welcome screen list (`RecentProjectsManager`, application service).
+- [x] `recent_projects`: welcome screen list (`RecentProjectsManager`, application service).
 
 **Application services still to extract**
-- [ ] `keymap`: `KeymapManager` (application service; reads `SettingsService`).
-- [ ] `updates`, `update_state`, `update_silent`, `update_executable`, `update_installer`: update
+- [x] `keymap`: `KeymapManager` (application service; reads `SettingsService`).
+- [x] `updates`, `update_state`, `update_silent`, `update_executable`, `update_installer`: update
   checking and installation (`UpdateChecker`).
 - [ ] `plugin_host`: plugin registry, plugin tool windows and tabs (`PluginManager`;
   contributions become extensions).
 - [ ] `ai`, `agents`: AI assistant and agents (application and project services).
 
 **Already moved** (see "Services in place"): `toolchains`, `settings`, `update_notification`,
-`git`, `git_watcher`, `git_pending`, `vcs_stale`, `runner`, `build_window`, `run_configurations`,
-`edit_run_configurations`, `runnable_cache`, `debugger`, `spring`, `terminal`, `terminal_tabs`.
+`git`, `git_watcher`, `git_pending`, `vcs_stale`, and the ticked groups above (including `runner`,
+`build_window`, `run_configurations`, `edit_run_configurations`, `runnable_cache`, `debugger`, `spring`,
+`terminal`, `terminal_tabs`).

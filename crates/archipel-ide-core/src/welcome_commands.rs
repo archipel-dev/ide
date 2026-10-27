@@ -2,16 +2,8 @@
 
 use crate::{CommandError, IdeState, spec, string_param};
 use archipel_ide_command::{Command, CommandRegistry};
-use archipel_ide_git::{RemoteEvent, RemoteJob, RemoteOperation};
 use serde_json::{Value, json};
-use std::path::{Path, PathBuf};
-
-/// A running `git clone` started from the welcome screen.
-pub struct CloneJob {
-    job: RemoteJob,
-    pub url: String,
-    pub directory: PathBuf,
-}
+use std::path::Path;
 
 /// Directory name a clone URL suggests: `https://host/org/repo.git` → `repo`.
 pub fn repository_name(url: &str) -> String {
@@ -84,82 +76,61 @@ impl IdeState {
         choices
     }
 
-    /// Persists recent projects in the per-user config directory.
+    /// Loads the recent projects from the per-user config directory.
     pub fn load_recent_projects(&mut self) {
         let store =
             archipel_ide_toolchains::config_dir().map(|dir| dir.join("recent-projects.json"));
-        self.recent_projects = archipel_ide_project::recent::RecentProjects::load(store);
+        self.recent_projects()
+            .replace(archipel_ide_project::recent::RecentProjects::load(store));
     }
 
     pub fn clone_busy(&self) -> bool {
-        self.clone_job.is_some()
+        self.clone_manager().is_busy()
+    }
+
+    /// Latest progress line of the running clone.
+    pub fn clone_progress(&self) -> Option<String> {
+        self.clone_manager().progress()
+    }
+
+    /// The message of the last failed clone.
+    pub fn clone_error(&self) -> Option<String> {
+        self.clone_manager().error()
+    }
+
+    /// Takes the message of the last failed clone (the dialog shows it once).
+    pub fn take_clone_error(&self) -> Option<String> {
+        self.clone_manager().take_error()
     }
 
     pub fn start_clone(&mut self, url: &str, directory: &Path) -> Result<(), String> {
-        if self.clone_busy() {
-            return Err("Another clone is still running".into());
-        }
-        let url = url.trim();
-        if url.is_empty() {
-            return Err("Enter the repository URL".into());
-        }
-        if directory.exists() {
-            return Err(format!("{} already exists", directory.display()));
-        }
-        let parent = directory
-            .parent()
-            .filter(|parent| parent.is_dir())
-            .ok_or_else(|| format!("The parent of {} does not exist", directory.display()))?;
-        let operation = RemoteOperation::Clone {
-            url: url.to_owned(),
-            directory: directory.display().to_string(),
-        };
-        let job = RemoteJob::start(parent, operation, self.repaint.notifier())
-            .map_err(|error| error.to_string())?;
-        self.clone_progress = Some("Cloning…".into());
-        self.clone_error = None;
+        self.clone_manager()
+            .start(url, directory, self.repaint.notifier())?;
         self.status = "Cloning…".into();
-        self.clone_job = Some(CloneJob {
-            job,
-            url: url.to_owned(),
-            directory: directory.to_owned(),
-        });
         Ok(())
     }
 
     /// Applies clone progress; opens the project when the clone succeeds.
     /// Returns true when a new project was opened.
     pub fn poll_clone(&mut self) -> bool {
-        let Some(clone) = self.clone_job.as_ref() else {
-            return false;
-        };
-        let mut finished = None;
-        for event in clone.job.poll() {
-            match event {
-                RemoteEvent::Progress(line) => {
-                    self.status = format!("Cloning: {line}");
-                    self.clone_progress = Some(line);
-                }
-                RemoteEvent::Finished(result) => finished = Some(result),
-            }
+        let clone = self.clone_manager();
+        let (progress, finished) = clone.poll();
+        if let Some(line) = progress {
+            self.status = format!("Cloning: {line}");
         }
-        let Some(result) = finished else {
+        let Some(outcome) = finished else {
             return false;
         };
-        let directory = clone.directory.clone();
-        self.clone_job = None;
-        self.clone_progress = None;
-        match result {
-            Ok(_) => match self.open_project(&directory) {
+        match outcome.result {
+            Ok(_) => match self.open_project(&outcome.directory) {
                 Ok(()) => true,
                 Err(error) => {
-                    self.clone_error = Some(error);
+                    clone.set_error(Some(error));
                     false
                 }
             },
-            Err(error) => {
+            Err(_) => {
                 self.status = "Clone failed".into();
-                self.clone_error = Some(error);
                 false
             }
         }
@@ -199,7 +170,7 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             |_| true,
             |state: &mut IdeState, params| {
                 let path = string_param(&params, "path")?;
-                Ok(json!({"removed": state.recent_projects.remove(Path::new(&path))}))
+                Ok(json!({"removed": state.recent_projects().write().remove(Path::new(&path))}))
             },
         ))
         .expect("unique built-in id");
@@ -278,12 +249,12 @@ mod tests {
             }
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
-        assert!(state.clone_error.is_none(), "{:?}", state.clone_error);
+        assert!(state.clone_error().is_none(), "{:?}", state.clone_error());
         assert_eq!(
             state.project.as_ref().unwrap().root(),
             target.canonicalize().unwrap()
         );
-        assert_eq!(state.recent_projects.entries()[0].name, "copy");
+        assert_eq!(state.recent_projects().read().entries()[0].name, "copy");
         // A second clone into the same directory is refused with a clear message.
         let error = state.start_clone("x", &target).unwrap_err();
         assert!(error.contains("already exists"), "{error}");

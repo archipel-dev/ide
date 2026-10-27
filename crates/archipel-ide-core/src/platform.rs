@@ -11,14 +11,19 @@
 //! feature becomes a service, its listener does the work itself and the reaction disappears.
 
 use crate::build_window::BuildWindowFollower;
+use crate::services::Settings;
 use crate::services::{
-    DEBUG_SESSION_TOPIC, DebugSessionListener, EXECUTION_TOPIC, ExecutionListener,
-    ExecutionManager, GIT_REPO_CHANGE, GitRepositories, GitRepositoryChangeListener, Notifications,
-    ProjectModelService, SettingsService, SpringStarters, TOOLCHAIN_TOPIC, TerminalService,
-    ToolchainBanner, ToolchainListener, ToolchainManager, ToolchainRequirementsService,
-    ToolchainState, XDebuggerManager,
+    ActionManager, BlameAnnotations, CloneManager, DEBUG_SESSION_TOPIC, DebugSessionListener,
+    EXECUTION_TOPIC, ExecutionListener, ExecutionManager, FIND_TOPIC, FindInProjectService,
+    FindListener, GIT_REPO_CHANGE, GitLogService, GitRemoteOperations, GitRepositories,
+    GitRepositoryChangeListener, KeymapManager, LineStatusTracker, Notifications,
+    ProjectModelService, REMOTE_TOPIC, RecentProjectsManager, RemoteOperationListener,
+    RemoteOutcome, SETTINGS_TOPIC, SearchEverywhereManager, SearchSummary, SettingsListener,
+    SettingsService, SpringStarters, TOOLCHAIN_TOPIC, TerminalService, ToolchainBanner,
+    ToolchainListener, ToolchainManager, ToolchainRequirementsService, ToolchainState,
+    UPDATE_TOPIC, UpdateChecker, UpdateListener, XDebuggerManager,
 };
-use crate::{IdeState, toolchain_commands};
+use crate::{IdeState, UpdateState, settings_commands, toolchain_commands};
 use archipel_ide_dap::StackFrame;
 use archipel_ide_git::RepositoryStatus;
 use archipel_ide_platform::{
@@ -41,6 +46,12 @@ pub(crate) enum Reaction {
     RunExited,
     /// The debug session stopped at a new execution point.
     DebugPaused(StackFrame),
+    /// A Find in Files search finished.
+    SearchFinished(SearchSummary),
+    /// A fetch, pull or push ended.
+    RemoteFinished(RemoteOutcome),
+    /// The update checker has something to tell the user.
+    UpdateMessage(String),
 }
 
 #[derive(Clone, Default)]
@@ -128,21 +139,85 @@ fn connect_run_listeners(
     );
 }
 
+struct FindReactions(Reactions);
+
+impl FindListener for FindReactions {
+    fn search_finished(&self, summary: &SearchSummary) {
+        self.0.push(Reaction::SearchFinished(*summary));
+    }
+}
+
+struct RemoteReactions(Reactions);
+
+impl RemoteOperationListener for RemoteReactions {
+    fn remote_operation_finished(&self, outcome: &RemoteOutcome) {
+        self.0.push(Reaction::RemoteFinished(outcome.clone()));
+    }
+}
+
+/// Shows a balloon and a status line when the update checker has news.
+struct UpdateReactions {
+    application: WeakApplication,
+    reactions: Reactions,
+}
+
+impl UpdateListener for UpdateReactions {
+    fn update_state_changed(&self, _state: &UpdateState, message: Option<&str>) {
+        let Some(message) = message else {
+            return;
+        };
+        if let Some(application) = self.application.upgrade() {
+            application.service::<Notifications>().show_update_balloon();
+        }
+        self.reactions
+            .push(Reaction::UpdateMessage(message.to_owned()));
+    }
+}
+
+/// Hands Settings | Build Tools | Gradle to the Gradle integration whenever settings change.
+struct GradleOptions;
+
+impl SettingsListener for GradleOptions {
+    fn settings_changed(&self, settings: &Settings) {
+        settings_commands::apply_gradle_options(settings);
+    }
+}
+
 /// Connects the per-project listeners when a project opens.
-struct CoreProjectListener(Reactions);
+struct CoreProjectListener {
+    application: WeakApplication,
+    reactions: Reactions,
+}
 
 impl ProjectManagerListener for CoreProjectListener {
     fn project_opened(&self, project: &Project) {
+        // Search Everywhere survives projects (it works on the welcome screen); what it knows
+        // about the previous project (symbol index, recent locations, Switcher) does not.
+        if let Some(application) = self.application.upgrade() {
+            application
+                .service::<SearchEverywhereManager>()
+                .replace(Default::default());
+        }
         let _ = project.message_bus().subscribe(
             project.disposable(),
             GIT_REPO_CHANGE,
-            Arc::new(VcsReactions(self.0.clone())),
+            Arc::new(VcsReactions(self.reactions.clone())),
+        );
+        let _ = project.message_bus().subscribe(
+            project.disposable(),
+            FIND_TOPIC,
+            Arc::new(FindReactions(self.reactions.clone())),
+        );
+        let _ = project.message_bus().subscribe(
+            project.disposable(),
+            REMOTE_TOPIC,
+            Arc::new(RemoteReactions(self.reactions.clone())),
         );
         connect_run_listeners(
             project.message_bus(),
             project.disposable(),
             &project.service::<ExecutionManager>(),
-            &self.0,
+            &self.reactions,
         );
     }
 }
@@ -152,7 +227,26 @@ fn register_core_services(application: &Application) {
         application.register_service(ServiceDescriptor::new(|_: &Application| {
             ToolchainManager::new(ToolchainState::default())
         })),
-        application.register_service(ServiceDescriptor::of_default::<SettingsService>()),
+        application.register_service(ServiceDescriptor::new(|application: &Application| {
+            SettingsService::new(application.message_bus().clone())
+        })),
+        application.register_service(ServiceDescriptor::new(|application: &Application| {
+            let settings = application.service::<SettingsService>();
+            KeymapManager::connect(
+                application.message_bus(),
+                application.disposable(),
+                &settings.read(),
+            )
+        })),
+        application.register_service(ServiceDescriptor::new(|application: &Application| {
+            UpdateChecker::new(application.message_bus().clone())
+        })),
+        application.register_service(ServiceDescriptor::of_default::<RecentProjectsManager>()),
+        application.register_service(ServiceDescriptor::new(|application: &Application| {
+            CloneManager::new(application.message_bus().clone())
+        })),
+        application.register_service(ServiceDescriptor::of_default::<ActionManager>()),
+        application.register_service(ServiceDescriptor::of_default::<SearchEverywhereManager>()),
         application.register_service(ServiceDescriptor::new(|application: &Application| {
             Notifications::new(application.message_bus().clone())
         })),
@@ -161,6 +255,21 @@ fn register_core_services(application: &Application) {
         >()),
         application.register_project_service(ServiceDescriptor::disposable(|project: &Project| {
             GitRepositories::new(project.message_bus().clone())
+        })),
+        application.register_project_service(ServiceDescriptor::disposable(|project: &Project| {
+            FindInProjectService::new(project.message_bus().clone())
+        })),
+        application.register_project_service(ServiceDescriptor::new(|project: &Project| {
+            GitLogService::connect(project)
+        })),
+        application.register_project_service(ServiceDescriptor::new(|project: &Project| {
+            BlameAnnotations::connect(project)
+        })),
+        application.register_project_service(ServiceDescriptor::new(|project: &Project| {
+            LineStatusTracker::connect(project)
+        })),
+        application.register_project_service(ServiceDescriptor::disposable(|project: &Project| {
+            GitRemoteOperations::new(project.message_bus().clone())
         })),
         application.register_project_service(ServiceDescriptor::disposable(|project: &Project| {
             ProjectModelService::new(project.message_bus().clone())
@@ -252,8 +361,20 @@ impl Default for Platform {
         );
         let _ = bus.subscribe(
             owner,
+            UPDATE_TOPIC,
+            Arc::new(UpdateReactions {
+                application: application.downgrade(),
+                reactions: reactions.clone(),
+            }),
+        );
+        let _ = bus.subscribe(owner, SETTINGS_TOPIC, Arc::new(GradleOptions));
+        let _ = bus.subscribe(
+            owner,
             ProjectManager::TOPIC,
-            Arc::new(CoreProjectListener(reactions.clone())),
+            Arc::new(CoreProjectListener {
+                application: application.downgrade(),
+                reactions: reactions.clone(),
+            }),
         );
         let detached = Detached::new(&application, &reactions);
         Self {
@@ -311,6 +432,77 @@ impl IdeState {
     /// Settings (application service).
     pub fn settings(&self) -> Arc<SettingsService> {
         self.application().service()
+    }
+
+    /// The effective keymap, kept in step with the settings (application service).
+    pub fn keymap(&self) -> Arc<KeymapManager> {
+        self.application().service()
+    }
+
+    /// Update checking and installation (application service).
+    pub fn updates(&self) -> Arc<UpdateChecker> {
+        self.application().service()
+    }
+
+    /// Recently opened projects (application service).
+    pub fn recent_projects(&self) -> Arc<RecentProjectsManager> {
+        self.application().service()
+    }
+
+    /// Get from Version Control (application service).
+    pub fn clone_manager(&self) -> Arc<CloneManager> {
+        self.application().service()
+    }
+
+    /// The Git Log tab (project service).
+    pub fn git_log(&self) -> Option<Arc<GitLogService>> {
+        self.platform_project()?.get_service()
+    }
+
+    /// The Git Log tab as of now; empty without a project.
+    pub fn git_log_snapshot(&self) -> Arc<crate::GitLogState> {
+        self.git_log().map(|log| log.snapshot()).unwrap_or_default()
+    }
+
+    /// Blame annotations of the open project's documents (project service).
+    pub fn annotations(&self) -> Option<Arc<BlameAnnotations>> {
+        self.platform_project()?.get_service()
+    }
+
+    /// Gutter change markers of the open project's documents (project service).
+    pub fn line_status(&self) -> Option<Arc<LineStatusTracker>> {
+        self.platform_project()?.get_service()
+    }
+
+    /// Fetch, pull and push of the open project (project service).
+    pub fn remote_ops(&self) -> Option<Arc<GitRemoteOperations>> {
+        self.platform_project()?.get_service()
+    }
+
+    /// Find Action options (application service).
+    pub fn actions(&self) -> Arc<ActionManager> {
+        self.application().service()
+    }
+
+    /// Find in Files: results, scope and options (project service).
+    pub fn find(&self) -> Option<Arc<FindInProjectService>> {
+        self.platform_project()?.get_service()
+    }
+
+    /// Whether a Find in Files search is running.
+    pub fn search_running(&self) -> bool {
+        self.find().is_some_and(|find| find.is_running())
+    }
+
+    /// Search Everywhere, Recent Locations and the Switcher (application service: the popup
+    /// works on the welcome screen, and its project-bound parts reset when a project opens).
+    pub fn search_everywhere(&self) -> Arc<SearchEverywhereManager> {
+        self.application().service()
+    }
+
+    /// Whether the Switcher popup is open.
+    pub fn switcher_open(&self) -> bool {
+        self.search_everywhere().read().switcher.is_some()
     }
 
     /// Toolchain discovery, pins and installs (application service).
@@ -417,9 +609,6 @@ impl IdeState {
         for reaction in self.platform.reactions.take() {
             match reaction {
                 Reaction::VcsChanged { structure_changed } => {
-                    self.invalidate_line_changes();
-                    self.invalidate_git_log();
-                    self.invalidate_annotations();
                     if structure_changed && let Some(project) = &self.project {
                         // Files created or deleted outside the IDE change the set of
                         // untracked/added/deleted paths; rescan so the project tree shows them.
@@ -430,6 +619,21 @@ impl IdeState {
                 Reaction::ToolchainInstalled => self.toolchain_installed(),
                 Reaction::RunExited => self.run_exited(),
                 Reaction::DebugPaused(frame) => self.debug_paused(&frame),
+                Reaction::UpdateMessage(message) => self.status = message,
+                Reaction::RemoteFinished(outcome) => self.remote_operation_finished(outcome),
+                Reaction::SearchFinished(summary) => {
+                    self.status = format!(
+                        "Found {} result{} in {} files{}",
+                        summary.results,
+                        if summary.results == 1 { "" } else { "s" },
+                        summary.files_scanned,
+                        if summary.truncated {
+                            " (limit reached)"
+                        } else {
+                            ""
+                        }
+                    );
+                }
             }
         }
     }
@@ -699,6 +903,57 @@ mod tests {
             .expect("the Build tool window kept the finished run");
         assert_eq!(snapshot.state, TaskState::Exited(2));
         assert!(snapshot.console.lines().iter().any(|l| l.text == "hello"));
+    }
+
+    #[test]
+    fn a_finished_search_sets_the_status_line_through_the_topic() {
+        let dir = temp("search-status");
+        std::fs::write(dir.join("a.txt"), "needle\nneedle\n").unwrap();
+        let mut state = IdeState::default();
+        state.open_project(&dir).unwrap();
+        state.start_search("needle".into()).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while state.search_running() && std::time::Instant::now() < deadline {
+            state.poll_search();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        state.poll_search();
+        assert_eq!(state.status, "Found 2 results in 1 files");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn update_news_raises_the_balloon_and_the_status_line_through_the_topic() {
+        let mut state = IdeState::default();
+        assert!(!state.notifications().update_balloon());
+        let (sender, receiver) = std::sync::mpsc::channel();
+        sender
+            .send(archipel_ide_update::UpdateEvent::Checked(Err(
+                "offline".into()
+            )))
+            .unwrap();
+        state
+            .updates()
+            .set_worker(archipel_ide_update::UpdateService::with_receiver(receiver));
+        state.poll_updates();
+        assert_eq!(state.status, "Update check failed: offline");
+        assert!(state.notifications().update_balloon());
+    }
+
+    #[test]
+    fn a_settings_change_reaches_the_keymap_without_a_direct_call() {
+        use archipel_ide_settings::{SettingValue, ids};
+        let state = IdeState::default();
+        let before = state.keymap_state().keymap.id.clone();
+        assert_ne!(before, "Default for KDE");
+        state
+            .settings()
+            .write()
+            .set(ids::KEYMAP, SettingValue::Text("Default for KDE".into()))
+            .unwrap();
+        assert_eq!(state.keymap_state().keymap.id, before, "not announced yet");
+        state.settings().notify_changed();
+        assert_eq!(state.keymap_state().keymap.id, "Default for KDE");
     }
 
     #[test]

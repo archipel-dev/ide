@@ -132,12 +132,13 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         // Read access for the frame; released before commands may write settings.
         let settings = app.state.settings();
         let settings = settings.read();
+        let keymap = app.state.keymap_state();
         draw(
             &mut dialog,
             PageContext {
                 registry: &settings.registry,
                 store: &settings.store,
-                keymap: &app.state.keymap,
+                keymap: &keymap,
                 state: &app.state,
                 requests: &mut requests,
             },

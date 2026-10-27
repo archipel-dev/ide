@@ -222,7 +222,7 @@ impl IdeState {
             pinned_files: self.tabs.pinned.iter().cloned().collect(),
             marked_dirs: self.project_view.marks.clone(),
             compact_packages: Some(self.project_view.compact_packages),
-            include_disabled_actions: self.include_disabled_actions,
+            include_disabled_actions: self.actions().read().include_disabled,
             splits: self.splits_json(),
             selected_run_configuration: self
                 .execution()
@@ -279,7 +279,7 @@ impl IdeState {
             .filter(|(path, _)| known.contains(*path))
             .map(|(path, mark)| (path.clone(), *mark))
             .collect();
-        self.include_disabled_actions = workspace.include_disabled_actions;
+        self.actions().write().include_disabled = workspace.include_disabled_actions;
         if let Some(compact) = workspace.compact_packages {
             self.project_view.compact_packages = compact;
         }
@@ -504,7 +504,8 @@ mod tests {
         assert!(!commands.is_enabled("project.close", &state));
         assert!(
             state
-                .recent_projects
+                .recent_projects()
+                .read()
                 .entries()
                 .iter()
                 .any(|e| e.path.ends_with(root.file_name().unwrap()))
@@ -714,7 +715,7 @@ mod tests {
         let root = parent.join("wiz");
         assert!(root.join(".git").is_dir());
         assert!(root.join("src/main/kotlin/org/example/Main.kt").is_file());
-        assert_eq!(state.recent_projects.entries()[0].name, "wiz");
+        assert_eq!(state.recent_projects().read().entries()[0].name, "wiz");
         let _ = std::fs::remove_dir_all(parent);
     }
 }

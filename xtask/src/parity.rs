@@ -23,7 +23,7 @@ use std::{
 
 pub const DASHBOARD_FILE: &str = "dashboard.md";
 /// Files in `docs/parity/` that are not areas: the generated dashboard and the format guide.
-pub const NON_AREA_FILES: [&str; 2] = [DASHBOARD_FILE, "README.md"];
+pub const NON_AREA_FILES: [&str; 3] = [DASHBOARD_FILE, "README.md", "editor-cases.md"];
 pub const README_BEGIN: &str = "<!-- parity:begin -->";
 pub const README_END: &str = "<!-- parity:end -->";
 pub const ULTIMATE_TAG: &str = "[Ultimate]";

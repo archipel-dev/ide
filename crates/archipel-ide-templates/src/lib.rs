@@ -286,6 +286,8 @@ pub struct ExpansionContext {
     pub selection: Option<String>,
     /// Expression for postfix templates (`$EXPR$`).
     pub expression: Option<String>,
+    /// The word before the abbreviation a template with `$ARG$` consumes (ED-TMPL-012).
+    pub argument: Option<String>,
     /// Nearby text, used to pick unused names (`suggestIndexName()`).
     pub surrounding: String,
     /// Enclosing type and method (`className()`, `methodName()`, `methodParameters()`).
@@ -640,13 +642,16 @@ pub fn instantiate(template: &Template, context: &ExpansionContext) -> Instance 
         let definition = template.variables.iter().find(|v| &v.name == name);
         let computed = if name == "EXPR" {
             context.expression.clone()
+        } else if name == "ARG" {
+            context.argument.clone()
         } else {
             definition
                 .and_then(|d| d.expression.as_deref())
                 .and_then(|expression| evaluate(expression, context))
         };
-        let skip =
-            name == "EXPR" || (computed.is_some() && definition.is_some_and(|d| d.skip_if_defined));
+        let skip = name == "EXPR"
+            || name == "ARG"
+            || (computed.is_some() && definition.is_some_and(|d| d.skip_if_defined));
         let value = computed
             .or_else(|| definition.and_then(|d| d.default.clone()))
             .unwrap_or_default();

@@ -157,13 +157,14 @@ pub fn editor_row_height(ctx: &egui::Context, font: &egui::FontId, base: f32) ->
 
 const DEFAULT_LINE_HEIGHT: f32 = 1.2;
 
-fn pairing_id() -> egui::Id {
-    egui::Id::new("editor_pairing")
+fn editor_options_id() -> egui::Id {
+    egui::Id::new("editor_options")
 }
 
-/// Bracket/quote auto-insert from Settings | Editor | Code Editing.
-pub fn pair_options(ctx: &egui::Context) -> archipel_ide_text::ops::PairOptions {
-    ctx.data(|data| data.get_temp(pairing_id()))
+/// The editor behavior settings (Smart Keys, Code Style, caret movement) the input layer of
+/// the core reads for typed text.
+pub fn editor_options(ctx: &egui::Context) -> archipel_ide_core::editor_input::EditorOptions {
+    ctx.data(|data| data.get_temp(editor_options_id()))
         .unwrap_or_default()
 }
 
@@ -186,15 +187,8 @@ pub fn apply_settings(ctx: &egui::Context, settings: &archipel_ide_core::Setting
         .map(|value| value as f32)
         .unwrap_or(DEFAULT_LINE_HEIGHT);
     ctx.data_mut(|data| data.insert_temp(line_height_id(), line_height));
-    let pairing = archipel_ide_text::ops::PairOptions {
-        brackets: settings
-            .bool(archipel_ide_settings::ids::PAIR_BRACKETS)
-            .unwrap_or(true),
-        quotes: settings
-            .bool(archipel_ide_settings::ids::PAIR_QUOTES)
-            .unwrap_or(true),
-    };
-    ctx.data_mut(|data| data.insert_temp(pairing_id(), pairing));
+    let options = archipel_ide_core::editor_input::EditorOptions::from_settings(settings);
+    ctx.data_mut(|data| data.insert_temp(editor_options_id(), options));
     let size = settings
         .int(archipel_ide_settings::ids::EDITOR_FONT_SIZE)
         .map(|size| size as f32)

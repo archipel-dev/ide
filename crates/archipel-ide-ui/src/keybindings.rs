@@ -296,6 +296,11 @@ impl IdeApp {
             if terminal_focused && !TERMINAL_ACTIONS.contains(&action.as_str()) {
                 continue;
             }
+            // Escape closes popups, dialogs and the find bar before the editor uses it
+            // (`handle_shortcuts` runs the editor's own Escape last).
+            if action == "EditorEscape" {
+                continue;
+            }
             let effect = self.with_data_values(
                 |data| data.with_value(&data_keys::EDITOR_FOCUSED, editor_focused),
                 |registry, data| registry.perform(action, ActionPlace::Keymap, data),

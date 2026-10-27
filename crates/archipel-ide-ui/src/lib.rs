@@ -597,6 +597,19 @@ impl IdeApp {
             || self.state.android_tooling().merged_manifest().open
     }
 
+    /// Whether Escape has something to do in the editor: a selection, several carets, sticky
+    /// selection (ED-CARET-090).
+    fn editor_uses_escape(&self) -> bool {
+        self.state
+            .active_index()
+            .and_then(|index| self.state.documents().get(index))
+            .is_some_and(|document| {
+                document.input.sticky
+                    || document.selections.selections().len() > 1
+                    || !document.selections.primary().is_caret()
+            })
+    }
+
     fn editor_focused(&self, ctx: &egui::Context) -> bool {
         ctx.memory(|memory| memory.has_focus(editor::editor_id()))
     }
@@ -840,6 +853,9 @@ impl IdeApp {
                 // focused text field on this very Escape, so nothing is focused.
                 self.find.open = false;
                 ctx.memory_mut(|memory| memory.request_focus(editor::editor_id()));
+            } else if self.editor_focused(ctx) && self.editor_uses_escape() {
+                // ED-CARET-090: several carets or a selection: keep the oldest caret.
+                self.dispatch("editor.action", json!({"action": "EditorEscape"}));
             } else if self.state.tool_windows.visible(Anchor::Bottom).is_some()
                 && !self.palette.open
                 && !self.find_popup.open

@@ -95,6 +95,56 @@ pub mod ids {
     /// Keep trailing spaces on the caret line when saving (PLAT-SAVE-091).
     pub const KEEP_TRAILING_ON_CARET: &str = "editor.general.keepTrailingSpacesOnCaretLine";
     pub const REOPEN_PROJECT: &str = "system.reopenLastProject";
+    /// Smart Keys (Settings | Editor | General): surround a selection when a quote or bracket is typed
+    /// (ED-TYPE-035).
+    pub const SURROUND_ON_TYPING: &str = "editor.smartKeys.surroundSelection";
+    /// Insert the closing `}` when Enter is pressed after an unmatched `{` (ED-TYPE-065).
+    pub const PAIR_BRACE_ON_ENTER: &str = "editor.smartKeys.pairBraceOnEnter";
+    /// Tab leaves a just-typed closing bracket or quote (ED-TYPE-030).
+    pub const TAB_OUT: &str = "editor.smartKeys.tabOut";
+    /// Smart indent on Enter (ED-TYPE-062).
+    pub const SMART_INDENT: &str = "editor.smartKeys.smartIndent";
+    /// Close an unterminated block comment on Enter (ED-TYPE-067).
+    pub const CLOSE_BLOCK_COMMENT: &str = "editor.smartKeys.closeBlockComment";
+    /// Home moves to the first non-blank character first (ED-CARET-015).
+    pub const SMART_HOME: &str = "editor.smartKeys.smartHome";
+    /// Unindent on Backspace: `none`, `nearest` or `proper` (ED-TYPE-046).
+    pub const UNINDENT_ON_BACKSPACE: &str = "editor.smartKeys.unindentOnBackspace";
+    /// Reformat on paste: `none`, `block`, `lines` or `reformat` (ED-TYPE-102).
+    pub const REFORMAT_ON_PASTE: &str = "editor.smartKeys.reformatOnPaste";
+    /// Use "CamelHumps" words (ED-CARET-012).
+    pub const CAMEL_HUMPS: &str = "editor.general.camelHumps";
+    /// Caret stop policy of word movement: `idea` or `windows` (ED-CARET-010).
+    pub const CARET_STOP: &str = "editor.general.caretStopPolicy";
+    /// Do not copy or cut the caret line when nothing is selected (ED-CLIP-002).
+    pub const NO_COPY_LINE_WITHOUT_SELECTION: &str = "editor.general.noCopyLineWithoutSelection";
+    /// Undo treats caret movement as transparent (ED-UNDO-011).
+    pub const UNDO_TRANSPARENT_CARET: &str = "editor.general.undoTransparentCaretMovement";
+    /// Vertical scroll offset in lines (ED-VIEW-020).
+    pub const SCROLL_OFFSET: &str = "editor.general.verticalScrollOffset";
+    /// Code style: use the tab character (ED-TYPE-085).
+    pub const USE_TAB: &str = "editor.codeStyle.useTab";
+    /// Code style: indent size (ED-STYLE-001).
+    pub const INDENT_SIZE: &str = "editor.codeStyle.indentSize";
+    /// Detect and use existing file indents for editing (ED-STYLE-010).
+    pub const DETECT_INDENTS: &str = "editor.codeStyle.detectIndents";
+    /// Line comment at the first column (ED-LINE-041).
+    pub const LINE_COMMENT_FIRST_COLUMN: &str = "editor.codeStyle.lineCommentAtFirstColumn";
+    /// Add a space after the line comment prefix (ED-LINE-041).
+    pub const LINE_COMMENT_SPACE: &str = "editor.codeStyle.lineCommentAddSpace";
+    /// Add a space inside block comment delimiters (ED-LINE-044).
+    pub const BLOCK_COMMENT_SPACE: &str = "editor.codeStyle.blockCommentAddSpace";
+    /// Move the caret down after Comment with Line Comment (ED-LINE-042).
+    pub const COMMENT_MOVES_CARET: &str = "editor.general.commentMovesCaretDown";
+    /// Live template expand key: `tab`, `enter` or `space` (ED-TMPL-010).
+    pub const TEMPLATE_EXPAND_KEY: &str = "editor.liveTemplates.expandWith";
+    /// Code folding defaults (ED-FOLD-030..040).
+    pub const FOLD_IMPORTS: &str = "editor.folding.imports";
+    pub const FOLD_METHOD_BODIES: &str = "editor.folding.methodBodies";
+    pub const FOLD_ONE_LINE_METHODS: &str = "editor.folding.oneLineMethods";
+    pub const FOLD_DOC_COMMENTS: &str = "editor.folding.docComments";
+    pub const FOLD_CUSTOM_REGIONS: &str = "editor.folding.customRegions";
+    pub const FOLD_FILE_HEADER: &str = "editor.folding.fileHeader";
 }
 
 #[derive(Deserialize)]
@@ -143,6 +193,7 @@ pub(crate) fn registry() -> SettingsRegistry {
     add_configurables(&mut registry, &data.configurables);
     add_advanced_settings(&mut registry, &data.advanced_settings);
     add_definitions(&mut registry);
+    add_editor_definitions(&mut registry);
     registry
 }
 
@@ -733,6 +784,232 @@ fn add_definitions(registry: &mut SettingsRegistry) {
         )
         .scope(Scope::Project)
         .description("Empty uses the login shell ($SHELL, or cmd.exe on Windows)"),
+    ];
+    for definition in definitions {
+        let _ = registry.register_setting(definition);
+    }
+}
+
+/// Editor behavior settings of the Smart Keys, Code Style, Folding and General groups. The
+/// labels are those of the reference settings pages.
+fn add_editor_definitions(registry: &mut SettingsRegistry) {
+    use SettingKind::Bool;
+    use SettingValue::Bool as B;
+    let smart = "Smart Keys";
+    let style = "Code Style";
+    let general = "preferences.editor";
+    let folding = "Code Folding";
+    let definitions = vec![
+        SettingDef::new(
+            ids::SURROUND_ON_TYPING,
+            CODE_EDITING,
+            "Surround selection on typing quote or brace",
+            Bool,
+            B(true),
+        )
+        .group(smart),
+        SettingDef::new(
+            ids::PAIR_BRACE_ON_ENTER,
+            CODE_EDITING,
+            "Insert pair '}'",
+            Bool,
+            B(true),
+        )
+        .group(smart),
+        SettingDef::new(
+            ids::TAB_OUT,
+            CODE_EDITING,
+            "Jump outside closing bracket/quote with Tab when typing",
+            Bool,
+            B(true),
+        )
+        .group(smart),
+        SettingDef::new(
+            ids::SMART_INDENT,
+            CODE_EDITING,
+            "Smart indent",
+            Bool,
+            B(true),
+        )
+        .group(smart),
+        SettingDef::new(
+            ids::CLOSE_BLOCK_COMMENT,
+            CODE_EDITING,
+            "Close block comment",
+            Bool,
+            B(true),
+        )
+        .group(smart),
+        SettingDef::new(
+            ids::SMART_HOME,
+            CODE_EDITING,
+            "Home moves caret to first non-whitespace character",
+            Bool,
+            B(true),
+        )
+        .group(smart),
+        SettingDef::new(
+            ids::UNINDENT_ON_BACKSPACE,
+            CODE_EDITING,
+            "Unindent on Backspace",
+            options(&[
+                ("none", "Disabled"),
+                ("nearest", "To nearest indent position"),
+                ("proper", "To proper indent position"),
+            ]),
+            text("proper"),
+        )
+        .group(smart),
+        SettingDef::new(
+            ids::REFORMAT_ON_PASTE,
+            CODE_EDITING,
+            "Reformat on paste",
+            options(&[
+                ("none", "None"),
+                ("block", "Indent block"),
+                ("lines", "Indent each line"),
+                ("reformat", "Reformat block"),
+            ]),
+            text("lines"),
+        )
+        .group(smart),
+        SettingDef::new(
+            ids::CAMEL_HUMPS,
+            general,
+            "Use \"CamelHumps\" words",
+            Bool,
+            B(false),
+        )
+        .group("Editor"),
+        SettingDef::new(
+            ids::CARET_STOP,
+            general,
+            "Caret stop policy",
+            options(&[("idea", "IDE default"), ("windows", "Windows")]),
+            text("idea"),
+        )
+        .group("Editor"),
+        SettingDef::new(
+            ids::NO_COPY_LINE_WITHOUT_SELECTION,
+            general,
+            "Don't copy/cut the current line when invoking the Copy or Cut action with no selection",
+            Bool,
+            B(false),
+        )
+        .group("Editor"),
+        SettingDef::new(
+            ids::UNDO_TRANSPARENT_CARET,
+            general,
+            "Use undo transparent caret movement",
+            Bool,
+            B(false),
+        )
+        .group("Editor"),
+        SettingDef::new(
+            ids::SCROLL_OFFSET,
+            general,
+            "Vertical scroll offset",
+            SettingKind::Int { min: 0, max: 100 },
+            SettingValue::Int(1),
+        )
+        .group("Editor"),
+        SettingDef::new(
+            ids::USE_TAB,
+            CODE_EDITING,
+            "Use tab character",
+            Bool,
+            B(false),
+        )
+        .group(style),
+        SettingDef::new(
+            ids::INDENT_SIZE,
+            CODE_EDITING,
+            "Indent",
+            SettingKind::Int { min: 1, max: 32 },
+            SettingValue::Int(4),
+        )
+        .group(style),
+        SettingDef::new(
+            ids::DETECT_INDENTS,
+            CODE_EDITING,
+            "Detect and use existing file indents for editing",
+            Bool,
+            B(true),
+        )
+        .group(style),
+        SettingDef::new(
+            ids::LINE_COMMENT_FIRST_COLUMN,
+            CODE_EDITING,
+            "Line comment at first column",
+            Bool,
+            B(true),
+        )
+        .group(style),
+        SettingDef::new(
+            ids::LINE_COMMENT_SPACE,
+            CODE_EDITING,
+            "Add a space at comment start",
+            Bool,
+            B(false),
+        )
+        .group(style),
+        SettingDef::new(
+            ids::BLOCK_COMMENT_SPACE,
+            CODE_EDITING,
+            "Add a space at block comment start",
+            Bool,
+            B(false),
+        )
+        .group(style),
+        SettingDef::new(
+            ids::COMMENT_MOVES_CARET,
+            general,
+            "Move caret down after Comment with Line Comment action",
+            Bool,
+            B(true),
+        )
+        .group("Editor"),
+        SettingDef::new(
+            ids::TEMPLATE_EXPAND_KEY,
+            "editing.templates",
+            "Expand with",
+            options(&[("tab", "Tab"), ("enter", "Enter"), ("space", "Space")]),
+            text("tab"),
+        ),
+        SettingDef::new(ids::FOLD_IMPORTS, general, "Imports", Bool, B(true)).group(folding),
+        SettingDef::new(
+            ids::FOLD_METHOD_BODIES,
+            general,
+            "Method bodies",
+            Bool,
+            B(false),
+        )
+        .group(folding),
+        SettingDef::new(
+            ids::FOLD_ONE_LINE_METHODS,
+            general,
+            "One-line methods",
+            Bool,
+            B(true),
+        )
+        .group(folding),
+        SettingDef::new(
+            ids::FOLD_DOC_COMMENTS,
+            general,
+            "Documentation comments",
+            Bool,
+            B(false),
+        )
+        .group(folding),
+        SettingDef::new(ids::FOLD_FILE_HEADER, general, "File header", Bool, B(true)).group(folding),
+        SettingDef::new(
+            ids::FOLD_CUSTOM_REGIONS,
+            general,
+            "Custom folding regions",
+            Bool,
+            B(false),
+        )
+        .group(folding),
     ];
     for definition in definitions {
         let _ = registry.register_setting(definition);

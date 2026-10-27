@@ -29,12 +29,32 @@ impl FoldView {
         let mut view = Self::default();
         let text = &document.text;
         let len_bytes = text.char_to_byte(text.len_chars());
-        for fold in document.folds.collapsed() {
+        let folds = document.folds.collapsed();
+        let mut index = 0;
+        while index < folds.len() {
+            let fold = &folds[index];
+            index += 1;
             if fold.end_byte > len_bytes || fold.start_byte >= fold.end_byte {
                 continue;
             }
             let start_char = text.byte_to_char(fold.start_byte);
-            let end_char = text.byte_to_char(fold.end_byte);
+            let mut end_char = text.byte_to_char(fold.end_byte);
+            let mut placeholder = fold.placeholder.clone();
+            // The halves of a grouped region (a one-line method) are one placeholder.
+            while fold.group != 0
+                && index < folds.len()
+                && folds[index].group == fold.group
+                && folds[index].end_byte <= len_bytes
+            {
+                let next = &folds[index];
+                let between = text
+                    .slice(end_char, text.byte_to_char(next.start_byte))
+                    .unwrap_or_default();
+                placeholder.push_str(&between);
+                placeholder.push_str(&next.placeholder);
+                end_char = text.byte_to_char(next.end_byte);
+                index += 1;
+            }
             let start_line = text.char_to_line(start_char);
             let end_line = text.char_to_line(end_char);
             if end_line <= start_line
@@ -50,7 +70,7 @@ impl FoldView {
                     start_char,
                     end_line,
                     end_char,
-                    placeholder: fold.placeholder.clone(),
+                    placeholder,
                 },
             ));
         }
@@ -89,6 +109,7 @@ impl FoldView {
     }
 
     /// Visual row of a document line (a hidden line maps to its region's row).
+    #[cfg(test)]
     pub fn line_to_row(&self, line: usize) -> usize {
         let line = self
             .hidden
@@ -170,8 +191,9 @@ mod tests {
         let view = FoldView::new(&document);
         assert_eq!(view.row_count(document.text.len_lines()), 4);
         let row = view.collapsed_on(1).expect("collapsed row");
-        assert_eq!(row.placeholder, "{ g(); }");
+        // The two halves of a one-line method form one placeholder that starts behind `)`.
+        assert_eq!(row.placeholder, " { g(); }");
         assert_eq!(row.end_line, 3);
-        assert_eq!(&source[row.start_char..row.start_char + 1], "{");
+        assert_eq!(&source[row.start_char..row.start_char + 1], " ");
     }
 }

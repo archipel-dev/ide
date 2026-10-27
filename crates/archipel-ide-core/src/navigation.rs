@@ -105,6 +105,11 @@ pub struct NavigationState {
     pub usages: Option<NavigationList>,
     /// Whether the Find tool window shows the usages instead of text results.
     pub usages_selected: bool,
+    /// Where documents were last edited, oldest first: one place per file and run of edits
+    /// (Last Edit Location, ED-NAV-005).
+    changes: Vec<Place>,
+    /// The change place the last Last Edit Location went to.
+    change_walk: Option<usize>,
 }
 
 impl NavigationState {
@@ -136,13 +141,85 @@ impl IdeState {
         })
     }
 
+    /// The line of a place in an open document.
+    fn place_line(&self, place: &Place) -> Option<usize> {
+        let document = self.documents.iter().find(|d| d.path == place.path)?;
+        Some(
+            document
+                .text
+                .char_to_line(place.offset.min(document.text.len_chars())),
+        )
+    }
+
+    /// Records the place a navigation command started at. A place within fewer than four lines
+    /// of the previous one in the same file replaces it (ED-NAV-003).
     fn remember(&mut self, place: Place) {
-        if self.navigation.back.last() != Some(&place) {
-            self.navigation.back.push(place);
-            if self.navigation.back.len() > HISTORY_LIMIT {
-                self.navigation.back.remove(0);
-            }
+        if self.navigation.back.last() == Some(&place) {
+            return;
         }
+        let near = self.navigation.back.last().is_some_and(|previous| {
+            previous.path == place.path
+                && matches!(
+                    (self.place_line(previous), self.place_line(&place)),
+                    (Some(a), Some(b)) if a.abs_diff(b) < 4
+                )
+        });
+        if near {
+            self.navigation.back.pop();
+        }
+        self.navigation.back.push(place);
+        if self.navigation.back.len() > HISTORY_LIMIT {
+            self.navigation.back.remove(0);
+        }
+    }
+
+    /// A navigation command (Go to Line) moved the caret away from `origin`: Back returns there
+    /// and the forward places are gone (ED-NAV-002).
+    pub(crate) fn navigated_from(&mut self, origin: Option<Place>) {
+        let Some(origin) = origin else {
+            return;
+        };
+        if self.current_place().as_ref() != Some(&origin) {
+            self.remember(origin);
+            self.navigation.forward.clear();
+        }
+    }
+
+    /// Records the caret place after a document edit for Last Edit Location (ED-NAV-005).
+    pub(crate) fn record_change_place(&mut self) {
+        let Some(place) = self.current_place() else {
+            return;
+        };
+        let changes = &mut self.navigation.changes;
+        if changes.last().is_some_and(|last| last.path == place.path) {
+            changes.pop();
+        }
+        changes.retain(|existing| existing.path != place.path);
+        changes.push(place);
+        if changes.len() > HISTORY_LIMIT {
+            changes.remove(0);
+        }
+        self.navigation.change_walk = None;
+    }
+
+    /// Last Edit Location: the most recent place that differs from the current one; repeated
+    /// invocation walks back through older places.
+    pub fn jump_to_last_change(&mut self) -> Result<(), String> {
+        let current = self.current_place();
+        let changes = self.navigation.changes.clone();
+        let start = match self.navigation.change_walk {
+            Some(index) if changes.get(index) == current.as_ref() => index,
+            _ => changes.len(),
+        };
+        let Some(index) = (0..start)
+            .rev()
+            .find(|&i| Some(&changes[i]) != current.as_ref())
+        else {
+            return Err("No more edit locations".into());
+        };
+        self.show_place(&changes[index])?;
+        self.navigation.change_walk = Some(index);
+        Ok(())
     }
 
     /// Opens `place` and puts the caret there, without touching the history.
@@ -505,6 +582,22 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             ))
             .expect("unique built-in id");
     }
+    registry
+        .register(Command::new(
+            spec(
+                "navigate.lastEdit",
+                "Last Edit Location",
+                "Navigate",
+                Some("⇧⌘⌫"),
+                "{}",
+            ),
+            |state: &IdeState| !state.navigation.changes.is_empty(),
+            |state: &mut IdeState, _| {
+                state.jump_to_last_change().map_err(CommandError::Failed)?;
+                Ok(Value::Null)
+            },
+        ))
+        .expect("unique built-in id");
     registry
         .register(Command::new(
             spec(

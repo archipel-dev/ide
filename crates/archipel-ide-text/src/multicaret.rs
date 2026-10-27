@@ -119,7 +119,13 @@ pub fn select_next_occurrence(doc: &TextDocument, selections: &mut SelectionSet)
 /// occurrence. Returns `false` when only one selection remains.
 pub fn unselect_occurrence(selections: &mut SelectionSet) -> bool {
     if selections.selections().len() < 2 {
-        return false;
+        // With one caret only the selection goes (ED-CARET-076).
+        let only = selections.primary();
+        if only.is_caret() {
+            return false;
+        }
+        selections.set_single(Selection::caret(only.head));
+        return true;
     }
     let target = loop {
         match selections.occurrences.pop() {
@@ -376,6 +382,8 @@ mod tests {
                 }
             ]
         );
+        assert!(unselect_occurrence(&mut selections));
+        // The last selection collapses to a caret (ED-CARET-076), then nothing is left to do.
         assert!(unselect_occurrence(&mut selections));
         assert!(!unselect_occurrence(&mut selections));
     }

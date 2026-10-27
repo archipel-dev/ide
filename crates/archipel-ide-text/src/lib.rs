@@ -17,11 +17,44 @@ struct AtomicEdit {
     inserted: String,
 }
 
+/// Why an undo step exists. Consecutive steps of the same mergeable kind are one Undo step when
+/// the carets did not move in between (ED-UNDO-002 to ED-UNDO-005).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum UndoKind {
+    /// Never merges (paste, line operations, commands).
+    #[default]
+    Other,
+    Typing,
+    Enter,
+    Backspace,
+    Delete,
+    Tab,
+}
+
+impl UndoKind {
+    fn mergeable(self) -> bool {
+        self != UndoKind::Other
+    }
+}
+
+/// What Undo or Redo did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UndoResult {
+    /// The selections to show afterwards.
+    pub selections: Vec<Selection>,
+    /// False when only the editor state (the carets) was restored (ED-UNDO-011).
+    pub text_changed: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Transaction {
-    edits: Vec<AtomicEdit>,
-    /// Produced by typing; later adjacent typing may extend it.
-    typing: bool,
+    /// Edits in the order they were applied; a merged step list holds one entry per merged
+    /// command. Each entry is one `edit_many` batch.
+    steps: Vec<Vec<AtomicEdit>>,
+    kind: UndoKind,
+    /// Selections before the first and after the last step, when the editor recorded them.
+    before: Option<Vec<Selection>>,
+    after: Option<Vec<Selection>>,
     before_state: u64,
     after_state: u64,
 }
@@ -106,6 +139,10 @@ pub struct SelectionSet {
     /// Column selection mode toggle and the block it last produced.
     column_mode: bool,
     block: Option<multicaret::BlockSelection>,
+    /// Creation order of each selection (parallel to `selections`): the lowest is the oldest
+    /// caret, the highest the most recently added one (ED-CARET-090, ED-CARET-073).
+    ages: Vec<u64>,
+    next_age: u64,
 }
 
 impl Default for SelectionSet {
@@ -122,7 +159,58 @@ impl SelectionSet {
             occurrence_whole_words: false,
             column_mode: false,
             block: None,
+            ages: vec![0],
+            next_age: 1,
         }
+    }
+
+    /// The oldest selection: the one Escape keeps with several carets.
+    pub fn oldest(&self) -> Selection {
+        let index = (0..self.selections.len())
+            .min_by_key(|&i| self.ages.get(i).copied().unwrap_or(0))
+            .unwrap_or(0);
+        self.selections[index]
+    }
+
+    /// The most recently added selection.
+    pub fn newest(&self) -> Selection {
+        let index = (0..self.selections.len())
+            .max_by_key(|&i| self.ages.get(i).copied().unwrap_or(0))
+            .unwrap_or(0);
+        self.selections[index]
+    }
+
+    /// Replaces every selection by `map` of it, keeping each one's age (movement and edits keep
+    /// the carets' identities).
+    pub fn map(&mut self, map: impl Fn(Selection) -> Selection) {
+        let ages = self.ages.clone();
+        let next: Vec<Selection> = self.selections.iter().map(|s| map(*s)).collect();
+        self.set_all_aged(next, ages);
+    }
+
+    /// [`SelectionSet::set_all`] with the creation order of each selection.
+    pub fn set_all_aged(&mut self, selections: Vec<Selection>, ages: Vec<u64>) {
+        if selections.is_empty() {
+            self.selections = vec![Selection::caret(0)];
+            self.ages = vec![0];
+            return;
+        }
+        let ages = if ages.len() == selections.len() {
+            ages
+        } else {
+            (0..selections.len() as u64).collect()
+        };
+        self.next_age = self
+            .next_age
+            .max(ages.iter().copied().max().unwrap_or(0) + 1);
+        self.selections = selections;
+        self.ages = ages;
+        self.normalize();
+    }
+
+    /// The creation order of each selection, parallel to [`SelectionSet::selections`].
+    pub fn ages(&self) -> &[u64] {
+        &self.ages
     }
 
     pub fn selections(&self) -> &[Selection] {
@@ -136,12 +224,12 @@ impl SelectionSet {
     /// Replaces all selections; overlapping ones are merged. An empty input keeps
     /// a caret at offset 0 so there is always a primary selection.
     pub fn set_all(&mut self, selections: Vec<Selection>) {
-        self.selections = if selections.is_empty() {
-            vec![Selection::caret(0)]
+        let ages = if selections.len() == self.ages.len() {
+            self.ages.clone()
         } else {
-            selections
+            Vec::new()
         };
-        self.normalize();
+        self.set_all_aged(selections, ages);
     }
 
     pub fn set_single(&mut self, selection: Selection) {
@@ -150,10 +238,14 @@ impl SelectionSet {
         self.block = None;
         self.selections.clear();
         self.selections.push(selection);
+        self.ages = vec![0];
+        self.next_age = 1;
     }
 
     pub fn add(&mut self, selection: Selection) {
         self.selections.push(selection);
+        self.ages.push(self.next_age);
+        self.next_age += 1;
         self.normalize();
     }
 
@@ -225,11 +317,15 @@ impl SelectionSet {
     }
 
     fn normalize(&mut self) {
-        self.selections
-            .sort_by_key(|selection| (selection.start(), selection.end()));
-        let mut normalized: Vec<Selection> = Vec::with_capacity(self.selections.len());
-        for selection in self.selections.drain(..) {
-            if let Some(previous) = normalized.last_mut() {
+        if self.ages.len() != self.selections.len() {
+            self.ages = (0..self.selections.len() as u64).collect();
+        }
+        let mut pairs: Vec<(Selection, u64)> =
+            self.selections.drain(..).zip(self.ages.drain(..)).collect();
+        pairs.sort_by_key(|(selection, _)| (selection.start(), selection.end()));
+        let mut normalized: Vec<(Selection, u64)> = Vec::with_capacity(pairs.len());
+        for (selection, age) in pairs {
+            if let Some((previous, previous_age)) = normalized.last_mut() {
                 let duplicate_caret =
                     previous.is_caret() && selection.is_caret() && previous.head == selection.head;
                 if selection.start() < previous.end() || duplicate_caret {
@@ -239,12 +335,14 @@ impl SelectionSet {
                         anchor: start,
                         head: end,
                     };
+                    *previous_age = (*previous_age).min(age);
                     continue;
                 }
             }
-            normalized.push(selection);
+            normalized.push((selection, age));
         }
-        self.selections = normalized;
+        self.selections = normalized.iter().map(|(s, _)| *s).collect();
+        self.ages = normalized.iter().map(|(_, a)| *a).collect();
     }
 }
 
@@ -275,6 +373,8 @@ pub struct TextDocument {
     redo: Vec<Transaction>,
     journal: Vec<ByteEdit>,
     journal_reset: bool,
+    /// Kind and selections announced for the next edit ([`TextDocument::begin_undo_step`]).
+    pending: Option<(UndoKind, Vec<Selection>)>,
 }
 
 impl TextDocument {
@@ -289,6 +389,7 @@ impl TextDocument {
             redo: Vec::new(),
             journal: Vec::new(),
             journal_reset: true,
+            pending: None,
         }
     }
 
@@ -471,6 +572,37 @@ impl TextDocument {
         self.edit_many_kind(changes, false)
     }
 
+    /// Announces the next edit: its undo kind and the selections before it. The next edit is
+    /// recorded with them; it merges into the previous step when both are of the same
+    /// mergeable kind and the carets are where that step left them.
+    pub fn begin_undo_step(&mut self, kind: UndoKind, selections: &[Selection]) {
+        self.pending = Some((kind, selections.to_vec()));
+    }
+
+    /// Records the selections after the last edit (the state Undo returns to for the first step
+    /// and Redo restores).
+    pub fn finish_undo_step(&mut self, selections: &[Selection]) {
+        self.pending = None;
+        if let Some(last) = self.undo.last_mut()
+            && last.before.is_some()
+            && self.redo.is_empty()
+        {
+            last.after = Some(selections.to_vec());
+        }
+    }
+
+    /// Forgets the announced step (the action changed nothing).
+    pub fn cancel_undo_step(&mut self) {
+        self.pending = None;
+    }
+
+    /// Prevents the next edit from merging into the previous step.
+    pub fn break_undo_merge(&mut self) {
+        if let Some(last) = self.undo.last_mut() {
+            last.kind = UndoKind::Other;
+        }
+    }
+
     fn edit_many_kind(
         &mut self,
         changes: impl IntoIterator<Item = TextChange>,
@@ -518,7 +650,12 @@ impl TextDocument {
                 &edit.inserted,
             );
         }
-        self.record_transaction(edits, typing);
+        let kind = if typing {
+            UndoKind::Typing
+        } else {
+            UndoKind::Other
+        };
+        self.record_transaction(edits, kind);
         Ok(())
     }
 
@@ -528,34 +665,16 @@ impl TextDocument {
         if text.is_empty() {
             return Ok(());
         }
-        let can_coalesce = self.current_state != self.saved_state
-            && self.redo.is_empty()
-            && self.undo.last().is_some_and(|transaction| {
-                transaction.typing
-                    && transaction.edits.len() == 1
-                    && transaction.edits[0].applied_start
-                        + transaction.edits[0].inserted.chars().count()
-                        == position
-            });
         self.apply(position, position, text);
-        if can_coalesce {
-            let after_state = self.allocate_state();
-            let transaction = self.undo.last_mut().expect("coalescing requires history");
-            transaction.edits[0].inserted.push_str(text);
-            transaction.after_state = after_state;
-            self.current_state = after_state;
-            self.revision = self.revision.saturating_add(1);
-        } else {
-            self.record_transaction(
-                vec![AtomicEdit {
-                    original_start: position,
-                    applied_start: position,
-                    deleted: String::new(),
-                    inserted: text.to_owned(),
-                }],
-                true,
-            );
-        }
+        self.record_transaction(
+            vec![AtomicEdit {
+                original_start: position,
+                applied_start: position,
+                deleted: String::new(),
+                inserted: text.to_owned(),
+            }],
+            UndoKind::Typing,
+        );
         Ok(())
     }
 
@@ -573,43 +692,14 @@ impl TextDocument {
         if text.is_empty() || positions.is_empty() {
             return Ok(());
         }
-        let can_coalesce = self.current_state != self.saved_state
-            && self.redo.is_empty()
-            && self.undo.last().is_some_and(|transaction| {
-                transaction.typing
-                    && transaction.edits.len() == positions.len()
-                    && transaction
-                        .edits
-                        .iter()
-                        .zip(positions)
-                        .all(|(edit, &position)| {
-                            edit.applied_start + edit.inserted.chars().count() == position
-                        })
-            });
-        if !can_coalesce {
-            return self.edit_many_kind(
-                positions.iter().map(|&position| TextChange {
-                    start_char: position,
-                    end_char: position,
-                    inserted: text.to_owned(),
-                }),
-                true,
-            );
-        }
-        for &position in positions.iter().rev() {
-            self.apply(position, position, text);
-        }
-        let added = text.chars().count();
-        let after_state = self.allocate_state();
-        let transaction = self.undo.last_mut().expect("coalescing requires history");
-        for (index, edit) in transaction.edits.iter_mut().enumerate() {
-            edit.applied_start += added * index;
-            edit.inserted.push_str(text);
-        }
-        transaction.after_state = after_state;
-        self.current_state = after_state;
-        self.revision = self.revision.saturating_add(1);
-        Ok(())
+        self.edit_many_kind(
+            positions.iter().map(|&position| TextChange {
+                start_char: position,
+                end_char: position,
+                inserted: text.to_owned(),
+            }),
+            true,
+        )
     }
 
     /// Converts a UI-produced snapshot into one minimal contiguous edit. This keeps
@@ -650,44 +740,120 @@ impl TextDocument {
     /// one per edit, after the restored text (where the caret was before a
     /// deletion, where typing started for an insertion).
     pub fn undo_carets(&mut self) -> Option<Vec<usize>> {
-        let transaction = self.undo.pop()?;
+        let transaction = self.undo.last()?;
         let carets = transaction
-            .edits
-            .iter()
+            .steps
+            .first()
+            .into_iter()
+            .flatten()
             .map(|edit| edit.original_start + edit.deleted.chars().count())
             .collect();
-        for edit in transaction.edits.iter().rev() {
-            self.apply(
-                edit.applied_start,
-                edit.applied_start + edit.inserted.chars().count(),
-                &edit.deleted,
-            );
-        }
-        self.current_state = transaction.before_state;
-        self.redo.push(transaction);
-        self.revision = self.revision.saturating_add(1);
+        self.revert_last();
         Some(carets)
     }
 
     /// Redoes the next transaction; carets go after each re-applied edit.
     pub fn redo_carets(&mut self) -> Option<Vec<usize>> {
-        let transaction = self.redo.pop()?;
+        let transaction = self.redo.last()?;
         let carets = transaction
-            .edits
-            .iter()
+            .steps
+            .last()
+            .into_iter()
+            .flatten()
             .map(|edit| edit.applied_start + edit.inserted.chars().count())
             .collect();
-        for edit in transaction.edits.iter().rev() {
-            self.apply(
-                edit.original_start,
-                edit.original_start + edit.deleted.chars().count(),
-                &edit.inserted,
-            );
+        self.reapply_next();
+        Some(carets)
+    }
+
+    /// Undo with editor-state restore (ED-UNDO-011, ED-UNDO-012). With `current` selections that
+    /// differ from the ones the step left, and `transparent_caret` off, the first Undo only puts
+    /// the carets back; the next one reverts the text.
+    pub fn undo_with(
+        &mut self,
+        current: &[Selection],
+        transparent_caret: bool,
+    ) -> Option<UndoResult> {
+        let transaction = self.undo.last()?;
+        if !transparent_caret
+            && let Some(after) = &transaction.after
+            && after.as_slice() != current
+        {
+            return Some(UndoResult {
+                selections: after.clone(),
+                text_changed: false,
+            });
+        }
+        let before = transaction.before.clone();
+        let carets = self.undo_carets()?;
+        let selections =
+            before.unwrap_or_else(|| carets.into_iter().map(Selection::caret).collect());
+        Some(UndoResult {
+            selections,
+            text_changed: true,
+        })
+    }
+
+    /// Redo with editor-state restore; the counterpart of [`TextDocument::undo_with`].
+    pub fn redo_with(
+        &mut self,
+        current: &[Selection],
+        transparent_caret: bool,
+    ) -> Option<UndoResult> {
+        let transaction = self.redo.last()?;
+        if !transparent_caret
+            && let Some(before) = &transaction.before
+            && before.as_slice() != current
+        {
+            return Some(UndoResult {
+                selections: before.clone(),
+                text_changed: false,
+            });
+        }
+        let after = transaction.after.clone();
+        let carets = self.redo_carets()?;
+        let selections =
+            after.unwrap_or_else(|| carets.into_iter().map(Selection::caret).collect());
+        Some(UndoResult {
+            selections,
+            text_changed: true,
+        })
+    }
+
+    fn revert_last(&mut self) {
+        let Some(transaction) = self.undo.pop() else {
+            return;
+        };
+        for step in transaction.steps.iter().rev() {
+            for edit in step.iter().rev() {
+                self.apply(
+                    edit.applied_start,
+                    edit.applied_start + edit.inserted.chars().count(),
+                    &edit.deleted,
+                );
+            }
+        }
+        self.current_state = transaction.before_state;
+        self.redo.push(transaction);
+        self.revision = self.revision.saturating_add(1);
+    }
+
+    fn reapply_next(&mut self) {
+        let Some(transaction) = self.redo.pop() else {
+            return;
+        };
+        for step in &transaction.steps {
+            for edit in step.iter().rev() {
+                self.apply(
+                    edit.original_start,
+                    edit.original_start + edit.deleted.chars().count(),
+                    &edit.inserted,
+                );
+            }
         }
         self.current_state = transaction.after_state;
         self.undo.push(transaction);
         self.revision = self.revision.saturating_add(1);
-        Some(carets)
     }
 
     fn validate_range(&self, start: usize, end: usize) -> Result<(), TextError> {
@@ -734,16 +900,53 @@ impl TextDocument {
         state
     }
 
-    fn record_transaction(&mut self, edits: Vec<AtomicEdit>, typing: bool) {
-        let before_state = self.current_state;
+    fn record_transaction(&mut self, edits: Vec<AtomicEdit>, fallback: UndoKind) {
+        let pending = self.pending.take();
+        let (kind, before) = match pending {
+            Some((kind, before)) => (kind, Some(before)),
+            None => (fallback, None),
+        };
+        let merge = kind.mergeable()
+            && self.current_state != self.saved_state
+            && self.redo.is_empty()
+            && self.undo.last().is_some_and(|last| {
+                last.kind == kind
+                    && match (&last.after, &before) {
+                        (Some(after), Some(before)) => after == before,
+                        // Without recorded carets: adjacent typing only.
+                        (None, None) => {
+                            kind == UndoKind::Typing
+                                && last.steps.last().is_some_and(|step| {
+                                    step.len() == edits.len()
+                                        && step.iter().zip(&edits).all(|(previous, edit)| {
+                                            edit.deleted.is_empty()
+                                                && previous.applied_start
+                                                    + previous.inserted.chars().count()
+                                                    == edit.original_start
+                                        })
+                                })
+                        }
+                        _ => false,
+                    }
+            });
         let after_state = self.allocate_state();
-        self.undo.push(Transaction {
-            edits,
-            typing,
-            before_state,
-            after_state,
-        });
-        self.redo.clear();
+        if merge {
+            let last = self.undo.last_mut().expect("merging requires history");
+            last.steps.push(edits);
+            last.after_state = after_state;
+            last.after = None;
+        } else {
+            let before_state = self.current_state;
+            self.undo.push(Transaction {
+                steps: vec![edits],
+                kind,
+                before,
+                after: None,
+                before_state,
+                after_state,
+            });
+            self.redo.clear();
+        }
         self.revision = self.revision.saturating_add(1);
         self.current_state = after_state;
     }

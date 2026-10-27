@@ -176,13 +176,7 @@
   {
    "abbreviation": "thr",
    "description": "Inserts a throw statement",
-   "text": "throw new $EXCEPTION$($END$);",
-   "variables": [
-    {
-     "name": "EXCEPTION",
-     "default": "RuntimeException"
-    }
-   ],
+   "text": "throw new $END$",
    "contexts": [
     "JAVA_STATEMENT"
    ]

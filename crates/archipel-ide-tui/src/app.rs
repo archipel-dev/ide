@@ -972,7 +972,12 @@ impl App for TuiApp {
                 self.after_input(rt);
                 return;
             }
-            let ids = rt.actions().to_vec();
+            let mut ids = rt.actions().to_vec();
+            if rt.chord_completed() {
+                // The chord's own action first: `Ctrl+K ]` is Forward, not the editor's `Ctrl+]`.
+                let chord = |id: &String| crate::keys::FALLBACKS.iter().any(|(a, _)| a == id);
+                ids.sort_by_key(|id| !chord(id));
+            }
             // A speed search in the tree or a list keeps Esc for itself.
             let esc_for_widget = key.code == KeyCode::Esc && self.tree.state.speed.is_active();
             if !esc_for_widget {

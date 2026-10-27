@@ -41,7 +41,8 @@ fn typing_edits_the_core_document_and_save_writes_the_file() {
     tui.press(KeyCode::Enter);
     let text = tui.app.ide().state().documents()[0].text.text();
     assert!(
-        text.starts_with("// typed in the terminal\npackage demo;"),
+        // ED-TYPE-066: Enter in the middle of a line comment continues it.
+        text.starts_with("// typed in the terminal\n// package demo;"),
         "{text}"
     );
     assert!(tui.app.ide().state().documents()[0].text.is_dirty());

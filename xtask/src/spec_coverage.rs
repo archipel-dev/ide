@@ -23,11 +23,12 @@ use std::{
 const SPECS_DIR: &str = "docs/specs";
 const MAPPING_FILE: &str = "docs/specs/coverage.toml";
 const REPORT_FILE: &str = "docs/specs/coverage.md";
-const SETS: [(&str, &str); 4] = [
+const SETS: &[(&str, &str)] = &[
     ("JAVA", "Java"),
     ("PLAT", "Platform"),
     ("CI", "Code insight"),
     ("BLD", "Build"),
+    ("EXE", "Execution"),
 ];
 /// Pre-spec ID areas from `docs/spec/features/` that still appear in evidence files.
 const LEGACY_AREAS: [&str; 2] = ["JAVA-NAV", "JAVA-GEN"];

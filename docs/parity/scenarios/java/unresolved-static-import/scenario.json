@@ -86,5 +86,5 @@
     "action": "type the call without the import, Alt+Enter on assertThat, choose the static import",
     "notes": "the reported bug; the item text and the import placement (static imports in their own block at the end) are from IntelliJ's default import layout, not re-observed yet"
   },
-  "knownGap": "the daemon has no static import fix; the language server offers \"Add static import for 'Assertions.assertThat'\" once the Gradle classpath is imported, with its own wording, and its own markup message"
+  "knownGap": "the static import is offered since the LSP-as-external-pass work, with the language server's wording (\"Add static import for 'Assertions.assertThat'\") and markup message; IntelliJ's wording and its import block placement differ"
 }

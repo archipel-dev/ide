@@ -17,9 +17,15 @@ impl IdeState {
         let Some(document) = self.active_document.and_then(|i| self.documents.get(i)) else {
             return (true, false);
         };
-        let native_ready = self.daemon_service().is_none()
-            || self.native_problems(document).is_some()
-            || self.analysis.host.lookup(&document.path).is_none();
+        let native_ready = match (
+            self.daemon_service(),
+            self.analysis.host.lookup(&document.path),
+        ) {
+            (Some(service), Some(file)) => service.lock().markup(file).is_some_and(|markup| {
+                markup.rev() == archipel_ide_analysis::FileRev(document.text.revision())
+            }),
+            _ => true,
+        };
         let lsp_pending = self.active_absolute_path().is_some_and(|path| {
             self.lsp.handles(&path)
                 && !self.lsp.is_idle_for(&path)

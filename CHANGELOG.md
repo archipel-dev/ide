@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.5](https://github.com/archipel-dev/ide/compare/v0.2.4...v0.2.5) (2026-10-27)
+
+
+### Bug Fixes
+
+* **editor:** IntelliJ editing behavior from the ED spec cases (341 of 372 pass) ([#82](https://github.com/archipel-dev/ide/issues/82)) ([fbf3595](https://github.com/archipel-dev/ide/commit/fbf3595a05bf8dcac837479e344407949c4dcf0f))
+* **ui:** measured IntelliJ geometry for editor, chrome, tree and popups ([#80](https://github.com/archipel-dev/ide/issues/80)) ([ad1b324](https://github.com/archipel-dev/ide/commit/ad1b3249817d7b0ccf4d2e96ae19cb1b9629cba6))
+
 ## [0.2.4](https://github.com/archipel-dev/ide/compare/v0.2.3...v0.2.4) (2026-10-27)
 
 

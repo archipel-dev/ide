@@ -371,6 +371,11 @@ impl IdeState {
     pub fn execute_mod_command(&mut self, command: &ModCommand) -> Result<String, String> {
         match command {
             ModCommand::Nothing => Ok(String::new()),
+            ModCommand::ChooseFrom { title, rows } => {
+                let service = self.java_service().ok_or("no chooser available")?;
+                service.open_chooser(title.clone(), rows.clone());
+                Ok(String::new())
+            }
             ModCommand::Composite(parts) => {
                 let mut message = String::new();
                 for part in parts {
@@ -787,7 +792,7 @@ fn command_kind(command: &ModCommand) -> &'static str {
         ModCommand::StartRename { .. } => "in-place rename",
         ModCommand::StartTemplate(_) => "live templates from fixes",
         ModCommand::ShowConflicts(_) => "conflict dialogs",
-        ModCommand::Choose(_) => "choice menus",
+        ModCommand::Choose(_) | ModCommand::ChooseFrom { .. } => "choice menus",
         ModCommand::OpenUrl(_) => "opening URLs",
         ModCommand::CopyToClipboard(_) => "clipboard commands",
         ModCommand::Highlight { .. } => "highlight commands",

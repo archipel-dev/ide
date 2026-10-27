@@ -79,6 +79,9 @@ impl IdeState {
     /// The watcher reported these project-relative paths.
     pub(crate) fn index_paths_changed(&mut self, paths: &BTreeSet<PathBuf>) {
         let paths: Vec<PathBuf> = paths.iter().cloned().collect();
+        if let Some(java) = self.java_service() {
+            java.paths_changed(&paths);
+        }
         let services = &mut self.analysis;
         services.index.notify_paths(&mut services.host, &paths);
     }

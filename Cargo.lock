@@ -400,6 +400,7 @@ dependencies = [
  "archipel-ide-git",
  "archipel-ide-gradle",
  "archipel-ide-index",
+ "archipel-ide-java",
  "archipel-ide-keymap",
  "archipel-ide-language",
  "archipel-ide-lsp",

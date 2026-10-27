@@ -3,6 +3,8 @@
 
 use crate::analyze::ProblemKind;
 use crate::api::JavaProject;
+use crate::index::{JavaIndex, JavaIndexState};
+use archipel_ide_projectmodel::ProjectModel;
 use crate::env::{CurrentFile, Env};
 use crate::import_edit::{self, ImportSettings};
 use crate::import_fix::{self, ClassRefInfo, ImportClassFix, ImportStaticFix, Place, SearchInput};
@@ -40,7 +42,38 @@ struct State {
     project: Option<JavaProject>,
     root: PathBuf,
     settings: JavaSettings,
+    index: Option<JavaIndex>,
+    model: Option<Arc<ProjectModel>>,
+    loading: bool,
+    cache_dir: Option<PathBuf>,
+    docs: std::collections::HashMap<PathBuf, DocState>,
+    complete: bool,
+    chooser: Option<Chooser>,
 }
+
+/// The open chooser popup (`Method to Import`, `Class to Import`).
+#[derive(Debug, Clone)]
+pub struct Chooser {
+    pub title: String,
+    pub rows: Vec<archipel_ide_analysis::ChoiceRow>,
+}
+
+struct DocState {
+    rev: u64,
+    seen: std::time::Instant,
+    indexed: bool,
+}
+
+/// What the status bar and the control socket show about the Java indexes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JavaStatus {
+    pub state: JavaIndexState,
+    pub model_loading: bool,
+    pub native: bool,
+}
+
+/// Quiet time after the last edit before an open buffer is reindexed.
+const REINDEX_DELAY: std::time::Duration = std::time::Duration::from_millis(400);
 
 /// The Java language service of a project: indexes + model, shared with the daemon pass.
 #[derive(Default)]
@@ -73,6 +106,136 @@ impl JavaService {
 
     pub fn set_settings(&self, settings: JavaSettings) {
         self.state.write().settings = settings;
+    }
+
+    /// Brings the indexes in line with the project model (JAVA-STUB-018, PLAT-SCOPE-090): a new or
+    /// changed model schedules an incremental sync; `loading` is the import in progress
+    /// (JAVA-ERR-003). Returns true when the completeness of answers changed (the daemon must
+    /// run again).
+    pub fn sync(&self, root: &Path, model: Option<Arc<ProjectModel>>, loading: bool, cache_dir: Option<PathBuf>) -> bool {
+        let mut s = self.state.write();
+        let root_changed = s.root != root;
+        if root_changed {
+            s.root = root.to_path_buf();
+            s.index = None;
+            s.model = None;
+            s.docs.clear();
+        }
+        if s.index.is_none() {
+            let dir = cache_dir.as_ref().map(|d| d.join("java"));
+            if let Some(d) = &dir {
+                let _ = std::fs::create_dir_all(d);
+            }
+            s.index = Some(JavaIndex::open(dir.as_deref()));
+            s.cache_dir = cache_dir;
+        }
+        let index = s.index.clone().expect("created above");
+        let model_changed = match (&s.model, &model) {
+            (Some(a), Some(b)) => !Arc::ptr_eq(a, b),
+            (None, None) => false,
+            _ => true,
+        };
+        if model_changed {
+            s.model = model.clone();
+            if let Some(m) = &model {
+                index.sync(m.clone());
+            }
+        }
+        if model_changed || s.loading != loading || s.project.is_none() {
+            s.loading = loading;
+            s.project = s.model.clone().map(|m| JavaProject::new(index.clone(), m, loading));
+        }
+        let complete = s.project.as_ref().is_some_and(JavaProject::is_complete);
+        let flipped = complete != s.complete || model_changed;
+        s.complete = complete;
+        flipped
+    }
+
+    pub fn status(&self) -> JavaStatus {
+        let s = self.state.read();
+        JavaStatus {
+            state: s.index.as_ref().map_or(JavaIndexState::Absent, JavaIndex::state),
+            model_loading: s.loading,
+            native: s.settings.native,
+        }
+    }
+
+    pub fn open_chooser(&self, title: String, rows: Vec<archipel_ide_analysis::ChoiceRow>) {
+        self.state.write().chooser = Some(Chooser { title, rows });
+    }
+
+    pub fn chooser(&self) -> Option<Chooser> {
+        self.state.read().chooser.clone()
+    }
+
+    /// Chooses row `index`: closes the chooser and returns what applies.
+    pub fn choose(&self, index: usize) -> Option<ModCommand> {
+        let chooser = self.state.write().chooser.take()?;
+        chooser.rows.into_iter().nth(index).map(|r| r.command)
+    }
+
+    pub fn close_chooser(&self) {
+        self.state.write().chooser = None;
+    }
+
+    pub fn index(&self) -> Option<JavaIndex> {
+        self.state.read().index.clone()
+    }
+
+    /// An open buffer changed (or is seen for the first time): reindex it once typing paused
+    /// (the overlay of unsaved text, JAVA-STUB-018). `text` is only called when needed.
+    pub fn document_seen(&self, path: &Path, rev: u64, text: impl FnOnce() -> Arc<str>) {
+        let mut s = self.state.write();
+        let Some(index) = s.index.clone() else { return };
+        let Some(project) = s.project.clone() else { return };
+        let path = self.abs(&s.root, path);
+        if !project.applies_to(&path) {
+            return;
+        }
+        let now = std::time::Instant::now();
+        let entry = s.docs.entry(path.clone()).or_insert(DocState { rev, seen: now, indexed: false });
+        if entry.rev != rev {
+            *entry = DocState { rev, seen: now, indexed: false };
+        }
+        if entry.indexed || now.duration_since(entry.seen) < REINDEX_DELAY && entry.seen != now {
+            return;
+        }
+        if !index.is_ready() {
+            return;
+        }
+        entry.indexed = true;
+        let module = project.files.module_for_file(&path).map(|m| (m.name.clone(), project.files.is_in_test_source_content(&path)));
+        drop(s);
+        let text = text();
+        index.update_source(&path, &text, module.as_ref().map(|(m, t)| (m.as_str(), *t)));
+    }
+
+    /// Files changed on disk (watcher): sources are reindexed from disk, deleted ones forgotten.
+    pub fn paths_changed(&self, paths: &[PathBuf]) {
+        let s = self.state.read();
+        let (Some(index), Some(project)) = (s.index.clone(), s.project.clone()) else { return };
+        let root = s.root.clone();
+        drop(s);
+        if !index.is_ready() {
+            return;
+        }
+        for p in paths {
+            let abs = self.abs(&root, p);
+            if abs.extension().and_then(|e| e.to_str()) != Some("java") || !project.files.is_in_source_content(&abs) {
+                continue;
+            }
+            match std::fs::read(&abs) {
+                Ok(bytes) => {
+                    let module = project.files.module_for_file(&abs).map(|m| (m.name.clone(), project.files.is_in_test_source_content(&abs)));
+                    index.update_source(&abs, &String::from_utf8_lossy(&bytes), module.as_ref().map(|(m, t)| (m.as_str(), *t)));
+                }
+                Err(_) => index.remove_source(&abs),
+            }
+        }
+    }
+
+    fn abs(&self, root: &Path, p: &Path) -> PathBuf {
+        if p.is_absolute() { p.to_path_buf() } else { root.join(p) }
     }
 
     pub fn absolute(&self, p: &Path) -> PathBuf {
@@ -135,6 +298,20 @@ impl QuickFix for RemoveUnusedImports {
     }
     fn batch_ok(&self) -> bool {
         false
+    }
+}
+
+impl JavaService {
+    /// The service registered in `registry`.
+    pub fn from_registry(registry: &archipel_ide_analysis::ServiceRegistry) -> Option<Arc<JavaService>> {
+        registry.get::<JavaService>(archipel_ide_language::LanguageId::ANY)
+    }
+
+    /// Registers the service and the `java-resolve` pass.
+    pub fn register(self: &Arc<Self>, registry: &mut archipel_ide_analysis::ServiceRegistry) {
+        use archipel_ide_language::Registration;
+        registry.register::<dyn Pass>(Registration::any("java-resolve").dumb_aware(true), Arc::new(JavaResolvePass { service: self.clone() }));
+        registry.register::<JavaService>(Registration::any("java").dumb_aware(true), self.clone());
     }
 }
 

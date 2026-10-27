@@ -99,6 +99,10 @@ pub enum WaitCondition {
     Popup,
     /// The active editor or the status bar contains `text`.
     Text,
+    /// The code analysis of the active file has settled: the daemon has analyzed the
+    /// current text, its language server is ready and no markup changed for a moment
+    /// (IntelliJ's `DaemonCodeAnalyzer` idle). Implies [`WaitCondition::Idle`].
+    Analysis,
 }
 
 /// One response line: `{"ok":true,"result":…}` or `{"ok":false,"error":"…"}`.
@@ -497,6 +501,16 @@ mod tests {
             serde_json::from_str(r#"{"op":"wait","until":"text","text":"fn","timeoutMs":250}"#)
                 .unwrap();
         assert_eq!(wait.wait_timeout(), Duration::from_millis(250));
+        let analysis: Request =
+            serde_json::from_str(r#"{"op":"wait","until":"analysis","timeoutMs":90000}"#).unwrap();
+        assert_eq!(
+            analysis,
+            Request::Wait {
+                until: WaitCondition::Analysis,
+                text: None,
+                timeout_ms: Some(90_000)
+            }
+        );
         assert_eq!(
             serde_json::to_value(Request::Key {
                 chord: "Escape".into()

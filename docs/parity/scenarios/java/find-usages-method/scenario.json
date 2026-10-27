@@ -1,0 +1,45 @@
+{
+  "title": "Find usages of a method in other files",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/demo/Greeter.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "caret",
+      "line": 4,
+      "column": 21
+    },
+    {
+      "op": "findUsages"
+    }
+  ],
+  "expect": {
+    "usages": [
+      {
+        "count": 2,
+        "paths": [
+          "Main.java",
+          "Other.java"
+        ]
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "Alt+F7 on the method name",
+    "notes": "the declaration is not a usage; the two calls are listed, grouped by file"
+  }
+}

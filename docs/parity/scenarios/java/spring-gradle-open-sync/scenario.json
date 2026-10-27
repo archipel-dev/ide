@@ -1,0 +1,56 @@
+{
+  "title": "Spring Boot Gradle project opens and syncs",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/com/example/demo/DemoApplication.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "opened",
+      "timeoutMs": 240000
+    },
+    {
+      "op": "sync",
+      "command": "gradle.sync",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "synced",
+      "timeoutMs": 240000
+    }
+  ],
+  "expect": {
+    "noMarkup": [
+      {
+        "when": "opened",
+        "severity": "error"
+      },
+      {
+        "when": "synced",
+        "severity": "error"
+      }
+    ],
+    "query": [
+      {
+        "command": "gradle.refresh",
+        "pointer": "/tasks",
+        "atLeast": 20,
+        "confidence": "unverified"
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "open the project, wait for the Gradle sync to finish, open the Gradle tool window",
+    "notes": "no error in DemoApplication; the Gradle tool window lists the Spring Boot tasks (bootRun among them)"
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "title": "Unresolved class offers Create class",
+  "requires": [
+    "jdk",
+    "jdtls",
+    "gradle",
+    "network"
+  ],
+  "open": "src/main/java/demo/App.java",
+  "steps": [
+    {
+      "op": "waitServer",
+      "timeoutMs": 300000
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "initial",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "typeAt",
+      "line": 5,
+      "column": 19,
+      "text": "\nHelper helper = new Helper();"
+    },
+    {
+      "op": "waitAnalysis",
+      "name": "typed",
+      "timeoutMs": 120000
+    },
+    {
+      "op": "caret",
+      "line": 6,
+      "column": 11
+    },
+    {
+      "op": "altEnter"
+    }
+  ],
+  "expect": {
+    "markup": [
+      {
+        "when": "typed",
+        "range": "6:9-6:15",
+        "severity": "error",
+        "message": "Cannot resolve symbol 'Helper'"
+      },
+      {
+        "when": "typed",
+        "range": "6:29-6:35",
+        "severity": "error",
+        "message": "Cannot resolve symbol 'Helper'"
+      }
+    ],
+    "intentions": [
+      {
+        "items": [
+          "Create class 'Helper'"
+        ]
+      }
+    ]
+  },
+  "intellij": {
+    "version": "IntelliJ IDEA 2025.2",
+    "action": "type Helper helper = new Helper(); with no such class, Alt+Enter on the first Helper"
+  }
+}

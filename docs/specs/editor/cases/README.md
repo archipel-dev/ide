@@ -36,6 +36,6 @@ Conventions:
 * `viewport: N lines, top=K` after `language:` fixes the visible window (zero-based first line K); an
   `after viewport: top=K2` line after the `after` block states the expected first visible line.
 * Tab and window cases (file 08) have no text blocks: `tabs: a | [b] | c` gives the tab strip before the
-  keys (brackets mark the active tab, `(p)` a pinned tab, `~` a preview tab) and `after tabs: ...` gives it
+  keys (brackets mark the active tab, `(p)` a pinned tab, `~` a preview tab, `*` a modified file; `||` separates split windows) and `after tabs: ...` gives it
   afterwards. `open X`, `close X`, `history: a, b, c` (least to most recently used) and `after font size: N`
   are further steps or checks.

@@ -232,7 +232,7 @@ l8
 <caret>l9
 ```
 
-### ED-NAV-003 case 2: a hop of fewer than 4 lines is merged into the previous place
+### ED-NAV-003 case 2: a hop of fewer than 4 lines replaces the previous place
 settings: default
 status: unverified (Go to Line is assumed to be a navigation command)
 language: plain
@@ -250,9 +250,9 @@ l9
 ```
 keys: Ctrl+G "3" Enter, Ctrl+G "9" Enter, Ctrl+Alt+Left
 ```after
-<caret>l0
+l0
 l1
-l2
+<caret>l2
 l3
 l4
 l5

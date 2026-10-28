@@ -36,6 +36,7 @@ const SETS: &[(&str, &str)] = &[
     ("REF", "Refactoring"),
     ("SRCH", "Search and navigation"),
     ("KT", "Kotlin"),
+    ("TUI", "Terminal UI"),
 ];
 /// Pre-spec ID areas from `docs/spec/features/` that still appear in evidence files.
 const LEGACY_AREAS: [&str; 2] = ["JAVA-NAV", "JAVA-GEN"];

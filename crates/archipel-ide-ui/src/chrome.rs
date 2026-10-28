@@ -841,66 +841,99 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                     egui::Stroke::new(line, theme::DIVIDER),
                 );
             }
+            // The view crate's status bar for this frame. The window supplies what only it
+            // knows: the declarations around the caret (its structure cache) and whether the
+            // file is read-only (probed once a second).
+            let (code_kinds, status) = {
+                let code: Vec<(archipel_ide_language::SymbolKind, String)> = app
+                    .state
+                    .active_doc()
+                    .map(|document| crate::structure_view::breadcrumbs(ctx, document))
+                    .unwrap_or_default();
+                let read_only = app
+                    .state
+                    .active_doc()
+                    .is_some_and(|doc| is_read_only(ctx, &app.state.absolute_path(&doc.path)));
+                let mut data = app.view_data();
+                data.read_only = read_only;
+                data.code_crumbs = code
+                    .iter()
+                    .map(|(kind, name)| archipel_ide_view::status::CodeCrumb {
+                        kind: *kind,
+                        name: name.clone(),
+                        line: 0,
+                        column: 0,
+                    })
+                    .collect();
+                let cx = archipel_ide_view::ViewCx::new(
+                    &app.state,
+                    &app.commands,
+                    &data,
+                    archipel_ide_view::Caps::gui(),
+                );
+                (
+                    code.iter().map(|(kind, _)| *kind).collect::<Vec<_>>(),
+                    archipel_ide_view::status::status_bar(&cx),
+                )
+            };
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 let font = egui::FontId::proportional(theme::UI_FONT_SIZE - 1.0);
-                // Navigation bar breadcrumbs: project › directories › file, then
-                // the declarations around the caret (class › method).
-                let mut crumbs = vec![app.project_name()];
-                let mut code_crumbs = Vec::new();
-                let mut file_replaced = false;
-                if let Some(document) = app.state.active_doc() {
-                    crumbs.extend(
-                        document
-                            .path
-                            .components()
-                            .map(|part| part.as_os_str().to_string_lossy().into_owned()),
-                    );
-                    code_crumbs = crate::structure_view::breadcrumbs(ctx, document);
-                    // Like IntelliJ, a top-level declaration named after the file
-                    // stands in for the file itself (`App.java` → `App`).
-                    let stem = document.path.file_stem().map(|stem| stem.to_string_lossy());
-                    if code_crumbs.first().map(|(_, name)| name.as_str()) == stem.as_deref() {
-                        crumbs.pop();
-                        file_replaced = true;
-                    }
-                }
-                let last = crumbs.len().saturating_sub(1);
+                // Navigation bar breadcrumbs: project › directories › file, then the
+                // declarations around the caret (class › method): the view crate's model.
+                let last = status.breadcrumbs.crumbs.len().saturating_sub(1);
                 let file_icon = app
                     .state
                     .active_doc()
                     .map(|document| app.file_icon(&document.path));
-                for (index, crumb) in crumbs.iter().enumerate() {
+                let mut code_index = 0;
+                for (index, crumb) in status.breadcrumbs.crumbs.iter().enumerate() {
+                    if crumb.id.starts_with("code:") {
+                        let kind = code_kinds.get(code_index).copied();
+                        code_index += 1;
+                        icons::show(ui, Icon::ChevronRight, 12.0, theme::TEXT_INFO);
+                        let (rect, _) = ui.allocate_exact_size(vec2(20.0, 22.0), Sense::hover());
+                        if let Some(kind) = kind {
+                            icons::paint(
+                                ui.painter(),
+                                Rect::from_center_size(rect.center(), vec2(14.0, 14.0)),
+                                Icon::Kit(crate::structure_view::icon(kind)),
+                                theme::ICON,
+                            );
+                        }
+                        widgets::flat_widget(
+                            ui,
+                            None,
+                            &crumb.text,
+                            font.clone(),
+                            theme::TEXT,
+                            false,
+                            22.0,
+                        );
+                        continue;
+                    }
+                    let is_file = matches!(crumb.icon, Some(archipel_kit_model::IconKey::File(_)));
                     let icon = if index == 0 {
                         Some((Icon::Project, *theme::TEXT_SECONDARY))
-                    } else if index == last && !file_replaced {
+                    } else if is_file {
                         Some((
-                            file_icon.unwrap_or_else(|| Icon::for_file(crumb)),
+                            file_icon.unwrap_or_else(|| Icon::for_file(&crumb.text)),
                             *icons::ICON,
                         ))
                     } else {
                         None
                     };
-                    let color = if index == last && !file_replaced {
+                    let color = if is_file {
                         *theme::TEXT
                     } else {
                         *theme::TEXT_SECONDARY
                     };
-                    widgets::flat_widget(ui, icon, crumb, font.clone(), color, false, 22.0);
-                    if index != last {
+                    widgets::flat_widget(ui, icon, &crumb.text, font.clone(), color, false, 22.0);
+                    if index != last
+                        && !status.breadcrumbs.crumbs[index + 1].id.starts_with("code:")
+                    {
                         icons::show(ui, Icon::ChevronRight, 12.0, *theme::TEXT_INFO);
                     }
-                }
-                for (kind, name) in code_crumbs {
-                    icons::show(ui, Icon::ChevronRight, 12.0, theme::TEXT_INFO);
-                    let (rect, _) = ui.allocate_exact_size(vec2(20.0, 22.0), Sense::hover());
-                    icons::paint(
-                        ui.painter(),
-                        Rect::from_center_size(rect.center(), vec2(14.0, 14.0)),
-                        Icon::Kit(crate::structure_view::icon(kind)),
-                        theme::ICON,
-                    );
-                    widgets::flat_widget(ui, None, &name, font.clone(), theme::TEXT, false, 22.0);
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -914,105 +947,58 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                     crate::index_status::status_widget(app, ui, font.clone());
                     crate::toolchain_status::status_widget(app, ui, font.clone());
                     crate::external_status::status_widget(app, ui, font.clone());
-                    let active = app.state.active_doc();
-                    if let Some(document) = active {
-                        // Bounded detection: never copy the whole buffer per frame.
-                        let indent = archipel_ide_text::format::detect_indent(&document.text)
-                            .unwrap_or(archipel_ide_text::format::Indent::Spaces(4));
-                        let separator =
-                            archipel_ide_text::format::detect_line_separator(&document.text);
-                        let caret = document.selections.primary().head;
-                        let (line, column) =
-                            document.text.char_to_line_column(caret).unwrap_or((0, 0));
-                        widgets::flat_widget(
+                    // Indent, encoding, line separator, caret, read-only and column, then the
+                    // update widget: the view crate's status items, drawn from the right.
+                    for id in [
+                        archipel_ide_view::status::ids::INDENT,
+                        archipel_ide_view::status::ids::ENCODING,
+                        archipel_ide_view::status::ids::SEPARATOR,
+                        archipel_ide_view::status::ids::CARET,
+                        archipel_ide_view::status::ids::READ_ONLY,
+                        archipel_ide_view::status::ids::COLUMN,
+                    ] {
+                        let Some(item) = status.items.iter().find(|item| item.id == id) else {
+                            continue;
+                        };
+                        let color = match item.tone {
+                            archipel_kit_model::Tone::Warning => *theme::WARNING,
+                            _ => *secondary,
+                        };
+                        let response = widgets::flat_widget(
                             ui,
                             None,
-                            &indent.label(),
+                            &item.text,
                             font.clone(),
-                            secondary,
+                            color,
                             false,
                             22.0,
                         );
-                        widgets::flat_widget(
-                            ui,
-                            None,
-                            "UTF-8",
-                            font.clone(),
-                            secondary,
-                            false,
-                            22.0,
-                        );
-                        widgets::flat_widget(
-                            ui,
-                            None,
-                            separator.label(),
-                            font.clone(),
-                            secondary,
-                            false,
-                            22.0,
-                        )
-                        .on_hover_text("Line separator");
-                        widgets::flat_widget(
-                            ui,
-                            None,
-                            &crate::editor_keys::caret_position_label(
-                                &document.text,
-                                &document.selections,
-                                (line, column),
-                            ),
-                            font.clone(),
-                            secondary,
-                            false,
-                            22.0,
-                        );
-                        if is_read_only(ctx, &app.state.absolute_path(&document.path)) {
-                            widgets::flat_widget(
-                                ui,
-                                None,
-                                "Read-only",
-                                font.clone(),
-                                *theme::WARNING,
-                                false,
-                                22.0,
-                            )
-                            .on_hover_text("File is read-only");
-                        }
-                        if document.selections.column_mode() {
-                            widgets::flat_widget(
-                                ui,
-                                None,
-                                "Column",
-                                font.clone(),
-                                secondary,
-                                false,
-                                22.0,
-                            );
+                        // Only the line separator and the read-only flag explain themselves.
+                        if matches!(
+                            id,
+                            archipel_ide_view::status::ids::SEPARATOR
+                                | archipel_ide_view::status::ids::READ_ONLY
+                        ) && let Some(tip) = &item.tooltip
+                        {
+                            response.on_hover_text(tip.title.clone());
                         }
                     }
-                    let update_state = app.state.update_state();
-                    if let archipel_ide_core::UpdateState::Available { version, .. }
-                    | archipel_ide_core::UpdateState::Installed(version) = &update_state
-                    {
-                        let label =
-                            if matches!(update_state, archipel_ide_core::UpdateState::Installed(_))
-                            {
-                                "Restart to update".to_owned()
-                            } else {
-                                format!("Update {version}")
-                            };
-                        if widgets::flat_widget(
+                    if let Some(item) = status
+                        .items
+                        .iter()
+                        .find(|item| item.id == archipel_ide_view::status::ids::UPDATE)
+                        && widgets::flat_widget(
                             ui,
                             Some((Icon::Refresh, *theme::MODIFIED)),
-                            &label,
+                            &item.text,
                             font.clone(),
                             *theme::MODIFIED,
                             false,
                             22.0,
                         )
                         .clicked()
-                        {
-                            app.state.notifications().show_update_balloon();
-                        }
+                    {
+                        app.state.notifications().show_update_balloon();
                     }
                     if app.state.execution().is_running() || app.state.search_running() {
                         widgets::busy_spinner(ui, 12.0, *theme::ACCENT);

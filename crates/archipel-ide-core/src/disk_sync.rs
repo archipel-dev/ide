@@ -46,6 +46,25 @@ pub enum DiskConflict {
     Deleted,
 }
 
+/// Which side a line of [`IdeState::conflict_diff`] belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiffTag {
+    Same,
+    /// Only in the file system content.
+    Disk,
+    /// Only in the memory content.
+    Memory,
+    /// Unchanged lines left out between two hunks.
+    Gap,
+}
+
+/// One line of the conflict diff.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiffLine {
+    pub tag: DiffTag,
+    pub text: String,
+}
+
 /// The `disk_hash` of a document whose file was deleted and whose user chose to keep the
 /// editor version: the next save recreates the file (PLAT-SAVE-079).
 const RECREATE_ON_SAVE: u64 = 0;
@@ -227,6 +246,49 @@ impl IdeState {
         self.sync_document_lsp(&path, disk, version);
     }
 
+    /// The first document with an unresolved outside change (PLAT-VFS-101): the frontends ask
+    /// the user about it.
+    pub fn conflicted_document(&self) -> Option<usize> {
+        self.documents.iter().position(|d| d.conflict.is_some())
+    }
+
+    /// "Show Difference" of the conflict dialog: the disk text against the memory text as
+    /// unified-diff lines with two lines of context, capped at `limit` lines.
+    pub fn conflict_diff(&self, index: usize, limit: usize) -> Result<Vec<DiffLine>, String> {
+        let project = self.project.as_ref().ok_or("no project is open")?;
+        let document = self.documents.get(index).ok_or("document does not exist")?;
+        let disk = project.read_text(&document.path).unwrap_or_default();
+        let memory = document.text.text();
+        let diff = similar::TextDiff::from_lines(&disk, &memory);
+        let mut lines = Vec::new();
+        for (group_index, group) in diff.grouped_ops(2).iter().enumerate() {
+            if group_index > 0 {
+                lines.push(DiffLine {
+                    tag: DiffTag::Gap,
+                    text: String::new(),
+                });
+            }
+            for op in group {
+                for change in diff.iter_changes(op) {
+                    let tag = match change.tag() {
+                        similar::ChangeTag::Equal => DiffTag::Same,
+                        similar::ChangeTag::Delete => DiffTag::Disk,
+                        similar::ChangeTag::Insert => DiffTag::Memory,
+                    };
+                    lines.push(DiffLine {
+                        tag,
+                        text: change.value().trim_end_matches(['\n', '\r']).to_owned(),
+                    });
+                }
+            }
+            if lines.len() >= limit {
+                lines.truncate(limit);
+                break;
+            }
+        }
+        Ok(lines)
+    }
+
     /// Resolves a conflict in favour of the disk (or closes a tab whose file
     /// was deleted). Without a conflict it simply reloads.
     pub fn reload_from_disk(&mut self, index: usize) -> Result<(), String> {
@@ -277,10 +339,7 @@ impl IdeState {
 }
 
 fn active_has_conflict(state: &IdeState) -> bool {
-    state
-        .active_document
-        .and_then(|index| state.documents.get(index))
-        .is_some_and(|document| document.conflict.is_some())
+    state.conflicted_document().is_some()
 }
 
 fn document_index(state: &IdeState, params: &Value, id: &str) -> Result<usize, CommandError> {
@@ -433,6 +492,26 @@ mod tests {
                 .unwrap()
                 .starts_with("// mine")
         );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plat_vfs_101_conflict_is_found_and_its_difference_listed() {
+        let (root, mut state) = project("diff");
+        assert_eq!(state.conflicted_document(), None);
+        state.documents[0].text.edit(0, 0, "// mine\n").unwrap();
+        std::fs::write(root.join("src/App.java"), "class Theirs {}\n").unwrap();
+        state.synchronize_all();
+        assert_eq!(state.conflicted_document(), Some(0));
+        let diff = state.conflict_diff(0, 50).unwrap();
+        assert!(diff.contains(&DiffLine {
+            tag: DiffTag::Disk,
+            text: "class Theirs {}".into()
+        }));
+        assert!(diff.contains(&DiffLine {
+            tag: DiffTag::Memory,
+            text: "// mine".into()
+        }));
         let _ = std::fs::remove_dir_all(root);
     }
 

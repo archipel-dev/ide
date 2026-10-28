@@ -143,3 +143,69 @@ fn a_disabled_action_does_nothing_and_shows_no_toast() {
     }
     assert!(!tui.contains("Command failed"));
 }
+
+/// PLAT-VFS-101 (TUI-BUG-027): a file that changed on disk while its document has edits asks
+/// what to do; "Load File System Changes" replaces the text, "Keep Memory Changes" makes the
+/// next save overwrite, "Show Difference" lists both sides.
+fn conflict(name: &str) -> (Project, Tui) {
+    let project = project(name);
+    let mut tui = Tui::open(&project.root, &["a.txt"], 120, 30);
+    tui.advance(0.1);
+    tui.type_text("mine ");
+    std::fs::write(project.root.join("a.txt"), "theirs\n").unwrap();
+    tui.ctrl('s');
+    tui.advance(0.2);
+    (project, tui)
+}
+
+#[test]
+fn a_conflict_offers_load_keep_and_difference_and_load_replaces_the_text() {
+    let (project, mut tui) = conflict("conflict-load");
+    assert!(tui.contains("File Cache Conflict"), "{}", tui.text());
+    assert!(tui.contains("Load File System Changes"));
+    assert!(tui.contains("Keep Memory Changes"));
+    assert!(tui.contains("Show Difference"), "{}", tui.text());
+    // Enter takes the default button: load the disk version.
+    tui.press(KeyCode::Enter);
+    tui.advance(0.2);
+    assert!(!tui.contains("File Cache Conflict"));
+    let doc = &tui.app.ide().state().documents()[0];
+    assert_eq!(doc.text.text(), "theirs\n");
+    assert!(!doc.text.is_dirty());
+    assert_eq!(project.read("a.txt"), "theirs\n");
+}
+
+#[test]
+fn keeping_the_memory_version_lets_the_next_save_overwrite() {
+    let (project, mut tui) = conflict("conflict-keep");
+    let (x, y) = tui.find("Keep Memory Changes").expect("the button");
+    tui.click(x + 1, y);
+    tui.advance(0.2);
+    assert!(!tui.contains("File Cache Conflict"), "{}", tui.text());
+    tui.ctrl('s');
+    tui.advance(0.2);
+    assert_eq!(project.read("a.txt"), "mine alpha\n");
+}
+
+#[test]
+fn escape_snoozes_the_dialog_and_saving_asks_again() {
+    let (_project, mut tui) = conflict("conflict-esc");
+    tui.press(KeyCode::Esc);
+    tui.advance(0.3);
+    assert!(!tui.contains("File Cache Conflict"), "{}", tui.text());
+    assert!(tui.app.ide().state().documents()[0].text.is_dirty());
+    tui.ctrl('s');
+    tui.advance(0.2);
+    assert!(tui.contains("File Cache Conflict"), "{}", tui.text());
+}
+
+#[test]
+fn show_difference_lists_both_sides() {
+    let (_project, mut tui) = conflict("conflict-diff");
+    let (x, y) = tui.find("Show Difference").expect("the button");
+    tui.click(x + 1, y);
+    tui.advance(0.2);
+    assert!(tui.contains("theirs"), "{}", tui.text());
+    assert!(tui.contains("mine alpha"), "{}", tui.text());
+    assert!(tui.contains("File system content"), "{}", tui.text());
+}

@@ -128,7 +128,7 @@ pub use android_deploy::{DeployPhase, DeployState};
 pub use android_devices::DeviceHub;
 pub use android_logcat::LogcatState;
 pub use android_tools::{LayoutEditorState, LayoutMode};
-pub use disk_sync::{DiskConflict, Waker, content_hash};
+pub use disk_sync::{DiffLine, DiffTag, DiskConflict, Waker, content_hash};
 pub use services::Settings;
 mod vcs;
 pub use archipel_ide_runnables::RunnableKind;

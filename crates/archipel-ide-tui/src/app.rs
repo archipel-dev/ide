@@ -79,6 +79,10 @@ pub enum DialogKind {
         close: Option<usize>,
         quit: bool,
     },
+    /// A file changed on disk while its document has unsaved edits (PLAT-VFS-101).
+    Conflict {
+        index: usize,
+    },
 }
 
 /// A node of the project tree: what a row stands for.
@@ -116,6 +120,8 @@ pub struct TuiApp {
     pub(crate) notice: crate::notice::Notice,
     /// The keymap the runtime resolves; kept to show shortcuts.
     pub(crate) quit: bool,
+    /// Documents whose conflict dialog was closed with Escape; saving asks again.
+    pub(crate) conflict_snoozed: Vec<PathBuf>,
 }
 
 impl TuiApp {
@@ -155,6 +161,7 @@ impl TuiApp {
             welcome_rows: Vec::new(),
             notice: crate::notice::Notice::default(),
             quit: false,
+            conflict_snoozed: Vec::new(),
         };
         // Like the GUI: the Project window is open when a project is.
         app.ide.state_mut().tool_windows_mut().hide_all();
@@ -306,6 +313,9 @@ impl TuiApp {
     /// Runs a command after the editor buffers were pushed to the core.
     pub(crate) fn command(&mut self, rt: &mut Runtime, id: &str, params: Value) {
         self.sync_views();
+        if id.starts_with("editor.save") || id == "file.synchronize" {
+            self.conflict_snoozed.clear();
+        }
         // Closing a tab saves it first (the GUI autosaves on close) and asks when it cannot.
         if id == "editor.close" && params["saved"].as_bool() != Some(true) {
             let index = params["index"]
@@ -412,6 +422,7 @@ impl TuiApp {
         self.sync_views();
         self.ide.state_mut().record_caret_location();
         self.process_requests(rt);
+        self.offer_conflict(rt);
         self.refresh_tree();
         self.refresh_panels();
     }
@@ -849,6 +860,9 @@ impl TuiApp {
             return;
         }
         self.sync_views();
+        if id == "SaveAll" || id.starts_with("Synchronize") || id == "Reload" {
+            self.conflict_snoozed.clear();
+        }
         // A disabled action does nothing: its entries are greyed out, so no message names it.
         if let Some(effect) = self.ide.perform(id, place, self.editor_focused()) {
             self.apply_effect(rt, effect);
@@ -1015,6 +1029,9 @@ impl TuiApp {
     pub(crate) fn apply(&mut self, rt: &mut Runtime, msg: Msg) {
         match msg {
             Msg::Picked(target, alternate) => self.picked(rt, target, alternate),
+            Msg::Dialog(DialogKind::Conflict { index }, code, _) => {
+                self.conflict_answer(rt, index, code);
+            }
             Msg::Dialog(kind, code, input) => {
                 if code == ExitCode::Primary {
                     self.dialog_done(rt, kind, input);
@@ -1127,7 +1144,7 @@ impl TuiApp {
             DialogKind::Delete { path } => {
                 self.command(rt, "project.delete", json!({ "path": path }));
             }
-            DialogKind::Notice => {}
+            DialogKind::Notice | DialogKind::Conflict { .. } => {}
             DialogKind::DiscardUnsaved { close, quit } => {
                 if let Some(index) = close {
                     // Discard: the tab closes with its edits.

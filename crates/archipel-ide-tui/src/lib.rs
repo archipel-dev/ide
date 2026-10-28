@@ -8,6 +8,7 @@
 
 pub mod app;
 pub mod chrome;
+pub mod conflict;
 pub mod dialogs;
 pub mod draw;
 pub mod ide;

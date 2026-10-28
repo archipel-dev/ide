@@ -3,6 +3,7 @@
 use crate::icons::{self, Icon};
 use crate::widgets::{self, chrome_frame, glow_through_frame};
 use crate::{IdeApp, keys, theme};
+use archipel_ide_actions::ActionPlace;
 use archipel_ide_core::{Anchor, ToolWindow};
 use eframe::egui::{self, Color32, Rect, Sense, vec2};
 use serde_json::{Value, json};
@@ -95,13 +96,41 @@ pub fn main_toolbar(app: &mut IdeApp, ctx: &egui::Context) {
                         window_controls(ui);
                     });
                 }
+                // The tooltips of the buttons the view crate builds (the terminal shows the
+                // same texts).
+                let (search_tip, settings_tip) = app.with_view(|cx| {
+                    let bar = archipel_ide_view::toolbar::main_toolbar(cx);
+                    let tip = |id: &str| {
+                        bar.items().find_map(|item| match item {
+                            archipel_kit_model::ToolbarItem::Button(button) if button.id == id => {
+                                button
+                                    .tooltip
+                                    .as_ref()
+                                    .map(|t| t.text(archipel_ide_view::Caps::gui().notation()))
+                            }
+                            _ => None,
+                        })
+                    };
+                    (
+                        tip(archipel_ide_view::toolbar::ids::SEARCH),
+                        tip(archipel_ide_view::toolbar::ids::SETTINGS),
+                    )
+                });
+                // Settings, the gear right of Search Everywhere (it was only a menu item and a
+                // shortcut before; the terminal toolbar has it too).
+                if icons::toolbar_button(
+                    ui,
+                    Icon::Task,
+                    &settings_tip.unwrap_or_else(|| "Settings".into()),
+                )
+                .clicked()
+                {
+                    app.run_action("ShowSettings", ActionPlace::Toolbar, ctx);
+                }
                 if icons::toolbar_button(
                     ui,
                     Icon::Search,
-                    &format!(
-                        "Search Everywhere ({})",
-                        app.action_shortcut("SearchEverywhere").unwrap_or_default()
-                    ),
+                    &search_tip.unwrap_or_else(|| "Search Everywhere".into()),
                 )
                 .clicked()
                 {

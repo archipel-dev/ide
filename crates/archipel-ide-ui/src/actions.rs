@@ -8,7 +8,6 @@
 //! [`UiDataProvider`]. Nothing here reads another subsystem's fields.
 
 use crate::IdeApp;
-use crate::context_menus::Target;
 use crate::keybindings::UiAction;
 use archipel_ide_actions::{ActionEffect, ActionPlace, ActionRegistry, Presentation};
 use archipel_ide_core::ide_actions::IdeDataProvider;
@@ -20,13 +19,7 @@ use serde_json::{Value, json};
 use std::any::Any;
 use std::path::Path;
 
-pub(crate) use archipel_ide_view::actions::{
-    CONTEXT, ContextFacts, ContextKind, is_target_action, register_context_rules,
-    register_ui_actions,
-};
-
-#[cfg(test)]
-pub(crate) use archipel_ide_view::actions::context_rule;
+pub(crate) use archipel_ide_view::actions::{register_context_rules, register_ui_actions};
 
 /// Answers the keys that only the window knows.
 pub(crate) struct UiDataProvider<'a> {
@@ -89,7 +82,40 @@ impl IdeApp {
                     }
                 }
                 Effect::Request(Request::Ui(action)) => self.run_ui_action(action, ctx),
-                Effect::Request(Request::Paste) => self.run_ui_action(UiAction::Paste, ctx),
+                Effect::Request(Request::Paste) => {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::RequestPaste);
+                }
+                Effect::Request(Request::FindInPathIn(path)) => {
+                    // Scoped to the clicked directory (or file); the project root is everything.
+                    self.state.project_view_mut().search_scope =
+                        (!path.as_os_str().is_empty()).then(|| path.clone());
+                    self.state.set_search_scope_kind(
+                        if self.state.project_view().search_scope.is_some() {
+                            archipel_ide_core::SearchScopeKind::Directory
+                        } else {
+                            archipel_ide_core::SearchScopeKind::Project
+                        },
+                    );
+                    self.run_action("FindInPath", ActionPlace::ContextMenu, ctx);
+                }
+                Effect::Request(Request::SafeDelete(path)) => {
+                    let usages = self.state.safe_delete_usages(&path).unwrap_or_default();
+                    self.open_dialog(crate::popups::Dialog::SafeDelete { path, usages });
+                }
+                Effect::Request(Request::Move(path)) => {
+                    let destination = path
+                        .parent()
+                        .map(|parent| parent.display().to_string())
+                        .unwrap_or_default();
+                    self.open_dialog(crate::popups::Dialog::Move { path, destination });
+                }
+                Effect::Request(Request::Rename(path)) => {
+                    let name = IdeApp::file_name(&path);
+                    self.open_dialog(crate::popups::Dialog::Rename { path, name });
+                }
+                Effect::Request(Request::Delete(path)) => {
+                    self.open_dialog(crate::popups::Dialog::Delete { path });
+                }
                 Effect::Request(Request::OpenProject(path)) => {
                     if let Err(error) = self.open_project_path(&path, ctx) {
                         self.state.set_status(error);
@@ -219,31 +245,6 @@ impl IdeApp {
             }
         }
     }
-
-    /// Context for a context menu on `target`.
-    pub(crate) fn context_facts(&self, target: &Target) -> ContextFacts {
-        ContextFacts {
-            kind: match target {
-                Target::Tree { .. } => ContextKind::Tree,
-                Target::Editor => ContextKind::Editor,
-                Target::Tab(index) => ContextKind::Tab(*index),
-            },
-            open_tabs: self.state.open_editor_count(),
-            has_closed_tabs: self.state.has_closed_tabs(),
-            has_clipboard: self.state.project_view_clipboard_present(),
-            has_document: self.state.active_file().is_some(),
-        }
-    }
-
-    /// Whether the context menu entry `action` is enabled for `target`.
-    pub(crate) fn context_action_enabled(&self, action: &str, target: &Target) -> bool {
-        let facts = self.context_facts(target);
-        self.with_data_values(
-            |data| data.with_value(&CONTEXT, facts),
-            |registry, data| registry.update(action, ActionPlace::ContextMenu, data),
-        )
-        .is_some_and(|presentation| presentation.enabled)
-    }
 }
 
 /// The parameters of the Switcher depend on the Shift key.
@@ -255,66 +256,6 @@ pub(crate) fn switcher_params(ctx: &egui::Context) -> Value {
 mod tests {
     use super::*;
     use crate::keybindings;
-
-    fn facts(kind: ContextKind) -> ContextFacts {
-        ContextFacts {
-            kind,
-            open_tabs: 3,
-            has_closed_tabs: false,
-            has_clipboard: false,
-            has_document: true,
-        }
-    }
-
-    #[test]
-    fn tab_rules_follow_the_tab_strip() {
-        let rule = |action, kind| context_rule(action, &facts(kind));
-        assert_eq!(rule("CloseAllToTheLeft", ContextKind::Tab(0)), Some(false));
-        assert_eq!(rule("CloseAllToTheLeft", ContextKind::Tab(1)), Some(true));
-        assert_eq!(rule("CloseAllToTheRight", ContextKind::Tab(2)), Some(false));
-        assert_eq!(rule("CloseAllToTheRight", ContextKind::Tab(1)), Some(true));
-        assert_eq!(rule("ReopenClosedTab", ContextKind::Tab(0)), Some(false));
-        assert_eq!(rule("CloseAllEditors", ContextKind::Tab(0)), Some(true));
-        let single = ContextFacts {
-            open_tabs: 1,
-            ..facts(ContextKind::Tab(0))
-        };
-        assert_eq!(
-            context_rule("CloseAllEditorsButActive", &single),
-            Some(false)
-        );
-    }
-
-    #[test]
-    fn paste_depends_on_the_target() {
-        assert_eq!(
-            context_rule("$Paste", &facts(ContextKind::Tree)),
-            Some(false)
-        );
-        let with_clipboard = ContextFacts {
-            has_clipboard: true,
-            ..facts(ContextKind::Tree)
-        };
-        assert_eq!(context_rule("$Paste", &with_clipboard), Some(true));
-        assert_eq!(
-            context_rule("$Paste", &facts(ContextKind::Editor)),
-            Some(true)
-        );
-    }
-
-    #[test]
-    fn tree_entries_are_available_and_history_is_not() {
-        let tree = facts(ContextKind::Tree);
-        assert_eq!(context_rule("jt.git.stage", &tree), Some(true));
-        assert_eq!(context_rule("LocalHistory", &tree), Some(false));
-        assert_eq!(context_rule("SafeDelete", &tree), Some(true));
-        // Anything else is the action's own business.
-        assert_eq!(context_rule("GotoLine", &tree), None);
-        assert_eq!(
-            context_rule("SafeDelete", &facts(ContextKind::Editor)),
-            None
-        );
-    }
 
     #[test]
     fn every_implemented_action_is_registered() {

@@ -387,16 +387,16 @@ fn the_terminal_window_runs_a_shell() {
     tui.press_with(KeyCode::F(12), KeyModifiers::ALT);
     tui.expect("the Terminal window", 20, |tui| tui.contains("Terminal"));
     // The shell starts asynchronously; type until the echo shows up.
-    tui.type_text("echo terminal-works");
+    // The shell computes the marker, so the typed command line (which wraps in a narrow
+    // window after a long prompt) never contains it.
+    tui.type_text("echo tw-$((20+22))");
     tui.press(KeyCode::Enter);
-    tui.expect("the shell output", 20, |tui| {
-        tui.text().matches("terminal-works").count() >= 2
-    });
+    tui.expect("the shell output", 20, |tui| tui.contains("tw-42"));
     println!("{}", tui.text());
     // Shift+Esc hides the window and the focus returns to the editor.
     tui.press_with(KeyCode::Esc, KeyModifiers::SHIFT);
     tui.advance(0.1);
-    assert!(!tui.contains("terminal-works"), "{}", tui.text());
+    assert!(!tui.contains("tw-42"), "{}", tui.text());
 }
 
 fn select_in_tree(tui: &mut Tui, path: &str) {

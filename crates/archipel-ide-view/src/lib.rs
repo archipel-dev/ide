@@ -23,6 +23,7 @@ pub mod header;
 pub mod icons;
 pub mod keys;
 pub mod main_menu;
+pub mod popups;
 pub mod toolbar;
 
 pub mod status;

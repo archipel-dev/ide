@@ -1058,8 +1058,19 @@ impl TuiApp {
         }
     }
 
-    fn picked(&mut self, rt: &mut Runtime, target: Target, _alternate: bool) {
+    fn picked(&mut self, rt: &mut Runtime, target: Target, alternate: bool) {
         match target {
+            Target::Hit(hit) => {
+                if let archipel_ide_core::quick_nav::Hit::Action(action) = &hit {
+                    self.run_action(rt, &action.id, ActionPlace::FindAction);
+                } else {
+                    // Shift+Enter and Ctrl+Enter open in the right split.
+                    for (command, params) in hit.open_commands(alternate) {
+                        self.command(rt, command, params);
+                    }
+                    self.focus_editor();
+                }
+            }
             Target::File {
                 path,
                 line,
@@ -1349,7 +1360,7 @@ impl App for TuiApp {
         }
         if let Event::Key(key) = event
             && key.kind != KeyEventKind::Release
-            && self.popup_key(rt, key)
+            && (self.choices_key(rt, key) || self.popup_key(rt, key))
         {
             self.after_input(rt);
             return;

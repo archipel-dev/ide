@@ -90,14 +90,6 @@ impl IdeApp {
             .map(|shortcut| shortcut.label(Notation::current()))
     }
 
-    /// Shortcut label for a command: from the keymap when an action maps to it,
-    /// else the command's own (macOS-notation) default.
-    pub(crate) fn command_shortcut(&self, spec: &archipel_ide_command::CommandSpec) -> String {
-        archipel_ide_core::keymap_commands::actions_for_command(&spec.id)
-            .find_map(|action| self.action_shortcut(action))
-            .unwrap_or_else(|| crate::keys::display(spec.shortcut.as_deref().unwrap_or_default()))
-    }
-
     /// Directory (project-relative) that New entries go into: the selected directory,
     /// or the parent of the selected file, like the Project view's New group.
     fn new_entry_parent(&self) -> Option<PathBuf> {

@@ -393,8 +393,8 @@ impl TuiApp {
                 if *follow {
                     *follow = false;
                     if out.caret_cell.is_none() {
-                        let line = model.document.line_number(model.carets.primary().offset);
-                        state.scroll_to_line(line);
+                        // By row: the caret may sit on the 40th row of a wrapped line.
+                        state.scroll_to_caret();
                         out = EditorComponent::new(EDITOR, model)
                             .highlighter(highlighter)
                             .language(language)

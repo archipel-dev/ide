@@ -282,6 +282,14 @@ dependencies = [
 [[package]]
 name = "archipel-icons"
 version = "0.4.0"
+source = "git+https://github.com/archipel-dev/kit?branch=fix%2Ftui-editor-qa#2c4addf318cfa5b90ed3204caa1d11a8cc5d0673"
+dependencies = [
+ "egui",
+]
+
+[[package]]
+name = "archipel-icons"
+version = "0.4.0"
 source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
 dependencies = [
  "egui",
@@ -729,6 +737,7 @@ name = "archipel-ide-runner"
 version = "0.2.6"
 dependencies = [
  "archipel-ide-compat",
+ "libc",
  "quick-xml 0.37.5",
  "serde",
  "serde_json",
@@ -834,9 +843,10 @@ dependencies = [
  "archipel-ide-terminal",
  "archipel-ide-text",
  "archipel-ide-view",
- "archipel-kit",
- "archipel-kit-model",
+ "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=fix%2Ftui-editor-qa)",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=fix%2Ftui-editor-qa)",
  "archipel-kit-tui",
+ "libc",
  "serde_json",
  "unicode-width 0.2.2",
 ]
@@ -845,7 +855,7 @@ dependencies = [
 name = "archipel-ide-ui"
 version = "0.2.6"
 dependencies = [
- "archipel-icons",
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=fix%2Ftui-editor-qa)",
  "archipel-ide-actions",
  "archipel-ide-ai",
  "archipel-ide-analysis",
@@ -873,8 +883,8 @@ dependencies = [
  "archipel-ide-terminal",
  "archipel-ide-text",
  "archipel-ide-view",
- "archipel-kit",
- "archipel-kit-model",
+ "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=fix%2Ftui-editor-qa)",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=fix%2Ftui-editor-qa)",
  "eframe",
  "egui",
  "egui_extras",
@@ -919,8 +929,24 @@ dependencies = [
  "archipel-ide-plugins",
  "archipel-ide-settings",
  "archipel-ide-text",
- "archipel-kit-model",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=fix%2Ftui-editor-qa)",
  "serde_json",
+]
+
+[[package]]
+name = "archipel-kit"
+version = "0.4.0"
+source = "git+https://github.com/archipel-dev/kit?branch=fix%2Ftui-editor-qa#2c4addf318cfa5b90ed3204caa1d11a8cc5d0673"
+dependencies = [
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=fix%2Ftui-editor-qa)",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=fix%2Ftui-editor-qa)",
+ "egui",
+ "egui_kittest",
+ "objc2 0.6.5",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "regex",
+ "serde",
 ]
 
 [[package]]
@@ -928,8 +954,8 @@ name = "archipel-kit"
 version = "0.4.0"
 source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
 dependencies = [
- "archipel-icons",
- "archipel-kit-model",
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
  "egui",
  "egui_kittest",
  "objc2 0.6.5",
@@ -942,20 +968,29 @@ dependencies = [
 [[package]]
 name = "archipel-kit-model"
 version = "0.4.0"
+source = "git+https://github.com/archipel-dev/kit?branch=fix%2Ftui-editor-qa#2c4addf318cfa5b90ed3204caa1d11a8cc5d0673"
+dependencies = [
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=fix%2Ftui-editor-qa)",
+ "serde",
+]
+
+[[package]]
+name = "archipel-kit-model"
+version = "0.4.0"
 source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
 dependencies = [
- "archipel-icons",
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
  "serde",
 ]
 
 [[package]]
 name = "archipel-kit-tui"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
+source = "git+https://github.com/archipel-dev/kit?branch=fix%2Ftui-editor-qa#2c4addf318cfa5b90ed3204caa1d11a8cc5d0673"
 dependencies = [
- "archipel-icons",
- "archipel-kit",
- "archipel-kit-model",
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=fix%2Ftui-editor-qa)",
+ "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=fix%2Ftui-editor-qa)",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=fix%2Ftui-editor-qa)",
  "ratatui",
  "unicode-width 0.2.2",
 ]
@@ -977,7 +1012,7 @@ name = "archipel-plugin-testing"
 version = "0.1.0"
 source = "git+https://github.com/archipel-dev/sdk?branch=main#241e7e8db542905e65892145174cd5ddb0828168"
 dependencies = [
- "archipel-kit",
+ "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
  "archipel-plugin-api",
  "archipel-plugin-ui",
  "egui",
@@ -988,7 +1023,7 @@ name = "archipel-plugin-ui"
 version = "0.1.0"
 source = "git+https://github.com/archipel-dev/sdk?branch=main#241e7e8db542905e65892145174cd5ddb0828168"
 dependencies = [
- "archipel-kit",
+ "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
  "archipel-plugin-api",
  "egui",
 ]
@@ -1676,7 +1711,7 @@ checksum = "fe6d2e5af09e8c8ad56c969f2157a3d4238cebc7c55f0a517728c38f7b200f81"
 dependencies = [
  "serde",
  "termcolor",
- "unicode-width 0.2.2",
+ "unicode-width 0.1.14",
 ]
 
 [[package]]

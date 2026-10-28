@@ -780,3 +780,21 @@ fn the_run_chooser_lists_detected_targets_and_a_blocked_run_explains_itself() {
     assert!(tui.contains("no standard run goal"), "{}", tui.text());
     assert!(!tui.contains("run.project"), "{}", tui.text());
 }
+
+/// QA bug 19 of the TUI list: typing at the end of a 5 000-character line scrolls the wrapped rows so that
+/// the caret and the typed text are visible.
+#[test]
+fn the_view_follows_the_caret_inside_a_very_long_wrapped_line() {
+    let long = format!("{} end\n", "x".repeat(5000));
+    let project = Project::new("long-line", &[("long.txt", long.as_str())]);
+    let mut tui = Tui::open(&project.root, &["long.txt"], 100, 30);
+    tui.advance(0.1);
+    tui.press(KeyCode::End);
+    tui.type_text("ZZZ");
+    tui.advance(0.2);
+    assert!(
+        tui.contains("ZZZ"),
+        "the typed text is visible\n{}",
+        tui.text()
+    );
+}

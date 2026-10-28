@@ -282,6 +282,14 @@ dependencies = [
 [[package]]
 name = "archipel-icons"
 version = "0.4.0"
+source = "git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-popups#ddbc693bc6f562e60d8f9a62f572309b7f9a1583"
+dependencies = [
+ "egui",
+]
+
+[[package]]
+name = "archipel-icons"
+version = "0.4.0"
 source = "git+https://github.com/archipel-dev/kit?branch=main#f3531215823bdfe368dcdd15e252b1830dd9cbf6"
 dependencies = [
  "egui",
@@ -835,8 +843,8 @@ dependencies = [
  "archipel-ide-terminal",
  "archipel-ide-text",
  "archipel-ide-view",
- "archipel-kit",
- "archipel-kit-model",
+ "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-popups)",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-popups)",
  "archipel-kit-tui",
  "libc",
  "serde_json",
@@ -847,7 +855,7 @@ dependencies = [
 name = "archipel-ide-ui"
 version = "0.3.0"
 dependencies = [
- "archipel-icons",
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-popups)",
  "archipel-ide-actions",
  "archipel-ide-ai",
  "archipel-ide-analysis",
@@ -875,8 +883,8 @@ dependencies = [
  "archipel-ide-terminal",
  "archipel-ide-text",
  "archipel-ide-view",
- "archipel-kit",
- "archipel-kit-model",
+ "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-popups)",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-popups)",
  "eframe",
  "egui",
  "egui_extras",
@@ -912,6 +920,7 @@ dependencies = [
  "archipel-ide-analysis",
  "archipel-ide-command",
  "archipel-ide-core",
+ "archipel-ide-daemon",
  "archipel-ide-git",
  "archipel-ide-index",
  "archipel-ide-keymap",
@@ -921,8 +930,24 @@ dependencies = [
  "archipel-ide-plugins",
  "archipel-ide-settings",
  "archipel-ide-text",
- "archipel-kit-model",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-popups)",
  "serde_json",
+]
+
+[[package]]
+name = "archipel-kit"
+version = "0.4.0"
+source = "git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-popups#ddbc693bc6f562e60d8f9a62f572309b7f9a1583"
+dependencies = [
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-popups)",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-popups)",
+ "egui",
+ "egui_kittest",
+ "objc2 0.6.5",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "regex",
+ "serde",
 ]
 
 [[package]]
@@ -930,8 +955,8 @@ name = "archipel-kit"
 version = "0.4.0"
 source = "git+https://github.com/archipel-dev/kit?branch=main#f3531215823bdfe368dcdd15e252b1830dd9cbf6"
 dependencies = [
- "archipel-icons",
- "archipel-kit-model",
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
  "egui",
  "egui_kittest",
  "objc2 0.6.5",
@@ -944,20 +969,29 @@ dependencies = [
 [[package]]
 name = "archipel-kit-model"
 version = "0.4.0"
+source = "git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-popups#ddbc693bc6f562e60d8f9a62f572309b7f9a1583"
+dependencies = [
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-popups)",
+ "serde",
+]
+
+[[package]]
+name = "archipel-kit-model"
+version = "0.4.0"
 source = "git+https://github.com/archipel-dev/kit?branch=main#f3531215823bdfe368dcdd15e252b1830dd9cbf6"
 dependencies = [
- "archipel-icons",
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
  "serde",
 ]
 
 [[package]]
 name = "archipel-kit-tui"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#f3531215823bdfe368dcdd15e252b1830dd9cbf6"
+source = "git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-popups#ddbc693bc6f562e60d8f9a62f572309b7f9a1583"
 dependencies = [
- "archipel-icons",
- "archipel-kit",
- "archipel-kit-model",
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-popups)",
+ "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-popups)",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-popups)",
  "ratatui",
  "unicode-width 0.2.2",
 ]
@@ -979,7 +1013,7 @@ name = "archipel-plugin-testing"
 version = "0.1.0"
 source = "git+https://github.com/archipel-dev/sdk?branch=main#241e7e8db542905e65892145174cd5ddb0828168"
 dependencies = [
- "archipel-kit",
+ "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
  "archipel-plugin-api",
  "archipel-plugin-ui",
  "egui",
@@ -990,7 +1024,7 @@ name = "archipel-plugin-ui"
 version = "0.1.0"
 source = "git+https://github.com/archipel-dev/sdk?branch=main#241e7e8db542905e65892145174cd5ddb0828168"
 dependencies = [
- "archipel-kit",
+ "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
  "archipel-plugin-api",
  "egui",
 ]
@@ -1678,7 +1712,7 @@ checksum = "fe6d2e5af09e8c8ad56c969f2157a3d4238cebc7c55f0a517728c38f7b200f81"
 dependencies = [
  "serde",
  "termcolor",
- "unicode-width 0.2.2",
+ "unicode-width 0.1.14",
 ]
 
 [[package]]

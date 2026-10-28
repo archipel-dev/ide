@@ -49,7 +49,71 @@ pub struct DetectedBuild {
     pub build_unavailable: Option<String>,
 }
 
+/// A target the detected build system offers (Run Configurations chooser).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DetectedTarget {
+    /// `Cargo Run`, `Maven Build`, ...
+    pub label: String,
+    /// The type shown next to it: `Cargo`, `Maven`, ...
+    pub kind: String,
+    /// The command that starts it: `run.project`, `build.project` or `test.project`.
+    pub command: &'static str,
+    /// Why it cannot start, in words for the user.
+    pub unavailable: Option<String>,
+}
+
 impl IdeState {
+    /// The Run, Build and Test targets of the detected build system (Cargo, Gradle, Maven,
+    /// npm, Go, Bazel), with the reason when one cannot start.
+    pub fn detected_targets(&self) -> Vec<DetectedTarget> {
+        let Some(project) = self.project.as_ref() else {
+            return Vec::new();
+        };
+        let Some(provider) = self.build_systems.detect(project.root()) else {
+            return Vec::new();
+        };
+        let root = project.root();
+        let kind = provider.kind().display_name().to_owned();
+        let one = |plan: Result<TaskPlan, RunnerError>, fallback: &str, command| {
+            let (label, unavailable) = match plan {
+                Ok(plan) => (plan.name, None),
+                Err(error) => (format!("{kind} {fallback}"), Some(error.to_string())),
+            };
+            DetectedTarget {
+                label,
+                kind: kind.clone(),
+                command,
+                unavailable,
+            }
+        };
+        vec![
+            one(provider.run_plan(root), "Run", "run.project"),
+            one(provider.build_plan(root), "Build", "build.project"),
+            one(provider.test_plan(root), "Test", "test.project"),
+        ]
+    }
+
+    /// Why Run (Shift+F10) cannot start now, in words for the user; `None` when it can.
+    pub fn run_unavailable_reason(&self) -> Option<String> {
+        if self.project.is_none() {
+            return Some("Open a project first.".into());
+        }
+        if self.execution().is_running() {
+            return Some("A process is already running. Stop it first (Ctrl+F2).".into());
+        }
+        if self.execution().configurations().selected().is_some() {
+            return None;
+        }
+        match self.detected_build.as_ref() {
+            Some(build) => build.run_unavailable.clone(),
+            None => Some(
+                "There is nothing to run: no build file was found and no run configuration is selected. \
+                 Create one in Run, Edit Configurations."
+                    .into(),
+            ),
+        }
+    }
+
     /// Re-detects the build system of the open project.
     pub fn detect_build(&mut self) {
         self.detected_build = self.project.as_ref().and_then(|project| {

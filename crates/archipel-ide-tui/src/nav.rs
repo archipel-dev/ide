@@ -268,6 +268,26 @@ impl TuiApp {
                 row.footer = "Enter runs the configuration".to_owned();
                 row
             })
+            .chain(
+                // What the build system detected (Cargo, Gradle, Maven, npm, Go): a target that
+                // cannot start is listed greyed out with the reason.
+                self.ide
+                    .state()
+                    .detected_targets()
+                    .into_iter()
+                    .filter(|target| matches(query, &target.label))
+                    .map(|target| {
+                        let mut row =
+                            PickerRow::new(target.label.clone(), Target::Command(target.command));
+                        row.icon = Some(RowIcon::Glyph(Glyph::Run));
+                        row.detail = target.kind.clone();
+                        row.enabled = target.unavailable.is_none();
+                        row.footer = target
+                            .unavailable
+                            .unwrap_or_else(|| "Enter runs the target".to_owned());
+                        row
+                    }),
+            )
             .collect()
     }
 }

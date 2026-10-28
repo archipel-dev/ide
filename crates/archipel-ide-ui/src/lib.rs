@@ -26,7 +26,7 @@ mod change_popup;
 mod chrome;
 mod clone_dialog;
 mod completion_ui;
-mod console_links;
+mod conflict_dialog;
 mod context_menus;
 mod control;
 mod crash_notice;
@@ -205,6 +205,7 @@ pub struct IdeApp {
     doc_view: doc_ui::DocView,
     ai_ui: ai_chat::AiChatUi,
     agents_ui: agents_ui::State,
+    conflict_ui: conflict_dialog::State,
 }
 
 impl IdeApp {
@@ -373,6 +374,7 @@ impl IdeApp {
             doc_view: doc_ui::DocView::default(),
             ai_ui: ai_chat::AiChatUi::default(),
             agents_ui: agents_ui::State::default(),
+            conflict_ui: conflict_dialog::State::default(),
             file_dialogs: std::sync::Arc::new(native_dialog::SystemDialogs),
             pending_dialog: None,
             kind_cache: Default::default(),
@@ -410,6 +412,9 @@ impl IdeApp {
     }
 
     fn dispatch(&mut self, id: &str, params: Value) {
+        if id.starts_with("editor.save") || id == "file.synchronize" {
+            conflict_dialog::ask_again(self);
+        }
         // Tab navigation walks the agent threads while Agents mode shows them.
         let id = match (self.state.workbench_mode, id) {
             (WorkbenchMode::Agents, "editor.nextTab") => "agents.nextThread",
@@ -818,6 +823,8 @@ impl IdeApp {
                 self.menu_bar_open = false;
             } else if self.state.analysis.history.dialog.is_some() {
                 self.dispatch("history.close", Value::Null);
+            } else if conflict_dialog::active(self).is_some() {
+                conflict_dialog::snooze(self);
             } else if self.state.about_open {
                 self.dispatch("app.closeAbout", Value::Null);
             } else if self.state.first_run_open {
@@ -1208,6 +1215,7 @@ impl IdeApp {
         notifications::show(self, ctx);
         agents_ui::notices(self, ctx);
         crash_notice::show(self, ctx);
+        conflict_dialog::show(self, ctx);
         first_run::show(self, ctx);
         about::show(self, ctx);
         history_ui::show(self, ctx);

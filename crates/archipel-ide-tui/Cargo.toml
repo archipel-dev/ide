@@ -23,8 +23,13 @@ archipel-ide-text = { path = "../archipel-ide-text" }
 archipel-ide-terminal = { path = "../archipel-ide-terminal" }
 archipel-kit.workspace = true
 archipel-kit-tui.workspace = true
+archipel-kit-model.workspace = true
+archipel-ide-view = { path = "../archipel-ide-view" }
 serde_json.workspace = true
 unicode-width = "0.2"
 
 [dev-dependencies]
 serde_json.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

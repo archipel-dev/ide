@@ -42,18 +42,16 @@ const MUST_PASS: &[&str] = &[
 
 include!("../../archipel-ide-core/tests/support/editor_case_format.rs");
 
-/// The chords a terminal cannot send (Ctrl+W is the window leader, the numeric keypad is
-/// not reported) as the fallbacks `docs/tui.md` lists: Alt+Up/Down, or Ctrl+K and a key.
+/// The chords a terminal cannot send (the numeric keypad is not reported) as the fallbacks
+/// `docs/tui.md` lists: the leader `Ctrl+\` and a key.
 fn terminal_chord(chord: &str) -> String {
     match chord {
-        "Ctrl+W" => "Alt+Up",
-        "Ctrl+Shift+W" => "Alt+Down",
-        "Ctrl+Numpad+" => "Ctrl+K =",
-        "Ctrl+Numpad-" => "Ctrl+K -",
-        "Ctrl+Alt+Numpad+" => "Ctrl+K Alt+=",
-        "Ctrl+Alt+Numpad-" => "Ctrl+K Alt+-",
-        "Ctrl+Shift+Numpad+" => "Ctrl+K Shift+=",
-        "Ctrl+Shift+Numpad-" => "Ctrl+K Shift+-",
+        "Ctrl+Numpad+" => "Ctrl+\\ =",
+        "Ctrl+Numpad-" => "Ctrl+\\ -",
+        "Ctrl+Alt+Numpad+" => "Ctrl+\\ Alt+=",
+        "Ctrl+Alt+Numpad-" => "Ctrl+\\ Alt+-",
+        "Ctrl+Shift+Numpad+" => "Ctrl+\\ Shift+=",
+        "Ctrl+Shift+Numpad-" => "Ctrl+\\ Shift+-",
         other => other,
     }
     .to_owned()
@@ -130,8 +128,19 @@ impl Replay {
         else {
             return Self::with_height(case, serial, 30);
         };
-        for height in lines + 1..lines + 12 {
-            let replay = Self::with_height(case, serial, height as u16)?;
+        // The chrome needs a minimum terminal: a bottom window takes the rows the viewport
+        // must not have.
+        let mut replay = Self::with_height(case, serial, 24)?;
+        replay
+            .tui
+            .app
+            .ide_mut()
+            .dispatch("toolwindow.toggle", json!({ "id": "problems" }))
+            .map_err(|e| e.to_string())?;
+        replay.tui.draw();
+        for rows in 4..22u16 {
+            replay.tui.app.shell_mut().bottom_rows = Some(rows);
+            replay.tui.draw();
             let state = replay.tui.app.ide().state();
             let page = state
                 .active_document

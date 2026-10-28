@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0](https://github.com/archipel-dev/ide/compare/v0.2.6...v0.3.0) (2026-10-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* **tui:** GUI-faithful terminal chrome on a shared view model ([#94](https://github.com/archipel-dev/ide/issues/94))
+
+### Features
+
+* **tui:** GUI-faithful terminal chrome on a shared view model ([#94](https://github.com/archipel-dev/ide/issues/94)) ([2dea8c0](https://github.com/archipel-dev/ide/commit/2dea8c04c1f7bf26512c9d7faf72c4fdaac2302a))
+* **ui:** find bar and Find in Files on the core search models ([#89](https://github.com/archipel-dev/ide/issues/89)) ([7e77b61](https://github.com/archipel-dev/ide/commit/7e77b615f25d1b27513e28ad964f1fc0435a2408))
+
+
+### Bug Fixes
+
+* QA data-loss, performance and run bugs from the TUI bug list ([#95](https://github.com/archipel-dev/ide/issues/95)) ([cc1a6f4](https://github.com/archipel-dev/ide/commit/cc1a6f452584c73a25a18e72ea978fac15d9bc2e))
+* **tui:** themed diagnostic underlines and named project problems group ([#88](https://github.com/archipel-dev/ide/issues/88)) ([9d2f000](https://github.com/archipel-dev/ide/commit/9d2f00076319c9c1aeee9ce8ffbf6420e3e07a18))
+
 ## [0.2.6](https://github.com/archipel-dev/ide/compare/v0.2.5...v0.2.6) (2026-10-28)
 
 

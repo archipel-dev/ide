@@ -8,19 +8,18 @@
 //! [`UiDataProvider`]. Nothing here reads another subsystem's fields.
 
 use crate::IdeApp;
-use crate::context_menus::Target;
-use crate::keybindings::{UiAction, ui_action_ids};
-use archipel_ide_actions::{
-    ActionEffect, ActionPlace, ActionRegistry, AnAction, AnActionEvent, Presentation,
-};
-use archipel_ide_core::ide_actions::{IdeDataProvider, command_enabled};
-use archipel_ide_core::project_view::DirMark;
-use archipel_ide_platform::{DataContext, DataKey, DataProvider, data_keys};
+use crate::keybindings::UiAction;
+use archipel_ide_actions::{ActionEffect, ActionPlace, ActionRegistry, Presentation};
+use archipel_ide_core::ide_actions::IdeDataProvider;
+use archipel_ide_platform::{DataContext, DataProvider, data_keys};
+#[cfg(test)]
+use archipel_ide_view::actions::ui_action_ids;
 use eframe::egui;
 use serde_json::{Value, json};
 use std::any::Any;
 use std::path::Path;
-use std::sync::Arc;
+
+pub(crate) use archipel_ide_view::actions::{register_context_rules, register_ui_actions};
 
 /// Answers the keys that only the window knows.
 pub(crate) struct UiDataProvider<'a> {
@@ -40,214 +39,119 @@ impl DataProvider for UiDataProvider<'_> {
     }
 }
 
-/// An action that opens a workbench popup or talks to the clipboard: the window owns what it
-/// does, so its effect is a [`UiAction`] request.
-struct UiActionImpl(UiAction);
-
-impl AnAction for UiActionImpl {
-    fn update(&self, event: &AnActionEvent) -> Presentation {
-        let data = event.data();
-        let document = data.has(&data_keys::ACTIVE_FILE);
-        let project = data.has(&data_keys::PROJECT_ROOT);
-        // The focused widget handles clipboard keys itself.
-        if event.place == ActionPlace::Keymap
-            && matches!(self.0, UiAction::Copy | UiAction::Cut | UiAction::Paste)
-        {
-            return Presentation::hidden();
-        }
-        Presentation::when(match self.0 {
-            UiAction::GotoLine
-            | UiAction::FileStructure
-            | UiAction::Find
-            | UiAction::Replace
-            | UiAction::Paste => document,
-            UiAction::FindNext | UiAction::FindPrevious => {
-                document
-                    && data
-                        .get(&data_keys::FIND_QUERY)
-                        .is_some_and(|query| !query.is_empty())
-            }
-            UiAction::NewFile
-            | UiAction::NewDirectory
-            | UiAction::NewJavaClass
-            | UiAction::NewKotlinFile
-            | UiAction::ManageProjects => project,
-            UiAction::Push => data.flag(&data_keys::VCS_ACTIVE),
-            UiAction::Copy => data.flag(&command_enabled("editor.copy")),
-            UiAction::Cut => data.flag(&command_enabled("editor.cut")),
-            UiAction::FindInPath
-            | UiAction::ReplaceInPath
-            | UiAction::SaveAll
-            | UiAction::NewProject
-            | UiAction::OpenProject
-            | UiAction::Exit => true,
-        })
-    }
-
-    fn perform(&self, _event: &AnActionEvent) -> ActionEffect {
-        ActionEffect::Request(Arc::new(self.0))
-    }
-}
-
-/// What a context menu knows about its target.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ContextKind {
-    Tree,
-    Editor,
-    Tab(usize),
-}
-
-/// The facts the context menu rules need, supplied next to the usual data keys.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ContextFacts {
-    pub kind: ContextKind,
-    pub open_tabs: usize,
-    pub has_closed_tabs: bool,
-    pub has_clipboard: bool,
-    pub has_document: bool,
-}
-
-pub(crate) const CONTEXT: DataKey<ContextFacts> = DataKey::new("ui.contextMenu");
-
-/// Actions whose availability depends on the clicked target (they act on its path or tab).
-const TARGET_ACTIONS: [&str; 12] = [
-    "RenameElement",
-    "$Delete",
-    "CopyAbsolutePath",
-    "CopyFileName",
-    "CopyContentRootPath",
-    "ProjectViewEditSource",
-    "$Paste",
-    "CloseContent",
-    "CloseAllEditorsButActive",
-    "CloseAllEditors",
-    "CloseAllToTheLeft",
-    "CloseAllToTheRight",
-];
-
-pub(crate) fn is_target_action(action: &str) -> bool {
-    TARGET_ACTIONS.contains(&action)
-}
-
-/// Availability of `action` for a context menu target; `None` means the action's own rule
-/// applies. Order matters: the first matching rule wins.
-fn context_rule(action: &str, facts: &ContextFacts) -> Option<bool> {
-    use ContextKind::{Editor, Tab, Tree};
-    Some(match (action, facts.kind) {
-        ("$Paste", Tree) => facts.has_clipboard,
-        ("LocalHistory", _) => false,
-        (id, Tree) if id.starts_with("jt.") => true,
-        ("$Paste", Editor) => facts.has_document,
-        ("CloseAllEditorsButActive", Tab(_)) => facts.open_tabs > 1,
-        ("CloseAllToTheLeft", Tab(index)) => index > 0,
-        ("CloseAllToTheRight", Tab(index)) => index + 1 < facts.open_tabs,
-        (
-            "CloseAllEditors"
-            | "CloseAllUnmodifiedEditors"
-            | "PinActiveEditorTab"
-            | "PinActiveTabToggle",
-            Tab(_),
-        ) => true,
-        ("ReopenClosedTab", Tab(_)) => facts.has_closed_tabs,
-        (_, Tree | Tab(_)) if TARGET_ACTIONS.contains(&action) => true,
-        ("$Cut" | "$Copy" | "SafeDelete" | "Move" | "RenameFile", Tree) => true,
-        ("RevealIn" | "Terminal.OpenInTerminal" | "SynchronizeCurrentFile", Tree) => true,
-        ("FindInPath", Tree) => true,
-        ("ReformatCode" | "OptimizeImports", Tree) => true,
-        _ => return None,
-    })
-}
-
-/// Puts the context menu rules in front of an action: with a [`CONTEXT`] in the data the rule
-/// decides, otherwise (and for everything the rules do not cover) the wrapped action does.
-struct ContextMenuAction {
-    id: String,
-    inner: Option<Arc<dyn AnAction>>,
-}
-
-impl AnAction for ContextMenuAction {
-    fn update(&self, event: &AnActionEvent) -> Presentation {
-        if let Some(facts) = event.data().get(&CONTEXT)
-            && let Some(enabled) = context_rule(&self.id, &facts)
-        {
-            return Presentation::when(enabled);
-        }
-        self.inner
-            .as_ref()
-            .map_or_else(Presentation::disabled, |inner| inner.update(event))
-    }
-
-    fn perform(&self, event: &AnActionEvent) -> ActionEffect {
-        self.inner
-            .as_ref()
-            .map_or(ActionEffect::None, |inner| inner.perform(event))
-    }
-}
-
-/// Ids the context menus add themselves (not in any reference group).
-fn context_only_ids() -> Vec<String> {
-    let mut ids: Vec<String> = [
-        "LocalHistory",
-        "jt.runFile",
-        "jt.git.diff",
-        "jt.git.stage",
-        "jt.git.unstage",
-        "jt.mark.none",
-    ]
-    .map(str::to_owned)
-    .into();
-    ids.extend(
-        DirMark::ALL
-            .iter()
-            .map(|mark| format!("jt.mark.{}", mark.id())),
-    );
-    ids
-}
-
-/// Registers the window's actions, then the command-backed ones, then the context menu rules
-/// in front of both. Idempotent apart from the first call.
-fn register_ui_actions(registry: ActionRegistry<'_>) {
-    for (id, action) in ui_action_ids() {
-        // The same id never registers twice; a plugin cannot shadow a window action.
-        let _ = registry.register(id, Arc::new(UiActionImpl(action)), None);
-    }
-}
-
-fn register_context_rules(registry: ActionRegistry<'_>) {
-    let mut ids = context_only_ids();
-    ids.extend(TARGET_ACTIONS.iter().map(|id| (*id).to_owned()));
-    ids.extend(
-        [
-            "CloseAllUnmodifiedEditors",
-            "PinActiveEditorTab",
-            "PinActiveTabToggle",
-            "ReopenClosedTab",
-            "SafeDelete",
-            "Move",
-            "RenameFile",
-            "RevealIn",
-            "Terminal.OpenInTerminal",
-            "SynchronizeCurrentFile",
-            "FindInPath",
-            "ReformatCode",
-            "OptimizeImports",
-            "$Cut",
-            "$Copy",
-        ]
-        .map(str::to_owned),
-    );
-    ids.sort();
-    ids.dedup();
-    for id in ids {
-        let inner = registry.find(&id);
-        if inner.is_some() {
-            registry.unregister(&id);
-        }
-        let _ = registry.register(id.clone(), Arc::new(ContextMenuAction { id, inner }), None);
-    }
-}
-
 impl IdeApp {
+    /// The facts only the window knows, for the view builders.
+    pub(crate) fn view_data(&self) -> archipel_ide_view::UiData {
+        archipel_ide_view::UiData {
+            find_query: self.find.query().to_owned(),
+            tree_selection: self.tree_selection.clone(),
+            ..archipel_ide_view::UiData::default()
+        }
+    }
+
+    /// Runs `f` with the view context of this window: the builders of `archipel-ide-view`
+    /// (main menu, context menus, chrome) read the state through it.
+    pub(crate) fn with_view<R>(&self, f: impl FnOnce(&archipel_ide_view::ViewCx<'_>) -> R) -> R {
+        let data = self.view_data();
+        let cx = archipel_ide_view::ViewCx::new(
+            &self.state,
+            &self.commands,
+            &data,
+            archipel_ide_view::Caps::gui(),
+        );
+        f(&cx)
+    }
+
+    /// Does what the view crate's `dispatch` asked for.
+    pub(crate) fn apply_view_effects(
+        &mut self,
+        effects: Vec<archipel_ide_view::Effect>,
+        ctx: &egui::Context,
+    ) {
+        use archipel_ide_view::{Effect, Request};
+        for effect in effects {
+            match effect {
+                Effect::Command { id, params } => self.dispatch(&id, params),
+                Effect::Action { id, place } => {
+                    self.run_action(&id, place, ctx);
+                }
+                Effect::ToggleToolWindow(window) => self.toggle_tool_window(window),
+                Effect::HideToolWindow(window) => {
+                    if self.with_view(|cx| cx.tool_window_visible(window)) {
+                        self.toggle_tool_window(window);
+                    }
+                }
+                Effect::Request(Request::Ui(action)) => self.run_ui_action(action, ctx),
+                Effect::Request(Request::Paste) => {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::RequestPaste);
+                }
+                Effect::Request(Request::FindInPathIn(path)) => {
+                    // Scoped to the clicked directory (or file); the project root is everything.
+                    self.state.project_view_mut().search_scope =
+                        (!path.as_os_str().is_empty()).then(|| path.clone());
+                    self.state.set_search_scope_kind(
+                        if self.state.project_view().search_scope.is_some() {
+                            archipel_ide_core::SearchScopeKind::Directory
+                        } else {
+                            archipel_ide_core::SearchScopeKind::Project
+                        },
+                    );
+                    self.run_action("FindInPath", ActionPlace::ContextMenu, ctx);
+                }
+                Effect::Request(Request::SafeDelete(path)) => {
+                    let usages = self.state.safe_delete_usages(&path).unwrap_or_default();
+                    self.open_dialog(crate::popups::Dialog::SafeDelete { path, usages });
+                }
+                Effect::Request(Request::Move(path)) => {
+                    let destination = path
+                        .parent()
+                        .map(|parent| parent.display().to_string())
+                        .unwrap_or_default();
+                    self.open_dialog(crate::popups::Dialog::Move { path, destination });
+                }
+                Effect::Request(Request::Rename(path)) => {
+                    let name = IdeApp::file_name(&path);
+                    self.open_dialog(crate::popups::Dialog::Rename { path, name });
+                }
+                Effect::Request(Request::Delete(path)) => {
+                    self.open_dialog(crate::popups::Dialog::Delete { path });
+                }
+                Effect::Request(Request::OpenProject(path)) => {
+                    if let Err(error) = self.open_project_path(&path, ctx) {
+                        self.state.set_status(error);
+                    }
+                }
+                Effect::Request(Request::GitStash { pop }) => {
+                    self.git_dialog = Some(if pop {
+                        crate::branches_popup::GitDialog::Unstash {
+                            selected: 0,
+                            pop: true,
+                            error: None,
+                        }
+                    } else {
+                        crate::branches_popup::GitDialog::Stash {
+                            message: String::new(),
+                            keep_index: false,
+                            include_untracked: false,
+                            error: None,
+                        }
+                    });
+                    self.dialog_focus = true;
+                }
+                Effect::OpenMenuBar(_) => {
+                    self.menu_bar_open = true;
+                    self.menu_bar_popup_seen = false;
+                }
+                Effect::CopyText(text) => ctx.copy_text(text),
+                Effect::Status(text) => self.state.set_status(text),
+                Effect::SelectTreeNode(path) => self.tree_selection = path,
+                // Popups, dialogs of the context menus and the terminal's own rows have
+                // their own handling in the window.
+                _ => {}
+            }
+        }
+    }
+
     /// Registers the UI actions and the command-backed ones, once at start.
     pub(crate) fn register_actions(&mut self) {
         register_ui_actions(self.state.action_registry());
@@ -341,31 +245,6 @@ impl IdeApp {
             }
         }
     }
-
-    /// Context for a context menu on `target`.
-    pub(crate) fn context_facts(&self, target: &Target) -> ContextFacts {
-        ContextFacts {
-            kind: match target {
-                Target::Tree { .. } => ContextKind::Tree,
-                Target::Editor => ContextKind::Editor,
-                Target::Tab(index) => ContextKind::Tab(*index),
-            },
-            open_tabs: self.state.open_editor_count(),
-            has_closed_tabs: self.state.has_closed_tabs(),
-            has_clipboard: self.state.project_view_clipboard_present(),
-            has_document: self.state.active_file().is_some(),
-        }
-    }
-
-    /// Whether the context menu entry `action` is enabled for `target`.
-    pub(crate) fn context_action_enabled(&self, action: &str, target: &Target) -> bool {
-        let facts = self.context_facts(target);
-        self.with_data_values(
-            |data| data.with_value(&CONTEXT, facts),
-            |registry, data| registry.update(action, ActionPlace::ContextMenu, data),
-        )
-        .is_some_and(|presentation| presentation.enabled)
-    }
 }
 
 /// The parameters of the Switcher depend on the Shift key.
@@ -377,66 +256,6 @@ pub(crate) fn switcher_params(ctx: &egui::Context) -> Value {
 mod tests {
     use super::*;
     use crate::keybindings;
-
-    fn facts(kind: ContextKind) -> ContextFacts {
-        ContextFacts {
-            kind,
-            open_tabs: 3,
-            has_closed_tabs: false,
-            has_clipboard: false,
-            has_document: true,
-        }
-    }
-
-    #[test]
-    fn tab_rules_follow_the_tab_strip() {
-        let rule = |action, kind| context_rule(action, &facts(kind));
-        assert_eq!(rule("CloseAllToTheLeft", ContextKind::Tab(0)), Some(false));
-        assert_eq!(rule("CloseAllToTheLeft", ContextKind::Tab(1)), Some(true));
-        assert_eq!(rule("CloseAllToTheRight", ContextKind::Tab(2)), Some(false));
-        assert_eq!(rule("CloseAllToTheRight", ContextKind::Tab(1)), Some(true));
-        assert_eq!(rule("ReopenClosedTab", ContextKind::Tab(0)), Some(false));
-        assert_eq!(rule("CloseAllEditors", ContextKind::Tab(0)), Some(true));
-        let single = ContextFacts {
-            open_tabs: 1,
-            ..facts(ContextKind::Tab(0))
-        };
-        assert_eq!(
-            context_rule("CloseAllEditorsButActive", &single),
-            Some(false)
-        );
-    }
-
-    #[test]
-    fn paste_depends_on_the_target() {
-        assert_eq!(
-            context_rule("$Paste", &facts(ContextKind::Tree)),
-            Some(false)
-        );
-        let with_clipboard = ContextFacts {
-            has_clipboard: true,
-            ..facts(ContextKind::Tree)
-        };
-        assert_eq!(context_rule("$Paste", &with_clipboard), Some(true));
-        assert_eq!(
-            context_rule("$Paste", &facts(ContextKind::Editor)),
-            Some(true)
-        );
-    }
-
-    #[test]
-    fn tree_entries_are_available_and_history_is_not() {
-        let tree = facts(ContextKind::Tree);
-        assert_eq!(context_rule("jt.git.stage", &tree), Some(true));
-        assert_eq!(context_rule("LocalHistory", &tree), Some(false));
-        assert_eq!(context_rule("SafeDelete", &tree), Some(true));
-        // Anything else is the action's own business.
-        assert_eq!(context_rule("GotoLine", &tree), None);
-        assert_eq!(
-            context_rule("SafeDelete", &facts(ContextKind::Editor)),
-            None
-        );
-    }
 
     #[test]
     fn every_implemented_action_is_registered() {

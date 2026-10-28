@@ -9,31 +9,11 @@ use archipel_ide_actions::{ActionEffect, ActionPlace, ActionRegistry, Presentati
 use archipel_ide_command::{CommandRegistry, CommandSpec};
 use archipel_ide_core::ide_actions::{CommandActions, IdeDataProvider};
 use archipel_ide_core::{IdeState, built_in_commands};
-use archipel_ide_platform::{DataContext, DataProvider, data_keys};
+use archipel_ide_platform::{DataContext, data_keys};
 use archipel_ide_plugins::PluginSet;
+use archipel_ide_view::{Caps, UiData, ViewCx};
 use serde_json::{Value, json};
-use std::any::Any;
 use std::path::{Path, PathBuf};
-
-/// What only the terminal window knows, as data keys for actions.
-pub struct TuiDataProvider {
-    /// The text of the Find bar of the focused editor.
-    pub find_query: String,
-    /// The project-relative path selected in the Project tree.
-    pub tree_selection: Option<PathBuf>,
-}
-
-impl DataProvider for TuiDataProvider {
-    fn data(&self, key: &str) -> Option<Box<dyn Any>> {
-        if key == data_keys::FIND_QUERY.name() {
-            Some(Box::new(self.find_query.clone()))
-        } else if key == data_keys::TREE_SELECTION.name() {
-            Some(Box::new(self.tree_selection.clone()?))
-        } else {
-            None
-        }
-    }
-}
 
 /// How the IDE is started.
 #[derive(Default)]
@@ -57,8 +37,11 @@ pub struct Ide {
     command_actions: CommandActions,
     plugin_generation: u64,
     plugin_commands: Vec<String>,
-    /// The Find bar text and tree selection that actions are asked with.
-    pub data: TuiDataProvider,
+    /// What only this frontend knows (the Find bar text, the tree selection, the focused
+    /// tool window, the breadcrumbs source), shared with the view builders.
+    pub data: UiData,
+    /// What the keyboard can send; set by the app from the runtime.
+    pub caps: Caps,
 }
 
 impl Ide {
@@ -88,13 +71,12 @@ impl Ide {
             command_actions: CommandActions::default(),
             plugin_generation: u64::MAX,
             plugin_commands: Vec::new(),
-            data: TuiDataProvider {
-                find_query: String::new(),
-                tree_selection: None,
-            },
+            data: UiData::default(),
+            caps: Caps::kitty(),
         };
-        crate::actions::register(ide.state.action_registry());
+        archipel_ide_view::actions::register(ide.state.action_registry());
         ide.sync_actions();
+        archipel_ide_view::actions::register_context_rules(ide.state.action_registry());
         if let Some(path) = options.project {
             // The error is in the status line.
             let _ = ide.open_project(&path);
@@ -145,6 +127,11 @@ impl Ide {
             Ok(value) => Ok(value),
             Err(error) => {
                 let message = error.to_string();
+                // A disabled command is not a failure: its menu item is greyed out and a key
+                // that reaches it does nothing (no status with an internal id).
+                if message.starts_with("command is disabled") {
+                    return Err(message);
+                }
                 archipel_ide_core::diagnostics::log(
                     archipel_ide_core::diagnostics::Level::Warn,
                     &format!("{id}: {message}"),
@@ -176,6 +163,19 @@ impl Ide {
                 &format!("action registration: {error}"),
             );
         }
+    }
+
+    /// A read-only context for the view builders.
+    pub fn cx(&self) -> ViewCx<'_> {
+        ViewCx::new(&self.state, &self.commands, &self.data, self.caps)
+    }
+
+    /// The text of the shortcut of `action` for this keyboard (the GUI's text with the kitty
+    /// protocol).
+    pub fn shortcut_label(&self, action: &str) -> Option<String> {
+        self.cx()
+            .shortcut(action)
+            .map(|shortcut| shortcut.label(self.caps.notation()))
     }
 
     /// Runs `f` with the action registry and the current data context.
@@ -214,19 +214,7 @@ impl Ide {
 
     /// Whether the registry knows action `id`.
     pub fn knows_action(&self, id: &str) -> bool {
-        self.state.action_registry().contains(id)
-    }
-
-    /// Label of the first keyboard shortcut of `action` in the active keymap.
-    pub fn shortcut_label(&self, action: &str) -> Option<String> {
-        use archipel_ide_keymap::{Notation, Shortcut};
-        self.state
-            .keymap_state()
-            .keymap
-            .shortcuts(action)
-            .iter()
-            .find(|shortcut| matches!(shortcut, Shortcut::Keys(_)))
-            .map(|shortcut| shortcut.label(Notation::Text))
+        self.state.action_registry().contains(id) || id == "EditorPasteSimple"
     }
 
     /// Everything the GUI's frame polls, minus what only a window needs. Returns whether

@@ -48,7 +48,7 @@ impl TuiApp {
         let plain = !key
             .modifiers
             .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
-        if !plain || !self.layers.is_empty() || self.wb.focused_tool().is_some() {
+        if !plain || !self.layers.is_empty() || self.shell.tool_focused() {
             return false;
         }
         let completion_open = self

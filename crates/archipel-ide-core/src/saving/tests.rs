@@ -982,3 +982,28 @@ fn plat_save_113_save_points_do_not_rely_on_autosave() {
     assert_eq!(disk(&root, "out.txt"), "old\nedited\n");
     cleanup(root);
 }
+
+/// PLAT-VFS-030, QA bug 11 of the TUI list: lines typed or pasted into a CRLF document are saved with the
+/// document's separator (no mixed endings), and an LF file stays LF.
+#[test]
+fn plat_vfs_030_typed_and_pasted_newlines_take_the_document_separator() {
+    let (root, mut state) = project("crlf-typed", &[("c.txt", "line1\r\nline2\r\nlast")]);
+    state.editor_type("AB").unwrap();
+    state.editor_type("\n").unwrap();
+    built_in_commands()
+        .execute("editor.paste", &mut state, json!({"text": "p\nq\r\nr"}))
+        .unwrap();
+    state.save_all().unwrap();
+    let saved = disk(&root, "c.txt");
+    assert!(saved.contains("AB\r\n"), "{saved:?}");
+    assert!(saved.ends_with("line1\r\nline2\r\nlast"), "{saved:?}");
+    assert!(!saved.replace("\r\n", "").contains('\n'), "{saved:?}");
+    assert_eq!(doc(&state, "c.txt").text.text(), saved);
+    cleanup(root);
+
+    let (root, mut state) = project("lf-typed", &[("l.txt", "a\nb\n")]);
+    state.editor_type("x\r\ny").unwrap();
+    state.save_all().unwrap();
+    assert!(!disk(&root, "l.txt").contains('\r'));
+    cleanup(root);
+}

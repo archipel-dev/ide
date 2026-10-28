@@ -11,13 +11,14 @@ same Islands Dark theme, the same commands, actions and default shortcuts, all r
 Both frontends render one shared UI layer. The binding design is
 `docs/specs/tui/01-gui-faithful-terminal-ui.md` (what the terminal shows) and
 `docs/specs/tui/02-shared-component-layer.md` (how the two frontends share the UI); the work plan is
-Wave 0 of `docs/tui-parity.md`. Sections below that describe the earlier NvChad-style design (no menu, no
-toolbar, no stripes, `Ctrl+K` chords, a mode indicator) are marked "being replaced" until Wave 0 lands.
+Wave 0 of `docs/tui-parity.md`. Phases 0.1 (shared model and test infrastructure) and 0.2 (the chrome:
+toolbar, main menu, stripes, headers, tabs, status bar, keys) are in; dialogs, popups and tool window
+bodies still use the older components in the GUI's colors and move over in phases 0.3 to 0.5.
 
 ```bash
 archipel-ide --tui .                  # open the current folder
 archipel-ide --tui . src/main.rs      # and a file
-archipel-ide --tui                    # no project: press O to open a folder
+archipel-ide --tui                    # no project: File | Open…
 ```
 
 Use a terminal with 24-bit color and a [Nerd Font](https://www.nerdfonts.com) (JetBrainsMono
@@ -25,115 +26,93 @@ Nerd Font, the plain variant): all icons are Nerd Font characters. WezTerm, kitt
 iTerm2, Windows Terminal, Alacritty and GNOME Terminal work; a terminal with the kitty keyboard
 protocol also delivers the combinations a legacy terminal cannot send (see "Keys").
 
-## Layout (being replaced, see docs/specs/tui/01-gui-faithful-terminal-ui.md sections B to H)
+## Layout
 
-This describes the current build, not the target: the target has the GUI's toolbar on row 0, stripes,
-tool window headers, a tab strip with icons and close buttons, breadcrumbs and the GUI's status bar, and no
-mode indicator.
+The terminal draws the GUI's window with terminal cells (spec `docs/specs/tui/01-gui-faithful-terminal-ui.md`,
+sections B to H). One shared model builds every part of it, `archipel-ide-view::Chrome`, and the kit's
+terminal components (`archipel-kit-tui`: `ToolbarControl`, `MenuBarControl`, `ToolStripeControl`,
+`PanelHeaderControl`, `TabBarControl`, `StatusItemsControl`) draw it with the Islands Dark colors of the
+GUI theme as 24-bit color (`Look::gui`). The terminal never decides what an item says, whether it is
+enabled, or which shortcut it shows: that is the model's.
 
-```
- Project                    Main.java ●  README.md                                  󰖨  󰅖
-  demo                     │    1 package demo;
-  ├─ src                   │    2
-  │  └─ Main.java          │    3 public class Main {
-  └─ README.md             │    4 │   public static void main(String[] args) {
-                           │    5 │   │   System.out.println("hi");
-                           │    6 │   }
-                           │    7 }
-                           │─────────────────────────────────────────────────────────────
-                           │  Run
-                           │  $ cargo run
-  INSERT  Main.java  main +1 ~2   0  1  0  0   LSP Java   demo ▸ app   demo   Ln 5, Col 9
-```
+![The terminal IDE at 160x44](tui/img/main.png)
 
-- **Left**: the Project tree (Alt+1) or the Commit window (Alt+0).
-- **Top row**: the tab line (one tab per open document; a dot marks unsaved changes).
-- **Middle**: the editor, or the dashboard while no file is open.
-- **Bottom**: one of Run (Alt+4), Problems (Alt+6), Find (Alt+3) or Terminal (Alt+F12).
-- **Last row**: the status line: mode, file, Git branch and change counts, the status message
-  (or indexing and run progress), the problem counts of the file, the language server, the
-  selected run configuration (click it to choose), the project and the caret position.
+- **Row 0** is the main toolbar: the hamburger (click it to expand the main menu: File, Edit, View,
+  Navigate, Code, Refactor, Build, Run, Tools, Git, Window, Help), the project widget with its avatar, the
+  VCS branch widget, the Code and Agents mode switch, and on the right the run widget (run
+  configuration popup, Run, Build, Debug, Stop), Search Everywhere and Settings. Every widget opens what
+  the GUI opens.
+- **Stripes**: three cells on the left and the right with the tool window buttons of the GUI (Project,
+  Commit, Structure above; Find, Run, Build, Terminal, Problems, Git below), the active window filled with
+  the accent color, a badge for errors and warnings. Click a button to toggle its window; hovering shows
+  the GUI's tooltip with the shortcut.
+- **Tool windows** have the GUI's one-row header: title or view selector, actions (a `⋮` overflow when
+  they do not fit) and the Hide button. Left, right and bottom windows are separated by one-cell
+  splitters you can drag; sizes are in cells.
+- **Editor column**: the tab strip (file icons, a dot for unsaved changes, `✕` on the selected tab and on
+  hover, middle click closes), the editor with gutter, soft wrap and the error stripe in the last column.
+- **Last row**: the status bar: breadcrumbs on the left, then the status message and the widgets
+  (caret position, line separator, encoding, indent, indexing, language servers). Widgets drop by priority
+  when the width is short.
 
-(Being replaced: the new layout has a toolbar, a main menu and stripes; see the spec.) The mouse works
-everywhere (tabs, tree, lists, tool window titles, splitters, status line segments).
+Smaller terminals keep the same elements and drop the lowest priority ones: the Code/Agents switch and
+widget labels first, then stripe-side widgets, then status bar widgets. Below 60x16 only a message
+is shown.
 
-## Screenshots
+![Search, menus and popups](tui/img/file-menu.png)
 
-Taken with `archipel-ide --tui` in xterm (JetBrainsMono Nerd Font Mono, 24-bit color).
+![A bottom window at 100x30](tui/img/narrow-100x30.png)
 
-The editor with the Project tree: an error is a red underline on the range (no background),
-the selected text and its other occurrences have a subtle background.
+![80x24](tui/img/narrow-80x24.png)
 
-![The terminal editor](tui/img/tui-editor.png)
+## Keys
 
-The Problems window (Alt+6): problems that belong to no file, such as the build path and the
-compiler compliance, are grouped under the project's name; the others under their file.
+The shortcuts are the active keymap of the IDE (Settings | Keymap in the GUI, the default `$default`
+keymap otherwise, user overrides included): the frontend resolves key presses with the same action ids and
+asks the same action registry the GUI does. Every action is also reachable with the mouse from the menu bar,
+toolbar, stripes, headers, context menus or Search Everywhere (`archipel-ide-view` test `reachability`).
 
-![The Problems window](tui/img/tui-problems.png)
+A terminal with the **kitty keyboard protocol** (kitty, WezTerm, foot, Ghostty, Alacritty 0.13+) sends
+every GUI shortcut, including Ctrl+Shift+letter and double Shift. A **legacy terminal** cannot send some
+of them (Ctrl+Shift+letter, Ctrl+Alt+arrow, Ctrl+Space on some terminals). For those the single leader
+**`Ctrl+\`** followed by a key does the action; a chord never replaces a GUI shortcut and none of them is
+bound in a shipped keymap (`archipel-ide-view` test `keys_collisions`; where a keymap such as VSCode binds
+`Ctrl+\` the leader falls back to `Ctrl+]`, then `Ctrl+^`). The first start in a legacy terminal shows a
+one-time notice; Help | Terminal Keyboard Setup… shows it again. The table is
+`archipel_ide_view::keys::CHORDS`; the main rows:
 
-Search Everywhere (double Shift, or Ctrl+K then E):
-
-![Search Everywhere](tui/img/tui-search.png)
-
-## Terminal notes
-
-- **Diagnostics** are drawn as curly underlines (SGR `4:3`) in the severity color on kitty,
-  WezTerm, Ghostty, Alacritty, foot, iTerm2, Windows Terminal and VTE terminals (GNOME
-  Terminal); `ARCHIPEL_UNDERCURL=1` or `=0` forces it. Other terminals, xterm included, get a
-  plain underline in the severity color. Never a background: errors are red, warnings yellow,
-  weak warnings subtle.
-- **xterm**: Alt shortcuts (Alt+1, Alt+6, Alt+Enter) need `XTerm*metaSendsEscape: true` in
-  `~/.Xresources` (or `-xrm 'XTerm*metaSendsEscape: true'`); without it xterm types the
-  character with the eighth bit set, so Alt+6 inserts `¶`. Also use `XTerm*directColor: true`
-  and a UTF-8 locale (`LANG=C.UTF-8`) for the colors and the icons.
-
-## Keys (being replaced, see docs/specs/tui/01-gui-faithful-terminal-ui.md section L and appendix B)
-
-The shortcuts are the GUI keymap. The `Ctrl+K` and `Ctrl+W` fallback chords of the table below are
-superseded: every action will be reachable through the menu bar, toolbar and stripes first, keys a legacy
-terminal cannot send get alternatives behind the single leader `Ctrl+\` (none shadows a GUI shortcut), and
-the kitty keyboard protocol is detected with a one-time notice.
-
-The shortcuts are the active keymap of the IDE (Settings | Keymap in the GUI, the default
-`$default` keymap otherwise, user overrides included): the frontend resolves key presses with
-the same action ids and asks the same action registry the GUI does. Where a terminal cannot
-send a combination, `Ctrl+K` followed by a letter does the same; with the kitty keyboard
-protocol both work.
-
-| Action | Shortcut | Terminal without kitty protocol |
+| Action | GUI shortcut | Chord |
 |---|---|---|
-| Search Everywhere | Double Shift | Ctrl+K then E (double Shift needs the kitty protocol) |
-| Find Action | Ctrl+Shift+A | Ctrl+P, Ctrl+K then A |
-| Go to File | Ctrl+Shift+N | Ctrl+K then N |
-| Go to Line:Column | Ctrl+G | |
-| Recent Files / Switcher | Ctrl+E, Ctrl+Tab | Ctrl+K then T (the Switcher shows Recent Files) |
-| Find in Files | Ctrl+Shift+F | Ctrl+K then F |
-| Find, Replace, Next | Ctrl+F, Ctrl+R, F3 | |
-| Save All | Ctrl+S | |
-| Go to Declaration | Ctrl+B | Ctrl+K then B |
-| Back / Forward | Ctrl+Alt+Left / Right | Ctrl+K then [ / ] |
-| Code Completion | Ctrl+Space | Ctrl+K then Space |
-| Context actions and quick fixes | Alt+Enter | Ctrl+K then Enter |
-| Next / previous problem | F2, Shift+F2 | |
-| Run, Stop, Rerun | Shift+F10, Ctrl+F2, Ctrl+F5 | |
-| Choose run configuration | Alt+Shift+F10 | click the run segment in the status line |
-| Project, Find, Run, Problems | Alt+1, Alt+3, Alt+4, Alt+6 | Ctrl+W then the digit |
-| Commit window | Alt+0 | Ctrl+K then C |
-| Terminal | Alt+F12 | |
-| Hide window, hide all, jump back | Shift+Esc, Ctrl+Shift+F12, F12 | Ctrl+W then H |
-| Previous / next tab, close tab | Alt+Left / Alt+Right, Ctrl+F4 | Ctrl+K then W |
-| Quit (saves everything first) | Exit in Find Action | Ctrl+K then Q |
+| Search Everywhere | Double Shift (kitty only) | Ctrl+\ then E |
+| Find Action | Ctrl+Shift+A | Ctrl+\ then A |
+| Go to File | Ctrl+Shift+N | Ctrl+\ then N |
+| Find in Files | Ctrl+Shift+F | Ctrl+\ then F |
+| Redo | Ctrl+Shift+Z | Ctrl+\ then Z |
+| Back / Forward | Ctrl+Alt+Left / Right | Ctrl+\ then [ / ] |
+| Close tab | Ctrl+F4 | Ctrl+\ then W |
+| Commit window | Alt+0 | Ctrl+\ then 0 |
+| Project, Find, Run, Problems | Alt+1, Alt+3, Alt+4, Alt+6 | Ctrl+\ then the digit |
+| Terminal | Alt+F12 | Ctrl+\ then F12 |
+| Hide all windows | Ctrl+Shift+F12 | Ctrl+\ then H |
+| Extend / Shrink Selection | Ctrl+W, Ctrl+Shift+W | Ctrl+W works; Ctrl+\ then shift W |
+| Context actions and quick fixes | Alt+Enter | Ctrl+\ then Enter |
+| Quit (saves everything first) | Exit in the File menu | Ctrl+\ then Q |
+| Main menu | hamburger, F10, Alt+F / Alt+E ... (the mnemonic of each title) | Ctrl+\ then M |
 
-The editor takes the keys of the IDE editor (multiple carets with Alt+J, duplicate line with
-Ctrl+D, move line with Alt+Shift+Up/Down, comment with Ctrl+/, folding, undo and redo and
-so on). A chord shows a which-key list after its first stroke: press Ctrl+K and wait to see
-the fallbacks.
+A chord shows a which-key list after its first stroke. In the popups: Up/Down move, Enter chooses, Esc
+closes, Tab switches the tabs of Search Everywhere. In the Terminal window every key goes to the shell
+except the window and Find Action keys; Esc in another tool window returns to the editor.
 
-In the popups: Up/Down move, Enter chooses, Esc closes, Tab switches the tabs of Search
-Everywhere (All, Classes, Files, Symbols, Actions, Text). In the completion popup Enter inserts
-the item and Tab replaces the identifier. In the Commit window Space checks a file, `c` opens
-the commit dialog and `r` refreshes. In the Terminal window every key goes to the shell except
-the window and Find Action keys above.
+**Closing and quitting never lose edits**: closing a tab or quitting saves the modified documents first
+(as the GUI does on close) and asks only when a document cannot be saved. A disabled command is greyed in
+its menu and does nothing when its key is pressed; the terminal never shows a command id.
+
+**Mouse**: every button, widget, stripe button, header action, tab, menu row, splitter and list row works as
+in the GUI. Hover shows the GUI's tooltips after 500 ms; submenus open after 250 ms; right click opens the
+context menus of the editor, tabs and the project tree.
+
+Glyphs: `ARCHIPEL_TUI_GLYPHS=ascii` draws ASCII stand-ins for every Nerd Font icon with the same geometry.
+Without `COLORTERM=truecolor` the colors are quantized to the 256-color cube.
 
 ## What works (current build)
 
@@ -157,7 +136,15 @@ the window and Find Action keys above.
 - **Run**: the run configurations of the project (`.archipel/runConfigurations`, detected
   Cargo, Gradle, Maven, npm and Go targets). Run, Stop and Rerun go through the core, the
   console, the build output and test output appear in the Run window, and a line with a
-  source location opens the file (Enter or double click).
+  source location opens the file (Enter or double click; a relative path is resolved against
+  the working directory, the project root and the project's files, like the GUI: the links are
+  `archipel_ide_core::console_links`). The chooser (Alt+Shift+F10) lists the configurations and
+  the detected targets; a Run that cannot start says why. Stop ends the whole process tree
+  (SIGTERM to the process group, then SIGKILL). SIGTERM, SIGINT and SIGHUP quit like Quit does:
+  documents are saved and the terminal is restored.
+- **Conflicts**: a file that changed on disk while its document has unsaved edits opens the File
+  Cache Conflict dialog (Load File System Changes, Keep Memory Changes, Show Difference), as in
+  the GUI; Escape postpones it and Save or Reload All from Disk ask again.
 - **Git**: the branch and change counts in the status line, the Commit window with changed and
   unversioned files, and Commit with a message for the checked files.
 - **Terminal**: a pseudo-terminal session (the core's `terminal.*` commands) drawn in the window.
@@ -167,9 +154,18 @@ the window and Find Action keys above.
 `archipel-ide-tui` owns no project, document or run state. `Ide` wraps the core
 (`IdeState`, the command registry and the action registry) and does what the GUI frame does:
 poll the services, sync plugin commands, ask `DataContext` and `AnAction` for presentations and
-effects. Key presses resolve to action ids in the kit's runtime (the IDE keymap is layered on
-the kit's terminal keymap) and run through `ActionRegistry::perform`; the frontend only handles
-the effects it has to render (dialogs, pickers).
+effects.
+
+The chrome is the shared layer (spec file 02): `archipel-kit-model` (kit repo) holds the component
+vocabulary as plain data (`Toolbar`, `MenuBar`, `ToolStrip`, `PanelHeader`, `TabBar`, `StatusBar`,
+`Breadcrumbs`, `Shortcut`, `Tooltip`) with stable ids and semantic tones, and `archipel-ide-view` (this repo)
+builds those props from the core: `Chrome::build`, `context_menu`, the toolbar popups, and
+`dispatch(Event) -> Vec<Effect>`, which turns a component event into commands, actions and the surfaces
+a frontend opens. Neither crate depends on egui or ratatui. `archipel-ide-tui` places the kit controls
+(`chrome.rs`), keeps the focus and the splitters (`shell.rs`) and applies the effects (`app.rs`).
+Key presses resolve to action ids in the kit's runtime (the IDE keymap plus the chord table of
+`archipel_ide_view::keys`) and run through `ActionRegistry::perform`; the frontend only handles the
+effects it has to render (dialogs, pickers) and the window layout actions (hide, jump, maximize, resize).
 
 Editing is the core's, exactly as in the GUI. A typed character is `editor.type` (pairs,
 overtype, surround, live templates, completion and parameter info follow), every other editor key
@@ -191,20 +187,21 @@ terminal clipboard (OSC 52).
   other refactoring dialogs, Generate, Settings, the diff viewer and Local History, plugin
   views (plugin commands work), Android tooling, the AI assistant and Agents mode, the Git log,
   branches and push. Use the GUI for these.
-- Editor splits are shown as one tab list. Long lines wrap (the widget cannot follow a caret
-  horizontally). Documents with CRLF line endings are drawn as LF and keep CRLF in the core.
+- Editor splits are shown as one tab list. Long lines wrap; the view follows the caret by row. Documents with CRLF line endings are drawn as LF and keep CRLF in the core.
   Shift+arrows in column selection mode do not extend the block yet (the mode toggles).
-- Keys a terminal cannot send have fallbacks: Alt+Up / Alt+Down extend and shrink the selection
-  (Ctrl+W leads the window chords), Ctrl+7 comments (Ctrl+/), Ctrl+H deletes a word, and the
-  region, occurrence and caret actions of the editor are `Ctrl+K` chords (see the which-key list).
+- Keys a terminal cannot send have chords behind `Ctrl+\` (see "Keys"); Ctrl+7 comments (Ctrl+/) and
+  Ctrl+H deletes a word in a legacy terminal.
 - Quick Documentation, parameter info and inlay hints have no terminal surface yet.
 - Double Shift needs a terminal that reports modifier keys (kitty protocol); on macOS Option+digit
-  types a symbol, so use Ctrl+W then the digit there.
+  types a symbol, so use `Ctrl+\` then the digit there.
 - On Windows the release binary is a GUI-subsystem program; `--tui` attaches to the console of
   the parent process, so start it from Windows Terminal or `cmd`, not by double click.
-- Being replaced: the look is the dark Nerd Font NvChad look, the tab line's sun button (or Find Action |
-  Switch Theme) cycles the kit's themes, and colors do not follow the GUI's theme setting. The target is
-  the GUI's theme mapped to 24-bit color (spec section I).
+- The theme follows the Settings theme (default Islands Dark) live. Dialogs, popups and the
+  tool window bodies other than the Project tree still use the older kit components drawn in the GUI's
+  colors; phases 0.3 to 0.5 replace them with the shared models (the Welcome screen, Search
+  Everywhere, Find in Files, completion and the dialogs). Sizes of the splitters are not saved yet
+  (`tui.*` settings), and the one-time keyboard notice is remembered in
+  `$XDG_CONFIG_HOME/archipel-ide/tui-keyboard-notice` instead of the user settings.
 
 ## Tests
 
@@ -217,7 +214,21 @@ configuration prints its output and Stop ends a running task, completion and Go 
 Declaration with Back and Forward against the scriptable fake language server
 (`archipel-fake-lsp`, built by `cargo test --workspace`; those tests are skipped when it is
 missing), the Commit window against a temporary Git repository, and the Terminal window
-against a real shell. `tests/editor_cases.rs` replays the editor spec cases
+against a real shell. The Wave 0 tests:
+
+- `chrome_parity` (TUI-GUI-191, 192): for six fixtures (no project, a Java project with a dirty tab,
+  macOS notation, an Android project, indexing, a running task) at 160x45, 100x30 and 80x24, the outline
+  read back from the screen cells equals the outline of the `archipel-ide-view` props (items, order,
+  labels, enabled state, shortcuts, tooltips; narrow screens drop items by priority, never alter them), and
+  all twelve menus are opened to their deepest submenu and compared row by row.
+- `theme_tokens` (TUI-GUI-120, 121): surfaces, the selected tab, the splitters and popups use the tokens of
+  `Theme::colors`; a translucent token is blended over its surface; the Settings theme re-themes live.
+- `ascii_geometry` (TUI-GUI-131, 132), `keys_table` (TUI-GUI-194), `keyboard_notice` (TUI-GUI-159, 045),
+  `unsaved_edits` (closing and quitting never lose edits; disabled commands stay silent).
+- In `archipel-ide-view`: `reachability` (TUI-GUI-193), `keys_collisions` (TUI-GUI-170), `chrome_view`
+  (composition, order, enabled state), `no_ui_deps` (neither toolkit in the dependency tree).
+
+`tests/editor_cases.rs` replays the editor spec cases
 (`docs/specs/editor/cases/`, the same files, parser and judgement as the core's runner) through the
 TUI's key events, typed characters and paste events and reads the result from the core document:
 it must pass exactly what the core's runner passes (341 cases). Unit tests cover the editor/core

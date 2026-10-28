@@ -4,7 +4,31 @@ use crate::highlight::{self, HighlightLayer};
 use crate::registry::LanguageSpec;
 use archipel_ide_text::{ByteEdit, BytePoint};
 use std::ops::Range;
-use tree_sitter::{InputEdit, Parser, Point, Tree};
+use std::time::{Duration, Instant};
+use tree_sitter::{InputEdit, ParseOptions, Parser, Point, Tree};
+
+/// How long one parse may take. Tree-sitter's error recovery is super-linear on long runs of
+/// text that is not code (a big paste of prose into a source file), which froze the editor for
+/// minutes (QA bug 15 of the TUI list); a parse over the budget is dropped and the document is analyzed as
+/// plain text until an edit makes it parse again.
+const PARSE_BUDGET: Duration = Duration::from_millis(250);
+
+/// Parses `source` (reusing `old`) within [`PARSE_BUDGET`]; `None` when it ran out of time.
+fn parse_bounded(parser: &mut Parser, source: &str, old: Option<&Tree>) -> Option<Tree> {
+    let deadline = Instant::now() + PARSE_BUDGET;
+    let mut over = move |_: &tree_sitter::ParseState| Instant::now() > deadline;
+    let bytes = source.as_bytes();
+    let result = parser.parse_with_options(
+        &mut |offset, _| &bytes[offset.min(bytes.len())..],
+        old,
+        Some(ParseOptions::new().progress_callback(&mut over)),
+    );
+    if result.is_none() {
+        // A halted parse can be resumed; the next one starts from scratch.
+        parser.reset();
+    }
+    result
+}
 
 /// What an incremental reparse changed, in post-edit byte coordinates.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -117,7 +141,7 @@ pub(crate) fn merge_ranges(mut ranges: Vec<Range<usize>>) -> Vec<Range<usize>> {
 impl SyntaxTree {
     /// Parses `source` from scratch.
     pub fn parse(spec: &'static LanguageSpec, source: &str) -> Option<Self> {
-        let tree = parser(spec)?.parse(source, None)?;
+        let tree = parse_bounded(&mut parser(spec)?, source, None)?;
         Some(Self { spec, tree })
     }
 
@@ -153,7 +177,7 @@ impl SyntaxTree {
         for range in &mut edited {
             *range = line_range(source, range.clone());
         }
-        let tree = parser(self.spec)?.parse(source, Some(&self.tree))?;
+        let tree = parse_bounded(&mut parser(self.spec)?, source, Some(&self.tree))?;
         let clamp =
             |range: Range<usize>| range.start.min(source.len())..range.end.min(source.len());
         let mut inserted: Vec<Range<usize>> = Vec::with_capacity(edits.len());

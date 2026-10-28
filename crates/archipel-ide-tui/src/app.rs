@@ -147,7 +147,8 @@ impl TuiApp {
             now: 0.0,
             busy: false,
             theme_name: String::new(),
-            ascii: false,
+            ascii: std::env::var("ARCHIPEL_TUI_GLYPHS")
+                .is_ok_and(|v| v.eq_ignore_ascii_case("ascii")),
             read_only: None,
             crumb_cache: None,
             stripe_buckets: Vec::new(),
@@ -185,6 +186,12 @@ impl TuiApp {
     /// The menu bar the last frame built.
     pub fn built_menu(&self) -> Option<&archipel_kit_model::MenuBar> {
         self.chrome.built.as_ref().map(|c| &c.menu)
+    }
+
+    /// Switches between Nerd Font glyphs and their ASCII fallbacks (`ARCHIPEL_TUI_GLYPHS=ascii`
+    /// at start); the geometry is the same.
+    pub fn set_ascii_glyphs(&mut self, on: bool) {
+        self.ascii = on;
     }
 
     /// The window geometry state, mutably.

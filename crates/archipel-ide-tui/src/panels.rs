@@ -238,6 +238,28 @@ impl TuiApp {
                         length: None,
                     })
                 })
+                .or_else(|| {
+                    // A location in plain text (`src/main.rs:3:26`): the same links as the GUI.
+                    let cwd = plan.as_ref().map(|p| p.cwd.as_path())?;
+                    archipel_ide_core::console_links::find(text)
+                        .into_iter()
+                        .find_map(|link| match link.target {
+                            archipel_ide_core::console_links::LinkTarget::File {
+                                path,
+                                line,
+                                column,
+                            } => {
+                                let path = state.resolve_console_path(cwd, &path)?;
+                                Some(Open::File {
+                                    path,
+                                    line: Some(line as usize),
+                                    column: Some(column as usize),
+                                    length: None,
+                                })
+                            }
+                            archipel_ide_core::console_links::LinkTarget::Url(_) => None,
+                        })
+                })
                 .unwrap_or(Open::Nothing);
             targets.push(target);
         }

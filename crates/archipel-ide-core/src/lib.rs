@@ -128,12 +128,13 @@ pub use android_deploy::{DeployPhase, DeployState};
 pub use android_devices::DeviceHub;
 pub use android_logcat::LogcatState;
 pub use android_tools::{LayoutEditorState, LayoutMode};
+pub mod console_links;
 pub use disk_sync::{DiffLine, DiffTag, DiskConflict, Waker, content_hash};
 pub use services::Settings;
 mod vcs;
 pub use archipel_ide_runnables::RunnableKind;
 pub use archipel_ide_search::SearchOptions;
-pub use build_commands::{BuildSystems, DetectedBuild};
+pub use build_commands::{BuildSystems, DetectedBuild, DetectedTarget};
 pub use completion::CompletionSession;
 pub use gutter_commands::GutterMark;
 

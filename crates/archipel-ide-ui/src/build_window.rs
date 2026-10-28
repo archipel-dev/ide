@@ -1,9 +1,9 @@
 //! Build / Run tool window: execution tree with timings on the left, console on the right.
 
-use crate::console_links::{self, LinkTarget};
 use crate::icons::{self, Icon};
 use crate::widgets::{self, tool_window_header};
 use crate::{IdeApp, theme};
+use archipel_ide_core::console_links::{self, LinkTarget};
 use archipel_ide_core::{BuildSnapshot, BuildTab, ToolWindow};
 use archipel_ide_runner::{
     BuildEvents, ConsoleBuffer, MessageKind, OutputStream, StepOutcome, TaskKind, TaskPlan,
@@ -499,10 +499,10 @@ pub fn show(app: &mut IdeApp, ui: &mut egui::Ui) {
         }) => {
             view.selected = Some(node);
             // Console links are relative to the task's working directory.
-            let path = project_root
-                .as_deref()
-                .and_then(|root| project_relative(root, &plan.cwd, Path::new(&path)))
-                .unwrap_or(path);
+            let path = app
+                .state
+                .resolve_console_path(&plan.cwd, &path)
+                .map_or(path, |found| found.display().to_string());
             app.dispatch("editor.openFile", json!({"path": path}));
             app.dispatch("editor.gotoLine", json!({"line": line, "column": column}));
         }

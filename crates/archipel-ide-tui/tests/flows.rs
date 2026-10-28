@@ -700,3 +700,52 @@ fn every_editor_key_of_the_kit_keymap_is_an_action_of_the_core() {
         "editor keys without a core action: {missing:?}"
     );
 }
+
+/// QA bug 7 of the TUI list: Enter on a project-relative location in the Run output (`src/main.rs:3:26`, as
+/// rustc, javac and Maven print them) opens the file at that line and column.
+#[test]
+fn enter_on_a_relative_location_in_the_run_output_opens_the_file() {
+    let project = Project::new(
+        "run-link",
+        &[
+            ("README.md", "# run\n"),
+            (
+                "src/main.rs",
+                "fn main() {\n    let x = 1;\n    println!(\"{}\", y); // undefined\n}\n",
+            ),
+            (
+                ".archipel/runConfigurations/err.toml",
+                "name = \"err\"\ntype = \"shell\"\nprogram = \"sh\"\narguments = [\"-c\", \"echo ' --> src/main.rs:3:26'\"]\n",
+            ),
+        ],
+    );
+    let mut tui = Tui::open(&project.root, &["README.md"], 120, 30);
+    tui.advance(0.1);
+    tui.press_with(KeyCode::F(10), KeyModifiers::SHIFT);
+    tui.expect("the exit line", 20, |tui| {
+        tui.contains("Process finished with exit code 0")
+    });
+    tui.alt('4');
+    tui.advance(0.1);
+    tui.press(KeyCode::Home);
+    tui.press(KeyCode::Down);
+    tui.press(KeyCode::Enter);
+    tui.advance(0.2);
+    let state = tui.app.ide().state();
+    assert_eq!(
+        state.active_file().unwrap().to_str(),
+        Some("src/main.rs"),
+        "{}",
+        tui.text()
+    );
+    let caret = state.active_doc().unwrap().selections.primary().head;
+    assert_eq!(
+        state
+            .active_doc()
+            .unwrap()
+            .text
+            .char_to_line_column(caret)
+            .unwrap(),
+        (2, 25)
+    );
+}

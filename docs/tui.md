@@ -46,6 +46,36 @@ protocol also delivers the combinations a legacy terminal cannot send (see "Keys
 There are no stripes and no toolbar. Everything else is a key, Find Action or a click: the mouse
 works everywhere (tabs, tree, lists, tool window titles, splitters, status line segments).
 
+## Screenshots
+
+Taken with `archipel-ide --tui` in xterm (JetBrainsMono Nerd Font Mono, 24-bit color).
+
+The editor with the Project tree: an error is a red underline on the range (no background),
+the selected text and its other occurrences have a subtle background.
+
+![The terminal editor](tui/img/tui-editor.png)
+
+The Problems window (Alt+6): problems that belong to no file, such as the build path and the
+compiler compliance, are grouped under the project's name; the others under their file.
+
+![The Problems window](tui/img/tui-problems.png)
+
+Search Everywhere (double Shift, or Ctrl+K then E):
+
+![Search Everywhere](tui/img/tui-search.png)
+
+## Terminal notes
+
+- **Diagnostics** are drawn as curly underlines (SGR `4:3`) in the severity color on kitty,
+  WezTerm, Ghostty, Alacritty, foot, iTerm2, Windows Terminal and VTE terminals (GNOME
+  Terminal); `ARCHIPEL_UNDERCURL=1` or `=0` forces it. Other terminals, xterm included, get a
+  plain underline in the severity color. Never a background: errors are red, warnings yellow,
+  weak warnings subtle.
+- **xterm**: Alt shortcuts (Alt+1, Alt+6, Alt+Enter) need `XTerm*metaSendsEscape: true` in
+  `~/.Xresources` (or `-xrm 'XTerm*metaSendsEscape: true'`); without it xterm types the
+  character with the eighth bit set, so Alt+6 inserts `¶`. Also use `XTerm*directColor: true`
+  and a UTF-8 locale (`LANG=C.UTF-8`) for the colors and the icons.
+
 ## Keys
 
 The shortcuts are the active keymap of the IDE (Settings | Keymap in the GUI, the default

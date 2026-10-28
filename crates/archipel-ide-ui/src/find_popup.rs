@@ -904,7 +904,9 @@ mod tests {
         for (path, text) in files {
             std::fs::write(root.join(path), text).unwrap();
         }
-        let app = IdeApp::new(Some(root.clone()), vec![root.join(files[0].0)]);
+        let mut app = IdeApp::new(Some(root.clone()), vec![root.join(files[0].0)]);
+        // Without a settings file (a fresh CI home) the first-run wizard opens and takes Escape.
+        app.state.first_run_open = false;
         let ctx = egui::Context::default();
         crate::install_theme(&ctx);
         (app, ctx, root)

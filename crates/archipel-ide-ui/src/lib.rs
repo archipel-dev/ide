@@ -1282,7 +1282,9 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join(file), text).unwrap();
-        let app = IdeApp::new(Some(root.clone()), vec![root.join(file)]);
+        let mut app = IdeApp::new(Some(root.clone()), vec![root.join(file)]);
+        // Without a settings file (a fresh CI home) the first-run wizard opens and takes Escape.
+        app.state.first_run_open = false;
         let ctx = egui::Context::default();
         install_theme(&ctx);
         (app, ctx)

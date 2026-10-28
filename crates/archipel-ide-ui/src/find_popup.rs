@@ -222,9 +222,12 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         return;
     }
     if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
-        app.find_popup.open = false;
-        ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
-        return;
+        // Escape answers the confirmation of Replace All first, whichever handler sees it first.
+        if app.find_popup.confirm.take().is_none() {
+            app.find_popup.open = false;
+            ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
+            return;
+        }
     }
     let message = invalid(app);
     // Nothing is listed while the request cannot run (SRCH-FIP-030).

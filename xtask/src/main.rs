@@ -6,6 +6,7 @@ mod manifests;
 mod parity;
 mod scenario;
 mod scenes;
+mod search_cases;
 mod spec_coverage;
 mod ux_smoke;
 
@@ -16,7 +17,7 @@ use std::{
     process::Command,
 };
 
-const USAGE: &str = "usage: cargo xtask parity [--check] | dist [--installer] [--target <triple>] | changelog [--from REF] [--to REF] [--version X.Y.Z] [--output FILE] | manifests --dir DIR [--version X.Y.Z] | scenes [--only 01,05] [--out DIR] [--release] | scenario [--only NAME,…] [--report FILE] [--install-toolchains] [--list] [--strict] [--release] | ux-smoke [--only NAME,…] [--out DIR] [--release] | spec-coverage [--check] [--out FILE] | design-lint [--update] | editor-cases [--only ED-TYPE] [--verbose] | pack-plugin <dir> [output] | build-wasm-example";
+const USAGE: &str = "usage: cargo xtask parity [--check] | dist [--installer] [--target <triple>] | changelog [--from REF] [--to REF] [--version X.Y.Z] [--output FILE] | manifests --dir DIR [--version X.Y.Z] | scenes [--only 01,05] [--out DIR] [--release] | scenario [--only NAME,…] [--report FILE] [--install-toolchains] [--list] [--strict] [--release] | ux-smoke [--only NAME,…] [--out DIR] [--release] | spec-coverage [--check] [--out FILE] | design-lint [--update] | editor-cases [--only ED-TYPE] [--verbose] | search-cases [--only SRCH-MAT] [--verbose] | pack-plugin <dir> [output] | build-wasm-example";
 
 fn workspace_root() -> PathBuf {
     // Prefer the current directory when it holds the inventory (normal `cargo run`
@@ -51,6 +52,7 @@ fn main() -> Result<()> {
         Some("spec-coverage") => spec_coverage::run(&workspace_root(), args.into_iter().skip(1)),
         Some("design-lint") => design_lint::run(args.into_iter().skip(1)),
         Some("editor-cases") => editor_cases::run(&workspace_root(), args.into_iter().skip(1)),
+        Some("search-cases") => search_cases::run(&workspace_root(), args.into_iter().skip(1)),
         Some("build-wasm-example") => build_wasm_example(),
         Some("pack-plugin") => {
             let dir = args

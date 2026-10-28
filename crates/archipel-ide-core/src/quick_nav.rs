@@ -6,16 +6,20 @@
 //! only record a [`NavigationRequest`] that the UI turns into a popup, or drive
 //! the [`Switcher`] state directly.
 
+use crate::goto_rank::{
+    GotoOptions, decorate, rank_files, rank_names, rank_qualified, split_position,
+};
+use crate::name_match::{MatchMode, NameMatcher, PREFER_START_BONUS};
 use crate::{IdeState, ToolWindow, spec};
 use archipel_ide_command::{Command, CommandError, CommandRegistry};
 use archipel_ide_language::structure::{StructureItem, SymbolKind};
-use archipel_ide_lsp::completion::{MatchClass, fuzzy_match, match_class};
 use archipel_ide_lsp::lsp_types;
 use archipel_ide_lsp::{WorkspaceSymbolHit, WorkspaceSymbolRequestHandle};
 use archipel_ide_project::FileEntry;
 use archipel_ide_search::TextMatch;
 use serde_json::{Value, json};
 use std::collections::HashMap;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -93,119 +97,55 @@ pub enum NavigationRequest {
 pub struct Ranked<T> {
     pub item: T,
     pub positions: Vec<usize>,
-    class: MatchClass,
-    score: i32,
+    /// Matching degree plus the prefer-start and exact-match bonuses (SRCH-MAT-034, 035); `0`
+    /// for an empty query.
+    pub weight: i32,
 }
 
-/// Camel-hump ranks `candidates` against `query` (the completion matcher):
-/// exact and prefix matches first, then humps, then tighter matches, then
-/// shorter names. An empty query keeps the candidates' own order.
+/// The highlighted character indices of a list of fragments.
+fn positions_of(fragments: &[Range<usize>]) -> Vec<usize> {
+    fragments.iter().flat_map(Clone::clone).collect()
+}
+
+/// Ranks `candidates` against `query` with the name matcher of SRCH-MAT (camel humps, wildcards,
+/// middle matching, prefer-start): a name equal to the query first, then the higher weight, then
+/// the name ignoring case. An empty query keeps the candidates' own order.
 pub fn rank<T>(
     query: &str,
     candidates: impl IntoIterator<Item = (T, String)>,
     limit: usize,
 ) -> Vec<Ranked<T>> {
-    rank_with(false, query, candidates, limit)
-}
-
-/// Like [`rank`], but for names made of several words (actions, file names):
-/// letters scattered over the words (`main` in `Markdown: Insert Image`) do not
-/// match. A strict match is a contiguous run at a word start, initials of
-/// words, or camel humps inside one word.
-pub fn rank_strict<T>(
-    query: &str,
-    candidates: impl IntoIterator<Item = (T, String)>,
-    limit: usize,
-) -> Vec<Ranked<T>> {
-    rank_with(true, query, candidates, limit)
-}
-
-/// Whether the matched `positions` of `name` read as a deliberate match.
-fn strict_match(name: &str, positions: &[usize]) -> bool {
-    let chars: Vec<char> = name.chars().collect();
-    let word_start = |index: usize| {
-        index == 0
-            || chars.get(index - 1).is_some_and(|c| !c.is_alphanumeric())
-                && chars.get(index).is_some_and(|c| c.is_alphanumeric())
-    };
-    let Some(&first) = positions.first() else {
-        return true;
-    };
-    let contiguous = positions.windows(2).all(|pair| pair[1] == pair[0] + 1);
-    if contiguous && word_start(first) {
-        return true;
-    }
-    if positions.len() >= 2
-        && positions.iter().all(|&p| word_start(p))
-        && positions.windows(2).all(|pair| pair[1] != pair[0] + 1)
-    {
-        return true;
-    }
-    // Camel humps inside a single word.
-    let (lo, hi) = (first, positions[positions.len() - 1]);
-    !chars[lo..=hi.min(chars.len() - 1)]
-        .iter()
-        .any(|c| !c.is_alphanumeric())
-}
-
-fn rank_with<T>(
-    strict: bool,
-    query: &str,
-    candidates: impl IntoIterator<Item = (T, String)>,
-    limit: usize,
-) -> Vec<Ranked<T>> {
-    let mut ranked: Vec<(Ranked<T>, usize)> = Vec::new();
-    for (item, name) in candidates {
-        let (class, score, positions) = if query.is_empty() {
-            (MatchClass::Inner, 0, Vec::new())
-        } else {
-            let Some(found) = fuzzy_match(query, &name) else {
-                continue;
-            };
-            if strict && !strict_match(&name, &found.positions) {
-                continue;
-            }
-            (
-                match_class(query, &name, &found),
-                found.score,
-                found.positions,
-            )
-        };
-        ranked.push((
-            Ranked {
+    let candidates: Vec<(T, String)> = candidates.into_iter().collect();
+    if query.is_empty() {
+        return candidates
+            .into_iter()
+            .take(limit)
+            .map(|(item, _)| Ranked {
                 item,
-                positions,
-                class,
-                score,
-            },
-            name.chars().count(),
-        ));
+                positions: Vec::new(),
+                weight: 0,
+            })
+            .collect();
     }
-    if !query.is_empty() {
-        ranked.sort_by(|(a, a_len), (b, b_len)| {
-            a.class
-                .cmp(&b.class)
-                .then(b.score.cmp(&a.score))
-                .then(a_len.cmp(b_len))
-        });
-    }
-    ranked.into_iter().map(|(r, _)| r).take(limit).collect()
+    let names: Vec<&str> = candidates.iter().map(|(_, name)| name.as_str()).collect();
+    let hits = rank_names(query, &names, GotoOptions::default());
+    let mut slots: Vec<Option<T>> = candidates.into_iter().map(|(item, _)| Some(item)).collect();
+    hits.into_iter()
+        .take(limit)
+        .filter_map(|hit| {
+            Some(Ranked {
+                item: slots[hit.index].take()?,
+                positions: positions_of(&hit.fragments),
+                weight: hit.weight,
+            })
+        })
+        .collect()
 }
 
-/// Whether `name` matches `query` with camel-hump semantics (empty matches all).
+/// Whether `name` matches `query` with the Go to semantics (empty matches all).
 pub fn matches(query: &str, name: &str) -> bool {
-    query.is_empty() || fuzzy_match(query, name).is_some()
-}
-
-/// Splits `Name:12` into the name pattern and a one-based line.
-pub fn split_line_suffix(query: &str) -> (&str, Option<usize>) {
-    if let Some((name, line)) = query.rsplit_once(':')
-        && !line.is_empty()
-        && let Ok(line) = line.parse::<usize>()
-    {
-        return (name, Some(line.max(1)));
-    }
-    (query, None)
+    query.is_empty()
+        || NameMatcher::new(&decorate(query, true), MatchMode::IgnoreCase).matches(name)
 }
 
 // ------------------------------------------------------------ symbol index
@@ -376,10 +316,53 @@ pub struct ActionCandidate {
 /// One row of the popup.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Hit {
-    File { path: PathBuf, line: Option<usize> },
+    /// A file with the position typed after its name (`A.java:12:5`, SRCH-SE-051).
+    File {
+        path: PathBuf,
+        line: Option<usize>,
+        column: Option<usize>,
+    },
     Symbol(SymbolEntry),
     Action(ActionCandidate),
     Text(TextMatch),
+}
+
+impl Hit {
+    /// The typed commands that open this row (SRCH-SE-050, SRCH-SE-051): the window, the terminal
+    /// frontend and the tests dispatch these in order. Actions have none (they run through the
+    /// action registry).
+    pub fn open_commands(&self, right_split: bool) -> Vec<(&'static str, Value)> {
+        let (path, params) = match self {
+            Hit::File { path, line, column } => {
+                let mut params = json!({"path": path});
+                if let Some(line) = line {
+                    params["line"] = json!(line);
+                    params["column"] = json!(column.unwrap_or(1));
+                }
+                (path, params)
+            }
+            Hit::Symbol(symbol) => (
+                &symbol.path,
+                json!({"path": symbol.path, "line": symbol.line + 1}),
+            ),
+            Hit::Text(found) => (
+                &found.path,
+                json!({
+                    "path": found.path,
+                    "line": found.line,
+                    "column": found.column,
+                    "length": found.length,
+                }),
+            ),
+            Hit::Action(_) => return Vec::new(),
+        };
+        let mut commands = Vec::new();
+        if right_split {
+            commands.push(("editor.openInRightSplit", json!({"path": path})));
+        }
+        commands.push(("editor.openFile", params));
+        commands
+    }
 }
 
 /// What the providers draw from.
@@ -397,97 +380,225 @@ pub struct SearchSources<'a> {
     pub include_non_project: bool,
 }
 
-/// Rows per section on the All tab.
-const ALL_SECTION: [(SearchTab, usize); 5] = [
-    (SearchTab::Classes, 4),
-    (SearchTab::Symbols, 4),
-    (SearchTab::Files, 4),
-    (SearchTab::Actions, 5),
-    (SearchTab::Text, 5),
-];
+/// Rows per provider on the All tab (SRCH-SE-023) and on a single-provider tab.
+const ALL_SECTION: usize = 15;
 const TAB_LIMIT: usize = 30;
 
-/// Runs the provider(s) of `tab`. The All tab concatenates short sections.
-pub fn search(tab: SearchTab, query: &str, sources: &SearchSources) -> Vec<Ranked<Hit>> {
-    let query = query.trim();
-    if tab == SearchTab::All {
-        return ALL_SECTION
-            .into_iter()
-            .flat_map(|(tab, limit)| provider(tab, query, sources, limit))
-            .collect();
-    }
-    provider(tab, query, sources, TAB_LIMIT)
+/// The providers of Search Everywhere with their sort weight (SRCH-SE-021 rule 4): the weight
+/// that breaks a tie between equal item weights.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Provider {
+    RecentFiles,
+    Classes,
+    Files,
+    Symbols,
+    Actions,
+    Text,
 }
 
-fn provider(
-    tab: SearchTab,
-    query: &str,
-    sources: &SearchSources,
-    limit: usize,
-) -> Vec<Ranked<Hit>> {
+impl Provider {
+    pub fn sort_weight(self) -> u32 {
+        match self {
+            Provider::RecentFiles => 70,
+            Provider::Classes => 100,
+            Provider::Files => 200,
+            Provider::Symbols => 300,
+            Provider::Actions => 400,
+            Provider::Text => 1500,
+        }
+    }
+
+    /// The group name of the type filter and the list texts.
+    pub fn name(self) -> &'static str {
+        match self {
+            Provider::RecentFiles => "Recent Files",
+            Provider::Classes => "Classes",
+            Provider::Files => "Files",
+            Provider::Symbols => "Symbols",
+            Provider::Actions => "Actions",
+            Provider::Text => "Text",
+        }
+    }
+}
+
+/// Runs the provider(s) of `tab`. The All tab merges the providers by weight (SRCH-SE-021).
+pub fn search(tab: SearchTab, query: &str, sources: &SearchSources) -> Vec<Ranked<Hit>> {
+    let query = query.trim_start();
+    if tab == SearchTab::All {
+        return search_all(query, sources);
+    }
     match tab {
-        SearchTab::Files => files(query, sources, limit),
-        SearchTab::Classes => symbols(query, sources, limit, true),
-        SearchTab::Symbols => symbols(query, sources, limit, false),
-        SearchTab::Text => sources
-            .text
-            .iter()
-            .take(limit)
-            .map(|found| Ranked {
-                item: Hit::Text(found.clone()),
-                positions: Vec::new(),
-                class: MatchClass::Inner,
-                score: 0,
-            })
-            .collect(),
-        SearchTab::Actions => rank_strict(
-            query,
-            sources
-                .actions
-                .iter()
-                .map(|action| (Hit::Action(action.clone()), action.label.clone())),
-            limit,
-        ),
+        SearchTab::Files => files(query, sources, TAB_LIMIT),
+        SearchTab::Classes => symbols(query, sources, TAB_LIMIT, true),
+        SearchTab::Symbols => symbols(query, sources, TAB_LIMIT, false),
+        SearchTab::Actions => rank_actions(query, sources.actions, TAB_LIMIT),
+        SearchTab::Text => text_hits(sources, TAB_LIMIT),
         SearchTab::All => Vec::new(),
     }
 }
 
-fn files(query: &str, sources: &SearchSources, limit: usize) -> Vec<Ranked<Hit>> {
-    let (pattern, line) = split_line_suffix(query);
-    if pattern.is_empty() {
-        return sources
-            .recent
+fn text_hits(sources: &SearchSources, limit: usize) -> Vec<Ranked<Hit>> {
+    sources
+        .text
+        .iter()
+        .take(limit)
+        .map(|found| Ranked {
+            item: Hit::Text(found.clone()),
+            positions: Vec::new(),
+            weight: i32::MIN / 2,
+        })
+        .collect()
+}
+
+/// The All tab: every provider's own order, merged by weight and then the provider's sort weight
+/// (SRCH-SE-021). A file that is both a recent file and a file stays once, as the file
+/// (SRCH-SE-022). With nothing typed only the recent files are listed (SRCH-SE-033).
+fn search_all(query: &str, sources: &SearchSources) -> Vec<Ranked<Hit>> {
+    if query.trim().is_empty() {
+        return recent_hits(query, sources, ALL_SECTION);
+    }
+    let file_hits = files(query, sources, ALL_SECTION);
+    let known: std::collections::HashSet<&Path> = file_hits
+        .iter()
+        .filter_map(|hit| match &hit.item {
+            Hit::File { path, .. } => Some(path.as_path()),
+            _ => None,
+        })
+        .collect();
+    let recent: Vec<Ranked<Hit>> = recent_hits(query, sources, ALL_SECTION)
+        .into_iter()
+        .filter(|hit| match &hit.item {
+            Hit::File { path, .. } => !known.contains(path.as_path()),
+            _ => true,
+        })
+        .collect();
+    let lists: Vec<(Provider, Vec<Ranked<Hit>>)> = vec![
+        (Provider::RecentFiles, recent),
+        (
+            Provider::Classes,
+            symbols(query, sources, ALL_SECTION, true),
+        ),
+        (Provider::Files, file_hits),
+        (
+            Provider::Symbols,
+            symbols(query, sources, ALL_SECTION, false),
+        ),
+        (
+            Provider::Actions,
+            rank_actions(query, sources.actions, ALL_SECTION),
+        ),
+        (Provider::Text, text_hits(sources, ALL_SECTION)),
+    ];
+    merge_providers(lists)
+}
+
+/// Merges the ordered lists of several providers: the list whose next item has the higher
+/// weight goes first, equal weights go to the lower provider sort weight.
+pub fn merge_providers<T>(lists: Vec<(Provider, Vec<Ranked<T>>)>) -> Vec<Ranked<T>> {
+    merge_providers_with(lists, false)
+}
+
+/// Like [`merge_providers`]; with `recent_first` (`search.everywhere.recent.at.top`) the Recent
+/// Files provider is pinned above the others (SRCH-SE-021 rule 1).
+pub fn merge_providers_with<T>(
+    lists: Vec<(Provider, Vec<Ranked<T>>)>,
+    recent_first: bool,
+) -> Vec<Ranked<T>> {
+    let mut queues: Vec<(Provider, std::collections::VecDeque<Ranked<T>>)> = lists
+        .into_iter()
+        .map(|(provider, items)| (provider, items.into()))
+        .collect();
+    let mut out = Vec::new();
+    loop {
+        let best = queues
             .iter()
-            .take(limit)
-            .map(|path| Ranked {
+            .enumerate()
+            .filter_map(|(i, (provider, items))| {
+                items
+                    .front()
+                    .map(|item| (i, item.weight, provider.sort_weight()))
+            })
+            .max_by(|a, b| {
+                let pinned = |i: usize| recent_first && queues[i].0 == Provider::RecentFiles;
+                pinned(a.0)
+                    .cmp(&pinned(b.0))
+                    .then(a.1.cmp(&b.1))
+                    .then(b.2.cmp(&a.2))
+                    .then(b.0.cmp(&a.0))
+            });
+        let Some((index, ..)) = best else {
+            return out;
+        };
+        if let Some(item) = queues[index].1.pop_front() {
+            out.push(item);
+        }
+    }
+}
+
+/// Recent files filtered by the typed text, matched as `*text` with prefer-start; the weight is
+/// the name degree, newer first on equal weights (SRCH-SE-033).
+fn recent_hits(query: &str, sources: &SearchSources, limit: usize) -> Vec<Ranked<Hit>> {
+    let position = split_position(query);
+    let pattern = decorate(&position.name, true);
+    let matcher = NameMatcher::new(&pattern, MatchMode::IgnoreCase);
+    let mut hits: Vec<Ranked<Hit>> = sources
+        .recent
+        .iter()
+        .filter_map(|path| {
+            let name = file_name(path);
+            let (fragments, weight) = if position.name.trim().is_empty() {
+                (Vec::new(), 0)
+            } else {
+                let (fragments, degree) = matcher.match_with_degree(&name)?;
+                let bonus = if fragments.first().is_some_and(|f| f.start == 0)
+                    && !position.name.starts_with('*')
+                {
+                    PREFER_START_BONUS
+                } else {
+                    0
+                };
+                (fragments, degree + bonus)
+            };
+            Some(Ranked {
                 item: Hit::File {
                     path: path.clone(),
-                    line,
+                    line: position.line,
+                    column: position.column.filter(|_| position.line.is_some()),
                 },
-                positions: Vec::new(),
-                class: MatchClass::Inner,
-                score: 0,
+                positions: positions_of(&fragments),
+                weight,
             })
-            .collect();
+        })
+        .collect();
+    hits.sort_by_key(|hit| std::cmp::Reverse(hit.weight));
+    hits.truncate(limit);
+    hits
+}
+
+fn files(query: &str, sources: &SearchSources, limit: usize) -> Vec<Ranked<Hit>> {
+    let position = split_position(query);
+    if position.name.trim().is_empty() {
+        return recent_hits(query, sources, limit);
     }
-    rank_strict(
-        pattern,
-        sources
-            .files
-            .iter()
-            .filter(|entry| !entry.is_dir)
-            .map(|entry| {
-                let name = file_name(&entry.relative_path);
-                (
-                    Hit::File {
-                        path: entry.relative_path.clone(),
-                        line,
-                    },
-                    name,
-                )
-            }),
-        limit,
-    )
+    let entries: Vec<&FileEntry> = sources.files.iter().filter(|entry| !entry.is_dir).collect();
+    let paths: Vec<String> = entries
+        .iter()
+        .map(|entry| entry.relative_path.to_string_lossy().replace('\\', "/"))
+        .collect();
+    let refs: Vec<&str> = paths.iter().map(String::as_str).collect();
+    rank_files(query, &refs, None, GotoOptions::default())
+        .into_iter()
+        .take(limit)
+        .map(|hit| Ranked {
+            item: Hit::File {
+                path: entries[hit.index].relative_path.clone(),
+                line: position.line,
+                column: position.column.filter(|_| position.line.is_some()),
+            },
+            positions: positions_of(&hit.fragments),
+            weight: hit.weight,
+        })
+        .collect()
 }
 
 fn symbols(query: &str, sources: &SearchSources, limit: usize, classes: bool) -> Vec<Ranked<Hit>> {
@@ -499,7 +610,7 @@ fn symbols(query: &str, sources: &SearchSources, limit: usize, classes: bool) ->
         }
     };
     let mut seen = std::collections::HashSet::new();
-    let candidates: Vec<(Hit, String)> = sources
+    let candidates: Vec<&SymbolEntry> = sources
         .symbols
         .iter()
         .copied()
@@ -507,21 +618,252 @@ fn symbols(query: &str, sources: &SearchSources, limit: usize, classes: bool) ->
         .filter(|symbol| keep(symbol.kind))
         .filter(|symbol| sources.include_non_project || !symbol.path.is_absolute())
         .filter(|symbol| seen.insert((symbol.path.clone(), symbol.name.clone(), symbol.line)))
-        .map(|symbol| (Hit::Symbol(symbol.clone()), symbol.name.clone()))
         .collect();
-    let mut ranked = rank(query, candidates, usize::MAX);
-    if query.is_empty() {
-        ranked.sort_by(|a, b| hit_name(&a.item).cmp(hit_name(&b.item)));
+    if query.trim().is_empty() {
+        let mut all: Vec<&SymbolEntry> = candidates;
+        all.sort_by(|a, b| a.name.cmp(&b.name));
+        return all
+            .into_iter()
+            .take(limit)
+            .map(|symbol| Ranked {
+                item: Hit::Symbol(symbol.clone()),
+                positions: Vec::new(),
+                weight: 0,
+            })
+            .collect();
     }
-    ranked.truncate(limit);
-    ranked
+    let qualified: Vec<String> = candidates
+        .iter()
+        .map(|symbol| match &symbol.container {
+            Some(container) if !container.is_empty() => format!("{container}.{}", symbol.name),
+            _ => symbol.name.clone(),
+        })
+        .collect();
+    let refs: Vec<&str> = qualified.iter().map(String::as_str).collect();
+    rank_qualified(query, &refs, &['.'], GotoOptions::default())
+        .into_iter()
+        .take(limit)
+        .map(|hit| Ranked {
+            item: Hit::Symbol(candidates[hit.index].clone()),
+            positions: positions_of(&hit.fragments),
+            weight: hit.weight,
+        })
+        .collect()
 }
 
-fn hit_name(hit: &Hit) -> &str {
-    match hit {
-        Hit::Symbol(symbol) => &symbol.name,
-        _ => "",
+/// The weight of a file typed as a full path (SRCH-SE-031).
+pub const EXACT_PATH_WEIGHT: i32 = 15_000;
+
+/// A typed absolute path (or one relative to the project directory) that names an existing file
+/// gives that file with the exact weight, first in the list (SRCH-SE-031, SRCH-SE-016). Paths
+/// outside the project need `outside_allowed` (`search.everywhere.absolute.path.outside.project`).
+pub fn absolute_path_hit(
+    typed: &str,
+    root: &Path,
+    outside_allowed: bool,
+    exists: impl Fn(&Path) -> bool,
+) -> Option<Ranked<Hit>> {
+    let typed = split_position(typed);
+    let path = Path::new(typed.name.trim());
+    let (candidate, display): (PathBuf, PathBuf) = if path.is_absolute() {
+        match path.strip_prefix(root) {
+            Ok(relative) => (path.to_owned(), relative.to_owned()),
+            Err(_) if outside_allowed => (path.to_owned(), path.to_owned()),
+            Err(_) => return None,
+        }
+    } else if path.components().count() > 1 && exists(&root.join(path)) {
+        (root.join(path), path.to_owned())
+    } else {
+        return None;
+    };
+    if !exists(&candidate) {
+        return None;
     }
+    let name_len = file_name(&display).chars().count();
+    Some(Ranked {
+        item: Hit::File {
+            path: display,
+            line: typed.line,
+            column: typed.column.filter(|_| typed.line.is_some()),
+        },
+        positions: (0..name_len).collect(),
+        weight: EXACT_PATH_WEIGHT,
+    })
+}
+
+/// Actions whose abbreviation equals the typed text (ignoring case) come first, with the weight
+/// of the abbreviation match (SRCH-SE-040, SRCH-SE-043). `abbreviations` are
+/// `(abbreviation, action id)` pairs.
+pub fn abbreviation_hits(
+    typed: &str,
+    abbreviations: &[(String, String)],
+    actions: &[ActionCandidate],
+) -> Vec<Ranked<Hit>> {
+    let typed = typed.trim();
+    abbreviations
+        .iter()
+        .filter(|(abbreviation, _)| abbreviation.eq_ignore_ascii_case(typed))
+        .filter_map(|(abbreviation, id)| {
+            let action = actions.iter().find(|a| &a.id == id)?;
+            Some(Ranked {
+                item: Hit::Action(action.clone()),
+                positions: Vec::new(),
+                weight: action_weight(typed, abbreviation).unwrap_or(0),
+            })
+        })
+        .collect()
+}
+
+// ------------------------------------------------------------------- actions
+
+/// How an action matched (SRCH-SE-042 rule 2: the order of the modes).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum ActionMatchMode {
+    Name,
+    Group,
+}
+
+/// Splits at whitespace, `-` and `/` for the word-prefix match of a pattern with a space.
+fn words(text: &str) -> Vec<String> {
+    text.split(|c: char| c.is_whitespace() || c == '-' || c == '/')
+        .filter(|word| !word.is_empty())
+        .map(str::to_lowercase)
+        .collect()
+}
+
+/// Every pattern word is a case-insensitive prefix of some name word (SRCH-SE `NAME` mode).
+fn word_prefix_match(pattern: &str, name: &str) -> bool {
+    let name_words = words(name);
+    let pattern_words = words(pattern);
+    !pattern_words.is_empty()
+        && pattern_words.iter().all(|word| {
+            name_words
+                .iter()
+                .any(|candidate| candidate.starts_with(word))
+        })
+}
+
+/// `text` without leading and trailing non-alphanumeric characters (`Find…` is `Find`).
+fn trim_non_alphanumeric(text: &str) -> &str {
+    text.trim_matches(|c: char| !c.is_alphanumeric())
+}
+
+/// The weight of an action text for a typed pattern (SRCH-SE-041).
+pub fn action_weight(pattern: &str, text: &str) -> Option<i32> {
+    let trimmed = pattern.trim();
+    let matcher = NameMatcher::new(&decorate(trimmed, true), MatchMode::IgnoreCase);
+    let weigh = |name: &str| -> Option<i32> {
+        let (fragments, degree) = matcher.match_with_degree(name)?;
+        let bonus = if fragments.first().is_some_and(|f| f.start == 0) && !trimmed.starts_with('*')
+        {
+            PREFER_START_BONUS
+        } else {
+            0
+        };
+        Some(degree + bonus)
+    };
+    let stripped = trim_non_alphanumeric(text);
+    let degree = weigh(stripped).filter(|d| *d != 0).or_else(|| weigh(text));
+    let space = if trimmed.contains(' ') { 100 } else { 0 };
+    match degree {
+        Some(d) if d != 0 => Some(d + space),
+        _ => {
+            // No camel-hump weight: the fallback rank.
+            let plain = text.trim_end_matches(['.', '…']).to_lowercase();
+            let wanted = trimmed.to_lowercase();
+            let rank = if plain == wanted {
+                3
+            } else if plain.starts_with(&wanted) {
+                2
+            } else if plain.contains(&wanted) {
+                1
+            } else {
+                0
+            };
+            Some(rank + 1 + space)
+        }
+    }
+}
+
+/// The Actions provider (SRCH-SE-040 to 042): filter by name, group or word prefix, weigh and
+/// order equal weights.
+fn rank_actions(query: &str, actions: &[ActionCandidate], limit: usize) -> Vec<Ranked<Hit>> {
+    let query = query.trim_start();
+    if query.trim().is_empty() {
+        return actions
+            .iter()
+            .take(limit)
+            .map(|action| Ranked {
+                item: Hit::Action(action.clone()),
+                positions: Vec::new(),
+                weight: 0,
+            })
+            .collect();
+    }
+    let trimmed = query.trim();
+    let has_space = trimmed.contains(' ');
+    let name_matcher = NameMatcher::new(&decorate(trimmed, true), MatchMode::IgnoreCase);
+    struct Row<'a> {
+        action: &'a ActionCandidate,
+        weight: i32,
+        mode: ActionMatchMode,
+        positions: Vec<usize>,
+    }
+    let mut rows: Vec<Row> = Vec::new();
+    for action in actions {
+        let mode = if !has_space && name_matcher.matches(&action.label)
+            || has_space && word_prefix_match(trimmed, &action.label)
+        {
+            Some(ActionMatchMode::Name)
+        } else if !action.category.is_empty()
+            && (word_prefix_match(trimmed, &format!("{} {}", action.category, action.label))
+                || word_prefix_match(trimmed, &format!("{} {}", action.label, action.category)))
+            && has_space
+        {
+            Some(ActionMatchMode::Group)
+        } else {
+            None
+        };
+        let Some(mode) = mode else { continue };
+        let Some(weight) = action_weight(trimmed, &action.label) else {
+            continue;
+        };
+        let positions = name_matcher
+            .match_name(&action.label)
+            .map(|f| positions_of(&f))
+            .unwrap_or_default();
+        rows.push(Row {
+            action,
+            weight,
+            mode,
+            positions,
+        });
+    }
+    // Equal weights: available before unavailable, match mode, text, shorter, group.
+    let strip = |text: &str| text.trim_end_matches(['.', '…']).to_lowercase();
+    rows.sort_by(|a, b| {
+        b.weight
+            .cmp(&a.weight)
+            .then(b.action.enabled.cmp(&a.action.enabled))
+            .then(a.mode.cmp(&b.mode))
+            .then_with(|| strip(&a.action.label).cmp(&strip(&b.action.label)))
+            .then(
+                a.action
+                    .label
+                    .chars()
+                    .count()
+                    .cmp(&b.action.label.chars().count()),
+            )
+            .then_with(|| a.action.category.cmp(&b.action.category))
+    });
+    rows.into_iter()
+        .take(limit)
+        .map(|row| Ranked {
+            item: Hit::Action(row.action.clone()),
+            positions: row.positions,
+            weight: row.weight,
+        })
+        .collect()
 }
 
 /// File name of a project-relative path.
@@ -603,7 +945,8 @@ pub struct RecentLocation {
     pub preview: String,
 }
 
-const MAX_LOCATIONS: usize = 50;
+/// Entries of Recent Locations (`recentLocationsLimit`, SRCH-REC-010).
+const MAX_LOCATIONS: usize = 25;
 /// Caret moves within this many lines of the newest location update it.
 const SAME_PLACE_LINES: usize = 5;
 
@@ -1032,9 +1375,10 @@ mod tests {
         let order = names(&ranked, |s| s.clone());
         assert_eq!(order[0], "gn");
         assert!(order.contains(&"getName".to_owned()));
-        // Fragments must start at a hump, so mid-word `gn` does not match.
-        assert!(!order.contains(&"signName".to_owned()));
-        assert!(!order.contains(&"longgn".to_owned()));
+        // Middle matching (SRCH-MAT-040): a mid-word `gn` still matches but ranks after humps.
+        let at = |name: &str| order.iter().position(|n| n == name).unwrap();
+        assert!(at("getName") < at("signName"), "{order:?}");
+        assert!(at("GNode") < at("longgn"), "{order:?}");
     }
 
     #[test]
@@ -1047,7 +1391,8 @@ mod tests {
         let order = names(&ranked, |s| s.clone());
         assert!(order.contains(&"MainActivity".to_owned()));
         assert!(order.contains(&"MyApplication".to_owned()));
-        assert!(!order.contains(&"Dramatic".to_owned()));
+        // The middle match `Dra[ma]tic` ranks last (SRCH-MAT-040).
+        assert_eq!(order.last().map(String::as_str), Some("Dramatic"));
         assert_eq!(ranked[0].positions.first(), Some(&0));
     }
 
@@ -1059,14 +1404,6 @@ mod tests {
         assert_eq!(names(&all, |s| s.clone()), ["b", "a"]);
         assert_eq!(rank("x", candidates(&["a", "b"]), 10).len(), 0);
         assert_eq!(rank("", candidates(&["a", "b", "c"]), 2).len(), 2);
-    }
-
-    #[test]
-    fn line_suffix_is_split_off() {
-        assert_eq!(split_line_suffix("Main:42"), ("Main", Some(42)));
-        assert_eq!(split_line_suffix("Main:0"), ("Main", Some(1)));
-        assert_eq!(split_line_suffix("Main:"), ("Main:", None));
-        assert_eq!(split_line_suffix("Main"), ("Main", None));
     }
 
     fn entry(path: &str) -> FileEntry {
@@ -1095,6 +1432,13 @@ mod tests {
             category: "Test".into(),
             shortcut: "Ctrl+S".into(),
             enabled: true,
+        }
+    }
+
+    fn hit_name(hit: &Hit) -> &str {
+        match hit {
+            Hit::Symbol(symbol) => &symbol.name,
+            _ => "",
         }
     }
 
@@ -1145,14 +1489,16 @@ mod tests {
             search(SearchTab::Files, "mainact:30", &sources)[0].item,
             Hit::File {
                 path: "src/MainActivity.java".into(),
-                line: Some(30)
+                line: Some(30),
+                column: Some(1)
             }
         );
         assert_eq!(
             search(SearchTab::Files, "", &sources)[0].item,
             Hit::File {
                 path: "README.md".into(),
-                line: None
+                line: None,
+                column: None
             }
         );
         assert!(matches!(
@@ -1351,37 +1697,6 @@ mod tests {
         assert!(java.iter().any(|(n, k, _)| n == "A" && is_class_like(*k)));
         assert!(java.iter().any(|(n, _, l)| n == "run" && *l == 1));
         assert!(outline(Path::new("n.txt"), "hello").is_empty());
-    }
-
-    #[test]
-    fn strict_ranking_drops_letters_scattered_over_words() {
-        let names = [
-            "Markdown: Insert Image",
-            "Main Menu",
-            "Build Project",
-            "Run Main",
-            "getName",
-        ];
-        let rank = |query: &str| {
-            names_of(rank_strict(
-                query,
-                names.iter().map(|n| (n.to_string(), n.to_string())),
-                10,
-            ))
-        };
-        let found = rank("main");
-        assert!(found.contains(&"Main Menu".to_owned()), "{found:?}");
-        assert!(found.contains(&"Run Main".to_owned()), "{found:?}");
-        assert!(
-            !found.contains(&"Markdown: Insert Image".to_owned()),
-            "{found:?}"
-        );
-        assert_eq!(rank("bp"), ["Build Project"], "word initials still match");
-        assert_eq!(rank("gN"), ["getName"], "humps inside one word match");
-    }
-
-    fn names_of(ranked: Vec<Ranked<String>>) -> Vec<String> {
-        ranked.into_iter().map(|r| r.item).collect()
     }
 
     #[test]

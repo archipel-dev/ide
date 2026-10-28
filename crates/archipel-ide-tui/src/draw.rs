@@ -54,18 +54,24 @@ pub fn clip(text: &str, max: u16) -> String {
 /// supports it (`undercurl`). Other terminals do not know SGR 58: xterm reads its parameters
 /// as separate attributes (bright backgrounds, blinking text), so the color is dropped and
 /// the plain underline takes the color of the text, which is then the severity color.
-pub fn finish_underlines(buf: &mut Buffer, undercurl: bool) {
+/// Only the cells inside `area` (the editor) are touched: the chrome's own underlines (the
+/// selected tab) keep their color, which the kit's backend handles per terminal.
+pub fn finish_underlines(buf: &mut Buffer, area: Rect, undercurl: bool) {
     if undercurl {
         return;
     }
-    for cell in &mut buf.content {
-        if cell.underline_color == Color::Reset {
-            continue;
+    let area = area.intersection(buf.area);
+    for y in area.top()..area.bottom() {
+        for x in area.left()..area.right() {
+            let cell = &mut buf[(x, y)];
+            if cell.underline_color == Color::Reset {
+                continue;
+            }
+            if cell.modifier.contains(Modifier::UNDERLINED) {
+                cell.fg = cell.underline_color;
+            }
+            cell.underline_color = Color::Reset;
         }
-        if cell.modifier.contains(Modifier::UNDERLINED) {
-            cell.fg = cell.underline_color;
-        }
-        cell.underline_color = Color::Reset;
     }
 }
 

@@ -287,7 +287,7 @@ impl TuiApp {
         draw_which_key(rt, area, buf, &|id| {
             archipel_ide_actions::Catalog::shared().label(id)
         });
-        crate::draw::finish_underlines(buf, rt.undercurl);
+        crate::draw::finish_underlines(buf, geo.editor, rt.undercurl);
     }
 
     fn draw_tool_body(

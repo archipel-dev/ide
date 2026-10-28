@@ -24,6 +24,7 @@ use archipel_kit_tui::collections::{JBTree, TreeNode};
 use archipel_kit_tui::components::TabInfo;
 use archipel_kit_tui::dashboard::Dashboard;
 use archipel_kit_tui::dialog::Dialog;
+use archipel_kit_tui::editor::EditorComponent;
 use archipel_kit_tui::hit::Id;
 use archipel_kit_tui::input::{Event, KeyCode, KeyEventKind};
 use archipel_kit_tui::overlay::{Handled, Layers, Overlay};
@@ -219,7 +220,9 @@ impl TuiApp {
         self.refresh_panels();
     }
 
-    /// Mirrors every open document.
+    /// Mirrors every open document: what the editor widget did by itself (a click, a fold
+    /// chevron, Replace in its find bar) goes to the core as commands, then the core's state
+    /// (text, carets, folds) is shown in every editor model.
     pub(crate) fn sync_views(&mut self) {
         let paths: Vec<PathBuf> = self
             .ide
@@ -234,17 +237,28 @@ impl TuiApp {
             .collect();
         let mut views = Vec::with_capacity(paths.len());
         for (index, path) in paths.iter().enumerate() {
-            let mut view = match old.remove(path) {
+            let view = match old.remove(path) {
                 Some(view) => view,
                 None => match self.ide.state().document(index) {
                     Some(document) => DocView::open(document),
                     None => continue,
                 },
             };
-            view.sync(self.ide.state_mut(), index);
             views.push(view);
         }
         self.views = views;
+        if let Some(index) = self.active_view() {
+            let outgoing = match self.ide.state().document(index) {
+                Some(document) => self.views[index].outgoing(document),
+                None => Vec::new(),
+            };
+            for (id, params) in outgoing {
+                let _ = self.ide.dispatch(id, params);
+            }
+        }
+        for (index, view) in self.views.iter_mut().enumerate() {
+            view.refresh(self.ide.state_mut(), index);
+        }
     }
 
     fn refresh_tabs(&mut self) {
@@ -447,6 +461,55 @@ impl TuiApp {
             && !self.views.is_empty()
     }
 
+    /// Whether the find bar of the active editor is open.
+    pub(crate) fn find_open(&self) -> bool {
+        self.active_view()
+            .and_then(|index| self.views.get(index))
+            .is_some_and(|view| view.state.find_open())
+    }
+
+    /// Typed text goes to the core's input layer like in the GUI (pairs, overtype, surround,
+    /// live templates, completion). Returns whether `key` was typed text.
+    fn type_key(&mut self, rt: &mut Runtime, key: &archipel_kit_tui::input::KeyEvent) -> bool {
+        let Some(typed) = archipel_kit_tui::input::typed_char(key) else {
+            return false;
+        };
+        self.command(
+            rt,
+            "editor.type",
+            json!({ "text": typed.to_string(), "live": true }),
+        );
+        true
+    }
+
+    /// Gives `event` to the kit's editor widget (its find bar, the mouse). Returns whether it
+    /// used the event.
+    pub(crate) fn forward_to_editor_widget(&mut self, rt: &mut Runtime, event: &Event) -> bool {
+        let Some(index) = self.active_view() else {
+            return false;
+        };
+        let view = &mut self.views[index];
+        let crate::view::DocView {
+            editor,
+            state,
+            highlighter,
+            language,
+            highlights,
+            ..
+        } = view;
+        let out = EditorComponent::new(EDITOR, editor)
+            .highlighter(highlighter)
+            .language(language)
+            .highlights(highlights)
+            .bracket_folding(false)
+            .wrap(true)
+            .handle(rt, state, event);
+        if let Some(hint) = out.hint {
+            self.ide.state_mut().set_status(hint);
+        }
+        out.consumed
+    }
+
     pub(crate) fn terminal_focused(&self) -> bool {
         self.layers.is_empty() && self.wb.focused_tool() == Some("terminal")
     }
@@ -466,9 +529,6 @@ impl TuiApp {
             return false;
         }
         let editor_focused = self.editor_focused();
-        if editor_focused && EDITOR_OWNED.contains(&id) {
-            return false;
-        }
         self.sync_views();
         let Some(effect) = self.ide.perform(id, ActionPlace::Keymap, editor_focused) else {
             return false;
@@ -491,7 +551,7 @@ impl TuiApp {
     }
 
     /// Starts action `id` from a menu or Find Action.
-    pub(crate) fn run_action(&mut self, rt: &mut Runtime, id: &str, place: ActionPlace) {
+    pub fn run_action(&mut self, rt: &mut Runtime, id: &str, place: ActionPlace) {
         self.sync_views();
         if let Some(effect) = self.ide.perform(id, place, self.editor_focused()) {
             self.apply_effect(rt, effect);
@@ -563,6 +623,34 @@ impl TuiApp {
             }
             TuiAction::NextTheme => {
                 rt.look = crate::layout::next_theme(&rt.look);
+            }
+            TuiAction::Copy | TuiAction::Cut => {
+                let id = if action == TuiAction::Copy {
+                    "editor.copy"
+                } else {
+                    "editor.cut"
+                };
+                self.sync_views();
+                match self.ide.dispatch(id, Value::Null) {
+                    Ok(result) if result["skipped"].as_bool() != Some(true) => {
+                        let text = result["text"].as_str().unwrap_or_default().to_owned();
+                        let whole_line = result["wholeLine"].as_bool().unwrap_or(false);
+                        rt.clipboard.set_content(text, whole_line);
+                    }
+                    _ => {}
+                }
+                self.after_input(rt);
+            }
+            TuiAction::Paste | TuiAction::PasteSimple => {
+                let text = rt.clipboard.get().replace("\r\n", "\n");
+                if !text.is_empty() {
+                    let params = if action == TuiAction::PasteSimple {
+                        json!({ "text": text, "raw": true })
+                    } else {
+                        json!({ "text": text, "wholeLine": rt.clipboard.is_whole_line() })
+                    };
+                    self.command(rt, "editor.paste", params);
+                }
             }
             TuiAction::Exit => {
                 self.ide.shutdown();
@@ -840,38 +928,6 @@ impl TuiApp {
     }
 }
 
-/// Reference actions whose work the terminal editor does itself on its own model.
-const EDITOR_OWNED: [&str; 28] = [
-    "$Undo",
-    "$Redo",
-    "$Copy",
-    "$Cut",
-    "$Paste",
-    "$SelectAll",
-    "EditorDuplicate",
-    "EditorDeleteLine",
-    "CommentByLineComment",
-    "MoveLineUp",
-    "MoveLineDown",
-    "SelectNextOccurrence",
-    "UnselectPreviousOccurrence",
-    "SelectAllOccurrences",
-    "EditorAddCaretPerSelectedLine",
-    "EditorToggleColumnMode",
-    "EditorJoinLines",
-    "EditorToggleCase",
-    "EditorSplitLine",
-    "EditorStartNewLineBefore",
-    "EditorSelectWord",
-    "EditorUnSelectWord",
-    "CollapseRegion",
-    "ExpandRegion",
-    "CollapseSelection",
-    "CollapseAllRegions",
-    "ExpandAllRegions",
-    "EditorIndentSelection",
-];
-
 /// Why a command cannot run in the terminal, when it needs a surface this frontend lacks.
 fn unsupported(id: &str) -> Option<&'static str> {
     const NEEDS_GUI: [&str; 9] = [
@@ -961,6 +1017,30 @@ impl App for TuiApp {
             self.after_input(rt);
             return;
         }
+        if let Event::Paste(text) = event
+            && self.editor_focused()
+            && !self.find_open()
+        {
+            // The terminal's own paste (Ctrl+Shift+V, Cmd+V): the core pastes it like the GUI.
+            let text = text.replace("\r\n", "\n").replace('\r', "\n");
+            let whole_line = rt.clipboard.is_whole_line();
+            self.command(
+                rt,
+                "editor.paste",
+                json!({ "text": text, "wholeLine": whole_line }),
+            );
+            return;
+        }
+        // The find bar of the editor widget owns the keys while it is open.
+        if let Event::Key(key) = event
+            && key.kind != KeyEventKind::Release
+            && self.editor_focused()
+            && self.find_open()
+            && self.forward_to_editor_widget(rt, event)
+        {
+            self.after_input(rt);
+            return;
+        }
         if let Event::Mouse(_) = event {
             let events = self.wb.handle(rt, event);
             self.handle_workbench(events, rt);
@@ -994,6 +1074,10 @@ impl App for TuiApp {
                         return;
                     }
                 }
+            }
+            if self.editor_focused() && self.type_key(rt, key) {
+                self.after_input(rt);
+                return;
             }
         }
         self.route(rt, event);
@@ -1035,6 +1119,12 @@ impl App for TuiApp {
 
     fn draw(&mut self, rt: &mut Runtime, area: Rect, buf: &mut Buffer) {
         self.now = rt.now;
+        // Like the GUI's editor: a region that hides a caret is shown.
+        if let Some(index) = self.ide.state().active_index()
+            && let Some(document) = self.ide.state_mut().document_mut(index)
+        {
+            document.reveal_carets();
+        }
         self.sync_all();
         self.draw_all(rt, area, buf);
     }

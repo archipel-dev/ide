@@ -1,21 +1,24 @@
-//! One open document as the terminal shows it: the kit's editor model, the view state and the
-//! mirror between the editor buffer and the core's document.
+//! One open document as the terminal shows it: the kit's editor model as a renderer, kept equal
+//! to the core document.
 //!
-//! The core owns the document (text, undo history seen by commands, analysis, language server
-//! sync). The terminal editor works on the kit's `Editor` model, so every document has both,
-//! and [`DocView::sync`] keeps them equal: an edit made in the terminal editor is pushed to the
-//! core document as one minimal edit (and the analysis, the language server and completion are
-//! told, like the GUI editor does after a snapshot edit); a change the core made (a quick fix,
-//! a refactoring, a reload from disk, Go to Declaration moving the caret) is pulled into the
-//! editor model as one undoable edit.
+//! The core owns the document (text, carets and selections, folds, undo history, analysis,
+//! language server sync) and does all editing: typed text, Enter, Backspace, Tab, the caret
+//! keys and the line operations run through the core's input layer (`editor.type`,
+//! `editor.action`, ...), exactly as in the GUI. The kit's `Editor` is only what draws the
+//! text and takes the mouse, so [`DocView::pull`] copies the core's text, every caret and
+//! selection and the fold regions into it after a change. The other direction is narrow:
+//! what the kit widget itself does (a click or drag placing carets, a fold chevron, the Replace
+//! of its find bar) is turned into core commands by [`DocView::outgoing`].
 
 use archipel_ide_core::{Document, IdeState, Problem, Severity};
 use archipel_ide_text::Selection;
+use archipel_kit::editor::model::FoldRegion;
 use archipel_kit::editor::model::{Editor, Language};
 use archipel_kit::editor::{
     HighlightSeverity, RangeHighlight, Span, SyntaxHighlighter, TextAttributesKey,
 };
 use archipel_kit_tui::editor::EditorState;
+use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -156,43 +159,76 @@ pub fn language_for(path: &Path) -> Language {
     }
 }
 
-/// Char index in the core text of byte `at` of the (LF-normalized) editor text.
-fn core_char(kit_text: &str, at: usize, crlf: bool) -> usize {
-    let at = at.min(kit_text.len());
-    let before = &kit_text[..at];
-    let chars = before.chars().count();
-    if crlf {
-        chars + before.bytes().filter(|byte| *byte == b'\n').count()
-    } else {
-        chars
-    }
-}
-
-/// Byte offset in the editor text of char index `at` of the core text.
-fn kit_byte(core_text: &str, at: usize, crlf: bool) -> usize {
+/// Kit byte offsets of the core char offsets `chars` (in any order). The kit text has LF line
+/// breaks where a CRLF document has `\r\n`.
+fn kit_bytes(core_text: &str, chars: &[usize], crlf: bool) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..chars.len()).collect();
+    order.sort_by_key(|&i| chars[i]);
+    let mut out = vec![0; chars.len()];
+    let mut next = 0;
     let mut bytes = 0;
-    for (index, ch) in core_text.chars().enumerate() {
-        if index >= at {
-            break;
+    let mut index = 0;
+    let mut iter = core_text.chars();
+    loop {
+        while next < order.len() && chars[order[next]] <= index {
+            out[order[next]] = bytes;
+            next += 1;
         }
-        if crlf && ch == '\r' {
-            continue;
+        let Some(ch) = iter.next() else { break };
+        if !(crlf && ch == '\r') {
+            bytes += ch.len_utf8();
         }
-        bytes += ch.len_utf8();
+        index += 1;
     }
-    bytes
+    while next < order.len() {
+        out[order[next]] = bytes;
+        next += 1;
+    }
+    out
 }
 
-/// What [`DocView::sync`] found out.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct SyncResult {
-    /// The terminal editor changed the text and the core document was updated.
-    pub pushed: bool,
-    /// The core changed the text and the editor model was updated.
-    pub pulled: bool,
+/// Core char offsets of the kit byte offsets `bytes` (in any order), the inverse of
+/// [`kit_bytes`] for `kit_text`.
+fn core_chars(kit_text: &str, bytes: &[usize], crlf: bool) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..bytes.len()).collect();
+    order.sort_by_key(|&i| bytes[i]);
+    let mut out = vec![0; bytes.len()];
+    let mut next = 0;
+    let mut chars = 0;
+    for (at, ch) in kit_text.char_indices() {
+        while next < order.len() && bytes[order[next]] <= at {
+            out[order[next]] = chars;
+            next += 1;
+        }
+        chars += 1;
+        if crlf && ch == '\n' {
+            chars += 1;
+        }
+    }
+    while next < order.len() {
+        out[order[next]] = chars;
+        next += 1;
+    }
+    out
 }
 
-/// An open document: the editor model, its view state and the mirror bookkeeping.
+/// What the document's folds look like, to notice a change without comparing regions.
+fn fold_signature(document: &Document) -> (u64, usize, usize) {
+    let collapsed = document.folds.collapsed();
+    let hash = collapsed.iter().fold(0usize, |hash, fold| {
+        hash.wrapping_mul(31)
+            .wrapping_add(fold.start_byte)
+            .wrapping_mul(31)
+            .wrapping_add(fold.end_byte)
+    });
+    (document.text.revision(), collapsed.len(), hash)
+}
+
+/// A command the terminal editor asks the core to run for what the kit widget did by itself.
+pub type Outgoing = (&'static str, serde_json::Value);
+
+/// An open document: the editor model that draws it, its view state and the bookkeeping that
+/// tells a change of the core from a change the widget made.
 pub struct DocView {
     pub path: PathBuf,
     pub editor: Editor,
@@ -200,11 +236,16 @@ pub struct DocView {
     pub highlighter: CoreHighlighter,
     pub language: Language,
     pub highlights: Vec<RangeHighlight>,
+    /// The primary caret moved because of the core: keep it on screen.
+    pub follow: bool,
     crlf: bool,
     core_revision: u64,
+    core_selections: Vec<Selection>,
+    core_folds: (u64, usize, usize),
     kit_stamp: u64,
-    core_selection: Selection,
-    kit_selection: (usize, usize),
+    kit_carets: Vec<(usize, usize)>,
+    kit_folds: Vec<bool>,
+    force_pull: bool,
     problems: Option<Arc<Vec<Problem>>>,
     analysis_key: Option<(u64, usize)>,
 }
@@ -212,37 +253,28 @@ pub struct DocView {
 impl DocView {
     /// A view of `document`.
     pub fn open(document: &Document) -> Self {
-        let core_text = document.text.text();
-        let crlf = core_text.contains("\r\n");
-        let mut editor = Editor::new(&core_text);
         let mut view = Self {
             path: document.path.clone(),
             language: language_for(&document.path),
             state: EditorState::new(),
             highlighter: CoreHighlighter::default(),
             highlights: Vec::new(),
-            crlf,
-            core_revision: document.text.revision(),
+            follow: false,
+            crlf: false,
+            core_revision: u64::MAX,
+            core_selections: Vec::new(),
+            core_folds: (u64::MAX, 0, 0),
             kit_stamp: 0,
-            core_selection: document.selections.primary(),
-            kit_selection: (0, 0),
+            kit_carets: Vec::new(),
+            kit_folds: Vec::new(),
+            force_pull: true,
             problems: None,
             analysis_key: None,
             editor: Editor::new(""),
         };
-        let selection = document.selections.primary();
-        let anchor = kit_byte(&core_text, selection.anchor, crlf);
-        let head = kit_byte(&core_text, selection.head, crlf);
-        editor.carets.set_selection(&editor.document, anchor, head);
-        view.editor = editor;
-        view.kit_stamp = view.editor.document.modification_stamp();
-        view.kit_selection = view.selection_bytes();
+        view.editor.settings.tab_size = 4;
+        view.pull(document);
         view
-    }
-
-    fn selection_bytes(&self) -> (usize, usize) {
-        let caret = self.editor.carets.primary();
-        (caret.anchor, caret.offset)
     }
 
     /// The caret as (line, column), 1-based.
@@ -250,98 +282,194 @@ impl DocView {
         archipel_kit_tui::editor::cursor_position(&self.editor)
     }
 
-    /// Whether the editor text differs from the core's (before the next sync).
-    pub fn changed_in_editor(&self) -> bool {
-        self.editor.document.modification_stamp() != self.kit_stamp
+    fn kit_carets_now(&self) -> Vec<(usize, usize)> {
+        self.editor
+            .carets
+            .carets()
+            .iter()
+            .map(|caret| (caret.anchor, caret.offset))
+            .collect()
     }
 
-    /// Mirrors editor and core for document `index` of the state.
-    pub fn sync(&mut self, state: &mut IdeState, index: usize) -> SyncResult {
-        let mut result = SyncResult::default();
-        let Some(document) = state.document(index) else {
-            return result;
-        };
-        let core_changed = document.text.revision() != self.core_revision;
-        let kit_changed = self.changed_in_editor();
-        if kit_changed {
-            result.pushed = self.push(state, index);
-        } else if core_changed {
-            self.pull(state, index);
-            result.pulled = true;
-        } else {
-            self.sync_selection(state, index);
+    fn kit_folds_now(&self) -> Vec<bool> {
+        self.editor
+            .folding
+            .regions()
+            .iter()
+            .map(|region| region.expanded)
+            .collect()
+    }
+
+    /// What the kit widget changed since the last sync, as core commands, for the document
+    /// the core has active. Nothing when the core changed too: the core wins and
+    /// [`DocView::pull`] shows its state.
+    pub fn outgoing(&mut self, document: &Document) -> Vec<Outgoing> {
+        let core_changed = self.force_pull
+            || document.text.revision() != self.core_revision
+            || document.selections.selections() != self.core_selections.as_slice()
+            || fold_signature(document) != self.core_folds;
+        let text_changed = self.editor.document.modification_stamp() != self.kit_stamp;
+        let carets_changed = self.kit_carets_now() != self.kit_carets;
+        let folds_changed = self.kit_folds_now() != self.kit_folds;
+        if core_changed || !(text_changed || carets_changed || folds_changed) {
+            return Vec::new();
         }
-        self.refresh_decorations(state, index);
-        result
-    }
-
-    /// Pushes the editor text and caret to the core document.
-    fn push(&mut self, state: &mut IdeState, index: usize) -> bool {
+        let mut commands: Vec<Outgoing> = Vec::new();
         let kit_text = self.editor.document.text().to_owned();
-        let caret = self.editor.carets.primary().clone();
-        let crlf = self.crlf;
-        let Some(document) = state.document_mut(index) else {
-            return false;
-        };
-        let core_text = document.text.text();
-        let wanted: std::borrow::Cow<str> = if crlf {
+        let wanted: std::borrow::Cow<str> = if self.crlf {
             std::borrow::Cow::Owned(kit_text.replace('\n', "\r\n"))
         } else {
             std::borrow::Cow::Borrowed(&kit_text)
         };
-        let old: Vec<char> = core_text.chars().collect();
-        let new: Vec<char> = wanted.chars().collect();
-        let prefix = old.iter().zip(&new).take_while(|(a, b)| a == b).count();
-        let suffix = old[prefix..]
-            .iter()
-            .rev()
-            .zip(new[prefix..].iter().rev())
-            .take_while(|(a, b)| a == b)
-            .count();
-        let (old_end, new_end) = (old.len() - suffix, new.len() - suffix);
-        let inserted: String = new[prefix..new_end].iter().collect();
-        let pure_insertion = old_end == prefix;
-        if prefix != old_end || !inserted.is_empty() {
-            let _ = document.text.edit(prefix, old_end, &inserted);
+        if text_changed {
+            let old: Vec<char> = document.text.text().chars().collect();
+            let new: Vec<char> = wanted.chars().collect();
+            let prefix = old.iter().zip(&new).take_while(|(a, b)| a == b).count();
+            let suffix = old[prefix..]
+                .iter()
+                .rev()
+                .zip(new[prefix..].iter().rev())
+                .take_while(|(a, b)| a == b)
+                .count();
+            let (old_end, new_end) = (old.len() - suffix, new.len() - suffix);
+            if prefix != old_end || prefix != new_end {
+                commands.push((
+                    "editor.replaceRange",
+                    json!({
+                        "start": prefix,
+                        "end": old_end,
+                        "text": new[prefix..new_end].iter().collect::<String>(),
+                    }),
+                ));
+            }
         }
-        let anchor = core_char(&kit_text, caret.anchor, crlf);
-        let head = core_char(&kit_text, caret.offset, crlf);
-        let selection = Selection { anchor, head };
-        document.selections.set_single(selection);
-        document.refresh_analysis(&wanted);
-        let path = document.path.clone();
-        let revision = document.text.revision();
-        self.core_revision = revision;
-        self.core_selection = selection;
-        self.kit_stamp = self.editor.document.modification_stamp();
-        self.kit_selection = self.selection_bytes();
-        // The GUI editor does the same after a snapshot edit.
-        state.sync_document_lsp(&path, &wanted, revision.min(i32::MAX as u64) as i32);
-        if state.active_index() == Some(index) {
-            state.snippet_after_change();
-            let typed = if pure_insertion {
-                inserted.as_str()
-            } else {
-                ""
-            };
-            state.completion_after_typing(typed);
-            state.signature_after_typing(typed);
+        if text_changed || carets_changed {
+            let carets = self.editor.carets.carets();
+            let primary = self.editor.carets.primary_index();
+            let mut offsets = Vec::with_capacity(carets.len() * 2);
+            for caret in carets {
+                offsets.push(caret.anchor);
+                offsets.push(caret.offset);
+            }
+            let chars = core_chars(&kit_text, &offsets, self.crlf);
+            let mut selections: Vec<serde_json::Value> = Vec::with_capacity(carets.len());
+            for (index, pair) in chars.chunks(2).enumerate() {
+                let selection = json!({"anchor": pair[0], "head": pair[1]});
+                if index == primary {
+                    selections.insert(0, selection);
+                } else {
+                    selections.push(selection);
+                }
+            }
+            commands.push(("editor.setSelections", json!({ "selections": selections })));
         }
-        true
+        if folds_changed {
+            let before = &self.kit_folds;
+            for (index, region) in self.editor.folding.regions().iter().enumerate() {
+                if before.get(index).is_some_and(|b| *b != region.expanded) {
+                    let line = self.editor.document.line_number(region.start);
+                    commands.push(("editor.toggleFold", json!({ "line": line })));
+                }
+            }
+        }
+        // Whatever the core makes of it is shown on the next sync.
+        self.force_pull = true;
+        commands
     }
 
-    /// Replaces the editor text with the core's, as one undoable edit.
-    fn pull(&mut self, state: &IdeState, index: usize) {
-        let Some(document) = state.document(index) else {
-            return;
-        };
+    /// Shows the core document in the editor model when it changed (or `force`d by
+    /// [`DocView::outgoing`]).
+    pub fn pull(&mut self, document: &Document) -> bool {
+        let selections_changed =
+            document.selections.selections() != self.core_selections.as_slice();
+        let text_changed = document.text.revision() != self.core_revision;
+        let folds = fold_signature(document);
+        let folds_changed = folds != self.core_folds;
+        let forced = std::mem::take(&mut self.force_pull);
+        if !(forced || selections_changed || text_changed || folds_changed) {
+            return false;
+        }
         let core_text = document.text.text();
         let crlf = core_text.contains("\r\n");
         self.crlf = crlf;
+        if forced || text_changed || self.editor.document.modification_stamp() != self.kit_stamp {
+            self.pull_text(&core_text, crlf);
+        }
+        // Carets: the others first, the primary last (the kit's primary is the newest).
+        let selections = document.selections.selections();
+        let offsets: Vec<usize> = selections.iter().flat_map(|s| [s.anchor, s.head]).collect();
+        let bytes = kit_bytes(&core_text, &offsets, crlf);
+        let pairs: Vec<(usize, usize)> = bytes.chunks(2).map(|p| (p[0], p[1])).collect();
+        let primary_before = self.editor.carets.primary().offset;
+        let (primary, others) = (pairs[0], &pairs[1..]);
+        match others.split_first() {
+            None => self
+                .editor
+                .carets
+                .set_selection(&self.editor.document, primary.0, primary.1),
+            Some((first, rest)) => {
+                self.editor
+                    .carets
+                    .set_selection(&self.editor.document, first.0, first.1);
+                for (anchor, head) in rest {
+                    self.editor.carets.add_caret_with_selection(
+                        &self.editor.document,
+                        *anchor,
+                        *head,
+                    );
+                }
+                self.editor.carets.add_caret_with_selection(
+                    &self.editor.document,
+                    primary.0,
+                    primary.1,
+                );
+            }
+        }
+        self.editor.carets.overwrite = document.input.overwrite;
+        if self.editor.carets.primary().offset != primary_before || text_changed {
+            self.follow = true;
+        }
+        // Folds.
+        if folds_changed || text_changed || self.kit_folds.is_empty() {
+            let to_kit = |byte: usize| {
+                if crlf {
+                    let line = document.text.char_to_line(document.text.byte_to_char(byte));
+                    byte.saturating_sub(line)
+                } else {
+                    byte
+                }
+            };
+            let regions: Vec<FoldRegion> = document
+                .fold_regions()
+                .into_iter()
+                .map(|region| FoldRegion {
+                    start: to_kit(region.range.start_byte),
+                    end: to_kit(region.range.end_byte),
+                    placeholder: region.range.placeholder.clone(),
+                    expanded: !region.collapsed,
+                })
+                .collect();
+            let len = self.editor.document.len();
+            self.editor
+                .folding
+                .replace_regions(regions.into_iter().filter(|r| r.end <= len).collect());
+        }
+        self.core_revision = document.text.revision();
+        self.core_selections = selections.to_vec();
+        self.core_folds = folds;
+        self.kit_stamp = self.editor.document.modification_stamp();
+        self.kit_carets = self.kit_carets_now();
+        self.kit_folds = self.kit_folds_now();
+        true
+    }
+
+    /// Replaces the editor text with the core's by one minimal edit (the kit keeps its caches
+    /// and scroll position), without a history of its own.
+    fn pull_text(&mut self, core_text: &str, crlf: bool) {
         let normalized = if crlf {
             core_text.replace("\r\n", "\n")
         } else {
-            core_text.clone()
+            core_text.to_owned()
         };
         let old = self.editor.document.text().to_owned();
         if old != normalized {
@@ -365,60 +493,15 @@ impl DocView {
             self.editor
                 .replace_range(prefix, old_end, &normalized[prefix..new_end]);
         }
-        let selection = document.selections.primary();
-        let anchor = kit_byte(&core_text, selection.anchor, crlf);
-        let head = kit_byte(&core_text, selection.head, crlf);
-        self.editor
-            .carets
-            .set_selection(&self.editor.document, anchor, head);
-        // The first Undo takes the pulled change back, not the caret the core moved.
-        self.editor.undo.set_baseline(&self.editor.carets);
-        self.core_revision = document.text.revision();
-        self.core_selection = selection;
-        self.kit_stamp = self.editor.document.modification_stamp();
-        self.kit_selection = self.selection_bytes();
+        self.editor.undo.clear();
     }
 
-    /// Carries a caret move across: whichever side moved since the last sync wins.
-    fn sync_selection(&mut self, state: &mut IdeState, index: usize) {
-        let kit_now = self.selection_bytes();
-        let Some(document) = state.document(index) else {
-            return;
-        };
-        let core_now = document.selections.primary();
-        if kit_now != self.kit_selection {
-            let kit_text = self.editor.document.text();
-            let selection = Selection {
-                anchor: core_char(kit_text, kit_now.0, self.crlf),
-                head: core_char(kit_text, kit_now.1, self.crlf),
-            };
-            if let Some(document) = state.document_mut(index) {
-                document.selections.set_single(selection);
-            }
-            self.core_selection = selection;
-            self.kit_selection = kit_now;
-            // Like the GUI editor after a caret move: snippets, parameter info and the
-            // completion list follow the caret.
-            if state.active_index() == Some(index) {
-                state.snippet_after_caret_move();
-                state.signature_after_caret_move();
-                if state.completion().is_some() {
-                    state.refresh_completion();
-                }
-            }
-        } else if core_now != self.core_selection {
-            let core_text = document.text.text();
-            let anchor = kit_byte(&core_text, core_now.anchor, self.crlf);
-            let head = kit_byte(&core_text, core_now.head, self.crlf);
-            self.editor
-                .carets
-                .set_selection(&self.editor.document, anchor, head);
-            self.core_selection = core_now;
-            self.kit_selection = self.selection_bytes();
-            // Navigation (Go to Declaration, Back) moved the caret: show it.
-            self.state
-                .scroll_to_line(self.editor.document.line_number(head));
+    /// Highlights, diagnostics and the view of the core's state for document `index`.
+    pub fn refresh(&mut self, state: &mut IdeState, index: usize) {
+        if let Some(document) = state.document(index) {
+            self.pull(document);
         }
+        self.refresh_decorations(state, index);
     }
 
     /// Highlights and diagnostics for the editor.
@@ -512,90 +595,155 @@ fn floor_boundary(text: &str, mut at: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use archipel_ide_core::built_in_commands;
     use archipel_ide_text::Selection as CoreSelection;
 
-    fn state_with(text: &str) -> IdeState {
+    fn state_with(path: &str, text: &str) -> IdeState {
         let mut state = IdeState::default();
-        state.documents.push(Document::new("a.txt".into(), text));
+        state.documents.push(Document::new(path.into(), text));
         state.active_document = Some(0);
         state
     }
 
-    fn core_text(state: &IdeState) -> String {
-        state.documents[0].text.text()
+    fn run(state: &mut IdeState, commands: Vec<Outgoing>) {
+        let registry = built_in_commands();
+        for (id, params) in commands {
+            registry.execute(id, state, params).unwrap();
+        }
     }
 
     #[test]
-    fn an_edit_in_the_editor_reaches_the_core_as_one_edit() {
-        let mut state = state_with("hello world\n");
+    fn offsets_convert_between_core_chars_and_editor_bytes() {
+        // `ä` is two bytes, the CRLF of the core is one LF in the editor.
+        let core = "äö\r\nß = 1\r\n";
+        let chars = [0, 2, 4, 5, 11];
+        let bytes = kit_bytes(core, &chars, true);
+        assert_eq!(bytes, vec![0, 4, 5, 7, 12]);
+        // The `\n` after the `\r` is the same editor byte as the `\r` before it.
+        assert_eq!(kit_bytes(core, &[3], true), vec![4]);
+        let kit = core.replace("\r\n", "\n");
+        assert_eq!(core_chars(&kit, &bytes, true), chars.to_vec());
+        // Without CRLF the editor text is the core text.
+        let plain = kit_bytes("äö\nß", &[0, 1, 3, 4], false);
+        assert_eq!(plain, vec![0, 2, 5, 7]);
+        assert_eq!(core_chars("äö\nß", &plain, false), vec![0, 1, 3, 4]);
+    }
+
+    #[test]
+    fn the_core_selections_are_shown_as_carets_with_the_primary_last() {
+        let mut state = state_with("a.txt", "one two three\n");
         let mut view = DocView::open(&state.documents[0]);
-        let revision = state.documents[0].text.revision();
-        let at = view.editor.document.text().find("world").unwrap();
-        view.editor.replace_range(at, at + 5, "there");
-        view.editor.carets.set_caret(&view.editor.document, at + 5);
-        let result = view.sync(&mut state, 0);
-        assert!(result.pushed && !result.pulled);
-        assert_eq!(core_text(&state), "hello there\n");
-        assert_eq!(state.documents[0].text.revision(), revision + 1, "one edit");
-        assert_eq!(state.documents[0].selections.primary().head, 11);
-        // Nothing left to do.
-        assert_eq!(view.sync(&mut state, 0), SyncResult::default());
+        state.documents[0].selections.set_all(vec![
+            CoreSelection { anchor: 4, head: 7 },
+            CoreSelection::caret(0),
+            CoreSelection::caret(13),
+        ]);
+        assert!(view.pull(&state.documents[0]));
+        let carets = view.editor.carets.carets();
+        assert_eq!(carets.len(), 3);
+        // The core's first selection is the primary one.
+        let primary = view.editor.carets.primary();
+        assert_eq!((primary.anchor, primary.offset), (0, 0));
+        assert!(carets.iter().any(|c| (c.anchor, c.offset) == (4, 7)));
+        // Nothing changed: nothing to do, nothing to send.
+        assert!(!view.pull(&state.documents[0]));
+        assert!(view.outgoing(&state.documents[0]).is_empty());
     }
 
     #[test]
-    fn a_change_the_core_made_is_pulled_into_the_editor_and_can_be_undone_there() {
-        let mut state = state_with("one\ntwo\n");
+    fn a_change_of_the_core_text_is_shown_without_an_editor_history() {
+        let mut state = state_with("a.txt", "one\ntwo\n");
         let mut view = DocView::open(&state.documents[0]);
         state.documents[0].text.edit(0, 0, "zero\n").unwrap();
         state.documents[0]
             .selections
             .set_single(CoreSelection::caret(5));
-        let result = view.sync(&mut state, 0);
-        assert!(result.pulled && !result.pushed);
+        view.refresh(&mut state, 0);
         assert_eq!(view.editor.document.text(), "zero\none\ntwo\n");
         assert_eq!(view.editor.carets.primary().offset, 5);
-        // The pulled change is a step of the editor's own history.
-        view.editor.execute(
-            &archipel_kit::editor::model::EditorAction::Undo,
-            &archipel_kit::editor::model::ActionContext::plain_text(),
+        assert!(view.follow, "the caret the core moved is kept in view");
+        assert!(
+            !view.editor.undo.can_undo(&view.editor.carets),
+            "the core owns the history"
         );
-        assert_eq!(view.editor.document.text(), "one\ntwo\n");
     }
 
     #[test]
-    fn columns_are_chars_in_the_core_and_bytes_in_the_editor() {
-        let mut state = state_with("äö = 1\nß\n");
+    fn a_click_in_the_editor_becomes_a_caret_move_of_the_core() {
+        let mut state = state_with("a.txt", "äö = 1\nß\n");
         let mut view = DocView::open(&state.documents[0]);
-        // The core puts the caret after `ß` (char 8); the editor counts bytes.
-        state.documents[0]
-            .selections
-            .set_single(CoreSelection::caret(8));
-        view.sync(&mut state, 0);
-        assert_eq!(view.editor.carets.primary().offset, "äö = 1\nß".len());
-        // And back: an editor caret after `ö` is char 2.
-        view.editor
-            .carets
-            .set_caret(&view.editor.document, "äö".len());
-        view.sync(&mut state, 0);
-        assert_eq!(state.documents[0].selections.primary().head, 2);
+        let at = "äö".len();
+        view.editor.carets.set_caret(&view.editor.document, at);
+        let commands = view.outgoing(&state.documents[0]);
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands[0].0, "editor.setSelections");
+        run(&mut state, commands);
+        // The columns are chars in the core and bytes in the editor.
+        assert_eq!(
+            state.documents[0].selections.primary(),
+            CoreSelection::caret(2)
+        );
+        view.refresh(&mut state, 0);
+        assert_eq!(view.editor.carets.primary().offset, at);
     }
 
     #[test]
-    fn crlf_files_keep_their_line_endings_in_the_core() {
-        let mut state = state_with("a\r\nb\r\n");
+    fn a_replace_of_the_find_bar_reaches_the_core_with_crlf_kept() {
+        let mut state = state_with("a.txt", "a foo\r\nb foo\r\n");
         let mut view = DocView::open(&state.documents[0]);
-        assert_eq!(view.editor.document.text(), "a\nb\n");
-        let end = view.editor.document.text().len();
-        view.editor.replace_range(end, end, "c");
-        view.sync(&mut state, 0);
-        assert_eq!(core_text(&state), "a\r\nb\r\nc");
-        // A selection in the second line maps across the CR.
-        state.documents[0]
-            .selections
-            .set_single(CoreSelection { anchor: 3, head: 4 });
-        view.sync(&mut state, 0);
-        let caret = view.editor.carets.primary();
-        assert_eq!((caret.anchor, caret.offset), (2, 3));
+        assert_eq!(view.editor.document.text(), "a foo\nb foo\n");
+        let at = view.editor.document.text().find("foo").unwrap();
+        view.editor.replace_range(at, at + 3, "bar");
+        view.editor.carets.set_caret(&view.editor.document, at + 3);
+        let revision = state.documents[0].text.revision();
+        let commands = view.outgoing(&state.documents[0]);
+        assert_eq!(commands[0].0, "editor.replaceRange");
+        run(&mut state, commands);
+        assert_eq!(state.documents[0].text.text(), "a bar\r\nb foo\r\n");
+        assert_eq!(state.documents[0].text.revision(), revision + 1, "one edit");
+        assert_eq!(state.documents[0].selections.primary().head, 5);
+        view.refresh(&mut state, 0);
+        assert_eq!(view.editor.document.text(), "a bar\nb foo\n");
+    }
+
+    #[test]
+    fn the_fold_regions_of_the_core_are_shown_and_a_chevron_click_toggles_them() {
+        let source = "class A {\n    void f() {\n        g();\n        h();\n    }\n}\n";
+        let mut state = state_with("A.java", source);
+        let mut view = DocView::open(&state.documents[0]);
+        let regions: Vec<bool> = view
+            .editor
+            .folding
+            .regions()
+            .iter()
+            .map(|region| region.expanded)
+            .collect();
+        assert!(
+            !regions.is_empty(),
+            "the class and method bodies are regions"
+        );
+        assert!(regions.iter().all(|expanded| *expanded));
+        // A click on the chevron of the method toggles the kit's region ...
+        let method = view
+            .editor
+            .folding
+            .regions()
+            .iter()
+            .position(|region| view.editor.document.line_number(region.start) == 1)
+            .unwrap();
+        view.editor.toggle_fold_region(method, false);
+        let commands = view.outgoing(&state.documents[0]);
+        assert!(commands.iter().any(|(id, _)| *id == "editor.toggleFold"));
+        run(&mut state, commands);
+        // ... and the core collapsed its own.
+        assert!(
+            state.documents[0]
+                .fold_regions()
+                .iter()
+                .any(|region| region.collapsed && region.range.start_line == 1)
+        );
+        view.refresh(&mut state, 0);
+        assert!(!view.editor.folding.regions()[method].expanded);
     }
 
     #[test]

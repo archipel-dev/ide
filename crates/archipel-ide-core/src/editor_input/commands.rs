@@ -22,6 +22,64 @@ impl IdeState {
         Ok(())
     }
 
+    /// [`IdeState::editor_type`] with what the window does after typed text: the completion
+    /// list follows (or opens on an identifier start or a trigger character) and parameter
+    /// info updates. The terminal UI types through this.
+    pub fn editor_type_live(&mut self, text: &str) -> Result<(), String> {
+        let opts = self.editor_options();
+        let index = self.active_document.ok_or("no active document")?;
+        let document = self
+            .documents
+            .get_mut(index)
+            .ok_or("active document does not exist")?;
+        let revision = document.text.revision();
+        typing::type_text(document, &opts, text)?;
+        if document.text.revision() != revision {
+            let source = document.text.text();
+            document.refresh_analysis(&source);
+            self.sync_active_lsp();
+            self.record_change_place();
+        }
+        self.snippet_after_change();
+        self.completion_after_typing(text);
+        self.signature_after_typing(text);
+        Ok(())
+    }
+
+    /// Replaces the carets and selections of the active document (a mouse click or drag in a
+    /// frontend that draws the text itself). The first one is the primary caret; offsets are
+    /// characters. The live template, parameter info and completion follow the caret.
+    pub fn editor_set_selections(
+        &mut self,
+        selections: Vec<archipel_ide_text::Selection>,
+    ) -> Result<(), String> {
+        let index = self.active_document.ok_or("no active document")?;
+        let document = self
+            .documents
+            .get_mut(index)
+            .ok_or("active document does not exist")?;
+        let len = document.text.len_chars();
+        let selections: Vec<_> = selections
+            .into_iter()
+            .map(|s| archipel_ide_text::Selection {
+                anchor: s.anchor.min(len),
+                head: s.head.min(len),
+            })
+            .collect();
+        if selections.is_empty() || selections == document.selections.selections() {
+            return Ok(());
+        }
+        document.selections.set_all(selections);
+        document.input.goal_reset();
+        document.text.break_undo_merge();
+        self.snippet_after_caret_move();
+        self.signature_after_caret_move();
+        if self.completion.is_some() {
+            self.refresh_completion();
+        }
+        Ok(())
+    }
+
     /// Runs the reference editor action `action` (`EditorLeft`, `EditorBackSpace`, ...) on the
     /// active editor. `Err` carries a message for the status bar.
     pub fn editor_action(&mut self, action: &str) -> Result<Value, String> {
@@ -132,7 +190,116 @@ pub fn register(registry: &mut CommandRegistry<IdeState>) {
             needs_document,
             |state: &mut IdeState, params| {
                 let text = string_param(&params, "text")?;
-                state.editor_type(&text).map_err(CommandError::Failed)?;
+                let live = params.get("live").and_then(Value::as_bool).unwrap_or(false);
+                if live {
+                    state.editor_type_live(&text)
+                } else {
+                    state.editor_type(&text)
+                }
+                .map_err(CommandError::Failed)?;
+                Ok(Value::Null)
+            },
+        ))
+        .expect("unique built-in id");
+    registry
+        .register(Command::new(
+            spec(
+                "editor.setSelections",
+                "Set Carets and Selections",
+                "Editor",
+                None,
+                r#"{"selections":[{"anchor":"number","head":"number"}]}"#,
+            ),
+            needs_document,
+            |state: &mut IdeState, params| {
+                let selections = params
+                    .get("selections")
+                    .and_then(Value::as_array)
+                    .ok_or_else(|| {
+                        CommandError::InvalidParams("expected array field `selections`".into())
+                    })?
+                    .iter()
+                    .map(|value| {
+                        let offset = |name: &str| {
+                            value
+                                .get(name)
+                                .and_then(Value::as_u64)
+                                .and_then(|n| usize::try_from(n).ok())
+                                .ok_or_else(|| {
+                                    CommandError::InvalidParams(format!(
+                                        "expected non-negative integer field `{name}`"
+                                    ))
+                                })
+                        };
+                        Ok(archipel_ide_text::Selection {
+                            anchor: offset("anchor")?,
+                            head: offset("head")?,
+                        })
+                    })
+                    .collect::<Result<Vec<_>, CommandError>>()?;
+                state
+                    .editor_set_selections(selections)
+                    .map_err(CommandError::Failed)?;
+                Ok(Value::Null)
+            },
+        ))
+        .expect("unique built-in id");
+    registry
+        .register(Command::new(
+            spec(
+                "editor.replaceRange",
+                "Replace Range",
+                "Editor",
+                None,
+                r#"{"start":"number","end":"number","text":"string"}"#,
+            ),
+            needs_document,
+            |state: &mut IdeState, params| {
+                let start = crate::usize_param(&params, "start")?;
+                let end = crate::usize_param(&params, "end")?;
+                let text = string_param(&params, "text")?;
+                state
+                    .edit_active(|doc| {
+                        doc.text
+                            .edit(start, end, &text)
+                            .map_err(|error| error.to_string())
+                    })
+                    .map_err(CommandError::Failed)?;
+                Ok(Value::Null)
+            },
+        ))
+        .expect("unique built-in id");
+    registry
+        .register(Command::new(
+            spec(
+                "editor.extendColumnSelection",
+                "Extend Column Selection",
+                "Editor",
+                None,
+                r#"{"lines":"number","columns":"number"}"#,
+            ),
+            needs_document,
+            |state: &mut IdeState, params| {
+                let delta = |name: &str| {
+                    params
+                        .get(name)
+                        .and_then(Value::as_i64)
+                        .map(|n| n as isize)
+                        .ok_or_else(|| {
+                            CommandError::InvalidParams(format!("expected integer field `{name}`"))
+                        })
+                };
+                let (lines, columns) = (delta("lines")?, delta("columns")?);
+                state
+                    .edit_active(|doc| {
+                        let block = doc
+                            .selections
+                            .current_block(&doc.text)
+                            .moved(&doc.text, lines, columns);
+                        block.apply(&doc.text, &mut doc.selections);
+                        Ok(())
+                    })
+                    .map_err(CommandError::Failed)?;
                 Ok(Value::Null)
             },
         ))

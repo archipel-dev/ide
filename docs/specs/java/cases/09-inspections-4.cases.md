@@ -3310,7 +3310,7 @@ problem: warning `finally` "finally block can not complete normally"
 ### JAVA-ICB-111 case 2: Conditional return
 settings: default
 language: java
-status: unverified (a conditional return can still complete normally; the sibling inspections ReturnFromFinallyBlock/ThrowFromFinallyBlock report the statement itself)
+status: unverified (assumes the block is judged by whether it can complete normally; the statement itself is reported by ReturnFromFinallyBlock)
 ```before
 class A {
     void x(boolean b) {

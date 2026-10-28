@@ -12,7 +12,9 @@ fn the_leader_is_unbound_in_every_shipped_keymap() {
     assert!(ids.len() >= 26, "{ids:?}");
     let mut fallbacks = Vec::new();
     for id in ids {
-        let keymap = set.keymap(&id, &Overrides::default()).expect("keymap loads");
+        let keymap = set
+            .keymap(&id, &Overrides::default())
+            .expect("keymap loads");
         let leader = leader_for(&keymap);
         assert!(!leader_is_bound(&keymap, leader), "{id}: {leader} is bound");
         if leader != LEADER {
@@ -26,7 +28,12 @@ fn the_leader_is_unbound_in_every_shipped_keymap() {
     // The spec claims `Ctrl+\` is free in every keymap; NetBeans, VSCode, Visual Studio 2022 and the macOS system keymap bind it (open question).
     assert_eq!(
         fallbacks,
-        ["NetBeans 6.5", "VSCode", "Visual Studio 2022", "macOS System Shortcuts"],
+        [
+            "NetBeans 6.5",
+            "VSCode",
+            "Visual Studio 2022",
+            "macOS System Shortcuts"
+        ],
         "{fallbacks:?}"
     );
 }
@@ -50,7 +57,9 @@ fn no_two_chord_alternatives_share_a_key() {
 #[test]
 fn the_old_leaders_ctrl_k_and_ctrl_w_keep_their_gui_meaning() {
     let set = KeymapSet::shared().expect("keymaps");
-    let keymap = set.keymap("$default", &Overrides::default()).expect("keymap");
+    let keymap = set
+        .keymap("$default", &Overrides::default())
+        .expect("keymap");
     let has = |action: &str, text: &str| {
         keymap
             .shortcuts(action)

@@ -1656,13 +1656,7 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
         .expect("unique built-in id");
     registry
         .register(Command::new(
-            spec(
-                "project.expandAll",
-                "Expand All",
-                "Project",
-                None,
-                "{}",
-            ),
+            spec("project.expandAll", "Expand All", "Project", None, "{}"),
             |s: &IdeState| s.project.is_some(),
             |state: &mut IdeState, _| {
                 // Directories listed so far; lazily loaded ones expand level by level.
@@ -1688,13 +1682,7 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
         .expect("unique built-in id");
     registry
         .register(Command::new(
-            spec(
-                "project.collapseAll",
-                "Collapse All",
-                "Project",
-                None,
-                "{}",
-            ),
+            spec("project.collapseAll", "Collapse All", "Project", None, "{}"),
             |s: &IdeState| s.project.is_some(),
             |state: &mut IdeState, _| {
                 state.expanded_dirs.clear();
@@ -1725,7 +1713,10 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
                     .map(Path::to_path_buf)
                     .collect();
                 for dir in ancestors.into_iter().rev() {
-                    if state.files.iter().any(|e| e.is_dir && e.relative_path == dir)
+                    if state
+                        .files
+                        .iter()
+                        .any(|e| e.is_dir && e.relative_path == dir)
                         && !state.expanded_dirs.contains(&dir)
                         && state.load_children(&dir).is_ok()
                     {

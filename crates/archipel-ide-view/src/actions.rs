@@ -324,7 +324,6 @@ pub fn register_context_rules(registry: ActionRegistry<'_>) {
     }
 }
 
-
 /// Registers the frontends' actions, the command-backed ones are registered by the caller,
 /// then call [`register_context_rules`].
 pub fn register(registry: ActionRegistry<'_>) {

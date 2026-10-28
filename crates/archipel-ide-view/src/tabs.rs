@@ -54,7 +54,8 @@ pub fn editor_tabs(cx: &ViewCx, group: Option<&[usize]>, primary: bool) -> TabBa
             name,
             IconKey::File(doc.path.display().to_string()),
         );
-        tab.selected = state.active_index() == Some(index) && !state.diff_active() && !plugin_active;
+        tab.selected =
+            state.active_index() == Some(index) && !state.diff_active() && !plugin_active;
         tab.dirty = doc.text.is_dirty();
         tab.pinned = state.is_pinned(index);
         tab.preview = state.is_preview(index);
@@ -66,11 +67,17 @@ pub fn editor_tabs(cx: &ViewCx, group: Option<&[usize]>, primary: bool) -> TabBa
         if let Some(diff) = state.diff().as_ref() {
             let title = format!(
                 "{} (Diff)",
-                diff.path.file_name().and_then(|n| n.to_str()).unwrap_or("untitled")
+                diff.path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("untitled")
             );
             let mut tab = Tab::new(DIFF_TAB, title, Glyph::Diff);
             tab.selected = state.diff_active();
-            tab.tooltip = Some(Tooltip::new(format!("Diff of {} against HEAD", diff.path.display())));
+            tab.tooltip = Some(Tooltip::new(format!(
+                "Diff of {} against HEAD",
+                diff.path.display()
+            )));
             tabs.push(tab);
         }
         let host = state.plugin_host_service();
@@ -95,9 +102,8 @@ pub fn command_for(cx: &ViewCx, event: &TabEvent) -> Option<(String, serde_json:
     match event {
         TabEvent::Select { id } if id == DIFF_TAB => Some(("diff.activate".into(), json!({}))),
         TabEvent::Select { id } if id.starts_with("plugin:") => None,
-        TabEvent::Select { id } => {
-            document_index(cx, id).map(|index| ("editor.activate".into(), json!({ "index": index })))
-        }
+        TabEvent::Select { id } => document_index(cx, id)
+            .map(|index| ("editor.activate".into(), json!({ "index": index }))),
         TabEvent::Close { id } if id == DIFF_TAB => Some(("diff.close".into(), json!({}))),
         TabEvent::Close { id } => {
             document_index(cx, id).map(|index| ("editor.close".into(), json!({ "index": index })))

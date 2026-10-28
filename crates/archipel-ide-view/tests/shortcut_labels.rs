@@ -17,7 +17,10 @@ fn model_shortcut_labels_equal_the_keymap_labels() {
                 if matches!(shortcut, Shortcut::Gesture(_)) {
                     continue;
                 }
-                for (a, b) in [(Notation::Text, ModelNotation::Text), (Notation::Mac, ModelNotation::Mac)] {
+                for (a, b) in [
+                    (Notation::Text, ModelNotation::Text),
+                    (Notation::Mac, ModelNotation::Mac),
+                ] {
                     assert_eq!(
                         model_shortcut(shortcut, b == ModelNotation::Mac).label(b),
                         shortcut.label(a),

@@ -1,10 +1,10 @@
 //! The read-only context every builder takes.
 
+use archipel_ide_actions::{ActionPlace, Presentation};
 use archipel_ide_command::CommandRegistry;
 use archipel_ide_core::IdeState;
 use archipel_ide_core::ide_actions::IdeDataProvider;
 use archipel_ide_platform::{DataContext, DataProvider, data_keys};
-use archipel_ide_actions::{ActionPlace, Presentation};
 use archipel_kit_model::Notation;
 use std::any::Any;
 use std::path::PathBuf;
@@ -50,7 +50,11 @@ impl Caps {
 
     /// The notation shortcuts are written in.
     pub fn notation(&self) -> Notation {
-        if self.mac { Notation::Mac } else { Notation::Text }
+        if self.mac {
+            Notation::Mac
+        } else {
+            Notation::Text
+        }
     }
 }
 
@@ -121,7 +125,9 @@ impl<'a> ViewCx<'a> {
         f: impl FnOnce(archipel_ide_actions::ActionRegistry<'_>, &DataContext<'_>) -> R,
     ) -> R {
         let ide = IdeDataProvider::new(self.state, self.commands);
-        let data = add(DataContext::new().with_provider(&ide).with_provider(self.ui));
+        let data = add(DataContext::new()
+            .with_provider(&ide)
+            .with_provider(self.ui));
         f(self.state.action_registry(), &data)
     }
 

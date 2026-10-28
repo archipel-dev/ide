@@ -75,8 +75,13 @@ fn crumb_label(name: &str) -> String {
 }
 
 /// The declarations around the caret of `document`, outermost first, from its structure.
-pub fn code_crumbs(document: &archipel_ide_core::Document, items: &[StructureItem]) -> Vec<CodeCrumb> {
-    let byte = document.text.char_to_byte(document.selections.primary().head);
+pub fn code_crumbs(
+    document: &archipel_ide_core::Document,
+    items: &[StructureItem],
+) -> Vec<CodeCrumb> {
+    let byte = document
+        .text
+        .char_to_byte(document.selections.primary().head);
     structure::path_at(items, byte)
         .into_iter()
         .map(|item| {
@@ -143,9 +148,16 @@ pub fn breadcrumbs(cx: &ViewCx) -> Breadcrumbs {
         .map(|part| part.as_os_str().to_string_lossy().into_owned())
         .collect();
     let code = &cx.ui.code_crumbs;
-    let stem = document.path.file_stem().map(|s| s.to_string_lossy().into_owned());
+    let stem = document
+        .path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned());
     let file_replaced = code.first().map(|c| c.name.as_str()) == stem.as_deref() && stem.is_some();
-    let shown = if file_replaced { components.len() - 1 } else { components.len() };
+    let shown = if file_replaced {
+        components.len() - 1
+    } else {
+        components.len()
+    };
     for (i, part) in components.iter().take(shown).enumerate() {
         let mut crumb = Crumb::new(path_crumb_id(i + 1), part.clone());
         if i + 1 == components.len() {
@@ -225,7 +237,11 @@ pub fn lsp_summary(cx: &ViewCx, servers: &[ServerInfo]) -> Option<(String, bool,
         .iter()
         .find_map(|server| Some((server, server.progress.first()?)))
     {
-        return Some((format!("{}: {}", server.id, describe_progress(progress)), true, false));
+        return Some((
+            format!("{}: {}", server.id, describe_progress(progress)),
+            true,
+            false,
+        ));
     }
     let active = state.active_absolute_path()?;
     let (provider, _) = state.lsp().registry().for_path(&active)?;
@@ -246,9 +262,13 @@ pub fn lsp_summary(cx: &ViewCx, servers: &[ServerInfo]) -> Option<(String, bool,
             true,
             false,
         ),
-        ServerStatus::Ready if server.importing => (format!("{id}: importing the project…"), true, false),
+        ServerStatus::Ready if server.importing => {
+            (format!("{id}: importing the project…"), true, false)
+        }
         ServerStatus::Ready => (String::new(), false, false),
-        ServerStatus::Restarting { attempt } => (format!("{id}: restarting ({attempt})…"), true, true),
+        ServerStatus::Restarting { attempt } => {
+            (format!("{id}: restarting ({attempt})…"), true, true)
+        }
         ServerStatus::Failed { .. } => (format!("{id}: failed"), false, true),
     })
 }
@@ -435,7 +455,11 @@ pub fn status_bar(cx: &ViewCx) -> StatusBar {
         } else if text.is_empty() {
             l.icon = Some(Glyph::Success.into());
         }
-        l.tone = if busy && !problem { Tone::Info } else { Tone::Secondary };
+        l.tone = if busy && !problem {
+            Tone::Info
+        } else {
+            Tone::Secondary
+        };
         l.spinner = busy;
         l.tooltip = Some(lsp_tooltip(cx, &servers));
         l.menu = vec![MenuEntry::Item(MenuItem::new(
@@ -489,7 +513,11 @@ pub fn status_bar(cx: &ViewCx) -> StatusBar {
         };
         let mut w = item(ids::AI, text);
         w.icon = Some(Glyph::Sparkle.into());
-        w.tone = if ai.is_enabled() { Tone::Secondary } else { Tone::Info };
+        w.tone = if ai.is_enabled() {
+            Tone::Secondary
+        } else {
+            Tone::Info
+        };
         w.priority = 12;
         w.tooltip = Some(Tooltip::new(tooltip));
         items.push(w);
@@ -505,5 +533,67 @@ pub fn status_bar(cx: &ViewCx) -> StatusBar {
     StatusBar {
         breadcrumbs: breadcrumbs(cx),
         items,
+    }
+}
+
+/// Window title like the reference IDE: `project – File.java [module.sourceSet]`. The module is
+/// the directory above `src/` (or the project itself) joined with the source set (`main`,
+/// `test`, …) when the file lives under `src/<set>/`.
+pub fn window_title(project: &str, file: Option<&std::path::Path>) -> String {
+    let Some(file) = file else {
+        return format!("{project} – Archipel IDE");
+    };
+    let parts: Vec<String> = file
+        .components()
+        .map(|part| part.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    let name = parts.last().cloned().unwrap_or_default();
+    let module = match parts.iter().position(|part| part == "src") {
+        Some(src) if src + 2 < parts.len() => {
+            let owner = if src == 0 {
+                project.to_owned()
+            } else {
+                parts[src - 1].clone()
+            };
+            format!("{owner}.{}", parts[src + 1])
+        }
+        _ => project.to_owned(),
+    };
+    format!("{project} – {name} [{module}]")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn window_title_names_file_and_module() {
+        use std::path::Path;
+        assert_eq!(super::window_title("p", None), "p – Archipel IDE");
+        assert_eq!(
+            super::window_title("java-gradle", Some(Path::new("src/main/java/App.java"))),
+            "java-gradle – App.java [java-gradle.main]"
+        );
+        assert_eq!(
+            super::window_title("p", Some(Path::new("app/src/test/java/T.java"))),
+            "p – T.java [app.test]"
+        );
+        assert_eq!(
+            super::window_title("p", Some(Path::new("README.md"))),
+            "p – README.md [p]"
+        );
+    }
+
+    #[test]
+    fn long_messages_keep_their_first_line() {
+        assert_eq!(super::first_line_truncated("short", 10), "short");
+        assert_eq!(super::first_line_truncated("abcdefghijkl", 5), "abcd…");
+        assert_eq!(super::first_line_truncated("one\ntwo", 10), "one");
+    }
+
+    #[test]
+    fn mnemonics_are_found_in_reference_texts() {
+        assert_eq!(crate::main_menu::mnemonic_index("_File"), Some(0));
+        assert_eq!(crate::main_menu::mnemonic_index("R_un"), Some(1));
+        assert_eq!(crate::main_menu::mnemonic_index("Plain"), None);
+        assert_eq!(crate::main_menu::mnemonic_index("A__B"), None);
     }
 }

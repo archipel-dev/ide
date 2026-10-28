@@ -10,9 +10,7 @@ use crate::stripes::{left_stripe, right_stripe};
 use crate::tabs::editor_tabs;
 use crate::toolbar::{ids, main_toolbar};
 use archipel_ide_core::{Anchor, ToolWindow};
-use archipel_kit_model::{
-    MenuBar, MenuEntry, PanelHeader, StatusBar, TabBar, ToolStripe, Toolbar,
-};
+use archipel_kit_model::{MenuBar, MenuEntry, PanelHeader, StatusBar, TabBar, ToolStripe, Toolbar};
 
 /// What the chrome shows for a state.
 #[derive(Debug, Clone, PartialEq)]
@@ -36,6 +34,12 @@ pub struct Chrome {
 impl Chrome {
     /// Builds every part of the chrome. The only entry the frontends use for it.
     pub fn build(cx: &ViewCx) -> Chrome {
+        Self::build_with(cx, true)
+    }
+
+    /// Like [`Chrome::build`]; the main menu (hundreds of action updates) is built only when
+    /// `menu` is true, else it is an empty bar.
+    pub fn build_with(cx: &ViewCx, menu: bool) -> Chrome {
         let layout = cx.state.tool_windows();
         let headers = [Anchor::Left, Anchor::Bottom, Anchor::Right]
             .into_iter()
@@ -44,7 +48,11 @@ impl Chrome {
             .collect();
         Chrome {
             toolbar: main_toolbar(cx),
-            menu: main_menu(cx),
+            menu: if menu {
+                main_menu(cx)
+            } else {
+                MenuBar::default()
+            },
             left: left_stripe(cx),
             right: right_stripe(cx),
             headers,
@@ -57,7 +65,15 @@ impl Chrome {
     /// stripe button, a header action, a context menu, or Search Everywhere's Actions tab as
     /// the last resort. `None` when no path exists.
     pub fn reach(&self, cx: &ViewCx, action: &str) -> Option<Vec<String>> {
-        if let Some(path) = menu_path(&self.menu.headers.iter().map(|h| (h.label.as_str(), h.id.as_str(), h.entries.as_slice())).collect::<Vec<_>>(), action) {
+        if let Some(path) = menu_path(
+            &self
+                .menu
+                .headers
+                .iter()
+                .map(|h| (h.label.as_str(), h.id.as_str(), h.entries.as_slice()))
+                .collect::<Vec<_>>(),
+            action,
+        ) {
             return Some(path);
         }
         let toolbar_action = match action {
@@ -93,7 +109,11 @@ impl Chrome {
             }
         }
         if crate::actions::is_implemented(action) || cx.state.action_registry().contains(action) {
-            return Some(vec!["Search Everywhere".into(), "Actions".into(), action.into()]);
+            return Some(vec![
+                "Search Everywhere".into(),
+                "Actions".into(),
+                action.into(),
+            ]);
         }
         None
     }

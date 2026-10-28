@@ -43,8 +43,15 @@ pub fn applies(action: &str, target: &Target) -> bool {
         Target::Tree { path, is_dir } => {
             let root = path.as_os_str().is_empty();
             match action {
-                "NewFile" | "NewDir" | "NewClass" | "Kotlin.NewFile" | "CopyAbsolutePath"
-                | "CopyContentRootPath" | "FindInPath" | "RevealIn" | "Terminal.OpenInTerminal"
+                "NewFile"
+                | "NewDir"
+                | "NewClass"
+                | "Kotlin.NewFile"
+                | "CopyAbsolutePath"
+                | "CopyContentRootPath"
+                | "FindInPath"
+                | "RevealIn"
+                | "Terminal.OpenInTerminal"
                 | "SynchronizeCurrentFile" => true,
                 "$Paste" => true,
                 "RenameElement" | "$Delete" | "CopyFileName" | "$Cut" | "$Copy" | "SafeDelete"
@@ -55,7 +62,9 @@ pub fn applies(action: &str, target: &Target) -> bool {
                 _ => false,
             }
         }
-        Target::Editor => action == "$Paste" || (!is_target_action(action) && is_implemented(action)),
+        Target::Editor => {
+            action == "$Paste" || (!is_target_action(action) && is_implemented(action))
+        }
         Target::Tab(_) => matches!(
             action,
             "CloseContent"
@@ -182,7 +191,11 @@ pub fn context_items(cx: &ViewCx, target: &Target) -> Vec<RefItem> {
         add_tree_entries(cx, &mut items, path, *is_dir);
     }
     if let Target::Tab(index) = target {
-        let label = if cx.state.is_pinned(*index) { "Unpin Tab" } else { "Pin Tab" };
+        let label = if cx.state.is_pinned(*index) {
+            "Unpin Tab"
+        } else {
+            "Pin Tab"
+        };
         relabel(&mut items, "PinActiveEditorTab", label);
         relabel(&mut items, "PinActiveTabToggle", label);
     }
@@ -218,7 +231,10 @@ fn add_tree_entries(cx: &ViewCx, items: &mut Vec<RefItem>, path: &Path, is_dir: 
         let at = after(items, &["OptimizeImports", "$Delete", "RenameFile"]).unwrap_or(items.len());
         items.splice(
             at..at,
-            [RefItem::Separator(None), action("jt.runFile", &format!("Run '{name}'"))],
+            [
+                RefItem::Separator(None),
+                action("jt.runFile", &format!("Run '{name}'")),
+            ],
         );
     }
     let at = position(items, "RevealGroup").map_or(items.len(), |index| index + 1);
@@ -278,7 +294,11 @@ fn convert(cx: &ViewCx, target: &Target, items: &[RefItem], out: &mut Vec<MenuEn
             RefItem::Submenu { id, label, items } => {
                 let mut children = Vec::new();
                 convert(cx, target, items, &mut children);
-                out.push(MenuEntry::Item(MenuItem::submenu(id.clone(), label.clone(), children)));
+                out.push(MenuEntry::Item(MenuItem::submenu(
+                    id.clone(),
+                    label.clone(),
+                    children,
+                )));
             }
             RefItem::Separator(title) => out.push(MenuEntry::Separator {
                 title: title.clone(),
@@ -334,7 +354,11 @@ pub fn context_action(cx: &ViewCx, action: &str, target: &Target) -> Vec<Effect>
         }
         "$Cut" | "$Copy" if matches!(target, Target::Tree { .. }) => {
             if let Target::Tree { path, .. } = target {
-                let id = if action == "$Cut" { "project.cutPaths" } else { "project.copyPaths" };
+                let id = if action == "$Cut" {
+                    "project.cutPaths"
+                } else {
+                    "project.copyPaths"
+                };
                 effects.push(command(id, json!({"paths": [path]})));
             }
         }
@@ -354,7 +378,11 @@ pub fn context_action(cx: &ViewCx, action: &str, target: &Target) -> Vec<Effect>
                 effects.push(Effect::Request(Request::FindInPathIn(path.clone())));
             }
         }
-        "RevealIn" | "Terminal.OpenInTerminal" | "jt.runFile" | "jt.git.diff" | "jt.git.stage"
+        "RevealIn"
+        | "Terminal.OpenInTerminal"
+        | "jt.runFile"
+        | "jt.git.diff"
+        | "jt.git.stage"
         | "jt.git.unstage" => {
             if let Target::Tree { path, .. } = target {
                 let id = match action {
@@ -368,7 +396,9 @@ pub fn context_action(cx: &ViewCx, action: &str, target: &Target) -> Vec<Effect>
                 effects.push(command(id, json!({"path": path})));
             }
         }
-        "SynchronizeCurrentFile" => effects.push(command("file.synchronize", serde_json::Value::Null)),
+        "SynchronizeCurrentFile" => {
+            effects.push(command("file.synchronize", serde_json::Value::Null))
+        }
         "SafeDelete" | "Move" | "RenameFile" | "RenameElement" | "$Delete" => {
             if let Target::Tree { path, .. } = target {
                 let path = path.clone();
@@ -392,7 +422,10 @@ pub fn context_action(cx: &ViewCx, action: &str, target: &Target) -> Vec<Effect>
         id if id.starts_with("jt.mark.") => {
             if let Target::Tree { path, .. } = target {
                 let mark = id.trim_start_matches("jt.mark.");
-                effects.push(command("project.markDirectory", json!({"path": path, "mark": mark})));
+                effects.push(command(
+                    "project.markDirectory",
+                    json!({"path": path, "mark": mark}),
+                ));
             }
         }
         "ProjectViewEditSource" => {
@@ -405,8 +438,13 @@ pub fn context_action(cx: &ViewCx, action: &str, target: &Target) -> Vec<Effect>
                 effects.push(command("editor.close", json!({"index": index})));
             }
         }
-        "CloseAllEditors" | "CloseAllEditorsButActive" | "CloseAllUnmodifiedEditors"
-        | "CloseAllToTheLeft" | "CloseAllToTheRight" | "PinActiveEditorTab" | "PinActiveTabToggle" => {
+        "CloseAllEditors"
+        | "CloseAllEditorsButActive"
+        | "CloseAllUnmodifiedEditors"
+        | "CloseAllToTheLeft"
+        | "CloseAllToTheRight"
+        | "PinActiveEditorTab"
+        | "PinActiveTabToggle" => {
             if let Target::Tab(index) = target {
                 let id = match action {
                     "CloseAllEditors" => "editor.closeAll",
@@ -420,7 +458,10 @@ pub fn context_action(cx: &ViewCx, action: &str, target: &Target) -> Vec<Effect>
             }
         }
         "ReopenClosedTab" => effects.push(command("editor.reopenClosed", serde_json::Value::Null)),
-        "SplitVertically" | "SplitHorizontally" | "MoveEditorToOppositeTabGroup" | "KeepTabOpen"
+        "SplitVertically"
+        | "SplitHorizontally"
+        | "MoveEditorToOppositeTabGroup"
+        | "KeepTabOpen"
             if matches!(target, Target::Tab(_)) =>
         {
             if let Target::Tab(index) = target {

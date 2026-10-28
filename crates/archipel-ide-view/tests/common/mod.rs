@@ -55,7 +55,10 @@ impl Fixture {
         std::fs::write(dir.join("README.md"), "# demo\n").expect("write");
         let mut fixture = Self::empty();
         fixture.run("project.open", json!({ "path": dir }));
-        fixture.run("editor.openFile", json!({"path": "src/main/java/com/example/Main.java"}));
+        fixture.run(
+            "editor.openFile",
+            json!({"path": "src/main/java/com/example/Main.java"}),
+        );
         fixture.run("editor.openFile", json!({"path": "README.md"}));
         fixture.dir = Some(dir);
         fixture

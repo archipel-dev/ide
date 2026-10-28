@@ -3,9 +3,7 @@
 use crate::cx::ViewCx;
 use crate::icons::{activation_action, tool_window_icon};
 use archipel_ide_core::ToolWindow;
-use archipel_kit_model::{
-    IconKey, StripeAnchor, StripeButton, ToolStripe, Tone, Tooltip,
-};
+use archipel_kit_model::{IconKey, StripeAnchor, StripeButton, Tone, ToolStripe, Tooltip};
 
 /// The id of the stripe button of `window`.
 pub fn button_id(window: ToolWindow) -> String {
@@ -25,11 +23,8 @@ fn button(cx: &ViewCx, window: ToolWindow) -> StripeButton {
     }
     let mut button = StripeButton::new(button_id(window), tool_window_icon(window), tip);
     button.selected = state.tool_windows().is_visible(window);
-    button.focused = button.selected
-        && cx
-            .ui
-            .focused_window
-            .is_none_or(|focused| focused == window);
+    button.focused =
+        button.selected && cx.ui.focused_window.is_none_or(|focused| focused == window);
     button.badge = match window {
         ToolWindow::Problems => {
             let counts = state.problems().counts();
@@ -127,7 +122,12 @@ pub fn plugin_windows(cx: &ViewCx) -> Vec<(String, String, String, String)> {
         .flat_map(|entry| {
             entry.contributions.tool_windows.iter().map(|window| {
                 let icon = window.icon_text.clone().unwrap_or_else(|| {
-                    window.title.chars().take(1).collect::<String>().to_uppercase()
+                    window
+                        .title
+                        .chars()
+                        .take(1)
+                        .collect::<String>()
+                        .to_uppercase()
                 });
                 (
                     entry.id().to_owned(),
@@ -159,4 +159,14 @@ pub fn right_stripe(cx: &ViewCx) -> ToolStripe {
         stripe.top.push(b);
     }
     stripe
+}
+
+/// The stripe menu of a button: Hide (the kit's View Mode and Move to are the GUI's window
+/// manager and not part of the terminal).
+pub fn stripe_menu(cx: &ViewCx, id: &str) -> Vec<archipel_kit_model::MenuEntry> {
+    use archipel_kit_model::{MenuEntry, MenuItem};
+    let visible = ToolWindow::parse(id).is_some_and(|w| cx.state.tool_windows().is_visible(w));
+    vec![MenuEntry::Item(
+        MenuItem::new(format!("stripe.hide:{id}"), "Hide").enabled(visible),
+    )]
 }

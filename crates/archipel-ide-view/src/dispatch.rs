@@ -139,6 +139,9 @@ pub fn menu_row(cx: &ViewCx, id: &str) -> Vec<Effect> {
         let params = serde_json::from_str(params).unwrap_or(Value::Null);
         return vec![command(command_id, params)];
     }
+    if let Some(window) = id.strip_prefix("stripe.hide:").and_then(ToolWindow::parse) {
+        return vec![Effect::HideToolWindow(window)];
+    }
     match id {
         "git.stash" => return vec![Effect::Request(Request::GitStash { pop: false })],
         "git.stash.pop" => return vec![Effect::Request(Request::GitStash { pop: true })],
@@ -175,7 +178,11 @@ pub fn dispatch(cx: &ViewCx, event: &Event) -> Vec<Effect> {
             }
             ids::BUILD => vec![command("build.project", Value::Null)],
             ids::DEBUG => {
-                let id = if cx.state.is_debugging() { "debug.stop" } else { "debug.start" };
+                let id = if cx.state.is_debugging() {
+                    "debug.stop"
+                } else {
+                    "debug.start"
+                };
                 vec![command(id, Value::Null)]
             }
             ids::STOP => vec![command("run.cancel", Value::Null)],
@@ -209,7 +216,9 @@ pub fn dispatch(cx: &ViewCx, event: &Event) -> Vec<Effect> {
             }
             _ => Vec::new(),
         },
-        Event::Stripe(StripeEvent::Context { id }) => vec![Effect::Popup(Popup::Stripe(id.clone()))],
+        Event::Stripe(StripeEvent::Context { id }) => {
+            vec![Effect::Popup(Popup::Stripe(id.clone()))]
+        }
         Event::Header(window, PanelHeaderEvent::Hide) => vec![Effect::HideToolWindow(*window)],
         Event::Header(_, PanelHeaderEvent::Action { id }) => match id.as_str() {
             "project.new" => vec![Effect::Popup(Popup::ProjectNew)],
@@ -217,14 +226,22 @@ pub fn dispatch(cx: &ViewCx, event: &Event) -> Vec<Effect> {
             other => menu_row(cx, other),
         },
         Event::Header(ToolWindow::Terminal, PanelHeaderEvent::SelectTab { id }) => {
-            vec![command("terminal.selectTab", json!({"index": id.parse::<usize>().unwrap_or(0)}))]
+            vec![command(
+                "terminal.selectTab",
+                json!({"index": id.parse::<usize>().unwrap_or(0)}),
+            )]
         }
         Event::Header(ToolWindow::Terminal, PanelHeaderEvent::CloseTab { id }) => {
-            vec![command("terminal.closeTab", json!({"index": id.parse::<usize>().unwrap_or(0)}))]
+            vec![command(
+                "terminal.closeTab",
+                json!({"index": id.parse::<usize>().unwrap_or(0)}),
+            )]
         }
         Event::Header(_, _) => Vec::new(),
         Event::Tab(TabEvent::Context { id }) => match crate::tabs::document_index(cx, id) {
-            Some(index) => vec![Effect::Popup(Popup::Context(crate::context_menu::Target::Tab(index)))],
+            Some(index) => vec![Effect::Popup(Popup::Context(
+                crate::context_menu::Target::Tab(index),
+            ))],
             None => Vec::new(),
         },
         Event::Tab(TabEvent::Unpin { id }) => match crate::tabs::document_index(cx, id) {
@@ -244,14 +261,21 @@ fn status_click(cx: &ViewCx, id: &str) -> Vec<Effect> {
     use crate::status::ids as s;
     match id {
         s::MESSAGE => {
-            if cx.state.tool_windows().visible(archipel_ide_core::Anchor::Bottom).is_none() {
+            if cx
+                .state
+                .tool_windows()
+                .visible(archipel_ide_core::Anchor::Bottom)
+                .is_none()
+            {
                 vec![command("toolwindow.toggle", json!({"id": "build"}))]
             } else {
                 Vec::new()
             }
         }
         s::UPDATE => vec![Effect::Request(Request::ShowUpdateBalloon)],
-        s::CARET => vec![Effect::Request(Request::Ui(crate::actions::UiAction::GotoLine))],
+        s::CARET => vec![Effect::Request(Request::Ui(
+            crate::actions::UiAction::GotoLine,
+        ))],
         s::AI => vec![command("toolwindow.activate.aiChat", Value::Null)],
         s::AGENTS => vec![command("toolwindow.activate.agents", Value::Null)],
         other => vec![Effect::Popup(Popup::Status(other.to_owned()))],
@@ -259,7 +283,9 @@ fn status_click(cx: &ViewCx, id: &str) -> Vec<Effect> {
 }
 
 fn crumb_click(cx: &ViewCx, id: &str) -> Vec<Effect> {
-    if let Some(n) = id.strip_prefix("code:").and_then(|n| n.parse::<usize>().ok())
+    if let Some(n) = id
+        .strip_prefix("code:")
+        .and_then(|n| n.parse::<usize>().ok())
         && let Some(crumb) = cx.ui.code_crumbs.get(n)
     {
         return vec![Effect::GotoPosition {

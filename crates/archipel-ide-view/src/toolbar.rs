@@ -6,8 +6,8 @@
 use crate::cx::ViewCx;
 use archipel_ide_core::agents::WorkbenchMode;
 use archipel_kit_model::{
-    Avatar, Glyph, MenuEntry, MenuItem, Shortcut, Toolbar, ToolbarButton, ToolbarDropdown,
-    ToolbarItem, Tone, Tooltip,
+    Avatar, Glyph, MenuEntry, MenuItem, Shortcut, Tone, Toolbar, ToolbarButton, ToolbarDropdown,
+    ToolbarItem, Tooltip,
 };
 
 /// Ids of the toolbar's widgets.
@@ -88,8 +88,11 @@ pub fn main_toolbar(cx: &ViewCx) -> Toolbar {
     let state = cx.state;
     let mut bar = Toolbar::new("main");
     bar.leading.push(ToolbarItem::Button(
-        ToolbarButton::new(ids::MAIN_MENU, Glyph::Menu, "Main Menu")
-            .tooltip(tip(cx, "Main Menu", Some("MainMenu"))),
+        ToolbarButton::new(ids::MAIN_MENU, Glyph::Menu, "Main Menu").tooltip(tip(
+            cx,
+            "Main Menu",
+            Some("MainMenu"),
+        )),
     ));
     // Project widget.
     let name = project_name(cx);
@@ -136,7 +139,11 @@ pub fn main_toolbar(cx: &ViewCx) -> Toolbar {
         bar.trailing.push(ToolbarItem::Dropdown(config));
     }
     // Run.
-    let run_command = if android { "android.app.deploy" } else { "run.project" };
+    let run_command = if android {
+        "android.app.deploy"
+    } else {
+        "run.project"
+    };
     let can_run = cx.action_enabled(run_command);
     let mut run = ToolbarButton::new(ids::RUN, Glyph::Run, "Run")
         .tone(if can_run { Tone::Run } else { Tone::Disabled })
@@ -179,12 +186,18 @@ pub fn main_toolbar(cx: &ViewCx) -> Toolbar {
         ));
     }
     bar.trailing.push(ToolbarItem::Button(
-        ToolbarButton::new(ids::SEARCH, Glyph::Search, "Search Everywhere")
-            .tooltip(tip(cx, "Search Everywhere", Some("SearchEverywhere"))),
+        ToolbarButton::new(ids::SEARCH, Glyph::Search, "Search Everywhere").tooltip(tip(
+            cx,
+            "Search Everywhere",
+            Some("SearchEverywhere"),
+        )),
     ));
     bar.trailing.push(ToolbarItem::Button(
-        ToolbarButton::new(ids::SETTINGS, Glyph::Settings, "Settings")
-            .tooltip(tip(cx, "Settings", Some("ShowSettings"))),
+        ToolbarButton::new(ids::SETTINGS, Glyph::Settings, "Settings").tooltip(tip(
+            cx,
+            "Settings",
+            Some("ShowSettings"),
+        )),
     ));
     bar
 }
@@ -194,7 +207,12 @@ pub fn project_name(cx: &ViewCx) -> String {
     cx.state
         .project
         .as_ref()
-        .and_then(|project| project.root().file_name().map(|n| n.to_string_lossy().into_owned()))
+        .and_then(|project| {
+            project
+                .root()
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+        })
         .unwrap_or_else(|| "No project".into())
 }
 
@@ -209,8 +227,12 @@ pub fn project_popup(cx: &ViewCx) -> Vec<MenuEntry> {
         out.push(MenuEntry::Item(root));
         out.push(MenuEntry::separator());
     }
-    out.push(MenuEntry::Item(MenuItem::new("OpenFile", "Open Project…").mnemonic(0)));
-    out.push(MenuEntry::Item(MenuItem::new("NewProject", "New Project…").mnemonic(0)));
+    out.push(MenuEntry::Item(
+        MenuItem::new("OpenFile", "Open Project…").mnemonic(0),
+    ));
+    out.push(MenuEntry::Item(
+        MenuItem::new("NewProject", "New Project…").mnemonic(0),
+    ));
     out.push(MenuEntry::Item(MenuItem::new(
         command_row("plugin.refresh", &serde_json::Value::Null),
         "Refresh Plugins",
@@ -247,7 +269,10 @@ pub fn run_config_popup(cx: &ViewCx) -> Vec<MenuEntry> {
     out.push(MenuEntry::Item(current));
     for config in configs.configurations() {
         let mut item = MenuItem::new(
-            command_row("runConfig.select", &serde_json::json!({ "name": config.name })),
+            command_row(
+                "runConfig.select",
+                &serde_json::json!({ "name": config.name }),
+            ),
             config.name.clone(),
         );
         item.checked = Some(selected.as_deref() == Some(config.name.as_str()));
@@ -305,7 +330,11 @@ pub fn vcs_popup(cx: &ViewCx) -> Vec<MenuEntry> {
             MenuEntry::Item(MenuItem::new(command_row(command, &params), label))
         };
         if !is_current {
-            rows.push(row("git.checkout", serde_json::json!({ "branch": name }), "Checkout".into()));
+            rows.push(row(
+                "git.checkout",
+                serde_json::json!({ "branch": name }),
+                "Checkout".into(),
+            ));
         }
         if !remote && is_current {
             rows.push(row("git.pull", serde_json::Value::Null, "Update".into()));
@@ -323,7 +352,11 @@ pub fn vcs_popup(cx: &ViewCx) -> Vec<MenuEntry> {
             ));
         }
         if !remote && !is_current {
-            rows.push(row("git.deleteBranch", serde_json::json!({ "branch": name }), "Delete".into()));
+            rows.push(row(
+                "git.deleteBranch",
+                serde_json::json!({ "branch": name }),
+                "Delete".into(),
+            ));
         }
         rows
     };
@@ -335,7 +368,11 @@ pub fn vcs_popup(cx: &ViewCx) -> Vec<MenuEntry> {
         if branch.behind > 0 {
             label.push_str(&format!("  ↓{}", branch.behind));
         }
-        let mut item = MenuItem::submenu(format!("branch:{}", branch.name), label, branch_actions(&branch.name, false));
+        let mut item = MenuItem::submenu(
+            format!("branch:{}", branch.name),
+            label,
+            branch_actions(&branch.name, false),
+        );
         item.icon = Some(Glyph::Branch.into());
         item.checked = (branch.name == current).then_some(true);
         out.push(MenuEntry::Item(item));
@@ -345,7 +382,11 @@ pub fn vcs_popup(cx: &ViewCx) -> Vec<MenuEntry> {
             title: Some("Remote".into()),
         });
         for name in &branches.remote {
-            let mut item = MenuItem::submenu(format!("remote:{name}"), name.clone(), branch_actions(name, true));
+            let mut item = MenuItem::submenu(
+                format!("remote:{name}"),
+                name.clone(),
+                branch_actions(name, true),
+            );
             item.icon = Some(Glyph::Branch.into());
             out.push(MenuEntry::Item(item));
         }

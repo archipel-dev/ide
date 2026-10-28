@@ -40,7 +40,11 @@ pub fn tool_window_header(cx: &ViewCx, window: ToolWindow) -> PanelHeader {
                     "Select Opened File",
                 )
                 .enabled(cx.action_enabled("project.locateOpenFile")),
-                ToolbarButton::new(command_action("project.expandAll"), Glyph::ExpandAll, "Expand All"),
+                ToolbarButton::new(
+                    command_action("project.expandAll"),
+                    Glyph::ExpandAll,
+                    "Expand All",
+                ),
                 ToolbarButton::new(
                     command_action("project.collapseAll"),
                     Glyph::CollapseAll,
@@ -102,7 +106,11 @@ pub fn tool_window_header(cx: &ViewCx, window: ToolWindow) -> PanelHeader {
                 })
                 .collect();
             header.actions = vec![
-                ToolbarButton::new(command_action("terminal.newTab"), Glyph::Plus, "New Session"),
+                ToolbarButton::new(
+                    command_action("terminal.newTab"),
+                    Glyph::Plus,
+                    "New Session",
+                ),
                 ToolbarButton::new(
                     command_action("terminal.restart"),
                     Glyph::Refresh,
@@ -118,4 +126,33 @@ pub fn tool_window_header(cx: &ViewCx, window: ToolWindow) -> PanelHeader {
         }
     });
     header
+}
+
+/// The Options menu of the Project header.
+pub fn project_options_menu(cx: &ViewCx) -> Vec<archipel_kit_model::MenuEntry> {
+    use archipel_kit_model::{MenuEntry, MenuItem};
+    vec![MenuEntry::Item(
+        MenuItem::new(
+            command_action("project.toggleCompactPackages"),
+            "Compact Middle Packages",
+        )
+        .checked(cx.state.project_view.compact_packages),
+    )]
+}
+
+/// The New menu of the Project header: the `New` submenu of the File menu.
+pub fn project_new_menu(cx: &ViewCx) -> Vec<archipel_kit_model::MenuEntry> {
+    use archipel_kit_model::MenuEntry;
+    let bar = crate::main_menu::main_menu(cx);
+    for header in &bar.headers {
+        for entry in &header.entries {
+            if let MenuEntry::Item(item) = entry
+                && item.id == "NewElementInMenuGroup"
+                && let Some(sub) = &item.submenu
+            {
+                return sub.clone();
+            }
+        }
+    }
+    Vec::new()
 }

@@ -16,26 +16,19 @@ pub mod chrome;
 pub mod context_menu;
 pub mod dispatch;
 
-
 pub mod cx;
 
-
-pub mod icons;
 pub mod header;
+pub mod icons;
 pub mod keys;
 pub mod main_menu;
 pub mod toolbar;
-
 
 pub mod status;
 pub mod stripes;
 pub mod tabs;
 
-
-
-
 pub use cx::{Caps, UiData, ViewCx};
 
-
-pub use dispatch::{Effect, Event, Popup, Request, dispatch};
 pub use chrome::Chrome;
+pub use dispatch::{Effect, Event, Popup, Request, dispatch};

@@ -199,7 +199,10 @@ fn action_entry(cx: &ViewCx, id: &str, label: &str) -> Option<MenuEntry> {
     if implemented && !presentation.visible {
         return None;
     }
-    let label = presentation.text.clone().unwrap_or_else(|| label.to_owned());
+    let label = presentation
+        .text
+        .clone()
+        .unwrap_or_else(|| label.to_owned());
     let mut item = MenuItem::new(id, label);
     item.mnemonic = mnemonic_of(id).filter(|at| *at < item.label.chars().count());
     item.shortcut = cx.shortcut(id);
@@ -298,7 +301,10 @@ pub fn main_menu(cx: &ViewCx) -> MenuBar {
             if !presentation.visible {
                 continue;
             }
-            let text = presentation.text.clone().unwrap_or_else(|| spec.label.clone());
+            let text = presentation
+                .text
+                .clone()
+                .unwrap_or_else(|| spec.label.clone());
             let mut entry = MenuItem::new(spec.id.clone(), text);
             entry.enabled = presentation.enabled;
             entry.shortcut = command_shortcut(cx, spec);

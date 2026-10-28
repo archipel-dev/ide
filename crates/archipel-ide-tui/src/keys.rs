@@ -5,10 +5,6 @@ use archipel_ide_keymap::{KeyStroke, Keymap as IdeKeymap, Shortcut as IdeShortcu
 use archipel_kit::action_system::{Keymap, Os, Shortcut};
 use archipel_kit_tui::input::{KeyCode, KeyEvent, KeyModifiers};
 
-/// The leader strokes of the terminal fallbacks: a binding of the IDE keymap that starts with
-/// one of them would hide the fallbacks, so it is not layered in.
-const LEADERS: [&str; 2] = ["ctrl K", "ctrl W"];
-
 fn key_name(key: &str) -> Option<String> {
     Some(match key {
         "Page Up" => "PgUp".to_owned(),
@@ -42,10 +38,11 @@ pub fn stroke_text(stroke: &KeyStroke) -> Option<String> {
     Some(parts.join(" "))
 }
 
-/// The kit keymap for the terminal: the kit's defaults and fallbacks, then every keyboard
-/// shortcut of the IDE keymap for the actions `knows` accepts.
+/// The kit keymap for the terminal: the kit's defaults, every keyboard shortcut of the IDE
+/// keymap for the actions `knows` accepts, then the chords of the single leader
+/// ([`archipel_ide_view::keys::CHORDS`]); a chord never replaces a GUI shortcut.
 pub fn build_keymap(os: Os, ide: &IdeKeymap, knows: impl Fn(&str) -> bool) -> Keymap {
-    let mut keymap = archipel_kit_tui::input::terminal_keymap(os);
+    let mut keymap = Keymap::default_for(os);
     for (action, shortcuts) in ide.bindings() {
         if action.starts_with('$') || !knows(action) {
             continue;
@@ -64,24 +61,24 @@ pub fn build_keymap(os: Os, ide: &IdeKeymap, knows: impl Fn(&str) -> bool) -> Ke
             if texts.is_empty() || texts.len() > 2 {
                 continue;
             }
-            if LEADERS.contains(&texts[0].as_str()) {
-                continue;
-            }
             if let Some(parsed) = Shortcut::parse(&texts.join(" > ")) {
                 keymap.add_shortcut(action, parsed);
             }
         }
     }
-    // Single strokes of the terminal fallbacks: Ctrl+W (Extend Selection) is the window leader,
-    // Ctrl+/ arrives as Ctrl+7 and Ctrl+Backspace as Ctrl+H.
+    let leader = archipel_ide_view::keys::leader_for(ide);
+    // Single strokes a legacy terminal sends as other keys: Ctrl+/ arrives as Ctrl+7 and
+    // Ctrl+Backspace as Ctrl+H.
     for (action, keys) in SINGLE_FALLBACKS {
         if let Some(parsed) = Shortcut::parse(keys) {
             keymap.add_shortcut(action, parsed);
         }
     }
-    // Ctrl+K leads the terminal fallbacks; Commit, the GUI's Ctrl+K, is Ctrl+K then C.
-    for (action, keys) in FALLBACKS {
-        if let Some(parsed) = Shortcut::parse(&format!("ctrl K > {keys}")) {
+    for (action, keys) in archipel_ide_view::keys::CHORDS {
+        if !knows(action) && !action.starts_with('$') {
+            continue;
+        }
+        if let Some(parsed) = Shortcut::parse(&format!("{leader} > {keys}")) {
             keymap.add_shortcut(action, parsed);
         }
     }
@@ -89,23 +86,9 @@ pub fn build_keymap(os: Os, ide: &IdeKeymap, knows: impl Fn(&str) -> bool) -> Ke
 }
 
 /// Single strokes for editor actions whose GUI shortcut a legacy terminal cannot send.
-pub const SINGLE_FALLBACKS: [(&str, &str); 4] = [
-    ("EditorSelectWord", "alt Up"),
-    ("EditorUnSelectWord", "alt Down"),
+pub const SINGLE_FALLBACKS: [(&str, &str); 2] = [
     ("CommentByLineComment", "ctrl 7"),
     ("EditorDeleteToWordStart", "ctrl H"),
-];
-
-/// Chords for the actions whose GUI shortcut a legacy terminal cannot send (Ctrl+Shift+letter,
-/// Ctrl+Alt+arrow, Ctrl+Space on some terminals). They also work with the kitty protocol.
-pub const FALLBACKS: [(&str, &str); 7] = [
-    ("CheckinProject", "C"),
-    ("GotoFile", "N"),
-    ("SearchEverywhere", "E"),
-    ("Back", "["),
-    ("Forward", "]"),
-    ("CodeCompletion", "Space"),
-    ("GotoDeclaration", "B"),
 ];
 
 /// The bytes a terminal session receives for `key`, `None` for keys it has no code for.
@@ -219,7 +202,13 @@ mod tests {
             "{:?}",
             text("Run")
         );
-        assert!(text("CheckinProject").iter().any(|t| t.contains("Ctrl+K")));
+        assert!(
+            text("SearchEverywhere")
+                .iter()
+                .any(|t| t.contains("Ctrl+\\")),
+            "{:?}",
+            text("SearchEverywhere")
+        );
     }
 
     #[test]

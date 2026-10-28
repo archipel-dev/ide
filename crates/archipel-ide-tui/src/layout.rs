@@ -1,125 +1,25 @@
-//! Drawing and mouse/keyboard routing of the NvChad layout.
+//! Drawing and mouse routing of the GUI-faithful layout: the chrome from the view crate, the
+//! tool window bodies, the editor column and the welcome screen.
 
-use crate::app::{
-    COMMIT, DASH, EDITOR, FIND, PROBLEMS, RUN, STATUS, TAB_BUTTONS, TABS, TERMINAL, TREE,
-    TreeEntry, TuiApp,
-};
-use archipel_ide_actions::ActionPlace;
-use archipel_ide_core::ProblemCounts;
+use crate::app::{COMMIT, EDITOR, FIND, PROBLEMS, RUN, TERMINAL, TREE, TreeEntry, TuiApp};
+use crate::shell::Focus;
 use archipel_ide_core::project_view::{RowKind, TreeRow};
-use archipel_kit::wm::{ToolWindow, ToolWindowAnchor};
+use archipel_ide_core::{Anchor, ToolWindow};
+use archipel_ide_view::{Caps, Chrome};
 use archipel_kit_tui::collections::{TreeEvent, TreeNode};
-use archipel_kit_tui::components::{
-    Diagnostics, GitStatus, Pane, PaneKind, RowIcon, RowIconKey, StatusBar, StatusSlot,
-};
-use archipel_kit_tui::dashboard::{Dashboard, DashboardButton};
-use archipel_kit_tui::editor::{EditorComponent, cursor_position};
+use archipel_kit_tui::components::{RowIcon, RowIconKey};
+use archipel_kit_tui::editor::EditorComponent;
 use archipel_kit_tui::input::Event;
 use archipel_kit_tui::overlay::draw_which_key;
 use archipel_kit_tui::ratatui::buffer::Buffer;
 use archipel_kit_tui::ratatui::layout::Rect;
-use archipel_kit_tui::ratatui::widgets::Widget;
+use archipel_kit_tui::ratatui::style::Style;
 use archipel_kit_tui::runtime::Runtime;
-use archipel_kit_tui::statusbar::{StatusBarControl, StatusEvent};
-use archipel_kit_tui::tabs::TabsEvent;
-use archipel_kit_tui::tooltip::Tooltip;
-use archipel_kit_tui::workbench::{Workbench, WorkbenchFocus};
-use archipel_kit_tui::{Glyph, Language, Mode};
-use serde_json::{Value, json};
+use archipel_kit_tui::{Glyph, Language};
+use serde_json::json;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-
-/// The tool windows around the editor.
-pub fn workbench() -> Workbench {
-    let window = |id: &str, title: &str, glyph: Glyph, anchor, number: Option<u8>| {
-        let mut window = ToolWindow::new(id, title, glyph, anchor);
-        window.activate_number = number;
-        window
-    };
-    Workbench::new(vec![
-        window(
-            "project",
-            "Project",
-            Glyph::Project,
-            ToolWindowAnchor::Left,
-            Some(1),
-        ),
-        window(
-            "commit",
-            "Commit",
-            Glyph::Commit,
-            ToolWindowAnchor::Left,
-            None,
-        ),
-        window(
-            "find",
-            "Find",
-            Glyph::Search,
-            ToolWindowAnchor::Bottom,
-            Some(3),
-        ),
-        window("run", "Run", Glyph::Run, ToolWindowAnchor::Bottom, Some(4)),
-        window(
-            "problems",
-            "Problems",
-            Glyph::Problems,
-            ToolWindowAnchor::Bottom,
-            Some(6),
-        ),
-        window(
-            "terminal",
-            "Terminal",
-            Glyph::Terminal,
-            ToolWindowAnchor::Bottom,
-            None,
-        ),
-    ])
-}
-
-/// The status line's control with its tooltips.
-pub fn status_control() -> StatusBarControl {
-    StatusBarControl::new(STATUS)
-        .tooltip(
-            StatusSlot::Git,
-            Tooltip::new("Git Branch").description("Click to open the Commit window"),
-        )
-        .tooltip(StatusSlot::Cursor, Tooltip::new("Caret Position"))
-        .tooltip(
-            StatusSlot::Cwd,
-            Tooltip::new("Toggle Project").shortcut("Alt+1"),
-        )
-        .tooltip(
-            StatusSlot::Diagnostics,
-            Tooltip::new("Problems").shortcut("Alt+6"),
-        )
-        .tooltip(
-            StatusSlot::Run,
-            Tooltip::new("Run Configuration")
-                .description("Click to choose; Shift+F10 runs it")
-                .shortcut("Alt+Shift+F10"),
-        )
-}
-
-/// The dashboard shown while no file is open.
-pub fn dashboard() -> Dashboard {
-    Dashboard::new(
-        DASH,
-        vec![
-            "  ▄▀█ █▀█ █▀▀ █ █ █ █▀▀ █   ".into(),
-            "  █▀█ █▀▄ █▄▄ █▀█ █ █▀▀ █▄▄ ".into(),
-            "".into(),
-            "       the terminal IDE".into(),
-        ],
-        vec![
-            DashboardButton::new(Glyph::Search, "Search Everywhere", "Shift Shift", 'e'),
-            DashboardButton::new(Glyph::File, "Go to File", "Ctrl Shift N", 'f'),
-            DashboardButton::new(Glyph::Project, "Project", "Alt 1", 'p'),
-            DashboardButton::new(Glyph::FolderOpen, "Open Folder", "", 'o'),
-            DashboardButton::new(Glyph::Close, "Quit", "Ctrl K Q", 'q'),
-        ],
-    )
-}
 
 /// The language logo of a file, a plain file icon otherwise.
 pub fn file_icon_key(path: &Path) -> RowIconKey {
@@ -175,6 +75,15 @@ pub fn file_icon(path: &Path) -> RowIcon {
     file_icon_key(path).into()
 }
 
+/// The view crate's keyboard capabilities of the runtime.
+pub(crate) fn view_caps(rt: &Runtime) -> Caps {
+    Caps {
+        kitty: rt.caps.kitty,
+        mac: rt.caps.os.is_mac(),
+        super_reported: rt.caps.super_reported,
+    }
+}
+
 impl TuiApp {
     /// Rebuilds the tree nodes when the core's rows changed.
     pub(crate) fn refresh_tree(&mut self) {
@@ -200,114 +109,265 @@ impl TuiApp {
         self.tree_source = Some(rows);
     }
 
+    /// The theme and glyph mode follow the settings, live.
+    fn sync_theme(&mut self, rt: &mut Runtime) {
+        let name = crate::theme::setting(self.ide.state());
+        if name != self.theme_name || self.ascii != rt.look.ascii {
+            self.theme_name = name.clone();
+            rt.look = crate::theme::look(&name, self.ascii);
+        }
+    }
+
+    /// The facts only this frontend knows, for the view builders.
+    fn sync_ui_data(&mut self, rt: &Runtime) {
+        let caps = view_caps(rt);
+        self.ide.caps = caps;
+        self.ide.data.focused_window = self.shell.focused_tool();
+        // Read-only is probed at most once a second: the builders do no I/O.
+        let path = self
+            .ide
+            .state()
+            .active_doc()
+            .map(|document| self.ide.state().absolute_path(&document.path));
+        match &path {
+            Some(path) => {
+                let stale = self
+                    .read_only
+                    .as_ref()
+                    .is_none_or(|(known, at, _)| known != path || rt.now - at >= 1.0);
+                if stale {
+                    let value = std::fs::metadata(path).is_ok_and(|m| m.permissions().readonly());
+                    self.read_only = Some((path.clone(), rt.now, value));
+                }
+                self.ide.data.read_only = self.read_only.as_ref().is_some_and(|(_, _, v)| *v);
+            }
+            None => self.ide.data.read_only = false,
+        }
+        // The declarations around the caret, from the structure of the active document.
+        let crumbs = match self.ide.state().active_doc() {
+            Some(document) => {
+                let revision = document.text.revision();
+                let fresh = self
+                    .crumb_cache
+                    .as_ref()
+                    .is_some_and(|(p, r, _)| *p == document.path && *r == revision);
+                if !fresh {
+                    let items = Arc::new(document.analysis.structure());
+                    self.crumb_cache = Some((document.path.clone(), revision, items));
+                }
+                self.crumb_cache
+                    .as_ref()
+                    .map(|(_, _, items)| archipel_ide_view::status::code_crumbs(document, items))
+                    .unwrap_or_default()
+            }
+            None => Vec::new(),
+        };
+        self.ide.data.code_crumbs = crumbs;
+    }
+
     /// Draws everything.
     pub(crate) fn draw_all(&mut self, rt: &mut Runtime, area: Rect, buf: &mut Buffer) {
+        self.sync_theme(rt);
         let look = rt.look.clone();
-        let p = look.palette;
-        Pane::new(&look).kind(PaneKind::Editor).render(area, buf);
-        if area.height < 4 || area.width < 20 {
+        let colors = look.theme.colors;
+        let island = look.over(colors.island, colors.island);
+        for y in area.top()..area.bottom() {
+            for x in area.left()..area.right() {
+                buf[(x, y)].set_symbol(" ").set_style(
+                    Style::default()
+                        .bg(island)
+                        .fg(look.over(colors.text, colors.island)),
+                );
+            }
+        }
+        let (left, right, bottom) = {
+            let layout = self.ide.state().tool_windows();
+            (
+                layout.visible(Anchor::Left),
+                layout.visible(Anchor::Right),
+                layout.visible(Anchor::Bottom),
+            )
+        };
+        let geo = self.shell.compute(area, left, right, bottom).clone();
+        if geo.too_small {
+            let text = format!(
+                "Terminal too small: need {}x{}, have {}x{}",
+                crate::shell::MIN_SIZE.0,
+                crate::shell::MIN_SIZE.1,
+                area.width,
+                area.height
+            );
+            crate::draw::put(
+                buf,
+                area,
+                area.x,
+                area.y,
+                &text,
+                Style::default()
+                    .fg(look.over(colors.text, colors.island))
+                    .bg(island),
+            );
             return;
         }
-        let status_row = Rect::new(area.x, area.bottom() - 1, area.width, 1);
-        let work = Rect::new(area.x, area.y, area.width, area.height - 1);
-        let areas = self.wb.draw(rt, work, buf);
+        self.sync_ui_data(rt);
+        let title = {
+            let state = self.ide.state();
+            let project = archipel_ide_view::toolbar::project_name(&self.ide.cx());
+            archipel_ide_view::status::window_title(
+                &project,
+                state.active_doc().map(|doc| doc.path.as_path()),
+            )
+        };
+        rt.title = Some(title);
+        let built = Chrome::build_with(&self.ide.cx(), self.chrome.menu_expanded());
+        self.chrome.built = Some(built.clone());
+
+        // Row 0 and the stripes.
+        self.chrome
+            .draw_toolbar(rt, &built.toolbar, &built.menu, geo.toolbar, buf);
+        self.chrome.left.draw(rt, &built.left, geo.left_stripe, buf);
+        self.chrome
+            .right
+            .draw(rt, &built.right, geo.right_stripe, buf);
+
+        // Tool windows: header and body.
+        let mut tools: Vec<(ToolWindow, Rect)> = Vec::new();
+        for pane in [geo.left, geo.right, geo.bottom].into_iter().flatten() {
+            let focused = self.shell.focus == Focus::Tool(pane.window);
+            if let Some((_, header)) = built.headers.iter().find(|(w, _)| *w == pane.window) {
+                let mut header = header.clone();
+                header.focused = focused;
+                match pane.window.anchor() {
+                    Anchor::Left => self.chrome.header_left.draw(rt, &header, pane.header, buf),
+                    Anchor::Right => self.chrome.header_right.draw(rt, &header, pane.header, buf),
+                    Anchor::Bottom => self
+                        .chrome
+                        .header_bottom
+                        .draw(rt, &header, pane.header, buf),
+                }
+            }
+            tools.push((pane.window, pane.body));
+        }
+        self.shell.register(rt);
+        // The splitter columns.
+        let sep = look.over(colors.separator, colors.island);
+        for (_, rect) in &geo.splitters {
+            if rect.width == 1 {
+                for y in rect.top()..rect.bottom() {
+                    crate::draw::put(
+                        buf,
+                        area,
+                        rect.x,
+                        y,
+                        "│",
+                        Style::default().fg(sep).bg(island),
+                    );
+                }
+            }
+        }
+        for (window, body) in tools {
+            self.draw_tool_body(rt, window, body, buf);
+        }
         self.sync_focus(rt);
-        if let Some(body) = areas.tool("project") {
-            self.tree
-                .show(rt, TREE, body, &self.tree_nodes, p.darker_black, buf);
-            self.ide.data.tree_selection = self
-                .tree
-                .selected_path()
-                .and_then(|path| self.tree_map.get(path))
-                .and_then(|entry| entry.path.clone())
-                .filter(|path| !path.is_absolute());
-        }
-        if let Some(body) = areas.tool("commit") {
-            self.draw_commit(rt, body, buf);
-        }
-        if let Some(body) = areas.tool("run") {
-            self.draw_run(rt, body, buf);
-        }
-        if let Some(body) = areas.tool("problems") {
-            self.draw_problems(rt, body, buf);
-        }
-        if let Some(body) = areas.tool("find") {
-            self.draw_find(rt, body, buf);
-        }
-        if let Some(body) = areas.tool("terminal") {
-            self.draw_terminal(rt, body, buf);
-        }
-        self.draw_editor_area(rt, areas.editor, buf);
-        self.draw_status(rt, status_row, buf);
+
+        // The editor column.
+        self.chrome.tabs.draw(rt, &built.tabs, geo.tabs, buf);
+        self.draw_editor_area(rt, geo.editor, buf);
+        // The status bar.
+        self.chrome.status.draw(rt, &built.status, geo.status, buf);
+
         self.layers.draw(rt, area, buf);
+        self.chrome.draw_popups(rt, buf);
         draw_which_key(rt, area, buf, &|id| {
             archipel_ide_actions::Catalog::shared().label(id)
         });
+    }
+
+    fn draw_tool_body(
+        &mut self,
+        rt: &mut Runtime,
+        window: ToolWindow,
+        body: Rect,
+        buf: &mut Buffer,
+    ) {
+        let p = rt.look.palette;
+        match window {
+            ToolWindow::Project => {
+                self.tree
+                    .show(rt, TREE, body, &self.tree_nodes, p.black, buf);
+                self.ide.data.tree_selection = self
+                    .tree
+                    .selected_path()
+                    .and_then(|path| self.tree_map.get(path))
+                    .and_then(|entry| entry.path.clone())
+                    .filter(|path| !path.is_absolute());
+            }
+            ToolWindow::Commit => self.draw_commit(rt, body, buf),
+            ToolWindow::Build => self.draw_run(rt, body, buf),
+            ToolWindow::Problems => self.draw_problems(rt, body, buf),
+            ToolWindow::Find => self.draw_find(rt, body, buf),
+            ToolWindow::Terminal => self.draw_terminal(rt, body, buf),
+            other => self.draw_unavailable(rt, other, body, buf),
+        }
+    }
+
+    /// The body of a window without a terminal rendering yet: says so and names the fallback
+    /// (TUI-GUI-076).
+    fn draw_unavailable(
+        &mut self,
+        rt: &mut Runtime,
+        window: ToolWindow,
+        body: Rect,
+        buf: &mut Buffer,
+    ) {
+        let look = rt.look.clone();
+        let c = look.theme.colors;
+        let style = Style::default()
+            .fg(look.over(c.text_secondary, c.island))
+            .bg(look.over(c.island, c.island));
+        let lines = [
+            format!("{} is not available in the terminal yet.", window.title()),
+            "Open it in the window: archipel-ide without --tui.".to_owned(),
+        ];
+        for (i, line) in lines.iter().enumerate() {
+            crate::draw::put(buf, body, body.x + 1, body.y + 1 + i as u16, line, style);
+        }
+    }
+
+    /// Makes the widget of the focused part the focused widget.
+    fn sync_focus(&self, rt: &mut Runtime) {
+        if !self.layers.is_empty() {
+            return;
+        }
+        let id = match self.shell.focus {
+            Focus::Editor => EDITOR,
+            Focus::Tool(window) => match window {
+                ToolWindow::Project => TREE,
+                ToolWindow::Commit => COMMIT,
+                ToolWindow::Build => RUN,
+                ToolWindow::Problems => PROBLEMS,
+                ToolWindow::Find => FIND,
+                ToolWindow::Terminal => TERMINAL,
+                _ => EDITOR,
+            },
+        };
+        if !rt.focused(id) {
+            rt.focus.focus(id);
+        }
     }
 
     fn draw_editor_area(&mut self, rt: &mut Runtime, editor: Rect, buf: &mut Buffer) {
         if editor.height < 2 || editor.width < 5 {
             return;
         }
-        let look = rt.look.clone();
-        let p = look.palette;
-        let bar = Rect::new(editor.x, editor.y, editor.width, 1);
-        let buttons_w = 7u16.min(bar.width);
-        let tabs_area = Rect::new(bar.x, bar.y, bar.width.saturating_sub(buttons_w), 1);
-        self.tab_control.show(
-            rt,
-            &mut self.tab_state,
-            &self.tabs,
-            tabs_area,
-            p.darker_black,
-            buf,
-        );
-        let bx = bar.right().saturating_sub(buttons_w);
-        self.buttons_rect = Rect::new(bx, bar.y, buttons_w, 1);
-        for (i, glyph, color, tip) in [
-            (
-                0u16,
-                if p.dark { Glyph::Sun } else { Glyph::Moon },
-                p.yellow,
-                "Switch Theme",
-            ),
-            (1, Glyph::Close, p.red, "Close All Tabs"),
-        ] {
-            let r = Rect::new(bx + i * 3 + 1, bar.y, 3, 1).intersection(bar);
-            archipel_kit_tui::testing::put_text(
-                buf,
-                bar,
-                r.x,
-                r.y,
-                &look.glyph(glyph),
-                color,
-                p.darker_black,
-            );
-            rt.clickable(TAB_BUTTONS.with(u64::from(i)), r);
-            rt.tooltip
-                .offer(TAB_BUTTONS.with(u64::from(i)), r, Tooltip::new(tip));
-        }
-        let body = Rect::new(editor.x, editor.y + 1, editor.width, editor.height - 1);
         match self.active_view() {
-            None => {
-                self.dashboard.show(rt, &look, body, buf);
-                if !self.ide.state().has_project() {
-                    let text = "No project is open: press O to open a folder";
-                    archipel_kit_tui::testing::put_text(
-                        buf,
-                        body,
-                        body.x + body.width.saturating_sub(text.chars().count() as u16) / 2,
-                        body.bottom().saturating_sub(2),
-                        text,
-                        p.grey_fg,
-                        p.black,
-                    );
-                }
-            }
+            None => self.draw_welcome(rt, editor, buf),
             Some(index) => {
+                // The last column is the error stripe.
+                let body = Rect::new(editor.x, editor.y, editor.width - 1, editor.height);
                 let view = &mut self.views[index];
                 let crate::view::DocView {
-                    editor,
+                    editor: model,
                     state,
                     highlighter,
                     language,
@@ -315,7 +375,7 @@ impl TuiApp {
                     follow,
                     ..
                 } = view;
-                let mut out = EditorComponent::new(EDITOR, editor)
+                let mut out = EditorComponent::new(EDITOR, model)
                     .highlighter(highlighter)
                     .language(language)
                     .highlights(highlights)
@@ -326,9 +386,9 @@ impl TuiApp {
                 if *follow {
                     *follow = false;
                     if out.caret_cell.is_none() {
-                        let line = editor.document.line_number(editor.carets.primary().offset);
+                        let line = model.document.line_number(model.carets.primary().offset);
                         state.scroll_to_line(line);
-                        out = EditorComponent::new(EDITOR, editor)
+                        out = EditorComponent::new(EDITOR, model)
                             .highlighter(highlighter)
                             .language(language)
                             .highlights(highlights)
@@ -339,229 +399,235 @@ impl TuiApp {
                 }
                 self.popups.caret_cell = out.caret_cell;
                 self.popups.editor_area = body;
-                // What Page Up/Down and the page-relative moves of the input layer need.
                 let (page, top) = (out.visible_lines.len().max(1), out.visible_lines.start);
                 if let Some(document) = self.ide.state_mut().document_mut(index) {
                     document.input.page_lines = page;
                     document.input.top_line = top;
                 }
+                self.draw_error_stripe(
+                    rt,
+                    index,
+                    Rect::new(editor.right() - 1, editor.y, 1, editor.height),
+                    buf,
+                );
                 self.draw_popups(rt, buf);
             }
         }
     }
 
-    fn draw_status(&mut self, rt: &mut Runtime, row: Rect, buf: &mut Buffer) {
+    /// The error stripe (TUI-GUI-093): the inspection widget in its top cell and a tick per
+    /// row bucket, error beating warning; a click moves the caret to the first problem of the
+    /// bucket.
+    fn draw_error_stripe(&mut self, rt: &mut Runtime, index: usize, rect: Rect, buf: &mut Buffer) {
         let look = rt.look.clone();
-        let p = look.palette;
-        let state = self.ide.state();
-        let view = self.active_view().and_then(|i| self.views.get(i));
-        let (cursor, file) = match (view, state.active_file()) {
-            (Some(view), Some(path)) => {
-                let (line, column) = cursor_position(&view.editor);
-                (
-                    format!("Ln {line}, Col {column}"),
-                    Some((
-                        file_icon(path),
-                        path.file_name()
-                            .map(|name| name.to_string_lossy().into_owned())
-                            .unwrap_or_default(),
-                    )),
-                )
-            }
-            _ => ("Ln -, Col -".to_owned(), None),
-        };
-        let git = state
-            .git_status()
-            .map(|status| {
-                use archipel_ide_git::ChangeKind;
-                let count = |wanted: &[ChangeKind]| {
-                    status
-                        .changes
-                        .iter()
-                        .filter(|c| wanted.contains(&c.kind))
-                        .count() as u32
-                };
-                GitStatus {
-                    branch: status.branch.clone(),
-                    added: count(&[ChangeKind::Added, ChangeKind::Untracked]),
-                    changed: count(&[
-                        ChangeKind::Modified,
-                        ChangeKind::Renamed,
-                        ChangeKind::Conflicted,
-                    ]),
-                    removed: count(&[ChangeKind::Deleted]),
-                }
-            })
-            .unwrap_or_default();
-        let counts = view
+        let c = look.theme.colors;
+        let e = look.theme.editor;
+        let bg = look.over(c.island, c.island);
+        let problems: Vec<archipel_ide_core::Problem> = self
+            .views
+            .get(index)
             .and_then(|view| view.problems())
-            .map(|problems| ProblemCounts::of(problems.iter()))
+            .map(<[_]>::to_vec)
             .unwrap_or_default();
-        let index_text = {
-            let status = state.index_status();
-            (status.phase != archipel_ide_index::Phase::Idle || status.dumb)
-                .then(|| status.summary())
-                .flatten()
+        self.stripe_buckets.clear();
+        let total_lines = self
+            .ide
+            .state()
+            .document(index)
+            .map_or(1, |document| document.text.len_lines().max(1));
+        let worst = problems.iter().map(|p| rank(p.severity)).max();
+        let (glyph, color) = match worst {
+            None => (Glyph::Success, look.over(c.success, c.island)),
+            Some(2) => (Glyph::Error, look.over(c.error, c.island)),
+            Some(1) => (Glyph::Warning, look.over(c.warning, c.island)),
+            Some(_) => (Glyph::WeakWarning, look.over(c.text_placeholder, c.island)),
         };
-        let toolchain_text = state
-            .toolchains()
-            .read()
-            .progress()
-            .map(|(text, fraction)| match fraction {
-                Some(fraction) => format!("{text} {}%", (fraction * 100.0).round() as u32),
-                None => text,
-            });
-        let busy_text = if self.panels.running {
-            Some("Running…".to_owned())
-        } else {
-            toolchain_text.or(index_text)
-        };
-        let center = rt
-            .hint
-            .clone()
-            .or_else(|| view.and_then(|v| v.state.hint(rt.now).map(str::to_owned)))
-            .or(busy_text)
-            .or_else(|| (!state.status().is_empty()).then(|| state.status().to_owned()))
-            .unwrap_or_default();
-        let project = state
-            .project()
-            .and_then(|project| project.root().file_name())
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let lsp = state
-            .lsp()
-            .servers()
-            .first()
-            .map(|server| server.language.clone())
-            .unwrap_or_default();
-        let config = state
-            .run_widget_label()
-            .unwrap_or_else(|| "no configuration".to_owned());
-        let mode = self.mode(rt);
-        let editor_mode = (self.wb.focused_tool().is_none() && self.layers.is_empty())
-            .then(|| {
-                view.map(|v| {
-                    if v.editor.carets.has_selection() {
-                        Mode::Visual
-                    } else {
-                        Mode::Insert
-                    }
-                })
-            })
-            .flatten();
-        let mode = editor_mode.unwrap_or(mode);
-        let mut bar = StatusBar::new(&look)
-            .mode(mode.label(), mode.color(&p))
-            .git(&git)
-            .center(&center)
-            .diagnostics(Diagnostics {
-                errors: counts.errors as u32,
-                warnings: counts.warnings as u32,
-                hints: counts.weak_warnings as u32,
-                info: 0,
-            })
-            .lsp(&lsp)
-            .run(&config, self.panels.running)
-            .cwd(&project)
-            .cursor(&cursor);
-        if let Some((icon, name)) = &file {
-            bar = bar.file(*icon, name);
-        }
-        self.status.show(rt, bar, row, buf);
-    }
-
-    fn mode(&self, _rt: &Runtime) -> Mode {
-        if !self.layers.is_empty() {
-            return Mode::Command;
-        }
-        match &self.wb.focus {
-            WorkbenchFocus::Editor => Mode::Normal,
-            WorkbenchFocus::Tool(id) if id == "run" || id == "terminal" => Mode::Terminal,
-            WorkbenchFocus::Tool(_) => Mode::Normal,
-        }
-    }
-
-    /// Makes the widget of the focused workbench part the focused widget.
-    fn sync_focus(&self, rt: &mut Runtime) {
-        if !self.layers.is_empty() {
+        crate::draw::put(
+            buf,
+            rect,
+            rect.x,
+            rect.y,
+            &look.glyph(glyph),
+            Style::default().fg(color).bg(bg),
+        );
+        let rows = rect.height.saturating_sub(1) as usize;
+        if rows == 0 {
             return;
         }
-        let id = match &self.wb.focus {
-            WorkbenchFocus::Editor => EDITOR,
-            WorkbenchFocus::Tool(tool) => match tool.as_str() {
-                "project" => TREE,
-                "commit" => COMMIT,
-                "run" => RUN,
-                "problems" => PROBLEMS,
-                "find" => FIND,
-                _ => TERMINAL,
-            },
-        };
-        if !rt.focused(id) && !rt.focused(TABS) {
-            rt.focus.focus(id);
+        let mut buckets: Vec<Option<(u8, usize)>> = vec![None; rows];
+        for problem in &problems {
+            let row = (problem.line * rows / total_lines).min(rows - 1);
+            let rank = rank(problem.severity);
+            match &mut buckets[row] {
+                Some((best, line)) if *best >= rank => {
+                    let _ = line;
+                }
+                slot => *slot = Some((rank, problem.line)),
+            }
+        }
+        for (i, bucket) in buckets.iter().enumerate() {
+            if let Some((rank, line)) = bucket {
+                let color = match rank {
+                    2 => look.over(e.error_stripe, c.island),
+                    1 => look.over(e.warning_stripe, c.island),
+                    _ => look.over(c.text_placeholder, c.island),
+                };
+                let y = rect.y + 1 + i as u16;
+                crate::draw::put(buf, rect, rect.x, y, "▪", Style::default().fg(color).bg(bg));
+                rt.clickable(
+                    crate::app::STRIPE_TICK.with(i as u64),
+                    Rect::new(rect.x, y, 1, 1),
+                );
+                self.stripe_buckets.push((i as u64, *line));
+            }
+        }
+    }
+
+    /// The Welcome screen (no project open): Open, New Project, the recent projects as rows.
+    fn draw_welcome(&mut self, rt: &mut Runtime, area: Rect, buf: &mut Buffer) {
+        let look = rt.look.clone();
+        let c = look.theme.colors;
+        let bg = look.over(c.island, c.island);
+        let strong = Style::default()
+            .fg(look.over(c.text_strong, c.island))
+            .bg(bg)
+            .add_modifier(archipel_kit_tui::ratatui::style::Modifier::BOLD);
+        let normal = Style::default().fg(look.over(c.text, c.island)).bg(bg);
+        let dim = Style::default()
+            .fg(look.over(c.text_secondary, c.island))
+            .bg(bg);
+        self.welcome_rows.clear();
+        let mut y = area.y + 2;
+        let x = area.x + 3;
+        crate::draw::put(buf, area, x, y, "Welcome to Archipel IDE", strong);
+        y += 2;
+        let has_project = self.ide.state().has_project();
+        let mut rows: Vec<(String, String, Option<archipel_ide_view::Effect>)> = Vec::new();
+        if !has_project {
+            rows.push((
+                "Open…".into(),
+                "Open a project folder".into(),
+                Some(archipel_ide_view::Effect::Action {
+                    id: "OpenFile".into(),
+                    place: archipel_ide_actions::ActionPlace::MainMenu,
+                }),
+            ));
+            rows.push((
+                "New Project…".into(),
+                "Create a project".into(),
+                Some(archipel_ide_view::Effect::Action {
+                    id: "NewProject".into(),
+                    place: archipel_ide_actions::ActionPlace::MainMenu,
+                }),
+            ));
+            let recent: Vec<_> = self.ide.state().recent_projects().read().entries().to_vec();
+            for entry in recent.iter().take(8) {
+                rows.push((
+                    entry.name.clone(),
+                    entry.path.display().to_string(),
+                    Some(archipel_ide_view::Effect::Request(
+                        archipel_ide_view::Request::OpenProject(entry.path.display().to_string()),
+                    )),
+                ));
+            }
+        } else {
+            let lines = [
+                ("Search Everywhere", "SearchEverywhere"),
+                ("Project View", "ActivateProjectToolWindow"),
+                ("Find in Files", "FindInPath"),
+                ("Terminal", "ActivateTerminalToolWindow"),
+            ];
+            for (label, action) in lines {
+                let shortcut = self.ide.shortcut_label(action).unwrap_or_default();
+                crate::draw::put(buf, area, x, y, label, normal);
+                crate::draw::put(buf, area, x + 24, y, &shortcut, dim);
+                y += 1;
+            }
+            return;
+        }
+        for (i, (label, detail, effect)) in rows.into_iter().enumerate() {
+            let id = crate::app::WELCOME.with(i as u64);
+            let rect = Rect::new(x, y, area.width.saturating_sub(6).min(70), 1);
+            let hovered = rt.hovered() == Some(id);
+            let row_bg = if hovered {
+                look.over(c.row_hover, c.island)
+            } else {
+                bg
+            };
+            crate::draw::fill(buf, rect, Style::default().bg(row_bg));
+            crate::draw::put(
+                buf,
+                rect,
+                rect.x + 1,
+                y,
+                &label,
+                Style::default().fg(look.over(c.link, c.island)).bg(row_bg),
+            );
+            let at = rect.x + 3 + crate::draw::width(&label).max(16);
+            crate::draw::put(
+                buf,
+                rect,
+                at,
+                y,
+                &crate::draw::clip(&detail, rect.right().saturating_sub(at + 1)),
+                Style::default()
+                    .fg(look.over(c.text_secondary, c.island))
+                    .bg(row_bg),
+            );
+            rt.clickable(id, rect);
+            if let Some(effect) = effect {
+                self.welcome_rows.push((id, effect));
+            }
+            y += 1;
         }
     }
 
     /// Routes an event the actions did not take to the widgets.
     pub(crate) fn route(&mut self, rt: &mut Runtime, event: &Event) {
         self.sync_focus(rt);
-        match self.status.handle(rt, event) {
-            StatusEvent::Clicked(StatusSlot::Cwd, _) => {
-                self.command(rt, "toolwindow.toggle", json!({ "id": "project" }))
+        // A press focuses the part under the pointer.
+        if let Event::Mouse(_) = event
+            && let Some(pointer) = rt.pointer().copied()
+            && pointer.kind
+                == archipel_kit_tui::pointer::PointerKind::Down(
+                    archipel_kit_tui::input::MouseButton::Left,
+                )
+        {
+            let at = archipel_kit_tui::ratatui::layout::Position::new(pointer.x, pointer.y);
+            let geo = self.shell.geo.clone();
+            let hit = [geo.left, geo.right, geo.bottom]
+                .into_iter()
+                .flatten()
+                .find(|pane| pane.rect.contains(at));
+            if let Some(pane) = hit {
+                self.shell.focus_tool(pane.window);
+                if pane.window == ToolWindow::Terminal {
+                    self.ensure_terminal();
+                }
+            } else if geo.editor.contains(at) || geo.tabs.contains(at) {
+                self.shell.focus_editor();
             }
-            StatusEvent::Clicked(StatusSlot::Git, _) => {
-                self.command(rt, "toolwindow.toggle", json!({ "id": "commit" }))
+            for (id, line) in self.stripe_buckets.clone() {
+                if pointer.over(crate::app::STRIPE_TICK.with(id)) {
+                    self.command(
+                        rt,
+                        "editor.gotoLine",
+                        json!({ "line": line + 1, "column": 1 }),
+                    );
+                    self.shell.focus_editor();
+                }
             }
-            StatusEvent::Clicked(StatusSlot::Diagnostics, _) => {
-                self.command(rt, "toolwindow.toggle", json!({ "id": "problems" }))
+            for (id, effect) in self.welcome_rows.clone() {
+                if pointer.over(id) {
+                    self.apply_effects(rt, vec![effect]);
+                }
             }
-            StatusEvent::Clicked(StatusSlot::Run, _) => {
-                self.open_picker(rt, crate::picker::PickerKind::Configs, 0)
-            }
-            _ => {}
         }
         if let Event::Mouse(_) = event
             && let Some(pointer) = rt.pointer().copied()
+            && self.shell.handle_pointer(&pointer)
         {
-            if pointer.clicked(TAB_BUTTONS.with(0)) {
-                rt.look = next_theme(&rt.look);
-            } else if pointer.clicked(TAB_BUTTONS.with(1)) {
-                self.command(rt, "editor.closeAll", Value::Null);
-            }
-        }
-        let before = self.tab_state.selected;
-        match self
-            .tab_control
-            .handle(rt, &mut self.tab_state, &mut self.tabs, event)
-        {
-            TabsEvent::CloseRequested(index) => {
-                self.command(rt, "editor.close", json!({ "index": index }));
-            }
-            TabsEvent::Selected(index) => {
-                self.command(rt, "editor.activate", json!({ "index": index }));
-                self.focus_editor();
-            }
-            _ => {
-                if self.tab_state.selected != before {
-                    let index = self.tab_state.selected;
-                    self.command(rt, "editor.activate", json!({ "index": index }));
-                }
-            }
-        }
-        if self.views.is_empty()
-            && self.wb.focused_tool().is_none()
-            && let Some(button) = self.dashboard.handle(rt, event)
-        {
-            match button {
-                0 => self.open_picker(rt, crate::picker::PickerKind::SearchEverywhere, 0),
-                1 => self.open_picker(rt, crate::picker::PickerKind::Files, 0),
-                2 => {
-                    self.wb.toggle("project");
-                    self.sync_layout();
-                }
-                3 => self.run_action(rt, "OpenFile", ActionPlace::Keymap),
-                _ => self.run_action(rt, "Exit", ActionPlace::Keymap),
-            }
+            return;
         }
         // The project tree.
         match self.tree.handle(rt, TREE, event) {
@@ -659,15 +725,6 @@ fn is_find_key(key: &archipel_kit_tui::input::KeyEvent) -> bool {
     }
 }
 
-pub(crate) fn next_theme(look: &archipel_kit_tui::Look) -> archipel_kit_tui::Look {
-    let all = archipel_kit_tui::Theme::all();
-    let current = all
-        .iter()
-        .position(|theme| (theme.constructor)().name == look.theme.name)
-        .unwrap_or(0);
-    archipel_kit_tui::Look::new((all[(current + 1) % all.len()].constructor)())
-}
-
 /// The tree nodes for the core's rows: the project root with the rows nested by depth. A
 /// directory the core lists as collapsed gets a placeholder child so the tree draws a
 /// chevron; the tree's expanded set follows the core's.
@@ -759,6 +816,15 @@ fn build_tree(
         .icon(RowIcon::Folder(true));
     root_node.children = finished;
     (vec![root_node], map, expanded)
+}
+
+fn rank(severity: archipel_ide_core::Severity) -> u8 {
+    use archipel_ide_core::Severity;
+    match severity {
+        Severity::Error => 2,
+        Severity::Warning => 1,
+        Severity::WeakWarning | Severity::Hint => 0,
+    }
 }
 
 #[cfg(test)]

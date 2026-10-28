@@ -235,6 +235,11 @@ impl Tui {
         self.terminal.backend().buffer()[(x, y)].fg
     }
 
+    /// The cell at (`x`, `y`).
+    pub fn cell(&self, x: u16, y: u16) -> archipel_kit_tui::ratatui::buffer::Cell {
+        self.terminal.backend().buffer()[(x, y)].clone()
+    }
+
     pub fn contains(&self, needle: &str) -> bool {
         self.text().contains(needle)
     }

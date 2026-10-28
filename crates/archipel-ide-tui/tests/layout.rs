@@ -32,5 +32,5 @@ fn the_layout_renders_tree_tabs_editor_and_status_line() {
         "editor text\n{screen}"
     );
     assert!(screen.contains("src"), "project tree\n{screen}");
-    assert!(screen.contains("Ln 1, Col 1"), "status line\n{screen}");
+    assert!(screen.contains("1:1"), "status line\n{screen}");
 }

@@ -282,7 +282,7 @@ dependencies = [
 [[package]]
 name = "archipel-icons"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#577ce543bef1ecb2ee5ab5532198924003ef9ae1"
+source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
 dependencies = [
  "egui",
 ]
@@ -926,7 +926,7 @@ dependencies = [
 [[package]]
 name = "archipel-kit"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#577ce543bef1ecb2ee5ab5532198924003ef9ae1"
+source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
 dependencies = [
  "archipel-icons",
  "archipel-kit-model",

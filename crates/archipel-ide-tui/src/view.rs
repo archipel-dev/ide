@@ -539,6 +539,11 @@ impl DocView {
         {
             return;
         }
+        self.set_problems(problems);
+    }
+
+    /// Shows `problems` as the editor's diagnostics (hints are not drawn).
+    pub(crate) fn set_problems(&mut self, problems: Arc<Vec<Problem>>) {
         self.highlights = problems
             .iter()
             .filter(|problem| problem.severity != Severity::Hint)

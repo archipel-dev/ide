@@ -34,6 +34,8 @@ pub enum Request {
     ShowUpdateBalloon,
     /// Show Git dialogs of the stash commands.
     GitStash { pop: bool },
+    /// Help > Terminal Keyboard Setup… (the terminal's keyboard notice).
+    KeyboardSetup,
 }
 
 /// A popup of the chrome: the frontend opens it at the widget that asked, with the entries
@@ -131,6 +133,9 @@ fn command(id: &str, params: Value) -> Effect {
 /// The effects of choosing the menu row `id`: an action, a recent project, a command row
 /// (`toolbar::command_row`) or a command.
 pub fn menu_row(cx: &ViewCx, id: &str) -> Vec<Effect> {
+    if id == crate::main_menu::KEYBOARD_SETUP {
+        return vec![Effect::Request(Request::KeyboardSetup)];
+    }
     if let Some(path) = id.strip_prefix(crate::main_menu::RECENT_PREFIX) {
         return vec![Effect::Request(Request::OpenProject(path.to_owned()))];
     }

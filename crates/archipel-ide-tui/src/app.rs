@@ -188,6 +188,11 @@ impl TuiApp {
         self.chrome.built.as_ref().map(|c| &c.menu)
     }
 
+    /// Keeps the one-time keyboard notice's marker at `path` (tests).
+    pub fn keyboard_notice_marker(&mut self, path: std::path::PathBuf) {
+        self.notice.marker_at(path);
+    }
+
     /// Switches between Nerd Font glyphs and their ASCII fallbacks (`ARCHIPEL_TUI_GLYPHS=ascii`
     /// at start); the geometry is the same.
     pub fn set_ascii_glyphs(&mut self, on: bool) {
@@ -691,6 +696,22 @@ impl TuiApp {
         self.chrome.open_popup(rt, popup, entries, placement, false);
     }
 
+    /// The keyboard notice (TUI-GUI-159): what this terminal can send and the leader chords.
+    pub(crate) fn keyboard_notice(&mut self, rt: &mut Runtime) {
+        let leader = archipel_ide_view::keys::LEADER;
+        let mut text = crate::notice::text(&leader.replace("ctrl ", "Ctrl+"));
+        text.push_str(if rt.caps.kitty {
+            "\n\nThis terminal reports every key (kitty keyboard protocol): the shortcuts are the GUI's."
+        } else {
+            "\n\nThis terminal does not report every key: the Ctrl+Shift shortcuts of the GUI work as chords."
+        });
+        let dialog = Dialog::new("Terminal keyboard")
+            .message(text)
+            .primary("OK")
+            .on_exit(|code| vec![Msg::Dialog(DialogKind::Notice, code, Input::default())]);
+        self.layers.push(rt, dialog);
+    }
+
     /// Surfaces the frontend opens for a request of the view crate.
     fn run_request(&mut self, rt: &mut Runtime, request: Request) {
         match request {
@@ -731,6 +752,7 @@ impl TuiApp {
             Request::GitStash { .. } => {
                 self.not_available(rt, "Stash", "it needs the stash dialog")
             }
+            Request::KeyboardSetup => self.keyboard_notice(rt),
             Request::ShowUpdateBalloon => self.ide.state().notifications().show_update_balloon(),
         }
     }
@@ -1417,12 +1439,7 @@ impl App for TuiApp {
         self.autoscroll(rt);
         self.run_finished_notice();
         if self.layers.is_empty() && self.notice.due(rt.caps.kitty) {
-            let leader = archipel_ide_view::keys::LEADER;
-            let dialog = Dialog::new("Terminal keyboard")
-                .message(crate::notice::text(&leader.replace("ctrl ", "Ctrl+")))
-                .primary("OK")
-                .on_exit(|code| vec![Msg::Dialog(DialogKind::Notice, code, Input::default())]);
-            self.layers.push(rt, dialog);
+            self.keyboard_notice(rt);
         }
     }
 

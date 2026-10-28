@@ -7,6 +7,7 @@ use std::path::PathBuf;
 #[derive(Default)]
 pub struct Notice {
     checked: bool,
+    marker: Option<PathBuf>,
 }
 
 fn marker() -> Option<PathBuf> {
@@ -17,6 +18,11 @@ fn marker() -> Option<PathBuf> {
 }
 
 impl Notice {
+    /// Keeps the "shown" marker at `path` instead of the config directory (tests).
+    pub fn marker_at(&mut self, path: PathBuf) {
+        self.marker = Some(path);
+    }
+
     /// Whether the notice is due now: once per user, only on legacy terminals. Records it.
     pub fn due(&mut self, kitty: bool) -> bool {
         if self.checked {
@@ -26,7 +32,7 @@ impl Notice {
         if kitty {
             return false;
         }
-        let Some(path) = marker() else {
+        let Some(path) = self.marker.clone().or_else(marker) else {
             return true;
         };
         if path.exists() {

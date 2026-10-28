@@ -81,6 +81,7 @@ pub(crate) fn view_caps(rt: &Runtime) -> Caps {
         kitty: rt.caps.kitty,
         mac: rt.caps.os.is_mac(),
         super_reported: rt.caps.super_reported,
+        terminal: true,
     }
 }
 

@@ -327,12 +327,29 @@ pub fn main_menu(cx: &ViewCx) -> MenuBar {
             }
             entries.extend(appended);
         }
+        if id == "HelpMenu" && cx.caps.terminal {
+            // The terminal's own entry (TUI-GUI-045): the keyboard notice again.
+            let row = MenuEntry::Item(MenuItem::new(
+                KEYBOARD_SETUP,
+                "Terminal Keyboard Setup\u{2026}",
+            ));
+            let after_find = entries
+                .iter()
+                .position(|e| matches!(e, MenuEntry::Item(i) if i.id == "GotoAction"));
+            match after_find {
+                Some(at) => entries.insert(at + 1, row),
+                None => entries.insert(0, row),
+            }
+        }
         let mut header = MenuHeader::new(id.clone(), label.clone()).entries(entries);
         header.mnemonic = mnemonic_of(id).filter(|at| *at < label.chars().count());
         headers.push(header);
     }
     MenuBar::new(headers)
 }
+
+/// The id of Help > Terminal Keyboard Setup… (a terminal-only row).
+pub const KEYBOARD_SETUP: &str = "tui.keyboardSetup";
 
 /// Shortcut of a command: from the keymap when an action maps to it.
 pub fn command_shortcut(cx: &ViewCx, spec: &CommandSpec) -> Option<archipel_kit_model::Shortcut> {

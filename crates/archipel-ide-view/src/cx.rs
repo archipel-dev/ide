@@ -18,6 +18,8 @@ pub struct Caps {
     pub mac: bool,
     /// A key event has carried the Super modifier.
     pub super_reported: bool,
+    /// The frontend is a terminal (it shows its own rows, such as Terminal Keyboard Setup).
+    pub terminal: bool,
 }
 
 impl Caps {
@@ -27,6 +29,7 @@ impl Caps {
             kitty: true,
             mac: cfg!(target_os = "macos"),
             super_reported: true,
+            terminal: false,
         }
     }
 
@@ -36,6 +39,7 @@ impl Caps {
             kitty: true,
             mac: cfg!(target_os = "macos"),
             super_reported: false,
+            terminal: true,
         }
     }
 
@@ -45,6 +49,7 @@ impl Caps {
             kitty: false,
             mac: cfg!(target_os = "macos"),
             super_reported: false,
+            terminal: true,
         }
     }
 

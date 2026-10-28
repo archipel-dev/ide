@@ -338,3 +338,102 @@ fn code_vision_shows_usages_authors_and_parameter_hints() {
     assert!(state.code_vision(0).0.is_empty() && state.code_vision(0).1.is_empty());
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A server that answers only on save (a build-based one): after the user edits the text of a
+/// highlight it published, that highlight is stale and goes at once (the server will not
+/// republish before the next save); highlights elsewhere only move with the text.
+#[test]
+fn server_highlights_that_an_edit_touched_do_not_stay_stale() {
+    let Some(server) = fake_server() else {
+        eprintln!("archipel-fake-lsp is not built; skipping");
+        return;
+    };
+    let root = std::env::temp_dir().join(format!("archipel-ide-core-stale-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(
+        root.join("App.java"),
+        "class App {\n    int a; // @error\n    int b;\n}\n",
+    )
+    .unwrap();
+    let mut registry = ServerRegistry::empty();
+    registry.register(Arc::new(Fake(
+        server,
+        ServerSpec {
+            id: "fake",
+            language: "Java",
+            extensions: &[("java", "java")],
+            file_names: &[],
+            candidates: &[],
+            root_markers: &[],
+            install_hint: "",
+            notify_missing: false,
+            initialization_options: None,
+        },
+        vec!["--push-on-save-only".to_string()],
+    )));
+    let commands = built_in_commands();
+    let mut state = IdeState::default();
+    state.lsp = LspManager::new(registry);
+    commands
+        .execute("project.open", &mut state, json!({"path": root}))
+        .unwrap();
+    commands
+        .execute("editor.openFile", &mut state, json!({"path": "App.java"}))
+        .unwrap();
+    let marker = |state: &IdeState| {
+        state
+            .active_problems()
+            .into_iter()
+            .find(|p| p.message == "marker @error")
+    };
+    let pump = |state: &mut IdeState| {
+        state.poll_lsp();
+        state.poll_analysis();
+    };
+    assert!(wait(&mut state, |state| {
+        state
+            .active_absolute_path()
+            .is_some_and(|path| !state.lsp.trigger_characters(&path).is_empty())
+    }));
+    // A save of an unchanged file sends nothing: change it first.
+    let end = state.documents[0].text.len_chars();
+    state.documents[0].text.edit(end, end, "\n").unwrap();
+    state.sync_active_lsp();
+    commands
+        .execute("editor.save", &mut state, json!({}))
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while marker(&state).is_none() && Instant::now() < deadline {
+        pump(&mut state);
+        thread::sleep(Duration::from_millis(10));
+    }
+    let line = marker(&state).unwrap().line;
+    // An edit above only moves it.
+    let caret = |state: &mut IdeState, char_index: usize| {
+        state.documents[0]
+            .selections
+            .set_single(archipel_ide_text::Selection::caret(char_index));
+    };
+    caret(&mut state, 0);
+    state.editor_type_live("\n").unwrap();
+    pump(&mut state);
+    assert_eq!(
+        marker(&state).map(|p| (p.line, p.column)),
+        Some((line + 1, 14)),
+        "{:?}",
+        state.active_problems()
+    );
+    // Typing inside the highlighted text makes it stale: it is gone before any new answer.
+    let at = state.documents[0].text.text().find("@error").unwrap() + 2;
+    let at = state.documents[0].text.byte_to_char(at);
+    caret(&mut state, at);
+    state.editor_type_live("x").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while marker(&state).is_some() && Instant::now() < deadline {
+        pump(&mut state);
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(marker(&state).is_none(), "{:?}", state.active_problems());
+    let _ = std::fs::remove_dir_all(root);
+}

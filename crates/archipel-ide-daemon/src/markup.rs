@@ -285,6 +285,12 @@ impl FileMarkup {
         };
         self.entries.retain_mut(|entry| {
             let old = entry.info.range.clone();
+            // A language server's answer is about the text it saw: once an edit touched the
+            // range (inside, or typing right at its ends) the message is stale, the next
+            // publication or the native pass says what is true now.
+            if entry.owner.is_lsp() && !edit_leaves_alone(map, &old) {
+                return false;
+            }
             let new = fix(&old);
             if !old.is_empty() && new.is_empty() && !entry.info.file_level {
                 return false;
@@ -373,8 +379,25 @@ impl FileMarkup {
             }
         }
         let mut shadowed = vec![false; self.entries.len()];
+        // Native resolve errors speak for their element: a server error on the same element
+        // (a different, JDT-worded range such as the whole call) is the same problem.
+        let native_errors: Vec<Range<u32>> = if how.graduated {
+            self.entries
+                .iter()
+                .filter(|e| !e.owner.is_lsp() && e.info.kind == HighlightKind::Unresolved)
+                .map(|e| e.info.range.clone())
+                .collect()
+        } else {
+            Vec::new()
+        };
         for (index, entry) in self.entries.iter().enumerate() {
             if entry.owner.is_lsp() {
+                if entry.info.severity >= Severity::ERROR
+                    && native_errors.iter().any(|r| overlaps(&entry.info.range, r))
+                {
+                    shadowed[index] = true;
+                    continue;
+                }
                 let key = (
                     entry.info.range.start,
                     entry.info.range.end,
@@ -462,6 +485,11 @@ impl HighlightMarkup for FileMarkup {
     }
 }
 
+/// Whether no edit of `map` changed text inside `range` or inserted at its ends.
+fn edit_leaves_alone(map: &EditMap, range: &Range<u32>) -> bool {
+    map.untouched(range.start as usize..range.end as usize + 1)
+}
+
 /// Moves `infos` through `map` into `text` (see [`FileMarkup::shift`]);
 /// non-empty ranges that collapsed are dropped. With the identity map this
 /// clamps ranges into the text.
@@ -475,6 +503,9 @@ pub fn shift_infos(infos: Vec<HighlightInfo>, map: &EditMap, text: &str) -> Vec<
     infos
         .into_iter()
         .filter_map(|mut info| {
+            if info.tool.is_lsp() && !edit_leaves_alone(map, &info.range) {
+                return None;
+            }
             let new = fix(&info.range);
             if !info.range.is_empty() && new.is_empty() && !info.file_level {
                 return None;
@@ -660,6 +691,83 @@ mod tests {
         assert_eq!(msgs(11..11), ["long", "short"]);
         assert_eq!(msgs(29..31), ["long", "empty"]);
         assert_eq!(msgs(100..120), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_language_server_highlight_goes_when_an_edit_touches_it_and_native_ones_stay() {
+        let lsp = ToolId::lsp("jdtls");
+        let native = ToolId::native("n");
+        let mut m = FileMarkup::new(FileRev(1));
+        let put = |tool: &ToolId, range: Range<u32>, msg: &str| {
+            HighlightInfo::new(range, Severity::ERROR, HighlightKind::Error, tool.clone())
+                .message(msg.to_string())
+        };
+        m.replace(
+            &lsp,
+            0..u32::MAX,
+            vec![put(&lsp, 10..17, "ArrayLi cannot be resolved to a type")],
+        );
+        m.replace(
+            &native,
+            0..u32::MAX,
+            vec![put(&native, 10..17, "Cannot resolve symbol 'ArrayLi'")],
+        );
+        // Typing right behind the word: the server answered for the old text.
+        let map = EditMap::from_edits(&[edit(17, 17, 18)]);
+        m.shift(&map, FileRev(2), &"x".repeat(40));
+        let left: Vec<_> = m
+            .iter()
+            .map(|i| i.message.clone().unwrap().to_string())
+            .collect();
+        assert_eq!(left, ["Cannot resolve symbol 'ArrayLi'"]);
+        // An edit elsewhere only moves a server highlight.
+        let mut m = FileMarkup::new(FileRev(1));
+        m.replace(&lsp, 0..u32::MAX, vec![put(&lsp, 10..17, "e")]);
+        m.shift(
+            &EditMap::from_edits(&[edit(0, 0, 2)]),
+            FileRev(2),
+            &"x".repeat(40),
+        );
+        assert_eq!(m.iter().next().unwrap().range, 12..19);
+    }
+
+    #[test]
+    fn graduated_native_errors_shadow_overlapping_server_errors() {
+        let lsp = ToolId::lsp("jdtls");
+        let native = ToolId::native("n");
+        let mut m = FileMarkup::new(FileRev(1));
+        m.replace(
+            &native,
+            0..u32::MAX,
+            vec![
+                HighlightInfo::new(
+                    10..13,
+                    Severity::ERROR,
+                    HighlightKind::Unresolved,
+                    native.clone(),
+                )
+                .message("Cannot resolve method 'foo()'"),
+            ],
+        );
+        m.replace(
+            &lsp,
+            0..u32::MAX,
+            vec![
+                HighlightInfo::new(10..15, Severity::ERROR, HighlightKind::Error, lsp.clone())
+                    .message("The method foo() is undefined for the type App"),
+                HighlightInfo::new(30..32, Severity::ERROR, HighlightKind::Error, lsp.clone())
+                    .message("Type mismatch"),
+            ],
+        );
+        m.reconcile(Coexistence {
+            graduated: true,
+            external_published: true,
+        });
+        let shown: Vec<_> = m
+            .iter()
+            .map(|i| i.message.clone().unwrap().to_string())
+            .collect();
+        assert_eq!(shown, ["Cannot resolve method 'foo()'", "Type mismatch"]);
     }
 
     #[test]

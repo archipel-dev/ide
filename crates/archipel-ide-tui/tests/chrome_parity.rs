@@ -296,16 +296,6 @@ fn rows_of(tui: &Tui, rect: archipel_kit_tui::ratatui::layout::Rect) -> Vec<Stri
         .collect()
 }
 
-fn hover(tui: &mut Tui, x: u16, y: u16) {
-    use archipel_kit_tui::input::{MouseEvent, MouseEventKind};
-    tui.send(archipel_kit_tui::Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Moved,
-        column: x,
-        row: y,
-        modifiers: KeyModifiers::NONE,
-    }));
-}
-
 /// Compares the visible rows of the menu at `depth` with `entries` (as many as are drawn).
 fn check_rows(
     tui: &mut Tui,
@@ -334,7 +324,7 @@ fn check_rows(
         .take(rows.len().saturating_sub(2))
         .map(|(i, r)| (rect.y + i as u16, r.clone()))
         .collect();
-    let colors = tui.rt.look.theme.colors.clone();
+    let colors = tui.rt.look.theme.colors;
     let disabled = tui.rt.look.over(colors.text_disabled, colors.popup);
     for (entry, (y, row)) in entries.iter().zip(inner.iter()) {
         match entry {

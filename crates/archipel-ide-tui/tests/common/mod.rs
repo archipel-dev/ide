@@ -4,7 +4,6 @@
 #![allow(dead_code)]
 
 use archipel_ide_tui::{StartOptions, TuiApp};
-use archipel_kit::action_system::Os;
 use archipel_kit_tui::input::{self, Caps, Event, KeyCode, KeyModifiers};
 use archipel_kit_tui::ratatui::Terminal;
 use archipel_kit_tui::ratatui::backend::TestBackend;

@@ -5,7 +5,15 @@ frontend over the same core as the window (`crates/archipel-ide-ui`). Both call 
 commands, actions and services of `crates/archipel-ide-core`, so a feature of the GUI that the TUI
 lacks is a missing terminal surface, not a missing engine. This file lists every GUI feature,
 the core API behind it, what the TUI has today, how to present it in a terminal, and the order to
-build it. It is a plan: nothing here changes code. Companion documents: `docs/tui.md` (what the
+build it. It is a plan: nothing here changes code.
+
+**Binding product decision (supersedes the NvChad-style design):** the TUI must look and behave exactly
+like the GUI. The target is specified in `docs/specs/tui/01-gui-faithful-terminal-ui.md` (what the
+terminal shows, cell by cell, and the key fallbacks) and `docs/specs/tui/02-shared-component-layer.md`
+(one UI layer, two renderers). Where a row, a layout sentence or a key table below says "no toolbar", "keep
+the no-toolbar layout", "status line segments" or "`Ctrl+K` chords", it describes the old design and is
+**being replaced**; Wave 0 below is the new first step. The feature matrix itself (what exists in the
+core) stays valid. Companion documents: `docs/tui.md` (what the
 TUI does now), `docs/architecture.md`, `docs/specs/` (behavior), `docs/parity/` (GUI versus the
 reference).
 
@@ -293,13 +301,13 @@ Tool windows (part F, an index of the same features, not added to the total): of
 
 | ID | GUI feature (source) | Core API | TUI status and evidence | Terminal presentation | Effort, deps |
 |---|---|---|---|---|---|
-| H01 | Main menu (File, Edit, View, Navigate, Code, Refactor, Build, Run, Tools, VCS, Window, Help) (`ui/main_menu.rs`) | `archipel-ide-actions` `Catalog::shared_menu("MainMenu")`, `filter_menu`; composition **GUI-ONLY** M20 | **Missing** (by design no toolbar; Find Action covers it, `docs/tui.md`) | Menu bar overlay on `F10` or `Alt+letter` showing the same tree with mnemonics, shortcuts column, disabled entries greyed (kit popup chain) | M, Wave 5, M20 |
-| H02 | Toolbar: project widget, VCS widget, run widget (config list, Run, Debug, Stop), device selector, Search Everywhere (`ui/chrome.rs` `main_toolbar`) | `core/run_config_commands.rs`, `core/vcs.rs` | **Partial**: status line segments (project toggles the tree, branch opens Commit, run opens the config picker, problems opens Problems) | Keep the no-toolbar layout; branch segment opens E07; run segment gets Run and Debug rows | S, Wave 4 |
-| H03 | Status bar widgets: breadcrumbs, plugin and AI widgets, language server, indexing, toolchain, external system, indent, encoding, line separator, caret and selection size, read-only, column mode, update, spinner, message (`ui/chrome.rs` `status_bar`) | `core/indexing_commands.rs` `index_status`, `core/platform.rs` `update_state`, `toolchains`, `archipel_ide_lsp`; labels **GUI-ONLY** M22 | **Partial**: mode, file, branch and counts, message, indexing and toolchain progress as busy text, problem counts, first language server, run configuration, project, `Ln, Col` (`tui/layout.rs` `draw_status`); missing indent, encoding, line separator, selection size, read-only, column mode, update, multiple servers, breadcrumbs | Right-aligned segments; hide the low priority ones under 100 columns | S, Wave 5, M22 |
+| H01 | Main menu (File, Edit, View, Navigate, Code, Refactor, Build, Run, Tools, VCS, Window, Help) (`ui/main_menu.rs`) | `archipel-ide-actions` `Catalog::shared_menu("MainMenu")`, `filter_menu`; composition **GUI-ONLY** M20 | **Missing** (old design: no menu; being replaced by TUI-GUI-035..045) | Hamburger at toolbar column 1 expands the same menu bar as the GUI; `F10` or `Alt+mnemonic`; mnemonics, shortcut column, disabled entries greyed, submenus (kit `MenuBar` + `PopupChain`) | M, **Wave 0**, M20 |
+| H02 | Toolbar: project widget, VCS widget, run widget (config list, Run, Debug, Stop), device selector, Search Everywhere (`ui/chrome.rs` `main_toolbar`) | `core/run_config_commands.rs`, `core/vcs.rs` | **Missing** (old design: status line segments instead of a toolbar; being replaced by TUI-GUI-020..028) | Row 0 toolbar exactly as the GUI: hamburger, project, VCS, mode switch, run configuration, Run, Build, Debug, Stop, Search Everywhere, Settings; all popups from the shared model | M, **Wave 0**, M19, M21 |
+| H03 | Status bar widgets: breadcrumbs, plugin and AI widgets, language server, indexing, toolchain, external system, indent, encoding, line separator, caret and selection size, read-only, column mode, update, spinner, message (`ui/chrome.rs` `status_bar`) | `core/indexing_commands.rs` `index_status`, `core/platform.rs` `update_state`, `toolchains`, `archipel_ide_lsp`; labels **GUI-ONLY** M22 | **Partial**: mode, file, branch and counts, message, indexing and toolchain progress as busy text, problem counts, first language server, run configuration, project, `Ln, Col` (`tui/layout.rs` `draw_status`); missing indent, encoding, line separator, selection size, read-only, column mode, update, multiple servers, breadcrumbs | The GUI's widget order and set (TUI-GUI-105), no mode, no file, no Git counts; hide low priority ones under 100 columns | S, **Wave 0**, M22 |
 | H04 | Language server status and notices: starting, missing server, restart, dismiss, toolchain setup (`ui/lsp_status.rs`) | `core/lsp_commands.rs` (`language.restartServers`, `language.dismissNotice`), `core/toolchain_commands.rs` (`toolchain.setup`); `summary` **GUI-ONLY** M22 | **Partial**: language name only; no notices or actions | Balloons with action buttons (kit `Balloons`) | S, Wave 5 |
 | H05 | Banners: toolchain missing, Gradle changes pending, indexing in popups (`ui/toolchain_banner.rs`, `ui/gradle_banner.rs`, `ui/index_status.rs` `banner`) | `core/toolchain_commands.rs` (`toolchain.banner`, `toolchain.dismissBanner`, `toolchain.install`), `core/gradle_commands.rs` (`gradle.loadChanges`, `gradle.dismissChanges`) | **Missing** | `InlineBanner` above the editor with buttons (reuse A29) | S, Wave 5, M23 |
 | H06 | Balloon notifications (run finished, agents, update) | `core/services/notifications.rs` `Notifications` | **Partial**: `tui/panels.rs` `run_finished_notice` only; the core service is never polled | Poll the service into `Balloons` | S, Wave 5, M23 |
-| H07 | Theme: follows the Settings theme, project color gradient (`ui/theme_engine.rs`, `ui/toolbar_gradient.rs`) | `archipel_ide_settings` `ids` | **Partial** (`docs/tui.md`: the tab line sun button cycles kit themes; no link to the setting) | Read the theme id at start | S, Wave 5 |
+| H07 | Theme (**Wave 0**, TUI-GUI-120): follows the Settings theme, project color gradient (`ui/theme_engine.rs`, `ui/toolbar_gradient.rs`) | `archipel_ide_settings` `ids` | **Partial** (`docs/tui.md`: the tab line sun button cycles kit themes; no link to the setting) | Read the theme id at start | S, Wave 5 |
 | H08 | Window title: project, file (`chrome::window_title`) | **GUI-ONLY** M22 | **Missing** | Set the terminal title with OSC 2 | S, Wave 5 |
 | H10 | Keymap resolution and chords | `archipel-ide-keymap`, `core/keymap_commands.rs` | **Done**: `tui/keys.rs`, tests in `tui/keys.rs` | n/a | n/a |
 
@@ -402,17 +410,78 @@ scenario against the real core with a temporary Git repository (as the Commit wi
 or the fake language server `archipel-fake-lsp`; **replay** means a spec-case replay in the manner
 of `tests/editor_cases.rs` (same case files, same parser, judgement read from the core).
 
-### Wave 0: prerequisites (parallel with Wave 1)
+### Wave 0: the GUI-faithful chrome (first; binding)
+
+Goal: `archipel-ide --tui` shows the same toolbar, main menu, stripes, tool window headers, tab strip,
+breadcrumbs, status bar, popups and keys as the GUI, from one shared UI layer. The spec is
+`docs/specs/tui/01-gui-faithful-terminal-ui.md` (IDs `TUI-GUI-*`) and
+`docs/specs/tui/02-shared-component-layer.md` (IDs `TUI-CMP-*`). Nothing in Waves 1 to 7 is worth building
+on the old layout: a gutter nobody can reach through a menu repeats the Go to File failure. Wave 0 has
+five phases in the order the product owner set: chrome, popups and lists, tool windows, dialogs
+(phases 0.2 to 0.5 of file 02), after the foundations (0.1). Phases 0.1 and 0.2 are the minimum before
+Wave 1 starts; Wave 1 (the editor already shares the core document) may then run in parallel with 0.3 to 0.5.
+The kit work is a change in `archipel-dev/kit` and a pin bump of `Cargo.lock` each time.
+
+Test kinds as defined in this section's preamble, plus **outline**: the structural comparison of
+TUI-CMP-040 (items, order, enabled, checked, shortcuts, labels, rendered through both backends).
+
+#### Phase 0.1 Foundations
+
+| Task | Crates and files | Tests |
+|---|---|---|
+| 0.1.1 `archipel-kit-model` crate (props and events of the vocabulary, no egui or ratatui), both kits re-export it; `VOCABULARY` list with `PENDING` entries | kit repo: new `crates/archipel-kit-model`, `archipel-kit/src/lib.rs`, `archipel-kit-tui/src/lib.rs` | kit: serde round trip per props type; `vocabulary` test lists pending entries (TUI-CMP-001, 005, 010) |
+| 0.1.2 `archipel-ide-view` crate: `ViewCx`, `Chrome::build`, `Outline`, `dispatch`; no UI dependencies | new `crates/archipel-ide-view`, workspace `Cargo.toml` | `no_ui_deps`, purity property test (TUI-CMP-002, 006) |
+| 0.1.3 Test infrastructure: outline extraction for both kits (`testing::outline`), `render_parity` skeleton with the fixtures of TUI-CMP-041, `raw_egui_budget` and extended `no_subsystem_reads` | kit `testing.rs` (both), `archipel-ide-view/tests/`, `archipel-ide-ui/tests/` | the tests themselves, budget baseline recorded |
+| 0.1.4 `Look::gui(theme)`, 256-color quantizer, `Caps` additions (`truecolor`, `super_reported`, `curly`), `Leaders` | kit-tui `lib.rs`, `palette.rs`, `input.rs`, `runtime.rs` | `theme_tokens` (TUI-GUI-120, 121, 122), `keys_collisions` unit part |
+| 0.1.5 Register the spec set | `xtask/src/spec_coverage.rs` `SETS` gets `("TUI", "Terminal UI")` | `cargo xtask spec-coverage` lists TUI |
+
+#### Phase 0.2 Chrome (the product owner's ask)
+
+| Task | Crates and files | Tests |
+|---|---|---|
+| 0.2.1 Extract M20 main menu composition and M19 action applicability, context menus, surface requests; builders `main_menu`, `context_menu` | core side `archipel-ide-view` (from `ui/main_menu.rs`, `ui/context_menus.rs`, `ui/actions.rs`, `ui/keybindings.rs`, `tui/actions.rs`); GUI switches to it | outline: GUI menu before and after the move identical; `ui_audit` unchanged |
+| 0.2.2 Extract the toolbar model: project, VCS, mode switch, run configuration widget and rows (M21), Run, Build, Debug, Stop, Search Everywhere, Settings gear (added to both frontends) | `archipel-ide-view` (from `ui/chrome.rs`); `archipel-ide-ui/src/chrome.rs` renders `ToolbarButton`/`ToolbarDropdown` | outline equality; click flows in the TUI (TUI-GUI-020..026) |
+| 0.2.3 Kit: `MenuBar`, `ToolbarDropdown`, tone and badge on toolbar buttons, tooltip with disabled reason | kit-tui `toolbar.rs`, new `menubar.rs`; kit `action_system` | kit conformance tests and gallery entries |
+| 0.2.4 TUI row 0 and the menu bar: hamburger at column 1, expansion, F10, Alt mnemonics, hover switching, submenus, shortcut column | `archipel-ide-tui/src/layout.rs`, new `chrome.rs`, `app.rs` | cells at 160x45, 100x30, 80x24; click each widget and compare the opened popup's outline; menu key tests (TUI-GUI-035..045) |
+| 0.2.5 Stripes: model (`left_stripe`, `right_stripe_windows`, badges), kit `ToolStripe` groups with separator and badge, TUI stripes with tooltips | `archipel-ide-view`; kit-tui `workbench.rs`; tui `layout.rs` `workbench()` (turn `.stripes(true)` on) | outline equality; click toggles layout state; badge tests (TUI-GUI-055..063) |
+| 0.2.6 Tool window headers: model per window (title, actions, view selector, tabs), kit `PanelHeader`, header actions including the full Project set in both frontends, overflow, Hide | `archipel-ide-view` (from `ui/toolwindows.rs`, `ui/widgets.rs`); kit-tui `workbench.rs` | outline over all 20 windows; cells; splitter drag test (TUI-GUI-014, 070..075) |
+| 0.2.7 Editor tab strip: model (name, icon, preview, dirty, pinned, errors, tooltip, tab menu), kit `TabBar` props, TUI tabs with close, dot, pin, overflow list, curly underline; keys Alt+Left/Right, Ctrl+F4 | `archipel-ide-view` (from `ui/editor.rs` `tabs`); kit-tui `tabs.rs`, `components.rs` | cells per tab state; flow: close dirty tab asks (TUI-GUI-085..088) |
+| 0.2.8 Status bar: model M22 (items in the GUI's order, caret label, read-only, line separator, encoding, indent, update, LSP, index, toolchain, external, window title), kit `StatusBar` item list and `Breadcrumbs` (M13 part), remove mode, file, Git counts and problem counts segments; widget popups; width priorities | `archipel-ide-view` (from `ui/chrome.rs`, `ui/lsp_status.rs`, `ui/index_status.rs`, `ui/structure_view.rs`); kit-tui `statusbar.rs`, new `breadcrumbs.rs`; tui `layout.rs` `draw_status` deleted | outline equality; cells at three widths; a test asserts no `INSERT`/`Ln` text (TUI-GUI-004, 105..109) |
+| 0.2.9 Error stripe column, gutter order contract (numbers, run lane, fold, change bar; lane content arrives in Wave 1), editor tick marks and inspection widget | tui `view.rs`, `layout.rs`; kit `editor` | cells; click tick moves the caret (TUI-GUI-090, 093) |
+| 0.2.10 Keys: single leader `Ctrl+\`, Appendix B table as data, `display_shortcut` in menus and tooltips, collision test, kitty detection with the flags of section L, double Shift only in kitty mode, one-time notice and `Help > Terminal Keyboard Setup…`, macOS keymap fallback; remove `Ctrl+K`/`Ctrl+W` leaders and `Ctrl+P` Find Action | `archipel-ide-tui/src/keys.rs`, `app.rs`; `archipel-ide-view` (key table, notice text); kit-tui `input.rs` | `keys_collisions`, table-driven key test (TUI-GUI-194), notice shown once, reachability test (TUI-GUI-193) |
+| 0.2.11 Theme and glyphs: `Look::gui(theme)` live from Settings, glyph table test, ASCII mode with equal geometry, OSC 2 title | tui `layout.rs`, `lib.rs`; kit-tui | `theme_tokens`, `ascii_geometry` (TUI-GUI-120..132) |
+| 0.2.12 Remove the old chrome: mode slot, status segments, theme sun button, dashboard letter keys (replaced by the Welcome screen), the "no toolbar" statements; update `docs/tui.md` | `archipel-ide-tui`, `docs/tui.md` | grep tests; full `chrome_parity` (TUI-GUI-190..192, 200..202) |
+
+Exit of 0.2: `chrome_parity` green for all fixtures at 160x45, 100x30 and 80x24; the mockups of the spec are
+generated from the snapshot files; every GUI chrome element of `docs/specs/tui/01-...` sections C to H is
+present; the guard in `tui/app.rs` `unsupported()` is unchanged (it goes in 0.3 to 0.5).
+
+#### Phases 0.3 to 0.5 (shared layer migration; plan in file 02 section 4)
+
+| Phase | Content | Exit |
+|---|---|---|
+| 0.3 Popups and lists | Search Everywhere with all tabs and Find Action (M13, M15), Go to File/Class/Symbol/Line, Recent Files and Switcher, File Structure, Find in Files, completion and docs (M17), Alt+Enter (M18), balloons and banners (M23), Recent Locations; kit `ListRow` extras, `Popover` sizing, `TextField` chips, `Tree` tone | popup `outline` tests; `tui/popups.rs`, `tui/picker.rs`, `tui/nav.rs` reduced to rendering; the Search Everywhere mockup is a snapshot |
+| 0.4 Tool windows | the 6 existing windows on the shared models (M5, M9 to M12, M28), then Structure, Git, Debug, Hierarchy, TODO, Gradle, Bazel, AI Chat, Agents, Android windows (M7, M14, M29, M30); the `WINDOWS` const covers `ToolWindow::ALL`; `unsupported()` for windows removed | every stripe button opens a window body; `tui/panels.rs` split by window |
+| 0.5 Dialogs | Settings (M26), Run/Debug Configurations (M24), New Project, Clone, Push, Rename and refactor dialogs, Commit dialog, Local History, Welcome, About (M25); kit `PropertyGrid`, `TitledSeparator`; `unsupported()` deleted | dialog `outline` tests; `docs/tui.md` "Known limitations" no longer lists dialogs |
+
+#### Wave 0P: gutter prerequisites (parallel with Wave 0)
+
+The former Wave 0 (P1 to P5); unchanged except that P3 is part of task 0.2.1 and P2 becomes phase 0.4.
+
 
 | Task | Crates and files | Tests |
 |---|---|---|
 | P1 Extract M1 and M2 (gutter model, change popup model) | core: new `gutter_model.rs`, `line_changes.rs`; ui: `editor.rs`, `gutter_popup.rs`, `change_popup.rs` call it | core unit tests for hit testing and entries; the GUI's existing `ui_ed_012` tests stay green |
-| P2 Tool window plumbing for more windows: extend `WINDOWS` in `tui/app.rs`, `workbench()` in `tui/layout.rs`, a generic "list or tree window" helper | tui | cells: a window shows and hides with its chord, focus follows |
-| P3 Surface request enum (M19, the part `TuiAction` duplicates) | core `ide_actions.rs`, `archipel-ide-actions`; ui `keybindings.rs`; tui `actions.rs` | existing action tests in both frontends |
+| P2 Tool window plumbing for more windows: delivered by phase 0.4 | see 0.4 | see 0.4 |
+| P3 Surface request enum (M19, the part `TuiAction` duplicates): delivered by task 0.2.1 | see 0.2.1 | see 0.2.1 |
 | P4 kit-tui: reserve N gutter lanes (`EditorComponent::lanes(n)`), glyphs `BreakpointConditional`, `BreakpointDisabled`, `Logpoint`, `ExecutionArrow`, `Lightbulb` (fallbacks exist: `Breakpoint` with tones, `Thinking`), line background tint (`LineHighlight`), `TreeNode.tone`, end-of-line text and inline hints, tab stop ranges | `archipel-dev/kit` (`crates/archipel-kit-tui/src/editor`, `glyphs.rs`, `collections.rs`) then bump the pin in `Cargo.lock` | kit's own tests; IDE cells tests pick them up |
 | P5 Spec case adapter for execution cases: `docs/specs/execution/cases/*.cases.md` have prose "after" blocks (`line 3 has a line breakpoint (red circle), enabled`) and no runner exists (`crates/archipel-ide-core/tests` replays only the editor and search cases). Add machine-readable lines to the case format with the spec team (for example `breakpoints: 3`, `gutter: 3 run`), then a core runner and the TUI replay | docs/specs, core `tests/support`, tui `tests/execution_cases.rs` | the runner itself |
 
-### Wave 1: editor gutter, breakpoints, change markers (the product owner's first ask)
+### Wave 1: editor gutter, breakpoints, change markers
+
+Starts after phase 0.2 (the gutter column order and the error stripe are fixed there, TUI-GUI-090). Every gutter
+function must also be reachable through the GUI's visible paths (gutter popup, Run menu), not only by the
+chords listed in task 1.8; those chords become `Ctrl+\` alternatives (spec section L).
 
 Goal: the terminal editor shows the same gutter marks as the GUI and runs and debugs from them.
 Two lanes (breakpoint or execution arrow in lane 0, run icon and lightbulb in lane 1) need P4's reserved
@@ -471,7 +540,7 @@ By daily impact: these are used in every session.
 | 4.5 Local History dialog | E11 | tui new `history.rs` | flow: edit twice, revert to the first revision |
 | 4.6 Blame annotations (A16), VCS colors (E13, C15) | A16, E13 | tui `view.rs`, `layout.rs`; P4 | cells; replay `docs/specs/vcs/cases/07-annotate-and-history.cases.md` |
 
-### Wave 5: dialogs, settings, project lifecycle, chrome
+### Wave 5: dialogs, settings, project lifecycle (chrome moved to Wave 0)
 
 | Task | Rows | Notes |
 |---|---|---|
@@ -479,8 +548,8 @@ By daily impact: these are used in every session.
 | 5.2 Run/Debug Configurations dialog | D02 | M24; flow: add, rename, delete a Cargo configuration, file on disk matches |
 | 5.3 Project tree operations and context menu | C15, C16 | M19, M28 |
 | 5.4 Welcome, New Project, Clone, first run, About, notices | G04, G05, G08, G09, E09 | M25, M23 |
-| 5.5 Main menu bar | H01 | M20 |
-| 5.6 Status bar segments, notices, theme from settings, terminal title | H03 to H08, D09 | M22 |
+| 5.5 Main menu bar | H01 | moved to Wave 0, task 0.2.4 |
+| 5.6 Status bar segments, theme from settings, terminal title | H03 to H08, D09 | moved to Wave 0, tasks 0.2.8 and 0.2.11; notices (H04 to H06) in phase 0.3 |
 
 ### Wave 6: the rest of the tool windows and editor layout
 
@@ -494,6 +563,13 @@ plugin manager and, after an SDK change, plugin views (J05); Android windows (J0
 (A18) last because it needs inline virtual text in the kit.
 
 ## 7. Keys and mouse
+
+> **Being replaced** (see `docs/specs/tui/01-gui-faithful-terminal-ui.md` section L and appendix B): the
+> `Ctrl+K` and `Ctrl+W` chord system below shadows GUI shortcuts (`Ctrl+K` is Commit, `Ctrl+W` is Extend
+> Selection) and was the primary path for Go to File. The new rule: every action is reachable by menu,
+> toolbar or stripe first; the GUI keymap is exact; one leader `Ctrl+\` carries the alternatives for keys a
+> legacy terminal cannot send; the kitty keyboard protocol is detected and a one-time notice explains how to
+> enable it. The chord proposals in this section are superseded by appendix B of that spec.
 
 The GUI keymap is authoritative (`archipel-ide-keymap`, `docs/spec/keymaps.md`, `core/keymap_commands.rs`
 `ACTION_COMMANDS`); the TUI resolves the same action ids (`tui/keys.rs`). Defaults for the new surfaces

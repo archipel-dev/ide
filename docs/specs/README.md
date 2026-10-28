@@ -31,6 +31,7 @@ two-team clean-room process:
 | Code insight | `codeinsight/` | highlighting daemon, inspections, quick fixes and Alt+Enter, auto-import, completion framework, navigation |
 | Java | `java/` | stubs, resolve, types and inference, error catalog, imports, completion, inspections, Spring notes |
 | Inventory | `inventory/` | feature inventory of IntelliJ IDEA Community (actions, settings, tool windows, inspections, intentions, file types) with spec coverage and ranked gaps; facts only, no requirements |
+| Terminal UI | `tui/` | the terminal frontend mirrors the GUI: cell-by-cell chrome, key fallbacks, shared UI layer (prefix `TUI`); a binding product decision, not an IntelliJ observation |
 
 ## Coverage
 

@@ -241,6 +241,9 @@ impl NameMatcher {
         if name.starts_with(&self.text) {
             return Some(MatchClass::Prefix);
         }
+        if self.pattern.iter().all(char::is_ascii) && name.is_ascii() {
+            return self.classify_ascii(name.as_bytes());
+        }
         // Cheap rejection: every pattern letter occurs in order (ignoring case).
         {
             let mut want = self.lower.iter();
@@ -270,6 +273,32 @@ impl NameMatcher {
             return Some(MatchClass::Middle);
         }
         None
+    }
+
+    /// The allocation-free path for ASCII names (nearly all of them): same rules as `classify`.
+    fn classify_ascii(&self, name: &[u8]) -> Option<MatchClass> {
+        let p = self.text.as_bytes();
+        if name.len() >= p.len() && name[..p.len()].eq_ignore_ascii_case(p) {
+            return Some(MatchClass::PrefixIgnoreCase);
+        }
+        // Every pattern letter occurs in order (ignoring case).
+        let mut want = p.iter();
+        let mut next = want.next();
+        for c in name {
+            if next.is_some_and(|w| w.eq_ignore_ascii_case(c)) {
+                next = want.next();
+                if next.is_none() {
+                    break;
+                }
+            }
+        }
+        if next.is_some() {
+            return None;
+        }
+        if hump_ascii(p, name, 0, 0, false, true) {
+            return Some(MatchClass::Hump);
+        }
+        hump_ascii(p, name, 0, 0, false, false).then_some(MatchClass::Middle)
     }
 
     /// Fragments of the pattern at humps of `name`; `at_start` forces the first fragment to
@@ -312,6 +341,59 @@ impl NameMatcher {
         }
         false
     }
+}
+
+fn is_hump_ascii(n: &[u8], i: usize) -> bool {
+    if i == 0 {
+        return true;
+    }
+    let (c, p) = (n[i], n[i - 1]);
+    if !c.is_ascii_alphanumeric() {
+        return false;
+    }
+    if !p.is_ascii_alphanumeric() {
+        return true;
+    }
+    if c.is_ascii_uppercase() && !p.is_ascii_uppercase() {
+        return true;
+    }
+    if c.is_ascii_uppercase()
+        && p.is_ascii_uppercase()
+        && n.get(i + 1).is_some_and(u8::is_ascii_lowercase)
+    {
+        return true;
+    }
+    c.is_ascii_digit() != p.is_ascii_digit()
+}
+
+fn hump_ascii(p: &[u8], n: &[u8], pi: usize, ni: usize, continuing: bool, at_start: bool) -> bool {
+    if pi == p.len() {
+        return true;
+    }
+    let pc = p[pi];
+    if continuing
+        && ni < n.len()
+        && (pc == n[ni]
+            || pc.eq_ignore_ascii_case(&n[ni])
+                && (!pc.is_ascii_uppercase() || n[ni].is_ascii_uppercase()))
+        && hump_ascii(p, n, pi + 1, ni + 1, true, false)
+    {
+        return true;
+    }
+    if at_start && pi == 0 {
+        return !n.is_empty()
+            && pc.eq_ignore_ascii_case(&n[0])
+            && hump_ascii(p, n, 1, 1, true, false);
+    }
+    for k in ni..n.len() {
+        if is_hump_ascii(n, k)
+            && pc.eq_ignore_ascii_case(&n[k])
+            && hump_ascii(p, n, pi + 1, k + 1, true, false)
+        {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]

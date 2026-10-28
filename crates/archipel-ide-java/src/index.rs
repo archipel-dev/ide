@@ -1215,26 +1215,82 @@ impl JavaIndex {
         &self,
         scope: &ResolveScope,
         pattern: &str,
-        accept: &dyn Fn(&NameEntry) -> bool,
+        accept: &(dyn Fn(&NameEntry) -> bool + Sync),
         limit: usize,
     ) -> Result<Vec<NameHit>, NotReady> {
         self.ready()?;
         self.load_names();
         let matcher = NameMatcher::new(pattern);
         let names = self.inner.names.read();
-        let mut hits: Vec<(crate::names::MatchClass, u32, &NameEntry)> = Vec::new();
-        for (unit, rank) in scope.iter() {
-            let Some(entries) = names.by_unit.get(&unit) else {
-                continue;
-            };
-            for e in entries {
-                if let Some(class) = matcher.classify(e.name())
-                    && accept(e)
-                {
-                    hits.push((class, rank, e));
+        // Cheap integer keys (match class, name length, classpath rank, then unit and position
+        // for a deterministic order) select the candidates; only those are sorted in full.
+        let units: Vec<(u32, u32)> = scope.iter().collect();
+        let total: usize = units
+            .iter()
+            .map(|(u, _)| names.by_unit.get(u).map_or(0, Vec::len))
+            .sum();
+        let scan = |chunk: &[(u32, u32)]| -> Vec<(u64, u32, u32)> {
+            let mut keys = Vec::new();
+            for (unit, rank) in chunk {
+                let Some(entries) = names.by_unit.get(unit) else {
+                    continue;
+                };
+                for (i, e) in entries.iter().enumerate() {
+                    if let Some(class) = matcher.classify(e.name())
+                        && accept(e)
+                    {
+                        let key = (class as u64) << 48
+                            | (e.name().len().min(0xffff) as u64) << 32
+                            | u64::from(*rank);
+                        keys.push((key, *unit, i as u32));
+                    }
                 }
             }
+            keys
+        };
+        // A big table is scanned by several threads, the units split evenly.
+        let workers = if total > 50_000 {
+            std::thread::available_parallelism().map_or(1, |n| n.get().min(8))
+        } else {
+            1
+        };
+        let mut keys: Vec<(u64, u32, u32)> = if workers > 1 {
+            let size = units.len().div_ceil(workers).max(1);
+            std::thread::scope(|s| {
+                let handles: Vec<_> = units
+                    .chunks(size)
+                    .map(|chunk| s.spawn(|| scan(chunk)))
+                    .collect();
+                handles
+                    .into_iter()
+                    .flat_map(|h| h.join().unwrap_or_default())
+                    .collect()
+            })
+        } else {
+            scan(&units)
+        };
+        // A few more than `limit` survive for the duplicate FQNs of several units.
+        if limit > 0 && keys.len() > limit * 4 {
+            keys.select_nth_unstable(limit * 4);
+            keys.truncate(limit * 4);
         }
+        const CLASSES: [crate::names::MatchClass; 5] = [
+            crate::names::MatchClass::Exact,
+            crate::names::MatchClass::Prefix,
+            crate::names::MatchClass::PrefixIgnoreCase,
+            crate::names::MatchClass::Hump,
+            crate::names::MatchClass::Middle,
+        ];
+        let mut hits: Vec<(crate::names::MatchClass, u32, &NameEntry)> = keys
+            .iter()
+            .map(|(key, unit, i)| {
+                (
+                    CLASSES[(key >> 48) as usize],
+                    (key & 0xffff_ffff) as u32,
+                    &names.by_unit[unit][*i as usize],
+                )
+            })
+            .collect();
         hits.sort_by(|a, b| {
             a.0.cmp(&b.0)
                 .then_with(|| a.2.name().len().cmp(&b.2.name().len()))

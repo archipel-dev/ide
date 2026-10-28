@@ -7,119 +7,15 @@
 
 use crate::{IdeApp, popups, toolwindows};
 use archipel_ide_actions::ActionPlace;
-use archipel_ide_core::keymap_commands::command_for_action;
 use archipel_ide_keymap::{KeyStroke, Lookup, Modifier, Modifiers, Notation, Shortcut};
 use archipel_ide_platform::data_keys;
 use eframe::egui;
 use serde_json::Value;
 use std::path::PathBuf;
 
-/// Actions that open workbench popups rather than run engine commands.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UiAction {
-    GotoLine,
-    FileStructure,
-    Find,
-    Replace,
-    FindNext,
-    FindPrevious,
-    FindInPath,
-    SaveAll,
-    NewProject,
-    OpenProject,
-    ManageProjects,
-    NewFile,
-    NewDirectory,
-    NewJavaClass,
-    NewKotlinFile,
-    Push,
-    Exit,
-    Copy,
-    Cut,
-    Paste,
-}
-
-pub fn ui_action(action: &str) -> Option<UiAction> {
-    Some(match action {
-        "GotoLine" => UiAction::GotoLine,
-        "FileStructurePopup" => UiAction::FileStructure,
-        "Find" => UiAction::Find,
-        "Replace" => UiAction::Replace,
-        "FindNext" => UiAction::FindNext,
-        "FindPrevious" => UiAction::FindPrevious,
-        "FindInPath" | "FindSelectionInPath" => UiAction::FindInPath,
-        "SaveAll" => UiAction::SaveAll,
-        "NewProject" | "WelcomeScreen.DefaultNewProjectAction" => UiAction::NewProject,
-        "OpenFile" => UiAction::OpenProject,
-        "ManageRecentProjects" => UiAction::ManageProjects,
-        "NewFile" => UiAction::NewFile,
-        "NewDir" => UiAction::NewDirectory,
-        "NewClass" => UiAction::NewJavaClass,
-        "Kotlin.NewFile" => UiAction::NewKotlinFile,
-        "Vcs.Push" => UiAction::Push,
-        "Exit" => UiAction::Exit,
-        "$Copy" => UiAction::Copy,
-        "$Cut" => UiAction::Cut,
-        "$Paste" => UiAction::Paste,
-        _ => return None,
-    })
-}
-
-/// Every reference action id the window implements itself, with its action.
-pub fn ui_action_ids() -> impl Iterator<Item = (&'static str, UiAction)> {
-    const IDS: [&str; 22] = [
-        "GotoLine",
-        "FileStructurePopup",
-        "Find",
-        "Replace",
-        "FindNext",
-        "FindPrevious",
-        "FindInPath",
-        "FindSelectionInPath",
-        "SaveAll",
-        "NewProject",
-        "WelcomeScreen.DefaultNewProjectAction",
-        "OpenFile",
-        "ManageRecentProjects",
-        "NewFile",
-        "NewDir",
-        "NewClass",
-        "Kotlin.NewFile",
-        "Vcs.Push",
-        "Exit",
-        "$Copy",
-        "$Cut",
-        "$Paste",
-    ];
-    IDS.into_iter()
-        .filter_map(|id| ui_action(id).map(|action| (id, action)))
-}
-
-/// Clipboard and selection actions that the focused editor or text field handles
-/// itself; the keymap lists them as implemented but does not intercept their keys.
-const NATIVE_ACTIONS: [&str; 4] = ["$Copy", "$Cut", "$Paste", "$SelectAll"];
-
-/// Whether Archipel IDE implements `action` (as a command, a popup or natively).
-pub fn is_implemented(action: &str) -> bool {
-    ui_action(action).is_some()
-        || command_for_action(action).is_some()
-        || NATIVE_ACTIONS.contains(&action)
-}
-
-/// Actions that still work while the terminal has focus; every other key goes to the
-/// shell, like the reference terminal's "Override IDE shortcuts" default.
-const TERMINAL_ACTIONS: [&str; 10] = [
-    "GotoAction",
-    "ShowSettings",
-    "HideAllWindows",
-    "ActivateTerminalToolWindow",
-    "ActivateProjectToolWindow",
-    "ActivateCommitToolWindow",
-    "ActivateFindToolWindow",
-    "ActivateRunToolWindow",
-    "ActivateProblemsViewToolWindow",
-    "SearchEverywhere",
-];
+#[cfg(test)]
+pub use archipel_ide_view::actions::ui_action;
+pub use archipel_ide_view::actions::{TERMINAL_ACTIONS, UiAction, is_implemented};
 
 /// Translates an egui key press into the keymap's notation.
 pub fn stroke(key: egui::Key, modifiers: egui::Modifiers) -> Option<KeyStroke> {

@@ -147,6 +147,11 @@ impl<'a> ViewCx<'a> {
         self.presentation(id, ActionPlace::Toolbar).enabled
     }
 
+    /// Whether tool window `window` is shown.
+    pub fn tool_window_visible(&self, window: archipel_ide_core::ToolWindow) -> bool {
+        self.state.tool_windows().is_visible(window)
+    }
+
     /// The shortcut of `action` for this frontend's keyboard.
     pub fn shortcut(&self, action: &str) -> Option<archipel_kit_model::Shortcut> {
         crate::keys::display_shortcut(&self.state.keymap_state().keymap, action, &self.caps)

@@ -5,7 +5,7 @@
 use crate::chrome::{self, STATUS_BAR_HEIGHT, STRIPE_WIDTH, TOOLBAR_HEIGHT};
 use crate::icons::{self, Icon};
 use crate::widgets::{self, chrome_frame, island_frame, tool_window_header};
-use crate::{IdeApp, keys, theme};
+use crate::{IdeApp, theme};
 use archipel_ide_plugins::{
     KeyChord, NotificationLevel, PluginRegistry, PluginStatus, ViewContext, ViewFrame,
     ViewPlacement,
@@ -116,45 +116,6 @@ pub fn handle_keybindings(app: &mut IdeApp, ctx: &egui::Context) {
                         .retain(|event| !matches!(event, egui::Event::Text(_)))
                 });
             }
-        }
-    }
-}
-
-/// Contributed items of `menu` in the main menu.
-pub fn menu_items(app: &mut IdeApp, ui: &mut egui::Ui, menu: &str) {
-    let items: Vec<(String, String, Option<String>)> = app
-        .state
-        .plugin_host_service()
-        .registry()
-        .entries()
-        .iter()
-        .filter(|entry| entry.is_active())
-        .flat_map(|entry| {
-            let specs = entry.contributions.command_specs();
-            entry
-                .contributions
-                .menus
-                .iter()
-                .filter(|item| item.menu.title() == menu)
-                .filter_map(move |item| {
-                    specs
-                        .iter()
-                        .find(|spec| spec.id == item.command)
-                        .map(|spec| (spec.id.clone(), spec.label.clone(), spec.shortcut.clone()))
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect();
-    if items.is_empty() {
-        return;
-    }
-    ui.separator();
-    for (id, label, shortcut) in items {
-        let button = egui::Button::new(label)
-            .shortcut_text(keys::display(shortcut.as_deref().unwrap_or_default()));
-        if ui.add(button).clicked() {
-            app.dispatch(&id, Value::Null);
-            ui.close();
         }
     }
 }

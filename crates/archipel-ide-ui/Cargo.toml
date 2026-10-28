@@ -38,6 +38,8 @@ archipel-ide-split = { path = "../archipel-ide-split" }
 archipel-ide-templates = { path = "../archipel-ide-templates" }
 archipel-ide-text = { path = "../archipel-ide-text" }
 archipel-ide-terminal = { path = "../archipel-ide-terminal" }
+archipel-ide-view = { path = "../archipel-ide-view" }
+archipel-kit-model.workspace = true
 pollster = "0.4"
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 serde.workspace = true

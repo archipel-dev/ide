@@ -277,6 +277,17 @@ impl TuiApp {
     /// Runs a command after the editor buffers were pushed to the core.
     pub(crate) fn command(&mut self, rt: &mut Runtime, id: &str, params: Value) {
         self.sync_views();
+        // Closing a tab saves it first (the GUI autosaves on close) and asks when it cannot.
+        if id == "editor.close" && params["saved"].as_bool() != Some(true) {
+            let index = params["index"]
+                .as_u64()
+                .map(|i| i as usize)
+                .or_else(|| self.ide.state().active_index());
+            if let Some(index) = index {
+                self.close_document_tab(rt, index);
+            }
+            return;
+        }
         if let Some(why) = unsupported(id) {
             let label = self
                 .ide
@@ -602,12 +613,6 @@ impl TuiApp {
     pub(crate) fn apply_effects(&mut self, rt: &mut Runtime, effects: Vec<Effect>) {
         for effect in effects {
             match effect {
-                Effect::Command { id, params } if id == "editor.close" => {
-                    match params["index"].as_u64() {
-                        Some(index) => self.close_document_tab(rt, index as usize),
-                        None => self.command(rt, &id, params),
-                    }
-                }
                 Effect::Command { id, params } => self.command(rt, &id, params),
                 Effect::Action { id, place } => self.run_action(rt, &id, place),
                 Effect::ToggleToolWindow(window) => {
@@ -718,7 +723,7 @@ impl TuiApp {
                 .any(|d| d.text.is_dirty())
         };
         if dirty(self) {
-            let _ = self.ide.dispatch("editor.saveAll", Value::Null);
+            let _ = self.ide.state_mut().save_all();
         }
         if dirty(self) {
             let names: Vec<String> = self
@@ -760,7 +765,7 @@ impl TuiApp {
             .document(index)
             .is_some_and(|d| d.text.is_dirty());
         if dirty {
-            let _ = self.ide.dispatch("editor.save", json!({ "index": index }));
+            let _ = self.ide.state_mut().save(index);
             let still = self
                 .ide
                 .state()
@@ -789,7 +794,7 @@ impl TuiApp {
                 return;
             }
         }
-        self.command(rt, "editor.close", json!({ "index": index }));
+        self.command(rt, "editor.close", json!({ "index": index, "saved": true }));
     }
 
     /// Starts action `id` from a menu or Find Action.
@@ -802,12 +807,9 @@ impl TuiApp {
             return;
         }
         self.sync_views();
+        // A disabled action does nothing: its entries are greyed out, so no message names it.
         if let Some(effect) = self.ide.perform(id, place, self.editor_focused()) {
             self.apply_effect(rt, effect);
-        } else {
-            self.ide
-                .state_mut()
-                .set_status(format!("{id} is not available here"));
         }
     }
 
@@ -1086,12 +1088,8 @@ impl TuiApp {
             DialogKind::Notice => {}
             DialogKind::DiscardUnsaved { close, quit } => {
                 if let Some(index) = close {
-                    // Discard: revert the buffer to the core's saved text by closing it.
-                    self.command(
-                        rt,
-                        "editor.close",
-                        json!({ "index": index, "discard": true }),
-                    );
+                    // Discard: the tab closes with its edits.
+                    self.command(rt, "editor.close", json!({ "index": index, "saved": true }));
                 }
                 if quit {
                     self.ide.shutdown();
@@ -1190,7 +1188,7 @@ impl TuiApp {
                 .iter()
                 .any(|d| d.text.is_dirty())
             {
-                let _ = self.ide.dispatch("editor.saveAll", Value::Null);
+                let _ = self.ide.state_mut().save_all();
             }
         }
     }

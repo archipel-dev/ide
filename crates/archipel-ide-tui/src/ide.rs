@@ -127,6 +127,11 @@ impl Ide {
             Ok(value) => Ok(value),
             Err(error) => {
                 let message = error.to_string();
+                // A disabled command is not a failure: its menu item is greyed out and a key
+                // that reaches it does nothing (no status with an internal id).
+                if message.starts_with("command is disabled") {
+                    return Err(message);
+                }
                 archipel_ide_core::diagnostics::log(
                     archipel_ide_core::diagnostics::Level::Warn,
                     &format!("{id}: {message}"),

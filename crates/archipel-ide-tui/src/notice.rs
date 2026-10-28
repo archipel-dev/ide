@@ -47,11 +47,19 @@ impl Notice {
 }
 
 /// The text of the notice and of Help > Terminal Keyboard Setup.
-pub fn text(leader: &str) -> String {
-    format!(
-        "This terminal does not report Ctrl+Shift keys, so some shortcuts of the GUI are \
-         sent as chords: press {leader}, then a key (for example {leader} E for Search \
-         Everywhere).\nTerminals with the kitty keyboard protocol (kitty, WezTerm, foot, \
-         Ghostty, Alacritty 0.13+) send every shortcut as in the GUI."
-    )
+pub fn text(leader: &str, kitty: bool) -> String {
+    if kitty {
+        format!(
+            "This terminal reports every key (kitty keyboard protocol): the shortcuts are the \
+             GUI's.\nTerminals without the protocol send the Ctrl+Shift shortcuts as chords: \
+             press {leader}, then a key (for example {leader} E for Search Everywhere)."
+        )
+    } else {
+        format!(
+            "This terminal does not report Ctrl+Shift keys, so some shortcuts of the GUI are \
+             sent as chords: press {leader}, then a key (for example {leader} E for Search \
+             Everywhere).\nTerminals with the kitty keyboard protocol (kitty, WezTerm, foot, \
+             Ghostty, Alacritty 0.13+) send every shortcut as in the GUI."
+        )
+    }
 }

@@ -699,12 +699,7 @@ impl TuiApp {
     /// The keyboard notice (TUI-GUI-159): what this terminal can send and the leader chords.
     pub(crate) fn keyboard_notice(&mut self, rt: &mut Runtime) {
         let leader = archipel_ide_view::keys::LEADER;
-        let mut text = crate::notice::text(&leader.replace("ctrl ", "Ctrl+"));
-        text.push_str(if rt.caps.kitty {
-            "\n\nThis terminal reports every key (kitty keyboard protocol): the shortcuts are the GUI's."
-        } else {
-            "\n\nThis terminal does not report every key: the Ctrl+Shift shortcuts of the GUI work as chords."
-        });
+        let text = crate::notice::text(&leader.replace("ctrl ", "Ctrl+"), rt.caps.kitty);
         let dialog = Dialog::new("Terminal keyboard")
             .message(text)
             .primary("OK")

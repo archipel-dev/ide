@@ -195,6 +195,23 @@ impl Tui {
         self
     }
 
+    /// A right click: press and release at (`x`, `y`).
+    pub fn right_click(&mut self, x: u16, y: u16) -> &mut Self {
+        use archipel_kit_tui::input::{MouseButton, MouseEvent, MouseEventKind};
+        for kind in [
+            MouseEventKind::Down(MouseButton::Right),
+            MouseEventKind::Up(MouseButton::Right),
+        ] {
+            self.send(Event::Mouse(MouseEvent {
+                kind,
+                column: x,
+                row: y,
+                modifiers: KeyModifiers::NONE,
+            }));
+        }
+        self
+    }
+
     /// Lets time pass: the manual clock advances and the app ticks (polling the core).
     pub fn advance(&mut self, seconds: f64) -> &mut Self {
         self.rt.now += seconds;

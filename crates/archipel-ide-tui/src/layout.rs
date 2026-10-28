@@ -634,7 +634,50 @@ impl TuiApp {
         match self.tree.handle(rt, TREE, event) {
             TreeEvent::Activated(path) => self.tree_activated(rt, &path, true),
             TreeEvent::Toggled(path) => self.tree_activated(rt, &path, false),
+            TreeEvent::ContextMenu { path, x, y } => {
+                let target = match path.as_deref().and_then(|p| self.tree_map.get(p)) {
+                    Some(entry) => archipel_ide_view::context_menu::Target::Tree {
+                        path: entry.path.clone().unwrap_or_default(),
+                        is_dir: matches!(entry.kind, RowKind::Directory | RowKind::Group),
+                    },
+                    None => archipel_ide_view::context_menu::Target::Tree {
+                        path: std::path::PathBuf::new(),
+                        is_dir: true,
+                    },
+                };
+                self.open_chrome_popup(
+                    rt,
+                    archipel_ide_view::dispatch::Popup::Context(target),
+                    Some((x, y)),
+                );
+                return;
+            }
             _ => {}
+        }
+        // Right click in the editor: its context menu.
+        if let Event::Mouse(_) = event
+            && let Some(pointer) = rt.pointer().copied()
+            && pointer.kind
+                == archipel_kit_tui::pointer::PointerKind::Down(
+                    archipel_kit_tui::input::MouseButton::Right,
+                )
+            && self
+                .shell
+                .geo
+                .editor
+                .contains(archipel_kit_tui::ratatui::layout::Position::new(
+                    pointer.x, pointer.y,
+                ))
+            && self.active_view().is_some()
+        {
+            self.open_chrome_popup(
+                rt,
+                archipel_ide_view::dispatch::Popup::Context(
+                    archipel_ide_view::context_menu::Target::Editor,
+                ),
+                Some((pointer.x, pointer.y)),
+            );
+            return;
         }
         if let Event::Key(key) = event
             && key.code == archipel_kit_tui::input::KeyCode::Delete

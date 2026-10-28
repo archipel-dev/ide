@@ -44,6 +44,7 @@ no problem reported
 
 ### JAVA-ICC-219 case 1: reuse existing variable
 settings: default
+status: unverified (the replaced text in the fix name may be shown without parentheses)
 language: java
 ```before
 class A {
@@ -62,7 +63,6 @@ class A {
   }
 }
 ```
-status: unverified (the replaced text in the fix name may be shown without parentheses)
 
 ### JAVA-ICC-219 case 2: variable reassigned in between
 settings: default
@@ -111,6 +111,7 @@ no problem reported
 
 ### JAVA-ICC-221 case 1: merge branches
 settings: default
+status: unverified (fix name wording: `Merge with ''{0}''`)
 language: java
 ```before
 class A {
@@ -143,7 +144,6 @@ class A {
   }
 }
 ```
-status: unverified (fix name wording: `Merge with ''{0}''`)
 
 ### JAVA-ICC-221 case 2: different branches
 settings: default
@@ -169,6 +169,7 @@ no problem reported
 
 ### JAVA-ICC-222 case 1: introduce variable
 settings: default
+status: unverified (variable name suggestion and complexity threshold: expression must score above 70)
 language: java
 ```before
 class A {
@@ -190,7 +191,6 @@ class A {
   }
 }
 ```
-status: unverified (variable name suggestion and complexity threshold: expression must score above 70)
 
 ### JAVA-ICC-222 case 2: single occurrence
 settings: default
@@ -302,6 +302,7 @@ no problem reported
 
 ### JAVA-ICC-228 case 1: conditional min
 settings: default
+status: unverified (fix name shows `{0}` as `Math.min`)
 language: java
 ```before
 class A {
@@ -314,7 +315,6 @@ class A {
   public int min(int a, int b) { return Math.min(a, b); }
 }
 ```
-status: unverified (fix name shows `{0}` as `Math.min`)
 
 ### JAVA-ICC-228 case 2: different values returned
 settings: default
@@ -489,6 +489,7 @@ no problem reported
 
 ### JAVA-ICC-235 case 1: isInstance
 settings: default
+status: unverified (fix name `{0}` text)
 language: java
 ```before
 class A {
@@ -501,7 +502,6 @@ class A {
   boolean f(Object o) { return o instanceof String; }
 }
 ```
-status: unverified (fix name `{0}` text)
 
 ### JAVA-ICC-235 case 2: class variable
 settings: default
@@ -518,6 +518,7 @@ no problem reported
 
 ### JAVA-ICC-236 case 1: containsAll(singletonList)
 settings: default
+status: unverified (fix name `{0}` text)
 language: java
 ```before
 import java.util.*;
@@ -532,7 +533,6 @@ class A {
   boolean f(Collection<String> collection) { return collection.contains("x"); }
 }
 ```
-status: unverified (fix name `{0}` text)
 
 ### JAVA-ICC-236 case 2: containsAll with a collection
 settings: default
@@ -671,6 +671,7 @@ no problem reported
 
 ### JAVA-ICC-242 case 1: ChronoField call
 settings: default
+status: unverified (fix name `{0}` text)
 language: java
 ```before
 import java.time.*; import java.time.temporal.ChronoField;
@@ -685,10 +686,10 @@ class A {
   int f(LocalTime localTime) { return localTime.getMinute(); }
 }
 ```
-status: unverified (fix name `{0}` text)
 
 ### JAVA-ICC-242 case 2: redundant creation
 settings: default
+status: unverified (fix name text)
 language: java
 ```before
 import java.time.*;
@@ -703,7 +704,6 @@ class A {
   LocalDateTime f() { LocalDateTime now = LocalDateTime.now(); return now; }
 }
 ```
-status: unverified (fix name text)
 
 ### JAVA-ICC-243 case 1: length check before loop
 settings: default
@@ -903,6 +903,7 @@ no problem reported
 
 ### JAVA-ICC-250 case 1: stream().forEach
 settings: default
+status: unverified (fix text: `Replace ''stream().{0}()'' with ''{1}()''{2}`)
 language: java
 ```before
 import java.util.*;
@@ -917,7 +918,6 @@ class A {
   void f(List<String> list) { list.forEach(System.out::println); }
 }
 ```
-status: unverified (fix text: `Replace ''stream().{0}()'' with ''{1}()''{2}`)
 
 ### JAVA-ICC-250 case 2: filter then forEach
 settings: default
@@ -935,6 +935,7 @@ no problem reported
 
 ### JAVA-ICC-251 case 1: appends then toString
 settings: default
+status: unverified (fix name `Replace ''{0}'' with ''{1}''` text)
 language: java
 ```before
 class A {
@@ -956,7 +957,6 @@ class A {
   }
 }
 ```
-status: unverified (fix name `Replace ''{0}'' with ''{1}''` text)
 
 ### JAVA-ICC-251 case 2: appends in a loop
 settings: default
@@ -977,6 +977,7 @@ no problem reported
 
 ### JAVA-ICC-252 case 1: new String(literal)
 settings: default
+status: unverified (exact fix name for the constructor case)
 language: java
 ```before
 class A {
@@ -989,7 +990,6 @@ class A {
   void f() { System.out.println("message"); }
 }
 ```
-status: unverified (exact fix name for the constructor case)
 
 ### JAVA-ICC-252 case 2: constructor option on
 settings: Do not report String constructor calls = on
@@ -1411,6 +1411,7 @@ problem: WARNING name "Inner class field name hides outer class field"
 
 ### JAVA-ICC-267 case 2: static nested class and instance outer field
 settings: inspection InnerClassVariableHidesOuterClassVariable enabled
+status: unverified (static nested classes cannot see instance fields; whether the inspection treats them as not visible)
 language: java
 ```before
 class Outer {
@@ -1422,7 +1423,6 @@ keys: inspect
 ```after
 no problem reported
 ```
-status: unverified (static nested classes cannot see instance fields; whether the inspection treats them as not visible)
 
 ### JAVA-ICC-268 case 1: exports to itself
 settings: language level 9
@@ -1491,6 +1491,7 @@ no problem reported
 
 ### JAVA-ICC-270 case 1: empty module body
 settings: language level 9; A.java imports `java.sql.Connection`
+status: unverified (requires derived from imports of the module's sources)
 language: java
 ```before
 --- module-info.java
@@ -1501,7 +1502,6 @@ keys: Alt+Enter, choose "Fill in module dependencies"
 --- module-info.java
 module m { requires java.sql; }
 ```
-status: unverified (requires derived from imports of the module's sources)
 
 ### JAVA-ICC-270 case 2: body has a comment
 settings: language level 9
@@ -1600,6 +1600,7 @@ no problem reported
 
 ### JAVA-ICC-274 case 1: private super method
 settings: inspection MethodOverridesInaccessibleMethodOfSuper enabled
+status: unverified (message text not in the bundle excerpt read)
 language: java
 ```before
 public class Super { private void test() { } }
@@ -1609,7 +1610,6 @@ keys: inspect
 ```after
 problem: WARNING test "(message: method overrides an inaccessible method of the superclass)"
 ```
-status: unverified (message text not in the bundle excerpt read)
 
 ### JAVA-ICC-274 case 2: unrelated name
 settings: inspection MethodOverridesInaccessibleMethodOfSuper enabled
@@ -1881,6 +1881,7 @@ no problem reported
 
 ### JAVA-ICC-285 case 1: indexOf >= 0
 settings: default
+status: unverified (the shown `{0}` text of the comparison)
 language: java
 ```before
 class A {
@@ -1893,7 +1894,6 @@ class A {
   boolean b = "abcd".contains("e");
 }
 ```
-status: unverified (the shown `{0}` text of the comparison)
 
 ### JAVA-ICC-285 case 2: index used
 settings: default
@@ -2037,6 +2037,7 @@ no problem reported
 
 ### JAVA-ICC-293 case 1: ternary null-safe equals with option off
 settings: default
+status: unverified (import handling and fix `{0}` text)
 language: java
 ```before
 class A {
@@ -2049,7 +2050,6 @@ class A {
   boolean f(Object a, Object b) { return java.util.Objects.equals(a, b); }
 }
 ```
-status: unverified (import handling and fix `{0}` text)
 
 ### JAVA-ICC-293 case 2: a != null && a.equals(b) with option off
 settings: default
@@ -2217,6 +2217,7 @@ no problem reported
 
 ### JAVA-ICC-298 case 1: anonymous Thread
 settings: default
+status: unverified (fix text uses `{0}`; body braces kept)
 language: java
 ```before
 class A {
@@ -2233,7 +2234,6 @@ class A {
   }
 }
 ```
-status: unverified (fix text uses `{0}`; body braces kept)
 
 ### JAVA-ICC-298 case 2: Thread with extra members
 settings: default
@@ -2314,6 +2314,7 @@ no problem reported
 
 ### JAVA-ICC-303 case 1: loop to allMatch
 settings: default
+status: unverified (fix name wording)
 language: java
 ```before
 import java.util.List;
@@ -2336,7 +2337,6 @@ class A {
   }
 }
 ```
-status: unverified (fix name wording)
 
 ### JAVA-ICC-303 case 2: loop with a break
 settings: default
@@ -2536,6 +2536,7 @@ no problem reported
 
 ### JAVA-ICC-310 case 1: entrySet().forEach
 settings: default
+status: unverified (fix text `{0}` and lambda body shape)
 language: java
 ```before
 import java.util.*;
@@ -2554,7 +2555,6 @@ class A {
   }
 }
 ```
-status: unverified (fix text `{0}` and lambda body shape)
 
 ### JAVA-ICC-310 case 2: entry used as a whole
 settings: default
@@ -2605,6 +2605,7 @@ no problem reported
 
 ### JAVA-ICC-312 case 1: forEach adding to a list
 settings: default
+status: unverified (fix text; collect form)
 language: java
 ```before
 import java.util.*;
@@ -2627,7 +2628,6 @@ class A {
   }
 }
 ```
-status: unverified (fix text; collect form)
 
 ### JAVA-ICC-312 case 2: plain forEach
 settings: default
@@ -2728,6 +2728,7 @@ no problem reported
 
 ### JAVA-ICC-317 case 1: if/else null check
 settings: language level 9
+status: unverified (import style and lambda vs method reference)
 language: java
 ```before
 class A {
@@ -2746,7 +2747,6 @@ class A {
   }
 }
 ```
-status: unverified (import style and lambda vs method reference)
 
 ### JAVA-ICC-317 case 2: unrelated branches
 settings: language level 9
@@ -2933,6 +2933,7 @@ class A {
 
 ### JAVA-ICC-322 case 2: fallthrough with side effects
 settings: language level 14
+status: unverified (switches with fall-through are converted only when it can be expressed with multiple labels)
 language: java
 ```before
 class A {
@@ -2949,10 +2950,10 @@ keys: inspect
 ```after
 no problem reported
 ```
-status: unverified (switches with fall-through are converted only when it can be expressed with multiple labels)
 
 ### JAVA-ICC-323 case 1: text block to string literal
 settings: language level 15
+status: unverified (concatenation layout)
 language: java
 ```before
 class A {
@@ -2969,7 +2970,6 @@ class A {
     "world\n";
 }
 ```
-status: unverified (concatenation layout)
 
 ### JAVA-ICC-323 case 2: regular literal
 settings: language level 15
@@ -3022,6 +3022,7 @@ no problem reported
 
 ### JAVA-ICC-325 case 1: immutable point class
 settings: language level 16
+status: unverified (with accessor renaming the getters become `x()`/`y()` accessors and callers are renamed; the declaration shown is the result)
 language: java
 ```before
 class <caret>Point {
@@ -3036,7 +3037,6 @@ keys: Alt+Enter, choose "Convert to record class"
 ```after
 record Point(double x, double y) { }
 ```
-status: unverified (with accessor renaming the getters become `x()`/`y()` accessors and callers are renamed; the declaration shown is the result)
 
 ### JAVA-ICC-325 case 2: non-final field
 settings: language level 16
@@ -3139,6 +3139,7 @@ no problem reported
 
 ### JAVA-ICC-328 case 1: max(min())
 settings: language level 21 with Math.clamp available (JDK 21)
+status: unverified (`{0}` text of the fix name)
 language: java
 ```before
 class A {
@@ -3159,7 +3160,6 @@ class A {
   }
 }
 ```
-status: unverified (`{0}` text of the fix name)
 
 ### JAVA-ICC-328 case 2: only min
 settings: language level 21
@@ -3176,6 +3176,7 @@ no problem reported
 
 ### JAVA-ICC-329 case 1: get(0)
 settings: language level 21
+status: unverified (fix name `{0}` text)
 language: java
 ```before
 import java.util.List;
@@ -3190,7 +3191,6 @@ class A {
   String f(List<String> list) { return list.getFirst(); }
 }
 ```
-status: unverified (fix name `{0}` text)
 
 ### JAVA-ICC-329 case 2: get(1)
 settings: language level 21
@@ -3291,6 +3291,7 @@ no problem reported
 
 ### JAVA-ICC-333 case 1: hello world class
 settings: language level 25
+status: unverified (`main` signature relaxation and formatting)
 language: java
 ```before
 public class <caret>Sample {
@@ -3303,10 +3304,10 @@ void main() {
   IO.println("Hello, world!");
 }
 ```
-status: unverified (`main` signature relaxation and formatting)
 
 ### JAVA-ICC-333 case 2: class with a constructor and state
 settings: language level 25
+status: unverified (whether fields block the conversion)
 language: java
 ```before
 public class <caret>Sample {
@@ -3318,7 +3319,6 @@ keys: inspect
 ```after
 no problem reported
 ```
-status: unverified (whether fields block the conversion)
 
 ### JAVA-ICC-334 case 1: compact source file
 settings: language level 25; file `Sample.java`
@@ -3346,6 +3346,7 @@ no problem reported
 
 ### JAVA-ICC-335 case 1: IO.println
 settings: language level 25
+status: unverified (fix text `{0}`)
 language: java
 ```before
 class A {
@@ -3358,7 +3359,6 @@ class A {
   void f() { System.out.println("Hello, World!"); }
 }
 ```
-status: unverified (fix text `{0}`)
 
 ### JAVA-ICC-335 case 2: System.out
 settings: language level 25
@@ -3375,6 +3375,7 @@ no problem reported
 
 ### JAVA-ICC-336 case 1: System.out.println to IO
 settings: language level 25
+status: unverified (fix text `{0}`)
 language: java
 ```before
 class A {
@@ -3387,7 +3388,6 @@ class A {
   void f() { IO.println("Hello, World!"); }
 }
 ```
-status: unverified (fix text `{0}`)
 
 ### JAVA-ICC-336 case 2: option for regular classes off
 settings: language level 25; Report in regular classes = off
@@ -3404,6 +3404,7 @@ no problem reported
 
 ### JAVA-ICC-337 case 1: ternary on compare
 settings: language level 26 (Comparator.max/min available)
+status: unverified (API level and fix text)
 language: java
 ```before
 import java.util.Comparator;
@@ -3418,7 +3419,6 @@ class A {
   String f(Comparator<String> comp, String a, String b) { return comp.max(a, b); }
 }
 ```
-status: unverified (API level and fix text)
 
 ### JAVA-ICC-337 case 2: different results
 settings: language level 26

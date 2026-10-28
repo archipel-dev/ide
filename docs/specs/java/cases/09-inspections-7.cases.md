@@ -305,6 +305,7 @@ no problem reported
 
 ### JAVA-ICC-012 case 1: add the Javadoc note
 settings: inspection ComparableImplementedButEqualsNotOverridden enabled
+status: unverified (exact note wording and comment shape not in the bundle excerpt)
 language: java
 ```before
 class <caret>Length implements Comparable<Length> {
@@ -322,7 +323,6 @@ class Length implements Comparable<Length> {
   public int compareTo(Length o) { return Integer.compare(cm, o.cm); }
 }
 ```
-status: unverified (exact note wording and comment shape not in the bundle excerpt)
 
 ### JAVA-ICC-012 case 2: equals is overridden
 settings: inspection ComparableImplementedButEqualsNotOverridden enabled
@@ -373,6 +373,7 @@ no problem reported
 
 ### JAVA-ICC-014 case 1: compareTo() == 1
 settings: default
+status: unverified (fix text is the `Replace with ''{0}''` template; `{0}` assumed to be the new operator form)
 language: java
 ```before
 class A {
@@ -385,7 +386,6 @@ class A {
   boolean f(String s1, String s2) { return s1.compareTo(s2) > 0; }
 }
 ```
-status: unverified (fix text is the `Replace with ''{0}''` template; `{0}` assumed to be the new operator form)
 
 ### JAVA-ICC-014 case 2: comparison with zero
 settings: default
@@ -601,6 +601,7 @@ no problem reported
 
 ### JAVA-ICC-025 case 1: only hashCode overridden, generate equals
 settings: inspection EqualsAndHashcode enabled
+status: unverified (the generated body depends on the generation dialog defaults)
 language: java
 ```before
 class <caret>StringHolder {
@@ -621,7 +622,6 @@ class StringHolder {
   }
 }
 ```
-status: unverified (the generated body depends on the generation dialog defaults)
 
 ### JAVA-ICC-025 case 2: both overridden
 settings: inspection EqualsAndHashcode enabled
@@ -839,6 +839,7 @@ no problem reported
 
 ### JAVA-ICC-035 case 1: mixed tabs and spaces
 settings: default
+status: unverified (whitespace width conversion depends on the tab size)
 language: java
 ```before
 class A {
@@ -857,7 +858,6 @@ class A {
     blue""";
 }
 ```
-status: unverified (whitespace width conversion depends on the tab size)
 
 ### JAVA-ICC-035 case 2: consistent indentation
 settings: default
@@ -918,6 +918,7 @@ problem: WARNING MMMMMM "Too many consecutive pattern letters 'M'; maximum: 5; s
 
 ### JAVA-ICC-037 case 1: unmatched brace
 settings: default
+status: unverified (range and which brace message applies)
 language: java
 ```before
 import java.text.MessageFormat;
@@ -929,10 +930,10 @@ keys: inspect
 ```after
 problem: WARNING {0 "Unmatched brace in message format pattern '{0'"
 ```
-status: unverified (range and which brace message applies)
 
 ### JAVA-ICC-037 case 2: argument not used
 settings: default
+status: unverified (highlighted range)
 language: java
 ```before
 import java.text.MessageFormat;
@@ -944,7 +945,6 @@ keys: inspect
 ```after
 problem: WARNING 2 "Argument with index '1' is not used in the pattern"
 ```
-status: unverified (highlighted range)
 
 ### JAVA-ICC-039 case 1: rationalize
 settings: inspection InnerClassReferencedViaSubclass enabled
@@ -1069,6 +1069,7 @@ no problem reported
 
 ### JAVA-ICC-043 case 1: list passed to varargs
 settings: default
+status: unverified (exact toArray overload inserted)
 language: java
 ```before
 import java.util.*;
@@ -1085,7 +1086,6 @@ class A {
   boolean f(List<String> l) { return contains("item", l.toArray()); }
 }
 ```
-status: unverified (exact toArray overload inserted)
 
 ### JAVA-ICC-043 case 2: array passed
 settings: default
@@ -1380,6 +1380,7 @@ no problem reported
 
 ### JAVA-ICC-056 case 1: new Object() == obj
 settings: default
+status: unverified (fix is offered by the shared equality fix; name from its bundle template)
 language: java
 ```before
 class A {
@@ -1392,7 +1393,6 @@ class A {
   boolean f(Object obj) { return new Object().equals(obj); }
 }
 ```
-status: unverified (fix is offered by the shared equality fix; name from its bundle template)
 
 ### JAVA-ICC-056 case 2: comparison of two variables
 settings: default
@@ -1466,6 +1466,7 @@ no problem reported
 
 ### JAVA-ICC-060 case 1: Integer == Integer, safe fix
 settings: default
+status: unverified (exact replacement text of the null-safe fix)
 language: java
 ```before
 class A {
@@ -1478,7 +1479,6 @@ class A {
   boolean f(Integer a, Integer b) { return java.util.Objects.equals(a, b); }
 }
 ```
-status: unverified (exact replacement text of the null-safe fix)
 
 ### JAVA-ICC-062 case 1: default toString
 settings: inspection ObjectToString enabled
@@ -1508,6 +1508,7 @@ no problem reported
 
 ### JAVA-ICC-064 case 1: ofNullable(null)
 settings: default
+status: unverified (fix name template)
 language: java
 ```before
 import java.util.Optional;
@@ -1522,7 +1523,6 @@ class A {
   Optional<String> f() { return Optional.empty(); }
 }
 ```
-status: unverified (fix name template)
 
 ### JAVA-ICC-064 case 2: nullable parameter
 settings: default
@@ -1670,6 +1670,7 @@ no problem reported
 
 ### JAVA-ICC-069 case 1: SOURCE retention
 settings: default
+status: unverified (exact highlighted range: class literal or its type element)
 language: java
 ```before
 import java.lang.annotation.*;
@@ -1682,7 +1683,6 @@ keys: inspect
 ```after
 problem: WARNING SourceAnnotation.class "Annotation 'SourceAnnotation' is not retained for reflective access"
 ```
-status: unverified (exact highlighted range: class literal or its type element)
 
 ### JAVA-ICC-069 case 2: RUNTIME retention
 settings: default
@@ -1959,6 +1959,7 @@ no problem reported
 
 ### JAVA-ICC-079 case 1: concatenation as pattern
 settings: default
+status: unverified (placeholder renumbering of existing arguments as in the description example)
 language: java
 ```before
 import java.text.MessageFormat;
@@ -1973,7 +1974,6 @@ class A {
   String f(String userName, int balance) { return MessageFormat.format("Hello, {0}! Balance {1}.", userName, balance); }
 }
 ```
-status: unverified (placeholder renumbering of existing arguments as in the description example)
 
 ### JAVA-ICC-079 case 2: constant pattern
 settings: default
@@ -2158,6 +2158,7 @@ no problem reported
 
 ### JAVA-ICC-087 case 1: YYYY
 settings: default
+status: unverified (fix text is the `Replace ''{0}'' with ''{1}''` template; the replaced token may be `YYYY`)
 language: java
 ```before
 import java.text.SimpleDateFormat;
@@ -2172,7 +2173,6 @@ class A {
   Object f() { return new SimpleDateFormat("yyyy-MM-dd"); }
 }
 ```
-status: unverified (fix text is the `Replace ''{0}'' with ''{1}''` template; the replaced token may be `YYYY`)
 
 ### JAVA-ICC-087 case 2: yyyy
 settings: default
@@ -2190,6 +2190,7 @@ no problem reported
 
 ### JAVA-ICC-088 case 1: indented follow-up statement
 settings: default
+status: unverified (exact highlighted range)
 language: java
 ```before
 class Bar {
@@ -2204,7 +2205,6 @@ keys: inspect
 ```after
 problem: WARNING System.out.println("question") "Suspicious indentation after 'if' statement"
 ```
-status: unverified (exact highlighted range)
 
 ### JAVA-ICC-088 case 2: aligned with the if
 settings: default
@@ -2225,6 +2225,7 @@ no problem reported
 
 ### JAVA-ICC-089 case 1: x *= 3/2
 settings: default
+status: unverified (the fix may produce `(double) 3 / 2`)
 language: java
 ```before
 class A {
@@ -2237,7 +2238,6 @@ class A {
   void f() { int x = 18; x *= 3.0/2; }
 }
 ```
-status: unverified (the fix may produce `(double) 3 / 2`)
 
 ### JAVA-ICC-089 case 2: floating point already
 settings: default
@@ -2254,6 +2254,7 @@ no problem reported
 
 ### JAVA-ICC-090 case 1: handler ignores method
 settings: default
+status: unverified (exact range)
 language: java
 ```before
 import java.lang.reflect.*;
@@ -2265,7 +2266,6 @@ keys: inspect
 ```after
 problem: WARNING the lambda "Method is never used in 'invoke()': it's unlikely that 'hashCode()', 'equals()' and 'toString()' are implemented correctly"
 ```
-status: unverified (exact range)
 
 ### JAVA-ICC-090 case 2: handler dispatches on method
 settings: default
@@ -2319,6 +2319,7 @@ no problem reported
 
 ### JAVA-ICC-093 case 1: x used as y
 settings: default
+status: unverified (message text built from the group names)
 language: java
 ```before
 class A {
@@ -2329,7 +2330,6 @@ keys: inspect
 ```after
 problem: WARNING x "Suspicious variable/parameter name combination" (the message names the groups of 'y' and 'x')
 ```
-status: unverified (message text built from the group names)
 
 ### JAVA-ICC-093 case 2: same group
 settings: default
@@ -2386,6 +2386,7 @@ no problem reported
 
 ### JAVA-ICC-095 case 1: intersecting ranges in same array
 settings: default
+status: unverified (highlighted argument)
 language: java
 ```before
 class A {
@@ -2396,7 +2397,6 @@ keys: inspect
 ```after
 problem: WARNING src "Copying to the same array with intersecting ranges"
 ```
-status: unverified (highlighted argument)
 
 ### JAVA-ICC-095 case 2: non-array argument
 settings: default
@@ -2519,6 +2519,7 @@ no problem reported
 
 ### JAVA-ICC-100 case 1: statement after System.exit
 settings: inspection UnreachableCode enabled
+status: unverified (System.exit contract inference)
 language: java
 ```before
 class A {
@@ -2532,7 +2533,6 @@ keys: inspect
 ```after
 problem: WARNING System.out.println("Application is terminated"); (unreachable text style) 
 ```
-status: unverified (System.exit contract inference)
 
 ### JAVA-ICC-100 case 2: reachable statement
 settings: inspection UnreachableCode enabled
@@ -2552,6 +2552,7 @@ no problem reported
 
 ### JAVA-ICC-101 case 1: returns -1 where @Range(from = 0, to = 10)
 settings: default
+status: unverified (range text format)
 language: java
 ```before
 import org.jetbrains.annotations.Range;
@@ -2563,7 +2564,6 @@ keys: inspect
 ```after
 problem: WARNING -1 "Return value '-1' is outside of declared range '0..10'"
 ```
-status: unverified (range text format)
 
 ### JAVA-ICC-101 case 2: inside range
 settings: default
@@ -2581,6 +2581,7 @@ no problem reported
 
 ### JAVA-ICC-102 case 1: LocalTime.get(YEAR)
 settings: default
+status: unverified (exact range: constant or qualified reference)
 language: java
 ```before
 import java.time.*; import java.time.temporal.ChronoField;
@@ -2592,7 +2593,6 @@ keys: inspect
 ```after
 problem: WARNING YEAR "Unsupported argument value: YEAR"
 ```
-status: unverified (exact range: constant or qualified reference)
 
 ### JAVA-ICC-102 case 2: supported field
 settings: default
@@ -2610,6 +2610,7 @@ no problem reported
 
 ### JAVA-ICC-104 case 1: put on Properties
 settings: inspection UseOfPropertiesAsHashtable enabled
+status: unverified (fix name is the `Replace with ''{0}''` template)
 language: java
 ```before
 import java.util.Properties;
@@ -2624,7 +2625,6 @@ class A {
   void f(Properties props) { props.setProperty("hello", "world"); }
 }
 ```
-status: unverified (fix name is the `Replace with ''{0}''` template)
 
 ### JAVA-ICC-104 case 2: setProperty
 settings: inspection UseOfPropertiesAsHashtable enabled
@@ -2726,6 +2726,7 @@ no problem reported
 
 ### JAVA-ICC-109 case 1: character outside ISO-8859-1
 settings: file `a.properties` with encoding ISO-8859-1
+status: unverified (range and file-type scope)
 language: plain
 ```before
 key=<caret>日本語
@@ -2734,7 +2735,6 @@ keys: inspect
 ```after
 problem: WARNING 日本語 "Unsupported characters for the charset 'ISO-8859-1'"
 ```
-status: unverified (range and file-type scope)
 
 ### JAVA-ICC-109 case 2: ASCII only
 settings: file `a.properties` with encoding ISO-8859-1
@@ -2809,6 +2809,7 @@ no problem reported
 
 ### JAVA-ICC-112 case 1: wrong number of arguments
 settings: default
+status: unverified (exact range)
 language: java
 ```before
 import java.lang.reflect.Method;
@@ -2823,7 +2824,6 @@ keys: inspect
 ```after
 problem: WARNING the arguments of invoke "Reflectively called method requires one argument"
 ```
-status: unverified (exact range)
 
 ### JAVA-ICC-112 case 2: matching call
 settings: default
@@ -2900,6 +2900,7 @@ no problem reported
 
 ### JAVA-ICC-115 case 1: socket channel not closed
 settings: inspection ChannelResource enabled
+status: unverified (the {0} text; probably the expression text)
 language: java
 ```before
 import java.net.*; import java.io.*; import java.nio.*; import java.nio.channels.*;
@@ -2911,7 +2912,6 @@ keys: inspect
 ```after
 problem: WARNING getChannel "'SocketChannel' should be opened in front of a 'try' block and closed in the corresponding 'finally' block"
 ```
-status: unverified (the {0} text; probably the expression text)
 
 ### JAVA-ICC-115 case 2: closed in finally
 settings: inspection ChannelResource enabled
@@ -2960,6 +2960,7 @@ no problem reported
 
 ### JAVA-ICC-117 case 1: session not closed
 settings: inspection HibernateResource enabled
+status: unverified (needs the Hibernate library on the classpath; {0} text)
 language: java
 ```before
 import org.hibernate.*;
@@ -2971,7 +2972,6 @@ keys: inspect
 ```after
 problem: WARNING openSession "'Session' should be opened in front of a 'try' block and closed in the corresponding 'finally' block"
 ```
-status: unverified (needs the Hibernate library on the classpath; {0} text)
 
 ### JAVA-ICC-117 case 2: closed in finally
 settings: inspection HibernateResource enabled
@@ -2992,6 +2992,7 @@ no problem reported
 
 ### JAVA-ICC-118 case 1: FileWriter not closed
 settings: inspection IOResource enabled
+status: unverified ({0} text)
 language: java
 ```before
 import java.io.*;
@@ -3003,7 +3004,6 @@ keys: inspect
 ```after
 problem: WARNING FileWriter "'FileWriter' should be opened in front of a 'try' block and closed in the corresponding 'finally' block"
 ```
-status: unverified ({0} text)
 
 ### JAVA-ICC-118 case 2: wrapped resource
 settings: inspection IOResource enabled
@@ -3023,6 +3023,7 @@ no problem reported
 
 ### JAVA-ICC-119 case 1: statement not closed
 settings: inspection JDBCResource enabled
+status: unverified ({0} text)
 language: java
 ```before
 import java.sql.*;
@@ -3034,7 +3035,6 @@ keys: inspect
 ```after
 problem: WARNING prepareStatement "'PreparedStatement' should be opened in front of a 'try' block and closed in the corresponding 'finally' block"
 ```
-status: unverified ({0} text)
 
 ### JAVA-ICC-119 case 2: try-with-resources
 settings: inspection JDBCResource enabled
@@ -3052,6 +3052,7 @@ no problem reported
 
 ### JAVA-ICC-120 case 1: InitialContext not closed
 settings: inspection JNDIResource enabled
+status: unverified ({0} text)
 language: java
 ```before
 import javax.naming.*; import java.util.Properties;
@@ -3063,7 +3064,6 @@ keys: inspect
 ```after
 problem: WARNING InitialContext "'InitialContext' should be opened in front of a 'try' block and closed in the corresponding 'finally' block"
 ```
-status: unverified ({0} text)
 
 ### JAVA-ICC-120 case 2: closed in finally
 settings: inspection JNDIResource enabled
@@ -3084,6 +3084,7 @@ no problem reported
 
 ### JAVA-ICC-121 case 1: accepted socket not closed
 settings: inspection SocketResource enabled
+status: unverified ({0} text)
 language: java
 ```before
 import java.net.*; import java.io.*;
@@ -3095,7 +3096,6 @@ keys: inspect
 ```after
 problem: WARNING accept "'Socket' should be opened in front of a 'try' block and closed in the corresponding 'finally' block"
 ```
-status: unverified ({0} text)
 
 ### JAVA-ICC-121 case 2: try-with-resources
 settings: inspection SocketResource enabled

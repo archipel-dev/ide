@@ -217,6 +217,7 @@ impl IdeState {
         }
         document.text.mark_saved();
         document.disk_hash = content_hash(disk);
+        document.separator = archipel_ide_text::format::detect_line_separator_str(disk);
         document.conflict = None;
         let len = document.text.len_chars();
         document.selections.clamp(len);

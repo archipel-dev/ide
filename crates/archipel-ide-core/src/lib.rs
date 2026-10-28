@@ -253,6 +253,9 @@ pub struct Document {
     /// The Code Folding settings at the time the file was opened: they decide which regions the
     /// document has (the one-line method form) and which start collapsed (ED-FOLD-020).
     pub fold_defaults: folds::FoldDefaults,
+    /// The line separator style of the file when it was loaded; saving applies it to every
+    /// line (PLAT-VFS-030).
+    pub separator: archipel_ide_text::format::LineSeparator,
 }
 
 /// What a document is backed by (PLAT-SAVE-003).
@@ -297,6 +300,7 @@ impl Document {
             force_save: false,
             input: Default::default(),
             fold_defaults: Default::default(),
+            separator: archipel_ide_text::format::detect_line_separator_str(text),
         };
         // The analysis already reflects `text`.
         document.text.take_edits();

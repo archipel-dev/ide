@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.6](https://github.com/archipel-dev/ide/compare/v0.2.5...v0.2.6) (2026-10-28)
+
+
+### Features
+
+* **search:** IntelliJ matching, ranking and search models from the SRCH spec cases (308 of 419 pass) ([#85](https://github.com/archipel-dev/ide/issues/85)) ([02b712d](https://github.com/archipel-dev/ide/commit/02b712dde1b62f3f1e3459c01abbdf8ee33d3c96))
+* **tui:** edit through the core editor layer; fix(daemon): diagnostics on unsaved text ([#83](https://github.com/archipel-dev/ide/issues/83)) ([6e02806](https://github.com/archipel-dev/ide/commit/6e02806e7d80a1156a4096f3319d57fc390ae8fe))
+
 ## [0.2.5](https://github.com/archipel-dev/ide/compare/v0.2.4...v0.2.5) (2026-10-27)
 
 

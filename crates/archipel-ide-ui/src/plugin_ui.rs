@@ -157,7 +157,7 @@ pub fn right_side(app: &mut IdeApp, ctx: &egui::Context) {
         chrome::right_stripe(app, ctx);
         return;
     }
-    let built_in = chrome::right_stripe_windows(app);
+    let built_in = app.with_view(archipel_ide_view::stripes::right_stripe);
     egui::SidePanel::right("right_stripe")
         .exact_width(STRIPE_WIDTH)
         .resizable(false)
@@ -167,10 +167,9 @@ pub fn right_side(app: &mut IdeApp, ctx: &egui::Context) {
             ui.add_space(6.0);
             ui.vertical_centered(|ui| {
                 ui.spacing_mut().item_spacing.y = chrome::stripe_gap();
-                for (window, icon) in built_in {
-                    chrome::stripe_button(app, ui, window, icon);
+                for button in &built_in.top {
+                    chrome::stripe_button(app, ui, button);
                 }
-                chrome::stripe_button(app, ui, archipel_ide_core::ToolWindow::AiChat, Icon::Ai);
                 for (plugin, id, title, icon) in &windows {
                     let selected = app.state.plugin_host_service().tool_window().as_ref()
                         == Some(&(plugin.clone(), id.clone()));

@@ -5,6 +5,7 @@ use crate::widgets::{self, chrome_frame, glow_through_frame};
 use crate::{IdeApp, keys, theme};
 use archipel_ide_actions::ActionPlace;
 use archipel_ide_core::{Anchor, ToolWindow};
+use archipel_kit_model::{StripeButton, Tone};
 use eframe::egui::{self, Color32, Rect, Sense, vec2};
 use serde_json::{Value, json};
 
@@ -642,8 +643,38 @@ pub(crate) fn stripe_gap() -> f32 {
     archipel_kit::tokens::stripe::PITCH - archipel_kit::tokens::stripe::BUTTON
 }
 
-pub(crate) fn stripe_button(app: &mut IdeApp, ui: &mut egui::Ui, window: ToolWindow, icon: Icon) {
-    let selected = app.state.tool_windows().is_visible(window);
+/// The window's icon on a stripe button.
+fn stripe_icon(window: ToolWindow) -> Icon {
+    match window {
+        ToolWindow::Project => Icon::Project,
+        ToolWindow::Commit => Icon::Commit,
+        ToolWindow::Structure | ToolWindow::Hierarchy => Icon::Structure,
+        ToolWindow::Agents => {
+            Icon::Kit(crate::agents_ui::glyph(crate::agents_ui::Concept::Agent).into())
+        }
+        ToolWindow::ResourceManager | ToolWindow::BuildVariants => Icon::Variants,
+        ToolWindow::Git => Icon::Branch,
+        ToolWindow::Logcat => Icon::Logcat,
+        ToolWindow::Problems => Icon::Problems,
+        ToolWindow::Todo => Icon::Success,
+        ToolWindow::Terminal => Icon::Terminal,
+        ToolWindow::Build => Icon::Build,
+        ToolWindow::Debug => Icon::Debug,
+        ToolWindow::Find => Icon::Find,
+        ToolWindow::Gradle | ToolWindow::Bazel => Icon::Model,
+        ToolWindow::DeviceManager | ToolWindow::RunningDevices => Icon::Device,
+        ToolWindow::AiChat => Icon::Ai,
+    }
+}
+
+/// One stripe button of the view crate's model: selected state, badge and tooltip come from
+/// the model (the terminal draws the same ones).
+pub(crate) fn stripe_button(app: &mut IdeApp, ui: &mut egui::Ui, button_props: &StripeButton) {
+    let Some(window) = ToolWindow::parse(&button_props.id) else {
+        return;
+    };
+    let icon = stripe_icon(window);
+    let selected = button_props.selected;
     let button = archipel_kit::tokens::stripe::BUTTON;
     let icon_edge = archipel_kit::tokens::stripe::ICON;
     let (rect, response) = ui.allocate_exact_size(vec2(button, button), Sense::click());
@@ -667,40 +698,25 @@ pub(crate) fn stripe_button(app: &mut IdeApp, ui: &mut egui::Ui, window: ToolWin
         icon,
         color,
     );
-    let mut badge = None;
-    if window == ToolWindow::Problems {
-        let counts = app.state.problems().counts();
-        if counts.errors > 0 {
-            badge = Some(theme::ERROR);
-        } else if counts.warnings > 0 {
-            badge = Some(theme::WARNING);
-        }
-    }
-    if window == ToolWindow::Build && app.state.execution().is_running() {
-        badge = Some(theme::RUN_GREEN);
-    }
-    if window == ToolWindow::Agents {
-        let counts = app.state.agents_manager().counts();
-        if counts.needs_input > 0 {
-            badge = Some(theme::WARNING);
-        } else if counts.working > 0 {
-            badge = Some(theme::RUN_GREEN);
-        }
-    }
+    let badge = button_props.badge.map(|tone| match tone {
+        Tone::Error => theme::ERROR,
+        Tone::Warning => theme::WARNING,
+        _ => theme::RUN_GREEN,
+    });
     if let Some(color) = badge {
         ui.painter()
             .circle_filled(rect.right_top() + vec2(-7.0, 7.0), 3.0, color);
     }
-    let tooltip = match window.shortcut() {
-        "" => window.title().to_owned(),
-        shortcut => format!("{} ({})", window.title(), keys::display(shortcut)),
-    };
+    let tooltip = button_props
+        .tooltip
+        .text(archipel_ide_view::Caps::gui().notation());
     if response.on_hover_text(tooltip).clicked() {
         app.toggle_tool_window(window);
     }
 }
 
 pub fn left_stripe(app: &mut IdeApp, ctx: &egui::Context) {
+    let strip = app.with_view(archipel_ide_view::stripes::left_stripe);
     egui::SidePanel::left("left_stripe")
         .exact_width(STRIPE_WIDTH)
         .resizable(false)
@@ -709,22 +725,8 @@ pub fn left_stripe(app: &mut IdeApp, ctx: &egui::Context) {
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = stripe_gap();
             ui.vertical(|ui| {
-                stripe_button(app, ui, ToolWindow::Project, Icon::Project);
-                stripe_button(app, ui, ToolWindow::Commit, Icon::Commit);
-                stripe_button(app, ui, ToolWindow::Structure, Icon::Structure);
-                if !app.state.agents_manager().sessions().is_empty()
-                    || app.state.tool_windows().is_visible(ToolWindow::Agents)
-                {
-                    stripe_button(
-                        app,
-                        ui,
-                        ToolWindow::Agents,
-                        Icon::Kit(crate::agents_ui::glyph(crate::agents_ui::Concept::Agent).into()),
-                    );
-                }
-                if app.state.is_android_project() {
-                    stripe_button(app, ui, ToolWindow::ResourceManager, Icon::Variants);
-                    stripe_button(app, ui, ToolWindow::BuildVariants, Icon::Variants);
+                for button in &strip.top {
+                    stripe_button(app, ui, button);
                 }
                 let (rect, _) = ui.allocate_exact_size(
                     vec2(archipel_kit::tokens::stripe::BUTTON, 1.0),
@@ -737,58 +739,21 @@ pub fn left_stripe(app: &mut IdeApp, ctx: &egui::Context) {
                     ],
                     egui::Stroke::new(1.0_f32, theme::TOOLBAR_SEPARATOR),
                 );
+                // The bottom group is listed from the bottom up.
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-                    stripe_button(app, ui, ToolWindow::Git, Icon::Branch);
-                    if app.state.hierarchy().current.is_some() {
-                        stripe_button(app, ui, ToolWindow::Hierarchy, Icon::Structure);
+                    for button in &strip.bottom {
+                        stripe_button(app, ui, button);
                     }
-                    if app.state.is_android_project() {
-                        stripe_button(app, ui, ToolWindow::Logcat, Icon::Logcat);
-                    }
-                    stripe_button(app, ui, ToolWindow::Problems, Icon::Problems);
-                    stripe_button(app, ui, ToolWindow::Todo, Icon::Success);
-                    stripe_button(app, ui, ToolWindow::Terminal, Icon::Terminal);
-                    stripe_button(app, ui, ToolWindow::Build, Icon::Build);
-                    stripe_button(app, ui, ToolWindow::Debug, Icon::Debug);
-                    stripe_button(app, ui, ToolWindow::Find, Icon::Find);
                 });
             });
         });
-}
-
-/// Built-in right-anchored tool windows offered for the open project, top to bottom.
-pub(crate) fn right_stripe_windows(app: &IdeApp) -> Vec<(ToolWindow, Icon)> {
-    let mut windows = Vec::new();
-    if app.state.is_gradle_project() || app.state.tool_windows().is_visible(ToolWindow::Gradle) {
-        windows.push((ToolWindow::Gradle, Icon::Model));
-    }
-    if app.state.is_bazel_project() || app.state.tool_windows().is_visible(ToolWindow::Bazel) {
-        windows.push((ToolWindow::Bazel, Icon::Model));
-    }
-    if app.state.is_android_project()
-        || app
-            .state
-            .tool_windows()
-            .is_visible(ToolWindow::DeviceManager)
-    {
-        windows.push((ToolWindow::DeviceManager, Icon::Device));
-    }
-    if app.state.is_android_project()
-        || app
-            .state
-            .tool_windows
-            .is_visible(ToolWindow::RunningDevices)
-    {
-        windows.push((ToolWindow::RunningDevices, Icon::Device));
-    }
-    windows
 }
 
 /// Right tool window stripe: the project's right-anchored tool windows (Gradle,
 /// Bazel, Device Manager) and AI Chat, which is always offered. Plugin tool
 /// windows join this stripe (`plugin_ui::right_side`).
 pub fn right_stripe(app: &mut IdeApp, ctx: &egui::Context) {
-    let windows = right_stripe_windows(app);
+    let strip = app.with_view(archipel_ide_view::stripes::right_stripe);
     egui::SidePanel::right("right_stripe")
         .exact_width(STRIPE_WIDTH)
         .resizable(false)
@@ -796,10 +761,9 @@ pub fn right_stripe(app: &mut IdeApp, ctx: &egui::Context) {
         .frame(chrome_frame(ctx).inner_margin(stripe_margin()))
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = stripe_gap();
-            for (window, icon) in windows {
-                stripe_button(app, ui, window, icon);
+            for button in &strip.top {
+                stripe_button(app, ui, button);
             }
-            stripe_button(app, ui, ToolWindow::AiChat, Icon::Ai);
         });
 }
 

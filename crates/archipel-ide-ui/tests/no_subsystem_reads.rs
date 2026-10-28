@@ -35,11 +35,11 @@ use std::path::{Path, PathBuf};
 /// at line 96, so nearly all of it was skipped) and could not see `app\n    .state\n    .field`
 /// broken over lines. Counting everything, 86 reads were there all along, most of them in
 /// `src/lib.rs` and `src/toolwindows.rs`.
-const SUBSYSTEM_READ_BASELINE: usize = 85;
+const SUBSYSTEM_READ_BASELINE: usize = 84;
 
 /// The number of calls of whole-subsystem handles the UI may still make. Lower it when calls go
 /// (a call becomes a `DataContext` key, a narrower accessor or a service call); never raise it.
-const HANDLE_BASELINE: usize = 111;
+const HANDLE_BASELINE: usize = 104;
 
 /// The `pub` fields of `pub struct IdeState`.
 fn ide_state_fields() -> Vec<String> {

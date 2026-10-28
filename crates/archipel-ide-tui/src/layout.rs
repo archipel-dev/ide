@@ -280,11 +280,14 @@ impl TuiApp {
         // The status bar.
         self.chrome.status.draw(rt, &built.status, geo.status, buf);
 
+        let underlined = crate::draw::colored_underlines(buf);
         self.layers.draw(rt, area, buf);
         self.chrome.draw_popups(rt, buf);
+        crate::draw::clear_covered_underlines(buf, &underlined);
         draw_which_key(rt, area, buf, &|id| {
             archipel_ide_actions::Catalog::shared().label(id)
         });
+        crate::draw::finish_underlines(buf, rt.undercurl);
     }
 
     fn draw_tool_body(
@@ -927,5 +930,132 @@ mod tests {
             file_icon_key(Path::new("notes.unknown")),
             RowIconKey::Glyph(Glyph::File)
         ));
+    }
+
+    /// A frame of a one-file project whose diagnostics are `problems` (a severity and the
+    /// text range, as (line, start column, end column)).
+    fn frame_with_problems(
+        undercurl: bool,
+        problems: &[(archipel_ide_core::Severity, usize, usize, usize)],
+    ) -> (Buffer, Runtime) {
+        use archipel_ide_core::Problem;
+        use archipel_kit_tui::input::Caps;
+        let root = std::env::temp_dir().join(format!(
+            "archipel-tui-diag-{}-{undercurl}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("A.txt"),
+            "alpha error\nbeta warning\ngamma weak\ndelta plain\n",
+        )
+        .unwrap();
+        let mut app = TuiApp::new(crate::StartOptions {
+            project: Some(root.canonicalize().unwrap()),
+            files: vec!["A.txt".into()],
+            isolated: true,
+            ..crate::StartOptions::default()
+        });
+        let keymap = app.keymap(archipel_kit::action_system::Os::Linux);
+        let mut rt = Runtime::with(archipel_kit_tui::Look::dark(), keymap, Caps::kitty());
+        rt.undercurl = undercurl;
+        let area = Rect::new(0, 0, 100, 20);
+        let mut buf = Buffer::empty(area);
+        rt.begin_frame(area);
+        app.sync_all();
+        app.draw_all(&mut rt, area, &mut buf);
+        rt.end_frame();
+        let list = problems
+            .iter()
+            .map(|(severity, line, column, end_column)| Problem {
+                severity: *severity,
+                message: "m".into(),
+                source: None,
+                code: None,
+                line: *line,
+                column: *column,
+                end_line: *line,
+                end_column: *end_column,
+                unnecessary: false,
+                deprecated: false,
+            })
+            .collect();
+        app.views[0].set_problems(Arc::new(list));
+        buf = Buffer::empty(area);
+        rt.begin_frame(area);
+        app.draw_all(&mut rt, area, &mut buf);
+        rt.end_frame();
+        let _ = std::fs::remove_dir_all(&root);
+        (buf, rt)
+    }
+
+    /// The cell where `needle` starts.
+    fn cell_of<'a>(buf: &'a Buffer, needle: &str) -> &'a archipel_kit_tui::ratatui::buffer::Cell {
+        use unicode_width::UnicodeWidthStr;
+        for y in 0..buf.area.height {
+            let line: String = (0..buf.area.width)
+                .map(|x| buf[(x, y)].symbol().to_owned())
+                .collect();
+            if let Some(at) = line.find(needle) {
+                return &buf[(UnicodeWidthStr::width(&line[..at]) as u16, y)];
+            }
+        }
+        panic!("{needle:?} is not on the screen");
+    }
+
+    #[test]
+    fn diagnostics_are_underlines_in_the_severity_color_and_never_a_background() {
+        use archipel_ide_core::Severity;
+        use archipel_kit_tui::ratatui::style::{Color, Modifier};
+        let problems = [
+            (Severity::Error, 0, 6, 11),
+            (Severity::Warning, 1, 5, 12),
+            (Severity::WeakWarning, 2, 6, 10),
+        ];
+        // A terminal without undercurl: a plain underline in the severity color, and the
+        // color of SGR 58 (which xterm reads as other attributes) is gone.
+        let (buf, rt) = frame_with_problems(false, &problems);
+        let ed = &rt.look.theme.editor;
+        let plain = cell_of(&buf, "plain");
+        for (word, line_start, color) in [
+            ("error", "alpha", ed.error_effect),
+            ("warning", "beta", ed.warning_effect),
+            ("weak", "gamma", ed.weak_warning_effect),
+        ] {
+            let cell = cell_of(&buf, word);
+            assert!(cell.modifier.contains(Modifier::UNDERLINED), "{word}");
+            assert_eq!(cell.fg, rt.look.color(color), "{word} underline color");
+            assert_eq!(cell.underline_color, Color::Reset, "{word}: no SGR 58");
+            assert_eq!(
+                cell.bg,
+                cell_of(&buf, line_start).bg,
+                "{word}: no background"
+            );
+        }
+        assert!(!plain.modifier.contains(Modifier::UNDERLINED));
+        // The three severities differ.
+        assert_ne!(cell_of(&buf, "error").fg, cell_of(&buf, "warning").fg);
+        assert_ne!(cell_of(&buf, "warning").fg, cell_of(&buf, "weak").fg);
+        // The text before the range is untouched.
+        assert!(
+            !cell_of(&buf, "alpha")
+                .modifier
+                .contains(Modifier::UNDERLINED)
+        );
+    }
+
+    #[test]
+    fn with_undercurl_the_underline_color_is_kept_for_the_curl() {
+        use archipel_ide_core::Severity;
+        use archipel_kit_tui::ratatui::style::Modifier;
+        let (buf, rt) = frame_with_problems(true, &[(Severity::Error, 0, 6, 11)]);
+        let cell = cell_of(&buf, "error");
+        let wanted = rt.look.color(rt.look.theme.editor.error_effect);
+        assert!(cell.modifier.contains(Modifier::UNDERLINED));
+        assert_eq!(cell.underline_color, wanted);
+        assert_eq!(cell.bg, cell_of(&buf, "alpha").bg, "no background");
+        let curls = archipel_kit_tui::runtime::undercurl_sequences(&buf);
+        assert!(curls.contains("\x1b[4:3m"), "the curl is drawn");
     }
 }

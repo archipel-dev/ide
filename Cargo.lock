@@ -282,15 +282,7 @@ dependencies = [
 [[package]]
 name = "archipel-icons"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components#8a7641e0c36e83c0e0985bcbd94af9ebf8c655a9"
-dependencies = [
- "egui",
-]
-
-[[package]]
-name = "archipel-icons"
-version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#577ce543bef1ecb2ee5ab5532198924003ef9ae1"
+source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
 dependencies = [
  "egui",
 ]
@@ -842,7 +834,7 @@ dependencies = [
  "archipel-ide-terminal",
  "archipel-ide-text",
  "archipel-ide-view",
- "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components)",
+ "archipel-kit",
  "archipel-kit-model",
  "archipel-kit-tui",
  "serde_json",
@@ -853,7 +845,7 @@ dependencies = [
 name = "archipel-ide-ui"
 version = "0.2.6"
 dependencies = [
- "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components)",
+ "archipel-icons",
  "archipel-ide-actions",
  "archipel-ide-ai",
  "archipel-ide-analysis",
@@ -881,7 +873,7 @@ dependencies = [
  "archipel-ide-terminal",
  "archipel-ide-text",
  "archipel-ide-view",
- "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components)",
+ "archipel-kit",
  "archipel-kit-model",
  "eframe",
  "egui",
@@ -934,25 +926,10 @@ dependencies = [
 [[package]]
 name = "archipel-kit"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components#8a7641e0c36e83c0e0985bcbd94af9ebf8c655a9"
+source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
 dependencies = [
- "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components)",
+ "archipel-icons",
  "archipel-kit-model",
- "egui",
- "egui_kittest",
- "objc2 0.6.5",
- "objc2-app-kit 0.3.2",
- "objc2-foundation 0.3.2",
- "regex",
- "serde",
-]
-
-[[package]]
-name = "archipel-kit"
-version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#577ce543bef1ecb2ee5ab5532198924003ef9ae1"
-dependencies = [
- "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
  "egui",
  "egui_kittest",
  "objc2 0.6.5",
@@ -965,19 +942,19 @@ dependencies = [
 [[package]]
 name = "archipel-kit-model"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components#8a7641e0c36e83c0e0985bcbd94af9ebf8c655a9"
+source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
 dependencies = [
- "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components)",
+ "archipel-icons",
  "serde",
 ]
 
 [[package]]
 name = "archipel-kit-tui"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components#8a7641e0c36e83c0e0985bcbd94af9ebf8c655a9"
+source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
 dependencies = [
- "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components)",
- "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components)",
+ "archipel-icons",
+ "archipel-kit",
  "archipel-kit-model",
  "ratatui",
  "unicode-width 0.2.2",
@@ -1000,7 +977,7 @@ name = "archipel-plugin-testing"
 version = "0.1.0"
 source = "git+https://github.com/archipel-dev/sdk?branch=main#241e7e8db542905e65892145174cd5ddb0828168"
 dependencies = [
- "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
+ "archipel-kit",
  "archipel-plugin-api",
  "archipel-plugin-ui",
  "egui",
@@ -1011,7 +988,7 @@ name = "archipel-plugin-ui"
 version = "0.1.0"
 source = "git+https://github.com/archipel-dev/sdk?branch=main#241e7e8db542905e65892145174cd5ddb0828168"
 dependencies = [
- "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
+ "archipel-kit",
  "archipel-plugin-api",
  "egui",
 ]

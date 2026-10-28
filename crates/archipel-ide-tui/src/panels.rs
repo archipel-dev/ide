@@ -6,7 +6,7 @@
 use crate::app::{COMMIT, DialogKind, FIND, PROBLEMS, RUN, TERMINAL, TuiApp};
 use crate::keys::key_bytes;
 use crate::log::{Line, LogEvent, LogView, Tone};
-use archipel_ide_core::Severity;
+use archipel_ide_core::{FileProblems, Severity};
 use archipel_ide_git::ChangeKind;
 use archipel_ide_runner::TaskState;
 use archipel_kit_tui::Glyph;
@@ -94,6 +94,81 @@ fn severity_line(severity: Severity) -> (Tone, Glyph) {
         Severity::Warning => (Tone::Warning, Glyph::Warning),
         Severity::WeakWarning | Severity::Hint => (Tone::Info, Glyph::WeakWarning),
     }
+}
+
+/// The rows of the Problems list: a header per file (name, directory, count) followed by its
+/// problems. Problems that belong to no file (the build configuration, the JRE; an empty
+/// path) are grouped under the project's name and open nothing.
+fn problem_rows(files: &[FileProblems], project: &str) -> (Vec<Line>, Vec<Open>) {
+    let mut lines = Vec::new();
+    let mut targets = Vec::new();
+    for file in files {
+        let worst = file
+            .problems
+            .iter()
+            .map(|problem| problem.severity)
+            .min()
+            .unwrap_or(Severity::Hint);
+        let (tone, _) = severity_line(worst);
+        let project_level = file.path.as_os_str().is_empty();
+        let name = if project_level {
+            project.to_owned()
+        } else {
+            file.path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        };
+        let mut header = Line::new(name, tone);
+        header.icon = Some(if project_level {
+            RowIcon::Glyph(Glyph::Project)
+        } else {
+            crate::layout::file_icon(&file.path)
+        });
+        let count = format!(
+            "{} problem{}",
+            file.problems.len(),
+            if file.problems.len() == 1 { "" } else { "s" }
+        );
+        let directory = file
+            .path
+            .parent()
+            .map(|parent| parent.display().to_string())
+            .unwrap_or_default();
+        header.detail = if directory.is_empty() {
+            count
+        } else {
+            format!("{directory} · {count}")
+        };
+        lines.push(header);
+        let open = |line: Option<usize>, column: Option<usize>| {
+            if project_level {
+                Open::Nothing
+            } else {
+                Open::File {
+                    path: file.path.clone(),
+                    line,
+                    column,
+                    length: None,
+                }
+            }
+        };
+        targets.push(open(None, None));
+        for problem in file.problems.iter().filter(|p| p.severity.listed()) {
+            let (tone, glyph) = severity_line(problem.severity);
+            let mut line = Line::new(problem.message.lines().next().unwrap_or_default(), tone);
+            line.icon = Some(RowIcon::Glyph(glyph));
+            line.indent = 2;
+            line.detail = format!("{}:{}", problem.line + 1, problem.column + 1);
+            lines.push(line);
+            targets.push(open(Some(problem.line + 1), Some(problem.column + 1)));
+        }
+    }
+    if lines.is_empty() {
+        lines.push(Line::new("No problems found in the project", Tone::Muted));
+        targets.push(Open::Nothing);
+    }
+    (lines, targets)
 }
 
 impl TuiApp {
@@ -225,60 +300,14 @@ impl TuiApp {
         if self.panels.problems_key == Some(signature) {
             return;
         }
-        let mut lines = Vec::new();
-        let mut targets = Vec::new();
-        for file in index.files() {
-            let worst = file
-                .problems
-                .iter()
-                .map(|problem| problem.severity)
-                .min()
-                .unwrap_or(Severity::Hint);
-            let (tone, glyph) = severity_line(worst);
-            let mut header = Line::new(
-                file.path
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
-                tone,
-            );
-            header.icon = Some(crate::layout::file_icon(&file.path));
-            let _ = glyph;
-            header.detail = format!(
-                "{} · {} problem{}",
-                file.path
-                    .parent()
-                    .map(|parent| parent.display().to_string())
-                    .unwrap_or_default(),
-                file.problems.len(),
-                if file.problems.len() == 1 { "" } else { "s" }
-            );
-            lines.push(header);
-            targets.push(Open::File {
-                path: file.path.clone(),
-                line: None,
-                column: None,
-                length: None,
-            });
-            for problem in file.problems.iter().filter(|p| p.severity.listed()) {
-                let (tone, glyph) = severity_line(problem.severity);
-                let mut line = Line::new(problem.message.lines().next().unwrap_or_default(), tone);
-                line.icon = Some(RowIcon::Glyph(glyph));
-                line.indent = 2;
-                line.detail = format!("{}:{}", problem.line + 1, problem.column + 1);
-                lines.push(line);
-                targets.push(Open::File {
-                    path: file.path.clone(),
-                    line: Some(problem.line + 1),
-                    column: Some(problem.column + 1),
-                    length: None,
-                });
-            }
-        }
-        if lines.is_empty() {
-            lines.push(Line::new("No problems found in the project", Tone::Muted));
-            targets.push(Open::Nothing);
-        }
+        let project = self
+            .ide
+            .state()
+            .project()
+            .and_then(|project| project.root().file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "project".to_owned());
+        let (lines, targets) = problem_rows(index.files(), &project);
         self.panels.problem_lines = lines;
         self.panels.problem_targets = targets;
         self.panels.problems_key = Some(signature);
@@ -731,5 +760,58 @@ impl TuiApp {
             }
             None => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use archipel_ide_core::Problem;
+
+    fn problem(severity: Severity, message: &str) -> Problem {
+        Problem {
+            severity,
+            message: message.into(),
+            source: None,
+            code: None,
+            line: 0,
+            column: 0,
+            end_line: 0,
+            end_column: 1,
+            unnecessary: false,
+            deprecated: false,
+        }
+    }
+
+    #[test]
+    fn problems_without_a_file_are_grouped_under_the_project_name() {
+        let files = [
+            FileProblems {
+                path: PathBuf::new(),
+                problems: vec![
+                    problem(Severity::Warning, "Build path specifies JavaSE-1.8"),
+                    problem(Severity::Warning, "The compiler compliance is 1.8"),
+                ],
+            },
+            FileProblems {
+                path: PathBuf::from("src/App.java"),
+                problems: vec![problem(Severity::Error, "greet() is undefined")],
+            },
+        ];
+        let (lines, targets) = problem_rows(&files, "demo");
+        assert_eq!(lines[0].text, "demo");
+        assert_eq!(
+            lines[0].detail, "2 problems",
+            "no empty directory before the count"
+        );
+        assert!(matches!(
+            lines[0].icon,
+            Some(RowIcon::Glyph(Glyph::Project))
+        ));
+        assert_eq!(lines[3].text, "App.java");
+        assert_eq!(lines[3].detail, "src · 1 problem");
+        // A group without a file opens nothing; a file's rows open it.
+        assert!(targets[..3].iter().all(|open| *open == Open::Nothing));
+        assert!(matches!(&targets[4], Open::File { line: Some(1), .. }));
     }
 }

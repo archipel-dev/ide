@@ -87,6 +87,8 @@ pub struct PassSpec {
     /// Runs synchronously on the edit thread, without debounce.
     pub inline: bool,
     pub triggers: Triggers,
+    /// Quiet time of this pass instead of [`SchedulerConfig::debounce`].
+    pub debounce: Option<Duration>,
 }
 
 impl PassSpec {
@@ -97,6 +99,7 @@ impl PassSpec {
             visible_first: false,
             inline: false,
             triggers: Triggers::CONTENT,
+            debounce: None,
         }
     }
 
@@ -112,6 +115,11 @@ impl PassSpec {
 
     pub fn inline(mut self) -> Self {
         self.inline = true;
+        self
+    }
+
+    pub fn debounce(mut self, debounce: Option<Duration>) -> Self {
+        self.debounce = debounce;
         self
     }
 
@@ -410,7 +418,7 @@ impl Scheduler {
             } else if trigger == Trigger::VisibleRangeChanged {
                 Duration::ZERO
             } else {
-                config.debounce
+                pass.spec.debounce.unwrap_or(config.debounce)
             };
             pass.state = State::Pending { due: now + delay };
         }

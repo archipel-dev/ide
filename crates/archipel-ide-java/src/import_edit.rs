@@ -127,6 +127,11 @@ pub fn parse_imports(text: &str) -> (Vec<ImportNode>, Option<usize>) {
     let Some(tree) = source::parse(text) else {
         return (Vec::new(), None);
     };
+    parse_imports_in(text, &tree)
+}
+
+/// [`parse_imports`] over a tree the caller already has.
+pub fn parse_imports_in(text: &str, tree: &tree_sitter::Tree) -> (Vec<ImportNode>, Option<usize>) {
     let root = tree.root_node();
     let mut out = Vec::new();
     let mut package_end = None;
@@ -884,10 +889,24 @@ pub fn unused_imports(
     own_package: &str,
     env: &Env<'_>,
 ) -> Vec<ImportNode> {
+    match source::parse(text) {
+        Some(tree) => unused_imports_in(text, &tree, usage, own_package, env),
+        None => Vec::new(),
+    }
+}
+
+/// [`unused_imports`] over a tree the caller already has.
+pub fn unused_imports_in(
+    text: &str,
+    tree: &tree_sitter::Tree,
+    usage: &Usage,
+    own_package: &str,
+    env: &Env<'_>,
+) -> Vec<ImportNode> {
     if usage.uncertain {
         return Vec::new();
     }
-    let (imports, _) = parse_imports(text);
+    let (imports, _) = parse_imports_in(text, tree);
     let mut out = Vec::new();
     for (i, imp) in imports.into_iter().enumerate() {
         let st = &imp.stub;

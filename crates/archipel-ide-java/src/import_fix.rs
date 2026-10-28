@@ -467,6 +467,7 @@ fn expected_fit(
         PTy::Ref(f) => Ty::Ref {
             fqn: Some(f.clone()),
             display: ty::display(f),
+            args: Vec::new(),
         },
         PTy::Array(_) => Ty::Unknown,
         _ => Ty::Unknown,

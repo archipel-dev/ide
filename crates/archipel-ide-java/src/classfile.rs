@@ -336,7 +336,9 @@ fn annotations(data: &[u8], pool: &Pool, names: &Names<'_>) -> Vec<String> {
         };
         let ty = p.ty();
         let Ok(pairs) = c.u2() else { break };
-        let is_target = ty == "java.lang.annotation.Target";
+        // `@Retention(SOURCE)` marks annotations that only an annotation processor can act on.
+        let is_target =
+            ty == "java.lang.annotation.Target" || ty == "java.lang.annotation.Retention";
         let mut constants = Vec::new();
         let mut ok = true;
         for _ in 0..pairs {

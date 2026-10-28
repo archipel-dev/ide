@@ -289,3 +289,88 @@ fn a_lone_non_imported_candidate_is_not_inserted_without_confirmation() {
     p.state.accept_completion(false).unwrap();
     assert!(text(&p.state).contains("import java.util.StringJoiner;"));
 }
+
+const LIST_TEXT: &str =
+    "package p;\n\nimport java.util.List;\n\nclass Main {\n    void run() {\n        \n    }\n}\n";
+
+fn messages(state: &IdeState) -> Vec<String> {
+    state
+        .active_problems()
+        .iter()
+        .map(|p| p.message.clone())
+        .collect()
+}
+
+/// The owner's bug on main: `List<String> more = new ArrayLi`, accept `ArrayList` (import added),
+/// type `();`: nothing stale may stay in Problems or underlined. The unresolved name is marked
+/// while typing and is gone, with the import in place, once the debounce has run.
+#[test]
+fn typing_a_class_name_accepting_it_and_finishing_the_statement_leaves_no_error() {
+    let mut p = open("stale", &[(MAIN, LIST_TEXT)], &[], MAIN);
+    caret_at(&mut p.state, "void run() {\n        ");
+    type_text(&mut p.state, "List<String> more = new ArrayLi");
+    wait(&mut p.state, 20, "the error while typing", |s| {
+        messages(s)
+            .iter()
+            .any(|m| m == "Cannot resolve symbol 'ArrayLi'")
+    });
+    p.state.accept_completion(false).unwrap();
+    assert!(text(&p.state).contains("import java.util.ArrayList;"));
+    type_text(&mut p.state, "();");
+    wait(&mut p.state, 20, "no error after the debounce", |s| {
+        s.active_problems()
+            .iter()
+            .all(|p| p.severity != archipel_ide_core::Severity::Error)
+    });
+    let left = messages(&p.state);
+    assert!(
+        left.iter().all(|m| !m.contains("ArrayLi")),
+        "stale problems: {left:?}"
+    );
+    assert!(
+        !left.iter().any(|m| m.starts_with("Syntax error")),
+        "stale problems: {left:?}"
+    );
+}
+
+/// The owner's case `foo();` in a class without `foo`, unsaved, character by character: the
+/// call is red within the budget after the last keystroke (100 ms Java debounce plus the pass,
+/// plan 3.5), with the catalog message and on exactly the name.
+#[test]
+fn an_unknown_method_call_is_red_shortly_after_the_last_keystroke() {
+    let mut p = open("foo", &[(MAIN, MAIN_TEXT)], &[], MAIN);
+    caret_at(&mut p.state, "Object list = ");
+    for c in "foo();".chars() {
+        p.state.editor_type_live(&c.to_string()).unwrap();
+        pump(&mut p.state);
+    }
+    let typed = Instant::now();
+    let mut seen = None;
+    while typed.elapsed() < Duration::from_secs(5) {
+        pump(&mut p.state);
+        if let Some(problem) = p
+            .state
+            .active_problems()
+            .into_iter()
+            .find(|p| p.message == "Cannot resolve method 'foo()'")
+        {
+            seen = Some((typed.elapsed(), problem));
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let (after, problem) = seen.expect("the unknown call is marked");
+    eprintln!(
+        "unknown call marked {} ms after the last keystroke",
+        after.as_millis()
+    );
+    assert_eq!(
+        (problem.line, problem.end_line),
+        (problem.line, problem.line)
+    );
+    assert_eq!(problem.end_column - problem.column, "foo".len());
+    assert!(
+        after < Duration::from_millis(1000),
+        "marked only after {after:?}"
+    );
+}

@@ -46,7 +46,9 @@ pub struct Shared {
 /// other registered pass is an ordinary content pass.
 pub fn spec_of(pass: &dyn Pass) -> PassSpec {
     let id = pass.id();
-    let mut spec = PassSpec::new(id).after(pass.after());
+    let mut spec = PassSpec::new(id)
+        .after(pass.after())
+        .debounce(pass.debounce());
     if pass.visible_range_first() {
         spec = spec.visible_first();
     }

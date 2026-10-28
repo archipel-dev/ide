@@ -121,6 +121,9 @@ pub struct Env<'a> {
     pub current: Option<&'a CurrentFile>,
     depth: Cell<u32>,
     supers: RefCell<HashMap<(u32, String), Rc<Supers>>>,
+    /// Answers of the index for this analysis: a file names the same few classes again and again.
+    classes: RefCell<HashMap<String, Option<ClassHit>>>,
+    packages: RefCell<HashMap<String, bool>>,
 }
 
 const MAX_DEPTH: u32 = 32;
@@ -141,6 +144,8 @@ impl<'a> Env<'a> {
             current,
             depth: Cell::new(0),
             supers: RefCell::new(HashMap::new()),
+            classes: RefCell::new(HashMap::new()),
+            packages: RefCell::new(HashMap::new()),
         }
     }
 
@@ -157,6 +162,17 @@ impl<'a> Env<'a> {
     // ---- class lookup ---------------------------------------------------------------
 
     pub fn find_class(&self, fqn: &str) -> Res<Option<ClassHit>> {
+        if let Some(hit) = self.classes.borrow().get(fqn) {
+            return Ok(hit.clone());
+        }
+        let found = self.find_class_uncached(fqn)?;
+        self.classes
+            .borrow_mut()
+            .insert(fqn.to_string(), found.clone());
+        Ok(found)
+    }
+
+    fn find_class_uncached(&self, fqn: &str) -> Res<Option<ClassHit>> {
         if let Some(cur) = self.current {
             for (i, top) in cur.stub.classes.iter().enumerate() {
                 let mut found = None;
@@ -185,7 +201,14 @@ impl<'a> Env<'a> {
         {
             return Ok(true);
         }
-        self.index.has_package(package, self.scope)
+        if let Some(known) = self.packages.borrow().get(package) {
+            return Ok(*known);
+        }
+        let known = self.index.has_package(package, self.scope)?;
+        self.packages
+            .borrow_mut()
+            .insert(package.to_string(), known);
+        Ok(known)
     }
 
     // ---- hierarchy ------------------------------------------------------------------

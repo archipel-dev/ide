@@ -93,6 +93,10 @@ pub struct Analyzer<'a, 'e> {
     /// Members may exist that no declaration shows (an annotation processor or an unresolved
     /// annotation could generate them): member errors are uncertain, so none is reported.
     augmented: bool,
+    /// Parent of every node, built once: `Node::parent` walks down from the root each time.
+    parents: HashMap<usize, Node<'a>>,
+    /// Types of expressions already computed (a call chain asks for the receiver at every link).
+    expr_types: HashMap<usize, Ty>,
 }
 
 #[derive(Debug, Clone)]
@@ -141,6 +145,8 @@ pub fn analyze(
         local_hits: HashMap::new(),
         pattern_cache: HashMap::new(),
         augmented: false,
+        parents: parent_map(tree),
+        expr_types: HashMap::new(),
     };
     a.augmented = a.member_augmentation_possible().unwrap_or(true);
     // Nothing can be said for a file that cannot be parsed reliably.
@@ -176,6 +182,31 @@ fn is_source_retained(annotations: &[String]) -> bool {
 fn annotation_name(text: &str) -> &str {
     let t = text.trim().trim_start_matches('@');
     t.split('(').next().unwrap_or(t).trim()
+}
+
+fn parent_map(tree: &Tree) -> HashMap<usize, Node<'_>> {
+    let mut out = HashMap::new();
+    let mut cursor = tree.walk();
+    let mut stack: Vec<Node<'_>> = Vec::new();
+    loop {
+        let node = cursor.node();
+        if let Some(p) = stack.last() {
+            out.insert(node.id(), *p);
+        }
+        if cursor.goto_first_child() {
+            stack.push(node);
+            continue;
+        }
+        loop {
+            if cursor.goto_next_sibling() {
+                break;
+            }
+            if !cursor.goto_parent() {
+                return out;
+            }
+            stack.pop();
+        }
+    }
 }
 
 fn kind_is_class(k: &str) -> bool {
@@ -230,11 +261,15 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         Ok(false)
     }
 
-    fn txt(&self, n: Node<'_>) -> &'a str {
+    pub(super) fn parent(&self, n: Node<'a>) -> Option<Node<'a>> {
+        self.parents.get(&n.id()).copied()
+    }
+
+    fn txt(&self, n: Node<'a>) -> &'a str {
         &self.text[n.byte_range()]
     }
 
-    fn push_symbol(&mut self, n: Node<'_>, name: &str, class_ref: bool, annotation: bool) {
+    fn push_symbol(&mut self, n: Node<'a>, name: &str, class_ref: bool, annotation: bool) {
         self.push_symbol_at(range(n), name, class_ref, annotation);
     }
 
@@ -302,7 +337,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
     fn check_imports(&mut self) -> Res<()> {
         let root = self.tree.root_node();
         let mut cur = root.walk();
-        let nodes: Vec<Node<'_>> = root
+        let nodes: Vec<Node<'a>> = root
             .children(&mut cur)
             .filter(|n| n.kind() == "import_declaration")
             .collect();
@@ -400,7 +435,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
 
     // ---- the walk -----------------------------------------------------------------------
 
-    fn visit(&mut self, node: Node<'_>) -> Res<()> {
+    fn visit(&mut self, node: Node<'a>) -> Res<()> {
         match node.kind() {
             "block_comment" => {
                 self.javadoc(node)?;
@@ -452,9 +487,9 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         self.visit_children(node)
     }
 
-    fn visit_children(&mut self, node: Node<'_>) -> Res<()> {
+    fn visit_children(&mut self, node: Node<'a>) -> Res<()> {
         let mut c = node.walk();
-        let kids: Vec<Node<'_>> = node.children(&mut c).collect();
+        let kids: Vec<Node<'a>> = node.children(&mut c).collect();
         for k in kids {
             self.visit(k)?;
         }
@@ -462,8 +497,8 @@ impl<'a, 'e> Analyzer<'a, 'e> {
     }
 
     /// Whether an `identifier` node is an expression name (as opposed to a declaration, label, ...).
-    fn ident_role(&self, n: Node<'_>) -> Option<()> {
-        let p = n.parent()?;
+    fn ident_role(&self, n: Node<'a>) -> Option<()> {
+        let p = self.parent(n)?;
         let field_of = |f: &str| p.child_by_field_name(f).is_some_and(|c| c.id() == n.id());
         let ok = match p.kind() {
             "binary_expression"
@@ -500,7 +535,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
     }
 
     /// Javadoc references count as uses of imports (JAVA-IMP-073); they are never reported.
-    fn javadoc(&mut self, n: Node<'_>) -> Res<()> {
+    fn javadoc(&mut self, n: Node<'a>) -> Res<()> {
         let text = self.txt(n);
         if !text.starts_with("/**") || !text.contains('@') {
             return Ok(());
@@ -540,7 +575,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         Ok(())
     }
 
-    fn annotation(&mut self, n: Node<'_>) -> Res<()> {
+    fn annotation(&mut self, n: Node<'a>) -> Res<()> {
         let Some(name) = n.child_by_field_name("name") else {
             return Ok(());
         };
@@ -549,9 +584,9 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         self.resolve_type_chain(n, &segs, &names, true)
     }
 
-    fn type_ref(&mut self, n: Node<'_>) -> Res<()> {
+    fn type_ref(&mut self, n: Node<'a>) -> Res<()> {
         // Declarations: the name of a type parameter is not a reference.
-        if let Some(p) = n.parent()
+        if let Some(p) = self.parent(n)
             && p.kind() == "type_parameter"
             && p.child(0).is_some_and(|c| c.id() == n.id())
         {
@@ -564,7 +599,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         self.resolve_type_chain(n, &[n], &[name.to_string()], false)
     }
 
-    fn scoped_type_ref(&mut self, n: Node<'_>) -> Res<()> {
+    fn scoped_type_ref(&mut self, n: Node<'a>) -> Res<()> {
         let segs = scoped_segments(n);
         let names: Vec<String> = segs.iter().map(|s| self.txt(*s).to_string()).collect();
         self.resolve_type_chain(n, &segs, &names, false)

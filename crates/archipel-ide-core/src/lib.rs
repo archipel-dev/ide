@@ -1655,6 +1655,79 @@ pub fn built_in_commands() -> CommandRegistry<IdeState> {
         ))
         .expect("unique built-in id");
     registry
+        .register(Command::new(
+            spec("project.expandAll", "Expand All", "Project", None, "{}"),
+            |s: &IdeState| s.project.is_some(),
+            |state: &mut IdeState, _| {
+                // Directories listed so far; lazily loaded ones expand level by level.
+                for _ in 0..8 {
+                    let dirs: Vec<PathBuf> = state
+                        .files
+                        .iter()
+                        .filter(|e| e.is_dir && !state.expanded_dirs.contains(&e.relative_path))
+                        .map(|e| e.relative_path.clone())
+                        .collect();
+                    if dirs.is_empty() {
+                        break;
+                    }
+                    for dir in dirs {
+                        if state.load_children(&dir).is_ok() {
+                            state.expanded_dirs.insert(dir);
+                        }
+                    }
+                }
+                Ok(json!({"expanded": state.expanded_dirs.len()}))
+            },
+        ))
+        .expect("unique built-in id");
+    registry
+        .register(Command::new(
+            spec("project.collapseAll", "Collapse All", "Project", None, "{}"),
+            |s: &IdeState| s.project.is_some(),
+            |state: &mut IdeState, _| {
+                state.expanded_dirs.clear();
+                Ok(json!({}))
+            },
+        ))
+        .expect("unique built-in id");
+    registry
+        .register(Command::new(
+            spec(
+                "project.locateOpenFile",
+                "Select Opened File",
+                "Project",
+                None,
+                "{}",
+            ),
+            |s: &IdeState| s.project.is_some() && s.active_document.is_some(),
+            |state: &mut IdeState, _| {
+                let path = state
+                    .active_document
+                    .and_then(|index| state.documents.get(index))
+                    .map(|document| document.path.clone())
+                    .ok_or_else(|| CommandError::Failed("no file is open".into()))?;
+                let ancestors: Vec<PathBuf> = path
+                    .ancestors()
+                    .skip(1)
+                    .filter(|a| !a.as_os_str().is_empty())
+                    .map(Path::to_path_buf)
+                    .collect();
+                for dir in ancestors.into_iter().rev() {
+                    if state
+                        .files
+                        .iter()
+                        .any(|e| e.is_dir && e.relative_path == dir)
+                        && !state.expanded_dirs.contains(&dir)
+                        && state.load_children(&dir).is_ok()
+                    {
+                        state.expanded_dirs.insert(dir);
+                    }
+                }
+                Ok(json!({"path": path}))
+            },
+        ))
+        .expect("unique built-in id");
+    registry
 }
 
 #[cfg(test)]

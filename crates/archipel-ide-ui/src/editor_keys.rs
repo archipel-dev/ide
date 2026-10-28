@@ -183,35 +183,10 @@ pub fn toggle_caret(selections: &mut SelectionSet, offset: usize) {
     }
 }
 
-/// Caret position widget text: `line:column`, the selected character and line
-/// break counts for a selection, or the caret count with several carets.
-pub fn caret_position_label(
-    text: &TextDocument,
-    selections: &SelectionSet,
-    (line, column): (usize, usize),
-) -> String {
-    let count = selections.selections().len();
-    if count > 1 {
-        return format!("{count} carets");
-    }
-    let primary = selections.primary();
-    let position = format!("{}:{}", line + 1, column + 1);
-    if primary.is_caret() {
-        return position;
-    }
-    let chars = primary.end() - primary.start();
-    let breaks = text.char_to_line(primary.end()) - text.char_to_line(primary.start());
-    let chars_label = if chars == 1 { "char" } else { "chars" };
-    match breaks {
-        0 => format!("{position} ({chars} {chars_label})"),
-        1 => format!("{position} ({chars} {chars_label}, 1 line break)"),
-        n => format!("{position} ({chars} {chars_label}, {n} line breaks)"),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use archipel_ide_view::status::caret_position_label;
 
     fn mods(ctrl: bool, alt: bool, shift: bool) -> Modifiers {
         Modifiers {

@@ -500,13 +500,23 @@ fn tabs(app: &mut IdeApp, ui: &mut egui::Ui, strip: Option<&TabStrip>) {
         None => (0..app.state.documents().len()).collect(),
     };
     let primary = strip.is_none_or(|strip| strip.primary);
-    for index in indices {
+    // What each tab says (name, selected, preview, pinned, dirty, errors, tooltip) is the view
+    // crate's model, the one the terminal draws too.
+    let model = app.with_view(|cx| {
+        archipel_ide_view::tabs::editor_tabs(
+            cx,
+            strip.map(|strip| strip.indices.as_slice()),
+            primary,
+        )
+    });
+    for (position, index) in indices.into_iter().enumerate() {
+        let Some(props) = model.tabs.get(position) else {
+            continue;
+        };
         let doc = &app.state.documents()[index];
-        let name = IdeApp::file_name(&doc.path);
-        let preview = app.state.is_preview(index);
-        let active = app.state.active_index() == Some(index)
-            && !app.state.diff_active()
-            && app.state.plugin_host_service().active_tab().is_none();
+        let name = props.title.clone();
+        let preview = props.preview;
+        let active = props.selected;
         let color = if active {
             *theme::TEXT_BRIGHT
         } else {
@@ -570,7 +580,7 @@ fn tabs(app: &mut IdeApp, ui: &mut egui::Ui, strip: Option<&TabStrip>) {
         );
         let text_rect = layout.text;
         ui.painter().galley(layout.text.min, galley, color);
-        if app.state.problems().has_errors(&doc.path) {
+        if props.error {
             problems_ui::squiggle(
                 ui.painter(),
                 text_rect.left(),
@@ -580,8 +590,8 @@ fn tabs(app: &mut IdeApp, ui: &mut egui::Ui, strip: Option<&TabStrip>) {
             );
         }
         let close_rect = layout.close;
-        let dirty = doc.text.is_dirty();
-        let pinned = app.state.is_pinned(index);
+        let dirty = props.dirty;
+        let pinned = props.pinned;
         let pointer_on_close = response
             .hover_pos()
             .is_some_and(|pos| close_rect.expand(2.0).contains(pos));
@@ -616,7 +626,12 @@ fn tabs(app: &mut IdeApp, ui: &mut egui::Ui, strip: Option<&TabStrip>) {
             ui.painter()
                 .circle_filled(layout.modified_dot, 2.5, theme::MODIFIED);
         }
-        let response = response.on_hover_text(doc.path.display().to_string());
+        let tooltip = props
+            .tooltip
+            .as_ref()
+            .map(|tip| tip.text(archipel_ide_view::Caps::gui().notation()))
+            .unwrap_or_default();
+        let response = response.on_hover_text(tooltip);
         response.context_menu(|ui| {
             let target = crate::context_menus::Target::Tab(index);
             let model = app.context_menu_model(&target);

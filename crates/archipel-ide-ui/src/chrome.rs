@@ -3,7 +3,9 @@
 use crate::icons::{self, Icon};
 use crate::widgets::{self, chrome_frame, glow_through_frame};
 use crate::{IdeApp, keys, theme};
+use archipel_ide_actions::ActionPlace;
 use archipel_ide_core::{Anchor, ToolWindow};
+use archipel_kit_model::{StripeButton, Tone};
 use eframe::egui::{self, Color32, Rect, Sense, vec2};
 use serde_json::{Value, json};
 
@@ -95,13 +97,41 @@ pub fn main_toolbar(app: &mut IdeApp, ctx: &egui::Context) {
                         window_controls(ui);
                     });
                 }
+                // The tooltips of the buttons the view crate builds (the terminal shows the
+                // same texts).
+                let (search_tip, settings_tip) = app.with_view(|cx| {
+                    let bar = archipel_ide_view::toolbar::main_toolbar(cx);
+                    let tip = |id: &str| {
+                        bar.items().find_map(|item| match item {
+                            archipel_kit_model::ToolbarItem::Button(button) if button.id == id => {
+                                button
+                                    .tooltip
+                                    .as_ref()
+                                    .map(|t| t.text(archipel_ide_view::Caps::gui().notation()))
+                            }
+                            _ => None,
+                        })
+                    };
+                    (
+                        tip(archipel_ide_view::toolbar::ids::SEARCH),
+                        tip(archipel_ide_view::toolbar::ids::SETTINGS),
+                    )
+                });
+                // Settings, the gear right of Search Everywhere (it was only a menu item and a
+                // shortcut before; the terminal toolbar has it too).
+                if icons::toolbar_button(
+                    ui,
+                    Icon::Task,
+                    &settings_tip.unwrap_or_else(|| "Settings".into()),
+                )
+                .clicked()
+                {
+                    app.run_action("ShowSettings", ActionPlace::Toolbar, ctx);
+                }
                 if icons::toolbar_button(
                     ui,
                     Icon::Search,
-                    &format!(
-                        "Search Everywhere ({})",
-                        app.action_shortcut("SearchEverywhere").unwrap_or_default()
-                    ),
+                    &search_tip.unwrap_or_else(|| "Search Everywhere".into()),
                 )
                 .clicked()
                 {
@@ -613,8 +643,38 @@ pub(crate) fn stripe_gap() -> f32 {
     archipel_kit::tokens::stripe::PITCH - archipel_kit::tokens::stripe::BUTTON
 }
 
-pub(crate) fn stripe_button(app: &mut IdeApp, ui: &mut egui::Ui, window: ToolWindow, icon: Icon) {
-    let selected = app.state.tool_windows().is_visible(window);
+/// The window's icon on a stripe button.
+fn stripe_icon(window: ToolWindow) -> Icon {
+    match window {
+        ToolWindow::Project => Icon::Project,
+        ToolWindow::Commit => Icon::Commit,
+        ToolWindow::Structure | ToolWindow::Hierarchy => Icon::Structure,
+        ToolWindow::Agents => {
+            Icon::Kit(crate::agents_ui::glyph(crate::agents_ui::Concept::Agent).into())
+        }
+        ToolWindow::ResourceManager | ToolWindow::BuildVariants => Icon::Variants,
+        ToolWindow::Git => Icon::Branch,
+        ToolWindow::Logcat => Icon::Logcat,
+        ToolWindow::Problems => Icon::Problems,
+        ToolWindow::Todo => Icon::Success,
+        ToolWindow::Terminal => Icon::Terminal,
+        ToolWindow::Build => Icon::Build,
+        ToolWindow::Debug => Icon::Debug,
+        ToolWindow::Find => Icon::Find,
+        ToolWindow::Gradle | ToolWindow::Bazel => Icon::Model,
+        ToolWindow::DeviceManager | ToolWindow::RunningDevices => Icon::Device,
+        ToolWindow::AiChat => Icon::Ai,
+    }
+}
+
+/// One stripe button of the view crate's model: selected state, badge and tooltip come from
+/// the model (the terminal draws the same ones).
+pub(crate) fn stripe_button(app: &mut IdeApp, ui: &mut egui::Ui, button_props: &StripeButton) {
+    let Some(window) = ToolWindow::parse(&button_props.id) else {
+        return;
+    };
+    let icon = stripe_icon(window);
+    let selected = button_props.selected;
     let button = archipel_kit::tokens::stripe::BUTTON;
     let icon_edge = archipel_kit::tokens::stripe::ICON;
     let (rect, response) = ui.allocate_exact_size(vec2(button, button), Sense::click());
@@ -638,40 +698,25 @@ pub(crate) fn stripe_button(app: &mut IdeApp, ui: &mut egui::Ui, window: ToolWin
         icon,
         color,
     );
-    let mut badge = None;
-    if window == ToolWindow::Problems {
-        let counts = app.state.problems().counts();
-        if counts.errors > 0 {
-            badge = Some(theme::ERROR);
-        } else if counts.warnings > 0 {
-            badge = Some(theme::WARNING);
-        }
-    }
-    if window == ToolWindow::Build && app.state.execution().is_running() {
-        badge = Some(theme::RUN_GREEN);
-    }
-    if window == ToolWindow::Agents {
-        let counts = app.state.agents_manager().counts();
-        if counts.needs_input > 0 {
-            badge = Some(theme::WARNING);
-        } else if counts.working > 0 {
-            badge = Some(theme::RUN_GREEN);
-        }
-    }
+    let badge = button_props.badge.map(|tone| match tone {
+        Tone::Error => theme::ERROR,
+        Tone::Warning => theme::WARNING,
+        _ => theme::RUN_GREEN,
+    });
     if let Some(color) = badge {
         ui.painter()
             .circle_filled(rect.right_top() + vec2(-7.0, 7.0), 3.0, color);
     }
-    let tooltip = match window.shortcut() {
-        "" => window.title().to_owned(),
-        shortcut => format!("{} ({})", window.title(), keys::display(shortcut)),
-    };
+    let tooltip = button_props
+        .tooltip
+        .text(archipel_ide_view::Caps::gui().notation());
     if response.on_hover_text(tooltip).clicked() {
         app.toggle_tool_window(window);
     }
 }
 
 pub fn left_stripe(app: &mut IdeApp, ctx: &egui::Context) {
+    let strip = app.with_view(archipel_ide_view::stripes::left_stripe);
     egui::SidePanel::left("left_stripe")
         .exact_width(STRIPE_WIDTH)
         .resizable(false)
@@ -680,22 +725,8 @@ pub fn left_stripe(app: &mut IdeApp, ctx: &egui::Context) {
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = stripe_gap();
             ui.vertical(|ui| {
-                stripe_button(app, ui, ToolWindow::Project, Icon::Project);
-                stripe_button(app, ui, ToolWindow::Commit, Icon::Commit);
-                stripe_button(app, ui, ToolWindow::Structure, Icon::Structure);
-                if !app.state.agents_manager().sessions().is_empty()
-                    || app.state.tool_windows().is_visible(ToolWindow::Agents)
-                {
-                    stripe_button(
-                        app,
-                        ui,
-                        ToolWindow::Agents,
-                        Icon::Kit(crate::agents_ui::glyph(crate::agents_ui::Concept::Agent).into()),
-                    );
-                }
-                if app.state.is_android_project() {
-                    stripe_button(app, ui, ToolWindow::ResourceManager, Icon::Variants);
-                    stripe_button(app, ui, ToolWindow::BuildVariants, Icon::Variants);
+                for button in &strip.top {
+                    stripe_button(app, ui, button);
                 }
                 let (rect, _) = ui.allocate_exact_size(
                     vec2(archipel_kit::tokens::stripe::BUTTON, 1.0),
@@ -708,58 +739,21 @@ pub fn left_stripe(app: &mut IdeApp, ctx: &egui::Context) {
                     ],
                     egui::Stroke::new(1.0_f32, theme::TOOLBAR_SEPARATOR),
                 );
+                // The bottom group is listed from the bottom up.
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-                    stripe_button(app, ui, ToolWindow::Git, Icon::Branch);
-                    if app.state.hierarchy().current.is_some() {
-                        stripe_button(app, ui, ToolWindow::Hierarchy, Icon::Structure);
+                    for button in &strip.bottom {
+                        stripe_button(app, ui, button);
                     }
-                    if app.state.is_android_project() {
-                        stripe_button(app, ui, ToolWindow::Logcat, Icon::Logcat);
-                    }
-                    stripe_button(app, ui, ToolWindow::Problems, Icon::Problems);
-                    stripe_button(app, ui, ToolWindow::Todo, Icon::Success);
-                    stripe_button(app, ui, ToolWindow::Terminal, Icon::Terminal);
-                    stripe_button(app, ui, ToolWindow::Build, Icon::Build);
-                    stripe_button(app, ui, ToolWindow::Debug, Icon::Debug);
-                    stripe_button(app, ui, ToolWindow::Find, Icon::Find);
                 });
             });
         });
-}
-
-/// Built-in right-anchored tool windows offered for the open project, top to bottom.
-pub(crate) fn right_stripe_windows(app: &IdeApp) -> Vec<(ToolWindow, Icon)> {
-    let mut windows = Vec::new();
-    if app.state.is_gradle_project() || app.state.tool_windows().is_visible(ToolWindow::Gradle) {
-        windows.push((ToolWindow::Gradle, Icon::Model));
-    }
-    if app.state.is_bazel_project() || app.state.tool_windows().is_visible(ToolWindow::Bazel) {
-        windows.push((ToolWindow::Bazel, Icon::Model));
-    }
-    if app.state.is_android_project()
-        || app
-            .state
-            .tool_windows()
-            .is_visible(ToolWindow::DeviceManager)
-    {
-        windows.push((ToolWindow::DeviceManager, Icon::Device));
-    }
-    if app.state.is_android_project()
-        || app
-            .state
-            .tool_windows
-            .is_visible(ToolWindow::RunningDevices)
-    {
-        windows.push((ToolWindow::RunningDevices, Icon::Device));
-    }
-    windows
 }
 
 /// Right tool window stripe: the project's right-anchored tool windows (Gradle,
 /// Bazel, Device Manager) and AI Chat, which is always offered. Plugin tool
 /// windows join this stripe (`plugin_ui::right_side`).
 pub fn right_stripe(app: &mut IdeApp, ctx: &egui::Context) {
-    let windows = right_stripe_windows(app);
+    let strip = app.with_view(archipel_ide_view::stripes::right_stripe);
     egui::SidePanel::right("right_stripe")
         .exact_width(STRIPE_WIDTH)
         .resizable(false)
@@ -767,10 +761,9 @@ pub fn right_stripe(app: &mut IdeApp, ctx: &egui::Context) {
         .frame(chrome_frame(ctx).inner_margin(stripe_margin()))
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = stripe_gap();
-            for (window, icon) in windows {
-                stripe_button(app, ui, window, icon);
+            for button in &strip.top {
+                stripe_button(app, ui, button);
             }
-            stripe_button(app, ui, ToolWindow::AiChat, Icon::Ai);
         });
 }
 
@@ -848,66 +841,99 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                     egui::Stroke::new(line, theme::DIVIDER),
                 );
             }
+            // The view crate's status bar for this frame. The window supplies what only it
+            // knows: the declarations around the caret (its structure cache) and whether the
+            // file is read-only (probed once a second).
+            let (code_kinds, status) = {
+                let code: Vec<(archipel_ide_language::SymbolKind, String)> = app
+                    .state
+                    .active_doc()
+                    .map(|document| crate::structure_view::breadcrumbs(ctx, document))
+                    .unwrap_or_default();
+                let read_only = app
+                    .state
+                    .active_doc()
+                    .is_some_and(|doc| is_read_only(ctx, &app.state.absolute_path(&doc.path)));
+                let mut data = app.view_data();
+                data.read_only = read_only;
+                data.code_crumbs = code
+                    .iter()
+                    .map(|(kind, name)| archipel_ide_view::status::CodeCrumb {
+                        kind: *kind,
+                        name: name.clone(),
+                        line: 0,
+                        column: 0,
+                    })
+                    .collect();
+                let cx = archipel_ide_view::ViewCx::new(
+                    &app.state,
+                    &app.commands,
+                    &data,
+                    archipel_ide_view::Caps::gui(),
+                );
+                (
+                    code.iter().map(|(kind, _)| *kind).collect::<Vec<_>>(),
+                    archipel_ide_view::status::status_bar(&cx),
+                )
+            };
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 let font = egui::FontId::proportional(theme::UI_FONT_SIZE - 1.0);
-                // Navigation bar breadcrumbs: project › directories › file, then
-                // the declarations around the caret (class › method).
-                let mut crumbs = vec![app.project_name()];
-                let mut code_crumbs = Vec::new();
-                let mut file_replaced = false;
-                if let Some(document) = app.state.active_doc() {
-                    crumbs.extend(
-                        document
-                            .path
-                            .components()
-                            .map(|part| part.as_os_str().to_string_lossy().into_owned()),
-                    );
-                    code_crumbs = crate::structure_view::breadcrumbs(ctx, document);
-                    // Like IntelliJ, a top-level declaration named after the file
-                    // stands in for the file itself (`App.java` → `App`).
-                    let stem = document.path.file_stem().map(|stem| stem.to_string_lossy());
-                    if code_crumbs.first().map(|(_, name)| name.as_str()) == stem.as_deref() {
-                        crumbs.pop();
-                        file_replaced = true;
-                    }
-                }
-                let last = crumbs.len().saturating_sub(1);
+                // Navigation bar breadcrumbs: project › directories › file, then the
+                // declarations around the caret (class › method): the view crate's model.
+                let last = status.breadcrumbs.crumbs.len().saturating_sub(1);
                 let file_icon = app
                     .state
                     .active_doc()
                     .map(|document| app.file_icon(&document.path));
-                for (index, crumb) in crumbs.iter().enumerate() {
+                let mut code_index = 0;
+                for (index, crumb) in status.breadcrumbs.crumbs.iter().enumerate() {
+                    if crumb.id.starts_with("code:") {
+                        let kind = code_kinds.get(code_index).copied();
+                        code_index += 1;
+                        icons::show(ui, Icon::ChevronRight, 12.0, theme::TEXT_INFO);
+                        let (rect, _) = ui.allocate_exact_size(vec2(20.0, 22.0), Sense::hover());
+                        if let Some(kind) = kind {
+                            icons::paint(
+                                ui.painter(),
+                                Rect::from_center_size(rect.center(), vec2(14.0, 14.0)),
+                                Icon::Kit(crate::structure_view::icon(kind)),
+                                theme::ICON,
+                            );
+                        }
+                        widgets::flat_widget(
+                            ui,
+                            None,
+                            &crumb.text,
+                            font.clone(),
+                            theme::TEXT,
+                            false,
+                            22.0,
+                        );
+                        continue;
+                    }
+                    let is_file = matches!(crumb.icon, Some(archipel_kit_model::IconKey::File(_)));
                     let icon = if index == 0 {
                         Some((Icon::Project, *theme::TEXT_SECONDARY))
-                    } else if index == last && !file_replaced {
+                    } else if is_file {
                         Some((
-                            file_icon.unwrap_or_else(|| Icon::for_file(crumb)),
+                            file_icon.unwrap_or_else(|| Icon::for_file(&crumb.text)),
                             *icons::ICON,
                         ))
                     } else {
                         None
                     };
-                    let color = if index == last && !file_replaced {
+                    let color = if is_file {
                         *theme::TEXT
                     } else {
                         *theme::TEXT_SECONDARY
                     };
-                    widgets::flat_widget(ui, icon, crumb, font.clone(), color, false, 22.0);
-                    if index != last {
+                    widgets::flat_widget(ui, icon, &crumb.text, font.clone(), color, false, 22.0);
+                    if index != last
+                        && !status.breadcrumbs.crumbs[index + 1].id.starts_with("code:")
+                    {
                         icons::show(ui, Icon::ChevronRight, 12.0, *theme::TEXT_INFO);
                     }
-                }
-                for (kind, name) in code_crumbs {
-                    icons::show(ui, Icon::ChevronRight, 12.0, theme::TEXT_INFO);
-                    let (rect, _) = ui.allocate_exact_size(vec2(20.0, 22.0), Sense::hover());
-                    icons::paint(
-                        ui.painter(),
-                        Rect::from_center_size(rect.center(), vec2(14.0, 14.0)),
-                        Icon::Kit(crate::structure_view::icon(kind)),
-                        theme::ICON,
-                    );
-                    widgets::flat_widget(ui, None, &name, font.clone(), theme::TEXT, false, 22.0);
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -921,105 +947,58 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                     crate::index_status::status_widget(app, ui, font.clone());
                     crate::toolchain_status::status_widget(app, ui, font.clone());
                     crate::external_status::status_widget(app, ui, font.clone());
-                    let active = app.state.active_doc();
-                    if let Some(document) = active {
-                        // Bounded detection: never copy the whole buffer per frame.
-                        let indent = archipel_ide_text::format::detect_indent(&document.text)
-                            .unwrap_or(archipel_ide_text::format::Indent::Spaces(4));
-                        let separator =
-                            archipel_ide_text::format::detect_line_separator(&document.text);
-                        let caret = document.selections.primary().head;
-                        let (line, column) =
-                            document.text.char_to_line_column(caret).unwrap_or((0, 0));
-                        widgets::flat_widget(
+                    // Indent, encoding, line separator, caret, read-only and column, then the
+                    // update widget: the view crate's status items, drawn from the right.
+                    for id in [
+                        archipel_ide_view::status::ids::INDENT,
+                        archipel_ide_view::status::ids::ENCODING,
+                        archipel_ide_view::status::ids::SEPARATOR,
+                        archipel_ide_view::status::ids::CARET,
+                        archipel_ide_view::status::ids::READ_ONLY,
+                        archipel_ide_view::status::ids::COLUMN,
+                    ] {
+                        let Some(item) = status.items.iter().find(|item| item.id == id) else {
+                            continue;
+                        };
+                        let color = match item.tone {
+                            archipel_kit_model::Tone::Warning => *theme::WARNING,
+                            _ => *secondary,
+                        };
+                        let response = widgets::flat_widget(
                             ui,
                             None,
-                            &indent.label(),
+                            &item.text,
                             font.clone(),
-                            secondary,
+                            color,
                             false,
                             22.0,
                         );
-                        widgets::flat_widget(
-                            ui,
-                            None,
-                            "UTF-8",
-                            font.clone(),
-                            secondary,
-                            false,
-                            22.0,
-                        );
-                        widgets::flat_widget(
-                            ui,
-                            None,
-                            separator.label(),
-                            font.clone(),
-                            secondary,
-                            false,
-                            22.0,
-                        )
-                        .on_hover_text("Line separator");
-                        widgets::flat_widget(
-                            ui,
-                            None,
-                            &crate::editor_keys::caret_position_label(
-                                &document.text,
-                                &document.selections,
-                                (line, column),
-                            ),
-                            font.clone(),
-                            secondary,
-                            false,
-                            22.0,
-                        );
-                        if is_read_only(ctx, &app.state.absolute_path(&document.path)) {
-                            widgets::flat_widget(
-                                ui,
-                                None,
-                                "Read-only",
-                                font.clone(),
-                                *theme::WARNING,
-                                false,
-                                22.0,
-                            )
-                            .on_hover_text("File is read-only");
-                        }
-                        if document.selections.column_mode() {
-                            widgets::flat_widget(
-                                ui,
-                                None,
-                                "Column",
-                                font.clone(),
-                                secondary,
-                                false,
-                                22.0,
-                            );
+                        // Only the line separator and the read-only flag explain themselves.
+                        if matches!(
+                            id,
+                            archipel_ide_view::status::ids::SEPARATOR
+                                | archipel_ide_view::status::ids::READ_ONLY
+                        ) && let Some(tip) = &item.tooltip
+                        {
+                            response.on_hover_text(tip.title.clone());
                         }
                     }
-                    let update_state = app.state.update_state();
-                    if let archipel_ide_core::UpdateState::Available { version, .. }
-                    | archipel_ide_core::UpdateState::Installed(version) = &update_state
-                    {
-                        let label =
-                            if matches!(update_state, archipel_ide_core::UpdateState::Installed(_))
-                            {
-                                "Restart to update".to_owned()
-                            } else {
-                                format!("Update {version}")
-                            };
-                        if widgets::flat_widget(
+                    if let Some(item) = status
+                        .items
+                        .iter()
+                        .find(|item| item.id == archipel_ide_view::status::ids::UPDATE)
+                        && widgets::flat_widget(
                             ui,
                             Some((Icon::Refresh, *theme::MODIFIED)),
-                            &label,
+                            &item.text,
                             font.clone(),
                             *theme::MODIFIED,
                             false,
                             22.0,
                         )
                         .clicked()
-                        {
-                            app.state.notifications().show_update_balloon();
-                        }
+                    {
+                        app.state.notifications().show_update_balloon();
                     }
                     if app.state.execution().is_running() || app.state.search_running() {
                         widgets::busy_spinner(ui, 12.0, *theme::ACCENT);

@@ -396,10 +396,16 @@ fn scan_line(text: &str, line: usize, out: &mut Vec<RefToken>) {
                 !(p.is_ascii_alphanumeric() || p == b'-' || (p == b'_' && !allow_us))
             }
         };
-        let upper = [("PLAT-", 5), ("CI-", 3), ("JAVA-", 5), ("REF-", 4)]
-            .iter()
-            .find(|(p, _)| b[i..].starts_with(p.as_bytes()))
-            .map(|(_, n)| *n);
+        let upper = [
+            ("PLAT-", 5),
+            ("CI-", 3),
+            ("JAVA-", 5),
+            ("REF-", 4),
+            ("TUI-", 4),
+        ]
+        .iter()
+        .find(|(p, _)| b[i..].starts_with(p.as_bytes()))
+        .map(|(_, n)| *n);
         if let (Some(n), true) = (upper, boundary_ok(i, false)) {
             let set = &text[i..i + n - 1];
             let a0 = i + n;
@@ -1196,6 +1202,16 @@ mod tests {
         assert_eq!(toks[1].extra, vec![144]);
         assert!(toks[2].lowercase);
         assert_eq!(toks[2].area, "PLAT-PSI");
+    }
+
+    #[test]
+    fn scans_terminal_ui_ids() {
+        let toks = scan_text("// TUI-GUI-191, TUI-CMP-040..042 and ATUI-GUI-001");
+        assert_eq!(toks.len(), 2);
+        assert_eq!(toks[0].area, "TUI-GUI");
+        assert_eq!(toks[0].first, 191);
+        assert_eq!(toks[1].area, "TUI-CMP");
+        assert_eq!(toks[1].last, Some(42));
     }
 
     #[test]

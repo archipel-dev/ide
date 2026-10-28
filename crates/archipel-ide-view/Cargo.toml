@@ -1,0 +1,27 @@
+[package]
+name = "archipel-ide-view"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The view-model layer of Archipel IDE: what the chrome shows, as plain props, for the egui and the terminal frontend."
+
+[dependencies]
+archipel-ide-actions = { path = "../archipel-ide-actions" }
+archipel-ide-ai = { path = "../archipel-ide-ai" }
+archipel-ide-analysis = { path = "../archipel-ide-analysis" }
+archipel-ide-command = { path = "../archipel-ide-command" }
+archipel-ide-core = { path = "../archipel-ide-core" }
+archipel-ide-git = { path = "../archipel-ide-git" }
+archipel-ide-index = { path = "../archipel-ide-index" }
+archipel-ide-keymap = { path = "../archipel-ide-keymap" }
+archipel-ide-language = { path = "../archipel-ide-language" }
+archipel-ide-lsp = { path = "../archipel-ide-lsp" }
+archipel-ide-platform = { path = "../archipel-ide-platform" }
+archipel-ide-settings = { path = "../archipel-ide-settings" }
+archipel-ide-plugins = { path = "../archipel-ide-plugins" }
+archipel-ide-text = { path = "../archipel-ide-text" }
+archipel-kit-model.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

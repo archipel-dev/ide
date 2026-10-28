@@ -282,7 +282,7 @@ dependencies = [
 [[package]]
 name = "archipel-icons"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#577ce543bef1ecb2ee5ab5532198924003ef9ae1"
+source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
 dependencies = [
  "egui",
 ]
@@ -833,7 +833,9 @@ dependencies = [
  "archipel-ide-settings",
  "archipel-ide-terminal",
  "archipel-ide-text",
+ "archipel-ide-view",
  "archipel-kit",
+ "archipel-kit-model",
  "archipel-kit-tui",
  "serde_json",
  "unicode-width 0.2.2",
@@ -870,7 +872,9 @@ dependencies = [
  "archipel-ide-templates",
  "archipel-ide-terminal",
  "archipel-ide-text",
+ "archipel-ide-view",
  "archipel-kit",
+ "archipel-kit-model",
  "eframe",
  "egui",
  "egui_extras",
@@ -898,11 +902,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "archipel-ide-view"
+version = "0.2.6"
+dependencies = [
+ "archipel-ide-actions",
+ "archipel-ide-ai",
+ "archipel-ide-analysis",
+ "archipel-ide-command",
+ "archipel-ide-core",
+ "archipel-ide-git",
+ "archipel-ide-index",
+ "archipel-ide-keymap",
+ "archipel-ide-language",
+ "archipel-ide-lsp",
+ "archipel-ide-platform",
+ "archipel-ide-plugins",
+ "archipel-ide-settings",
+ "archipel-ide-text",
+ "archipel-kit-model",
+ "serde_json",
+]
+
+[[package]]
 name = "archipel-kit"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#577ce543bef1ecb2ee5ab5532198924003ef9ae1"
+source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
 dependencies = [
  "archipel-icons",
+ "archipel-kit-model",
  "egui",
  "egui_kittest",
  "objc2 0.6.5",
@@ -913,12 +940,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "archipel-kit-model"
+version = "0.4.0"
+source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
+dependencies = [
+ "archipel-icons",
+ "serde",
+]
+
+[[package]]
 name = "archipel-kit-tui"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#577ce543bef1ecb2ee5ab5532198924003ef9ae1"
+source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
 dependencies = [
  "archipel-icons",
  "archipel-kit",
+ "archipel-kit-model",
  "ratatui",
  "unicode-width 0.2.2",
 ]

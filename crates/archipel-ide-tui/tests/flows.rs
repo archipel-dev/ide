@@ -204,7 +204,10 @@ fn a_shell_run_configuration_prints_its_output_in_the_run_window() {
     });
     println!("{}", tui.text());
     assert!(tui.contains("second line"));
-    assert!(tui.contains("Run"), "the Run window is open");
+    assert!(
+        tui.contains("Build"),
+        "the Build window shows the run output"
+    );
 }
 
 #[test]
@@ -265,22 +268,22 @@ fn go_to_declaration_and_back_navigate_through_the_language_server() {
     tui.type_text("3:7");
     tui.press(KeyCode::Enter);
     tui.advance(0.1);
-    assert!(tui.contains("Ln 3, Col 7"), "{}", tui.text());
+    assert!(tui.contains("3:7"), "{}", tui.text());
     // The server may still be starting: ask until it answers.
     tui.expect("the declaration", 30, |tui| {
         tui.ctrl('b');
         tui.advance(0.2);
-        tui.contains("Ln 1,")
+        tui.contains("1:1")
     });
     // Back returns to the usage.
     tui.press_with(KeyCode::Left, KeyModifiers::CONTROL | KeyModifiers::ALT);
     tui.advance(0.1);
-    assert!(tui.contains("Ln 3,"), "{}", tui.text());
-    // Forward goes to the declaration again; the Ctrl+K fallbacks do the same.
-    tui.ctrl('k');
+    assert!(tui.contains("3:7"), "{}", tui.text());
+    // Forward goes to the declaration again; the leader chords do the same.
+    tui.ctrl('\\');
     tui.type_text("]");
     tui.advance(0.1);
-    assert!(tui.contains("Ln 1,"), "{}", tui.text());
+    assert!(tui.contains("1:1"), "{}", tui.text());
 }
 
 #[test]
@@ -384,16 +387,16 @@ fn the_terminal_window_runs_a_shell() {
     tui.press_with(KeyCode::F(12), KeyModifiers::ALT);
     tui.expect("the Terminal window", 20, |tui| tui.contains("Terminal"));
     // The shell starts asynchronously; type until the echo shows up.
-    tui.type_text("echo terminal-works");
+    // The shell computes the marker, so the typed command line (which wraps in a narrow
+    // window after a long prompt) never contains it.
+    tui.type_text("echo tw-$((20+22))");
     tui.press(KeyCode::Enter);
-    tui.expect("the shell output", 20, |tui| {
-        tui.text().matches("terminal-works").count() >= 2
-    });
+    tui.expect("the shell output", 20, |tui| tui.contains("tw-42"));
     println!("{}", tui.text());
     // Shift+Esc hides the window and the focus returns to the editor.
     tui.press_with(KeyCode::Esc, KeyModifiers::SHIFT);
     tui.advance(0.1);
-    assert!(!tui.contains("terminal-works"), "{}", tui.text());
+    assert!(!tui.contains("tw-42"), "{}", tui.text());
 }
 
 fn select_in_tree(tui: &mut Tui, path: &str) {
@@ -488,7 +491,7 @@ fn a_click_on_a_tab_selects_it_and_recent_files_lists_the_history() {
         Some("two.txt")
     );
     let (x, y) = tui.find("one.txt").expect("the first tab is drawn");
-    assert_eq!(y, 0, "the tab line is the top row");
+    assert_eq!(y, 1, "the tab line is below the toolbar");
     tui.click(x + 1, y);
     tui.advance(0.1);
     assert_eq!(
@@ -526,17 +529,19 @@ fn the_run_configuration_chooser_runs_the_pick_and_stop_ends_a_running_task() {
     );
     let mut tui = Tui::open(&project.root, &["README.md"], 120, 30);
     tui.advance(0.1);
-    // Alt+Shift+F10 lists the configurations; choose `slow` and it runs.
+    // Alt+Shift+F10 lists the configurations; choose `slow`.
     tui.press_with(KeyCode::F(10), KeyModifiers::ALT | KeyModifiers::SHIFT);
-    tui.expect("the chooser", 10, |tui| tui.contains("Run Configurations"));
+    tui.expect("the chooser", 10, |tui| tui.contains("Edit Configurations"));
     assert!(
         tui.contains("quick") && tui.contains("slow"),
         "{}",
         tui.text()
     );
-    tui.type_text("slow");
-    tui.expect("the slow row", 10, |tui| tui.contains("Shell Command"));
-    tui.press(KeyCode::Enter);
+    let (x, y) = tui.find("slow").expect("the slow row");
+    tui.click(x + 1, y);
+    // As in the GUI the choice selects the configuration; Shift+F10 runs it.
+    tui.advance(0.1);
+    tui.press_with(KeyCode::F(10), KeyModifiers::SHIFT);
     tui.expect("the output", 20, |tui| tui.contains("slow-started"));
     assert!(tui.app.ide().state().execution().is_running());
     // Ctrl+F2 stops it.
@@ -653,7 +658,7 @@ fn the_page_keys_know_how_many_lines_the_screen_shows() {
 fn the_caret_stays_on_screen_while_typing_below_the_last_visible_line() {
     let text: String = (1..=60).map(|n| format!("row {n}\n")).collect();
     let project = Project::new("follow", &[("long.txt", text.as_str())]);
-    let mut tui = Tui::open(&project.root, &["long.txt"], 80, 14);
+    let mut tui = Tui::open(&project.root, &["long.txt"], 80, 16);
     tui.advance(0.1);
     tui.press_with(KeyCode::End, KeyModifiers::CONTROL);
     tui.type_text("tail");

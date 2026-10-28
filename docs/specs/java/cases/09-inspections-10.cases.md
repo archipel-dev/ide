@@ -1,8 +1,6 @@
 # Cases for 09-inspections-catalog-10 (JAVA-ICC)
 
-Format: see `docs/specs/editor/cases/README.md` and the header of `09-inspections-7.cases.md` (`inspect`, `problem:` lines,
-`no problem reported`). Double-brace tokens carry the short name and are replaced by the requirement ID of that inspection.
-Logging cases assume `org.slf4j` on the classpath; test cases assume JUnit 4 (`org.junit`) on the classpath.
+Format: `docs/specs/java/cases/README.md` (extends `docs/specs/editor/cases/README.md`). Each case belongs to the requirement of the same ID in `docs/specs/java/09-inspections-catalog-10.md`. Keys `inspect` list the expected highlights as `problem:` lines, `inspect batch` runs the whole-project inspection, and `no problem reported` means no highlight.
 
 ### JAVA-ICC-348 case 1: @Language on an int
 settings: default; JetBrains annotations on classpath
@@ -11,12 +9,12 @@ language: java
 ```before
 import org.intellij.lang.annotations.Language;
 class A {
-  @<caret>Language("HTML") int i;
+  @<caret>Language("SQL") long count;
 }
 ```
 keys: inspect
 ```after
-problem: ERROR @Language("HTML") "Language injection is only applicable to strings or string templates"
+problem: error `@Language("SQL")` "Language injection is only applicable to strings or string templates"
 ```
 
 ### JAVA-ICC-348 case 2: @Language on a String
@@ -39,13 +37,13 @@ language: java
 ```before
 import org.intellij.lang.annotations.Language;
 class A {
-  @Language("JavaScript") String JS_CODE = "var x;";
-  @Language("XPath") String XPATH_CODE = <caret>JS_CODE;
+  @Language("JavaScript") String DEFAULT_TTL = "var x;";
+  @Language("XPath") String HEADROOM = <caret>DEFAULT_TTL;
 }
 ```
 keys: inspect
 ```after
-problem: WARNING JS_CODE "Language mismatch: Expected 'XPath', got 'JavaScript'"
+problem: warning `DEFAULT_TTL` "Language mismatch: Expected 'XPath', got 'JavaScript'"
 ```
 
 ### JAVA-ICC-349 case 2: same language
@@ -69,12 +67,12 @@ language: java
 ```before
 import org.intellij.lang.annotations.Language;
 class A {
-  @Language("<caret>HMTL") String html;
+  @Language("<caret>JASON") String payload;
 }
 ```
 keys: inspect
 ```after
-problem: ERROR "HMTL" "Unknown language 'HMTL'"
+problem: error `"JASON"` "Unknown language 'JASON'"
 ```
 
 ### JAVA-ICC-350 case 2: known ID
@@ -136,12 +134,12 @@ settings: default; SLF4J on classpath
 language: java
 ```before
 import org.slf4j.Logger;
-class TestObject {
+class Locker {
   Logger LOG;
-  int expensiveCalculation(int i) { return i; }
-  void test(Object object) {
+  int weave(int i) { return i; }
+  void test(Object dims) {
     <caret>if (LOG.isDebugEnabled()) {
-      LOG.debug("some logging {}", expensiveCalculation(1));
+      LOG.debug("some logging {}", weave(1));
     }
   }
 }
@@ -149,11 +147,11 @@ class TestObject {
 keys: Alt+Enter, choose "Unwrap log guard condition"
 ```after
 import org.slf4j.Logger;
-class TestObject {
+class Locker {
   Logger LOG;
-  int expensiveCalculation(int i) { return i; }
-  void test(Object object) {
-    LOG.debug("some logging {}", expensiveCalculation(1));
+  int weave(int i) { return i; }
+  void test(Object dims) {
+    LOG.debug("some logging {}", weave(1));
   }
 }
 ```
@@ -163,9 +161,9 @@ settings: default; SLF4J on classpath
 language: java
 ```before
 import org.slf4j.Logger;
-class TestObject {
+class Archer {
   Logger LOG;
-  void test(Object object) {
+  void test(Object prices) {
     <caret>if (LOG.isDebugEnabled()) {
       LOG.debug("a");
       System.out.println("b");
@@ -190,7 +188,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING "{}: {}" "Fewer arguments provided (1) than placeholders specified (2)"
+problem: warning `"{}: {}"` "Fewer arguments provided (1) than placeholders specified (2)"
 ```
 
 ### JAVA-ICC-353 case 2: more arguments than placeholders
@@ -206,7 +204,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING v "More arguments provided (2) than placeholders specified (1)"
+problem: warning `v` "More arguments provided (2) than placeholders specified (1)"
 ```
 
 ### JAVA-ICC-353 case 3: matching count
@@ -231,13 +229,13 @@ language: java
 import org.slf4j.Logger;
 class A {
   private static Logger log;
-  static void request1(String text) { log.info(<caret>"Message: {}", text); }
-  static void request2(int i) { log.info("Message: {}", i); }
+  static void save1(String text) { log.info(<caret>"Saved {}", text); }
+  static void save2(int i) { log.info("Saved {}", i); }
 }
 ```
 keys: inspect
 ```after
-problem: WEAK WARNING "Message: {}" "Similar log messages"
+problem: weak warning `"Saved {}"` "Similar log messages"
 ```
 
 ### JAVA-ICC-354 case 2: distinct messages
@@ -247,8 +245,8 @@ language: java
 import org.slf4j.Logger;
 class A {
   private static Logger log;
-  static void request1(String text) { log.info(<caret>"First request: {}", text); }
-  static void request2(int i) { log.info("Second call: {}", i); }
+  static void save1(String text) { log.info(<caret>"Saved text {}", text); }
+  static void save2(int i) { log.info("Stored number {}", i); }
 }
 ```
 keys: inspect
@@ -263,7 +261,7 @@ language: java
 import org.slf4j.Logger;
 class A {
   Logger logger;
-  void f(Object variable1) { logger.<caret>info("variable1: " + variable1); }
+  void f(Object margin) { logger.<caret>info("variable1: " + margin); }
 }
 ```
 keys: Alt+Enter, choose "Replace with placeholders"
@@ -271,7 +269,7 @@ keys: Alt+Enter, choose "Replace with placeholders"
 import org.slf4j.Logger;
 class A {
   Logger logger;
-  void f(Object variable1) { logger.info("variable1: {}", variable1); }
+  void f(Object margin) { logger.info("variable1: {}", margin); }
 }
 ```
 
@@ -295,21 +293,21 @@ settings: default; SLF4J on classpath
 language: java
 ```before
 import org.slf4j.Logger;
-class TestObject {
+class Crane {
   Logger LOG;
-  int expensiveCalculation(int i) { return i; }
-  void test(Object object) { LOG.<caret>debug("some logging {}", expensiveCalculation(1)); }
+  int launch(int i) { return i; }
+  void test(Object title) { LOG.<caret>debug("some logging {}", launch(1)); }
 }
 ```
 keys: Alt+Enter, choose "Surround with a logging condition"
 ```after
 import org.slf4j.Logger;
-class TestObject {
+class Crane {
   Logger LOG;
-  int expensiveCalculation(int i) { return i; }
-  void test(Object object) {
+  int launch(int i) { return i; }
+  void test(Object title) {
     if (LOG.isDebugEnabled()) {
-      LOG.debug("some logging {}", expensiveCalculation(1));
+      LOG.debug("some logging {}", launch(1));
     }
   }
 }
@@ -320,7 +318,7 @@ settings: default; SLF4J on classpath
 language: java
 ```before
 import org.slf4j.Logger;
-class TestObject {
+class Marble {
   Logger LOG;
   void test() { LOG.<caret>debug("constant message"); }
 }
@@ -384,23 +382,23 @@ no problem reported
 settings: inspection BooleanMethodNameMustStartWithQuestion enabled
 language: java
 ```before
-import java.util.List;
+import java.util.Collection;
 class A {
-  boolean <caret>empty(List<String> list) { return list.isEmpty(); }
+  boolean <caret>full(Collection<?> items) { return items.size() > 3; }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING empty "Boolean method name empty does not start with question word"
+problem: warning `full` "Boolean method name full does not start with question word"
 ```
 
-### JAVA-ICC-359 case 2: isEmpty
+### JAVA-ICC-359 case 2: isFull
 settings: inspection BooleanMethodNameMustStartWithQuestion enabled
 language: java
 ```before
-import java.util.List;
+import java.util.Collection;
 class A {
-  boolean <caret>isEmpty(List<String> list) { return list.isEmpty(); }
+  boolean <caret>isFull(Collection<?> items) { return items.size() > 3; }
 }
 ```
 keys: inspect
@@ -410,19 +408,18 @@ no problem reported
 
 ### JAVA-ICC-360 case 1: Supplier and Callable overloads
 settings: inspection LambdaUnfriendlyMethodOverload enabled
-status: unverified (message text not in the bundle excerpt read)
 language: java
 ```before
 import java.util.concurrent.Callable;
 import java.util.function.Supplier;
-interface MyExecutor {
-  void <caret>execute(Supplier<?> supplier);
-  void execute(Callable<?> callable);
+interface Scheduler {
+  void <caret>submit(Supplier<?> supplier);
+  void submit(Callable<?> callable);
 }
 ```
 keys: inspect
 ```after
-problem: WARNING execute (the overload is lambda-unfriendly)
+problem: warning `submit` "Lambda-unfriendly overload of method submit()"
 ```
 
 ### JAVA-ICC-360 case 2: incompatible functional shapes
@@ -431,9 +428,9 @@ language: java
 ```before
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-interface MyExecutor {
-  void <caret>execute(Supplier<?> supplier);
-  void execute(Consumer<?> consumer);
+interface Scheduler {
+  void <caret>submit(Supplier<?> supplier);
+  void submit(Consumer<?> consumer);
 }
 ```
 keys: inspect
@@ -445,16 +442,16 @@ no problem reported
 settings: default
 language: java
 ```before
-class MyClass {
-  int val;
-  void <caret>MyClass(int val) { this.val = val; }
+class Counter {
+  int n;
+  void <caret>Counter(int n) { this.n = n; }
 }
 ```
 keys: Alt+Enter, choose "Make method constructor"
 ```after
-class MyClass {
-  int val;
-  MyClass(int val) { this.val = val; }
+class Counter {
+  int n;
+  Counter(int n) { this.n = n; }
 }
 ```
 
@@ -462,9 +459,9 @@ class MyClass {
 settings: default
 language: java
 ```before
-class MyClass {
-  int val;
-  <caret>MyClass(int val) { this.val = val; }
+class Counter {
+  int n;
+  <caret>Counter(int n) { this.n = n; }
 }
 ```
 keys: inspect
@@ -476,29 +473,29 @@ no problem reported
 settings: inspection MethodNameSameAsParentName enabled
 language: java
 ```before
-class Parent {}
-class Child extends Parent {
-  public Parent <caret>Parent() { return null; }
+class Engine {}
+class Truck extends Engine {
+  public Engine <caret>Engine() { return null; }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING Parent "Method name Parent is the same as its parent class name"
+problem: warning `Engine` "Method name Engine is the same as its parent class name"
 ```
 
-### JAVA-ICC-363 case 1: hashcode vs hashCode
+### JAVA-ICC-363 case 1: tostring vs toString
 settings: inspection MisspelledMethodName enabled
-status: unverified (hashCode here is declared in the same class; with only an inherited hashCode the report depends on the inherited-methods check)
+status: unverified (toString here is declared in the same class; with only an inherited toString the report depends on the inherited-methods check)
 language: java
 ```before
 class A {
-  public int <caret>hashcode() { return 0; }
-  public int hashCode() { return 1; }
+  public String <caret>tostring() { return ""; }
+  public String toString() { return "x"; }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING hashcode "Method name hashcode and method name 'hashCode' differ only by case"
+problem: warning `tostring` "Method name tostring and method name 'toString' differ only by case"
 ```
 
 ### JAVA-ICC-363 case 2: unrelated names
@@ -517,7 +514,7 @@ no problem reported
 
 ### JAVA-ICC-364 case 1: static method too short
 settings: inspection NewMethodNamingConvention enabled (default: minimum length 4 for static methods)
-status: unverified (message text of the naming-convention message not in the bundle excerpt read)
+status: unverified (the {0} text "Static method" of the naming-convention message)
 language: java
 ```before
 class A {
@@ -526,7 +523,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING n (the method name is shorter than the minimum length)
+problem: warning `n` "Static method name n is too short (1 < 4)"
 ```
 
 ### JAVA-ICC-364 case 2: long enough
@@ -542,29 +539,25 @@ keys: inspect
 no problem reported
 ```
 
-### JAVA-ICC-365 case 1: void hasName
+### JAVA-ICC-365 case 1: void isReady
 settings: inspection NonBooleanMethodNameMayNotStartWithQuestion enabled
 language: java
 ```before
-import java.util.Set;
 class A {
-  Set<String> names;
-  public void <caret>hasName(String name) { assert names.contains(name); }
+  public void <caret>isReady(int level) { assert level > 0; }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING hasName "Non-boolean method name hasName starts with a question word"
+problem: warning `isReady` "Non-boolean method name isReady starts with a question word"
 ```
 
-### JAVA-ICC-365 case 2: boolean hasName
+### JAVA-ICC-365 case 2: boolean isReady
 settings: inspection NonBooleanMethodNameMayNotStartWithQuestion enabled
 language: java
 ```before
-import java.util.Set;
 class A {
-  Set<String> names;
-  public boolean <caret>hasName(String name) { return names.contains(name); }
+  public boolean <caret>isReady(int level) { return level > 0; }
 }
 ```
 keys: inspect
@@ -578,13 +571,13 @@ language: java
 ```before
 import java.util.concurrent.RunnableFuture;
 class Main {
-  public static void <caret>execute(Runnable r) {}
-  public static <T> void execute(RunnableFuture<T> c) {}
+  public static void <caret>submit(Runnable r) {}
+  public static <T> void submit(RunnableFuture<T> f) {}
 }
 ```
 keys: inspect
 ```after
-problem: WARNING execute "Multiple methods named execute with the same number of parameters"
+problem: warning `submit` "Multiple methods named submit with the same number of parameters"
 ```
 
 ### JAVA-ICC-366 case 2: definitely incompatible parameter types
@@ -592,8 +585,8 @@ settings: inspection OverloadedMethodsWithSameNumberOfParameters enabled
 language: java
 ```before
 class Main {
-  public static void <caret>execute(String s) {}
-  public static void execute(Integer i) {}
+  public static void <caret>submit(String s) {}
+  public static void submit(Integer i) {}
 }
 ```
 keys: inspect
@@ -606,13 +599,13 @@ settings: inspection OverloadedVarargsMethod enabled
 language: java
 ```before
 class A {
-  public void <caret>execute(Runnable... r) {}
-  public void execute(Runnable r1, Runnable r2) {}
+  public void <caret>log(String... parts) {}
+  public void log(String a, String b) {}
 }
 ```
 keys: inspect
 ```after
-problem: WARNING execute "Overloaded varargs method execute()"
+problem: warning `log` "Overloaded varargs method log()"
 ```
 
 ### JAVA-ICC-367 case 2: unique name
@@ -620,8 +613,8 @@ settings: inspection OverloadedVarargsMethod enabled
 language: java
 ```before
 class A {
-  public void <caret>executeAll(Runnable... r) {}
-  public void execute(Runnable r1, Runnable r2) {}
+  public void <caret>logAll(String... parts) {}
+  public void log(String a, String b) {}
 }
 ```
 keys: inspect
@@ -635,14 +628,14 @@ status: unverified ({0} may be the annotation's simple name with or without the 
 language: java
 ```before
 import org.jetbrains.annotations.NotNull;
-public class MyClass {
-  private @NotNull String <caret>value;
-  public void setValue(@NotNull String value) { this.value = value; }
+public class Ranger {
+  private @NotNull String <caret>label;
+  public void setLabel(@NotNull String label) { this.label = label; }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING value "@NotNull fields must be initialized"
+problem: warning `label` "@NotNull fields must be initialized"
 ```
 
 ### JAVA-ICC-368 case 2: initialised in the constructor
@@ -650,9 +643,9 @@ settings: default; JetBrains annotations on classpath
 language: java
 ```before
 import org.jetbrains.annotations.NotNull;
-public class MyClass {
-  private @NotNull String <caret>value;
-  public MyClass(@NotNull String value) { this.value = value; }
+public class Pallet {
+  private @NotNull String <caret>label;
+  public Pallet(@NotNull String label) { this.label = label; }
 }
 ```
 keys: inspect
@@ -660,20 +653,20 @@ keys: inspect
 no problem reported
 ```
 
-### JAVA-ICC-369 case 1: greet(null)
+### JAVA-ICC-369 case 1: salute(null)
 settings: default; JetBrains annotations on classpath
 status: unverified (the inspection is new in a later release than the sources of the other rows; range may be the argument or the parameter)
 language: java
 ```before
 import org.jetbrains.annotations.NotNull;
-class Greeter {
-  void greet(@NotNull String name) { System.out.println("Hello, " + name); }
-  void run() { greet(<caret>null); }
+class Beacon {
+  void salute(@NotNull String who) { System.out.println("Ahoy, " + who); }
+  void run() { salute(<caret>null); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING null "Parameter annotated @NotNull should not receive 'null' as an argument"
+problem: warning `null` "Parameter annotated @NotNull should not receive 'null' as an argument"
 ```
 
 ### JAVA-ICC-369 case 2: non-null argument
@@ -681,9 +674,9 @@ settings: default; JetBrains annotations on classpath
 language: java
 ```before
 import org.jetbrains.annotations.NotNull;
-class Greeter {
-  void greet(@NotNull String name) { System.out.println("Hello, " + name); }
-  void run() { greet(<caret>"Bob"); }
+class Gallery {
+  void salute(@NotNull String who) { System.out.println("Ahoy, " + who); }
+  void run() { salute(<caret>"Sam"); }
 }
 ```
 keys: inspect
@@ -697,12 +690,12 @@ language: java
 ```before
 import org.jetbrains.annotations.*;
 class A {
-  @Nullable @<caret>NotNull String myFooString;
+  @Nullable @<caret>NotNull String headline;
 }
 ```
 keys: inspect
 ```after
-problem: WARNING @NotNull "Cannot annotate with both @Nullable and @NotNull"
+problem: warning `@NotNull` "Cannot annotate with both @Nullable and @NotNull"
 ```
 
 ### JAVA-ICC-370 case 2: annotated primitive
@@ -711,12 +704,12 @@ language: java
 ```before
 import org.jetbrains.annotations.*;
 class A {
-  @<caret>NotNull int myFoo;
+  @<caret>NotNull int budget;
 }
 ```
 keys: inspect
 ```after
-problem: WARNING @NotNull "Primitive type members cannot be annotated"
+problem: warning `@NotNull` "Primitive type members cannot be annotated"
 ```
 
 ### JAVA-ICC-370 case 3: override without annotation
@@ -731,7 +724,7 @@ class B extends A {
 ```
 keys: inspect
 ```after
-problem: WARNING m "Not annotated method overrides method annotated with @NotNull"
+problem: warning `m` "Not annotated method overrides method annotated with @NotNull"
 ```
 
 ### JAVA-ICC-370 case 4: consistent override
@@ -754,15 +747,15 @@ settings: inspection ReturnNull enabled
 status: unverified (the annotation fix name and import; needs JetBrains annotations)
 language: java
 ```before
-class Person {
-  public String getName() { return <caret>null; }
+class Track {
+  public String find(int id) { return <caret>null; }
 }
 ```
 keys: Alt+Enter, choose "Annotate method as '@Nullable'"
 ```after
 import org.jetbrains.annotations.Nullable;
-class Person {
-  public @Nullable String getName() { return null; }
+class Track {
+  public @Nullable String find(int id) { return null; }
 }
 ```
 
@@ -771,15 +764,15 @@ settings: inspection ReturnNull enabled
 language: java
 ```before
 import java.util.Optional;
-class Person {
-  public Optional<String> getName() { return <caret>null; }
+class Garden {
+  public Optional<String> find(int id) { return <caret>null; }
 }
 ```
 keys: Alt+Enter, choose "Replace with 'Optional.empty()'"
 ```after
 import java.util.Optional;
-class Person {
-  public Optional<String> getName() { return Optional.empty(); }
+class Garden {
+  public Optional<String> find(int id) { return Optional.empty(); }
 }
 ```
 
@@ -787,7 +780,7 @@ class Person {
 settings: inspection ReturnNull enabled; Ignore 'private' methods, anonymous classes & lambda's = on
 language: java
 ```before
-class Person {
+class Fjord {
   private String getName() { return <caret>null; }
 }
 ```
@@ -803,12 +796,12 @@ language: java
 ```before
 import org.intellij.lang.annotations.Pattern;
 class A {
-  @<caret>Pattern("\\d\\d") int i;
+  @<caret>Pattern("\\d\\d") long code;
 }
 ```
 keys: inspect
 ```after
-problem: ERROR @Pattern("\\d\\d") "Pattern annotation is only applicable to elements of type String"
+problem: error `@Pattern("\\d\\d")` "Pattern annotation is only applicable to elements of type String"
 ```
 
 ### JAVA-ICC-372 case 2: @Pattern on a String
@@ -830,14 +823,14 @@ settings: default; JetBrains annotations on classpath
 language: java
 ```before
 import org.intellij.lang.annotations.Pattern;
-abstract class Parent { abstract @Pattern("\\d\\d-\\d\\d\\d") String getId(); }
-class Child extends Parent {
+abstract class Ticket { abstract @Pattern("\\d\\d-\\d\\d\\d") String getId(); }
+class Marble extends Ticket {
   @Override String <caret>getId() { return "12-345"; }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING getId "Non-annotated Method overrides @Pattern Method"
+problem: warning `getId` "Non-annotated Method overrides @Pattern Method"
 ```
 
 ### JAVA-ICC-373 case 2: override with the same annotation
@@ -845,8 +838,8 @@ settings: default; JetBrains annotations on classpath
 language: java
 ```before
 import org.intellij.lang.annotations.Pattern;
-abstract class Parent { abstract @Pattern("\\d\\d-\\d\\d\\d") String getId(); }
-class Child extends Parent {
+abstract class Ferry { abstract @Pattern("\\d\\d-\\d\\d\\d") String getId(); }
+class Badger extends Ferry {
   @Override @Pattern("\\d\\d-\\d\\d\\d") String <caret>getId() { return "12-345"; }
 }
 ```
@@ -867,7 +860,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING "1" "Expression '1' doesn't match '\d\d-\d\d\d' pattern: (explanation of the mismatch)"
+problem: warning `"1"` "Expression '1' doesn't match '\d\d-\d\d\d' pattern: (explanation of the mismatch)"
 ```
 
 ### JAVA-ICC-374 case 2: matching constant
@@ -894,9 +887,9 @@ abc=xxx
 --- messages_fr.properties
 
 ```
-keys: action InspectCode (scope: whole project)
+keys: inspect batch
 ```after
-inspection results: Properties files | Inconsistent resource bundle | property 'abc' is not translated in messages_fr.properties
+problem: warning `abc` "property 'abc' is not translated in messages_fr.properties"
 ```
 
 ### JAVA-ICC-375 case 2: complete bundle
@@ -908,9 +901,9 @@ abc=xxx
 --- messages_fr.properties
 abc=yyy
 ```
-keys: action InspectCode (scope: whole project)
+keys: inspect batch
 ```after
-no problem reported by Inconsistent resource bundle
+no problem reported
 ```
 
 ### JAVA-ICC-376 case 1: unknown locale suffix
@@ -925,27 +918,27 @@ a=2
 ```
 keys: inspect
 ```after
-problem: WARNING messages_xx.properties "Resource bundle contains locales with suspicious locale languages"
+problem: warning `messages_xx.properties` "Resource bundle contains locales with suspicious locale languages"
 ```
 
 ### JAVA-ICC-377 case 1: {1} without {0}
 settings: default
-status: unverified (the #ref text in the message and the range)
+status: unverified (the range: whole property value)
 language: plain
 ```before
-# parameter {0} is not used
-error.message=Something happened in line <caret>{1}
+# only the line number is used
+failure.message=Failure near <caret>{1}
 ```
 keys: inspect
 ```after
-problem: WARNING the value "Using parameter {1} without using parameter {0} in ..."
+problem: warning `Failure near {1}` "Using parameter 1 without using parameter 0 in 'Failure near {1}'"
 ```
 
 ### JAVA-ICC-377 case 2: both parameters used
 settings: default
 language: plain
 ```before
-error.message=Something happened in line <caret>{1} of {0}
+failure.message=Failure near <caret>{1} in {0}
 ```
 keys: inspect
 ```after
@@ -964,7 +957,7 @@ class T {
 ```
 keys: inspect
 ```after
-problem: WARNING assertEquals "assertEquals() between objects of inconvertible types 'String' and 'int'"
+problem: warning `assertEquals` "assertEquals() between objects of inconvertible types 'String' and 'int'"
 ```
 
 ### JAVA-ICC-378 case 2: compatible types
@@ -985,23 +978,22 @@ no problem reported
 settings: inspection TestCaseWithConstructor enabled; JUnit 4 on classpath
 language: java
 ```before
-import java.io.*;
-public class ImportantTest {
-  private File file;
-  public <caret>ImportantTest() throws IOException { file = File.createTempFile("xyz", ".tmp"); }
+public class ReportTest {
+  private StringBuilder out;
+  public <caret>ReportTest() { out = new StringBuilder("seed"); }
   @org.junit.Test public void t() {}
 }
 ```
 keys: inspect
 ```after
-problem: WARNING ImportantTest "Initialization logic in constructor ImportantTest() instead of 'setup()' life cycle method"
+problem: warning `ReportTest` "Initialization logic in constructor ReportTest() instead of 'setup()' life cycle method"
 ```
 
 ### JAVA-ICC-379 case 2: no constructor
 settings: inspection TestCaseWithConstructor enabled; JUnit 4 on classpath
 language: java
 ```before
-public class <caret>ImportantTest {
+public class <caret>ReportTest {
   @org.junit.Test public void t() {}
 }
 ```
@@ -1015,13 +1007,14 @@ settings: inspection TestCaseWithNoTestMethods enabled; JUnit 4 on classpath
 language: java
 ```before
 import org.junit.Before;
-public class <caret>CrucialTest {
-  @Before public void setUp() { System.out.println("setting up"); }
+public class <caret>InvoiceTest {
+  int count;
+  @Before public void setUp() { count = 0; }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING CrucialTest "Test class CrucialTest has no tests"
+problem: warning `InvoiceTest` "Test class InvoiceTest has no tests"
 ```
 
 ### JAVA-ICC-380 case 2: class with a test
@@ -1029,7 +1022,7 @@ settings: inspection TestCaseWithNoTestMethods enabled; JUnit 4 on classpath
 language: java
 ```before
 import org.junit.Test;
-public class <caret>CrucialTest {
+public class <caret>InvoiceTest {
   @Test public void t() {}
 }
 ```
@@ -1050,7 +1043,7 @@ public class T {
 ```
 keys: inspect
 ```after
-problem: WARNING assertEquals(1, 0) "(failure message of the test result, e.g. expected:<1> but was:<0>)"
+problem: warning `assertEquals(1, 0)` "(failure message of the test result, e.g. expected:<1> but was:<0>)"
 ```
 
 ### JAVA-ICC-381 case 2: no failed run
@@ -1059,7 +1052,7 @@ language: java
 ```before
 import static org.junit.Assert.assertEquals;
 public class T {
-  @org.junit.Test public void foo() { <caret>assertEquals(1, 1); }
+  @org.junit.Test public void render() { <caret>assertEquals(1, 1); }
 }
 ```
 keys: inspect
@@ -1077,7 +1070,7 @@ public class <caret>CrucialTest {
 ```
 keys: inspect
 ```after
-problem: WARNING CrucialTest "Test case CrucialTest should probably be placed in a test source tree"
+problem: warning `CrucialTest` "Test case CrucialTest should probably be placed in a test source tree"
 ```
 
 ### JAVA-ICC-382 case 2: same class in a test root
@@ -1097,13 +1090,13 @@ no problem reported
 settings: inspection TestMethodWithoutAssertion enabled; JUnit 4 on classpath
 language: java
 ```before
-public class ExtensiveTest {
-  @org.junit.Test public void <caret>testAlive() { System.out.println("nothing"); }
+public class SensorTest {
+  @org.junit.Test public void <caret>testRender() { System.out.println("ok"); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING testAlive "Test method testAlive() contains no assertions"
+problem: warning `testRender` "Test method testRender() contains no assertions"
 ```
 
 ### JAVA-ICC-383 case 2: has an assertion
@@ -1111,8 +1104,8 @@ settings: inspection TestMethodWithoutAssertion enabled; JUnit 4 on classpath
 language: java
 ```before
 import static org.junit.Assert.assertTrue;
-public class ExtensiveTest {
-  @org.junit.Test public void <caret>testAlive() { assertTrue(true); }
+public class ItineraryTest {
+  @org.junit.Test public void <caret>testTune() { assertTrue(true); }
 }
 ```
 keys: inspect
@@ -1122,18 +1115,18 @@ no problem reported
 
 ### JAVA-ICC-384 case 1: production code calling a @TestOnly method
 settings: inspection TestOnlyProblems enabled; production source root
-status: unverified (message text not read)
+status: unverified (highlighted range)
 language: java
 ```before
 import org.jetbrains.annotations.TestOnly;
 class A {
-  @TestOnly static void foo() {}
-  static void main() { <caret>foo(); }
+  @TestOnly static void fetch() {}
+  static void main() { <caret>fetch(); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING foo (the call of a test-only method from production code)
+problem: warning `fetch` "Test-only method is called in production code"
 ```
 
 ### JAVA-ICC-384 case 2: call from another @TestOnly method
@@ -1142,8 +1135,8 @@ language: java
 ```before
 import org.jetbrains.annotations.TestOnly;
 class A {
-  @TestOnly static void foo() {}
-  @TestOnly static void bar() { <caret>foo(); }
+  @TestOnly static void launch() {}
+  @TestOnly static void stamp() { <caret>launch(); }
 }
 ```
 keys: inspect
@@ -1163,7 +1156,7 @@ language: plain
 ```
 keys: inspect
 ```after
-problem: WARNING com.example.Old "(deprecation message of Old)"
+problem: warning `com.example.Old` "(deprecation message of Old)"
 ```
 
 ### JAVA-ICC-385 case 2: non-deprecated class

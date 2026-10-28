@@ -1,6 +1,6 @@
 # Cases for 09-inspections-catalog-6.md
 
-Format: see docs/specs/editor/cases/README.md. Inspection cases: `keys: Alt+Enter, choose "<fix>"` applies the named quick fix at the caret; `keys: inspect` runs the inspection and `after` then lists `problem: <level> <range text> "<message>"` lines or `no problem reported`.
+Format: `docs/specs/java/cases/README.md` (extends `docs/specs/editor/cases/README.md`). Each case belongs to the requirement of the same ID in `docs/specs/java/09-inspections-catalog-6.md`. Keys `inspect` list the expected highlights as `problem:` lines, `inspect batch` runs the whole-project inspection, and `no problem reported` means no highlight.
 
 ### JAVA-ICB-257 case 1: Class with dollar sign
 settings: enable inspection DollarSignInName
@@ -18,26 +18,26 @@ settings: enable inspection FieldNamingConvention (kind Constant)
 language: java
 ```before
 public class A {
-    public static final int <caret>MAX = 42;
+    public static final int <caret>ID = 7;
 }
 ```
 keys: inspect
 ```after
-problem: warning `MAX` "Constant name MAX is too short (3 < 5)"
+problem: warning `ID` "Constant name ID is too short (2 < 5)"
 ```
 
 ### JAVA-ICB-259 case 1: Terminal digits
 settings: default
-language: java
 status: unverified (exact wording of the rename action)
+language: java
 ```before
 --- module-info.java
-module foo.<caret>bar2 {}
+module acme.<caret>util3 {}
 ```
-keys: Alt+Enter, choose "Rename module 'foo.bar2' to 'foo.bar'"
+keys: Alt+Enter, choose "Rename module 'acme.util3' to 'acme.util'"
 ```after
 --- module-info.java
-module foo.bar {}
+module acme.util {}
 ```
 
 ### JAVA-ICB-259 case 2: No digits
@@ -45,7 +45,7 @@ settings: default
 language: java
 ```before
 --- module-info.java
-module foo.<caret>bar {}
+module acme.<caret>util {}
 ```
 keys: inspect
 ```after
@@ -58,12 +58,12 @@ language: java
 ```before
 import java.util.function.Function;
 class A {
-    Function<String, String> id = <caret>X -> X;
+    Function<String, Integer> len = <caret>S -> S.length();
 }
 ```
 keys: inspect
 ```after
-problem: warning `X` "Lambda parameter name X doesn't match regex '[a-z][A-Za-z\d]*'"
+problem: warning `S` "Lambda parameter name S doesn't match regex '[a-z][A-Za-z\d]*'"
 ```
 
 ### JAVA-ICB-261 case 1: Upper-case variable
@@ -97,20 +97,20 @@ problem: warning `io` "Package name io is too short"
 settings: enable inspection ParameterNameDiffersFromOverriddenParameter
 language: java
 ```before
-class Person {
-    Person(String fullName) {}
+class Vehicle {
+    Vehicle(String licensePlate) {}
 }
-class Child extends Person {
-    Child(String <caret>name) { super(name); }
+class Truck extends Vehicle {
+    Truck(String <caret>plate) { super(plate); }
 }
 ```
-keys: Alt+Enter, choose "Rename to 'fullName'"
+keys: Alt+Enter, choose "Rename to 'licensePlate'"
 ```after
-class Person {
-    Person(String fullName) {}
+class Vehicle {
+    Vehicle(String licensePlate) {}
 }
-class Child extends Person {
-    Child(String fullName) { super(fullName); }
+class Truck extends Vehicle {
+    Truck(String licensePlate) { super(licensePlate); }
 }
 ```
 
@@ -119,18 +119,18 @@ settings: enable inspection ParameterNamingConvention
 language: java
 ```before
 class A {
-    void fooBar(int <caret>X) {}
+    void setLimit(int <caret>N) {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `X` "Parameter name X doesn't match regex '[a-z][A-Za-z\d]*'"
+problem: warning `N` "Parameter name N doesn't match regex '[a-z][A-Za-z\d]*'"
 ```
 
 ### JAVA-ICB-265 case 1: Questionable variable
 settings: enable inspection QuestionableName
-language: java
 status: unverified (exact default name list; `aa` is the documented example)
+language: java
 ```before
 class A {
     void m() {
@@ -176,14 +176,14 @@ settings: enable inspection BadOddness
 language: java
 ```before
 class A {
-    boolean m(int x) {
-        return <caret>x % 2 == 1;
+    boolean m(int n) {
+        return <caret>n % 2 == 1;
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `x % 2 == 1` "Oddness check will fail on negative values"
+problem: warning `n % 2 == 1` "Oddness check will fail on negative values"
 ```
 
 ### JAVA-ICB-269 case 1: equals on BigDecimal
@@ -193,7 +193,7 @@ language: java
 import java.math.BigDecimal;
 class A {
     boolean m() {
-        return new BigDecimal("2.0").<caret>equals(new BigDecimal("2.00"));
+        return new BigDecimal("1.50").<caret>equals(new BigDecimal("1.5"));
     }
 }
 ```
@@ -202,7 +202,7 @@ keys: Alt+Enter, choose "Replace with 'compareTo()==0'"
 import java.math.BigDecimal;
 class A {
     boolean m() {
-        return new BigDecimal("2.0").compareTo(new BigDecimal("2.00")) == 0;
+        return new BigDecimal("1.50").compareTo(new BigDecimal("1.5")) == 0;
     }
 }
 ```
@@ -244,13 +244,13 @@ settings: language level 17
 language: java
 ```before
 class A {
-    Integer i = <caret>new Integer(1);
+    Long total = <caret>new Long(5L);
 }
 ```
-keys: Alt+Enter, choose "Replace with 'Integer.valueOf()'"
+keys: Alt+Enter, choose "Replace with 'Long.valueOf()'"
 ```after
 class A {
-    Integer i = Integer.valueOf(1);
+    Long total = Long.valueOf(5L);
 }
 ```
 
@@ -259,7 +259,7 @@ settings: language level 8
 language: java
 ```before
 class A {
-    Integer i = <caret>new Integer(1);
+    Long total = <caret>new Long(5L);
 }
 ```
 keys: inspect
@@ -272,13 +272,13 @@ settings: enable inspection CharUsedInArithmeticContext
 language: java
 ```before
 class A {
-    int a = <caret>'a' + 42;
+    int code = <caret>'z' - 3;
 }
 ```
 keys: Alt+Enter, choose "Insert cast to int"
 ```after
 class A {
-    int a = (int) 'a' + 42;
+    int code = (int) 'z' - 3;
 }
 ```
 
@@ -287,15 +287,15 @@ settings: default
 language: java
 ```before
 class A {
-    short shortValue() { return 1; }
+    short audit() { return 1; }
     boolean m() {
-        return <caret>Character.MAX_VALUE == shortValue();
+        return <caret>Character.MAX_VALUE == audit();
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `Character.MAX_VALUE == shortValue()` "Equality comparison Character.MAX_VALUE == shortValue() of short and char values"
+problem: warning `Character.MAX_VALUE == audit()` "Equality comparison Character.MAX_VALUE == audit() of short and char values"
 ```
 
 ### JAVA-ICB-273 case 2: char vs char
@@ -352,13 +352,13 @@ settings: enable inspection ConfusingFloatingPointLiteral
 language: java
 ```before
 class A {
-    double d = <caret>.03;
+    double d = <caret>.75;
 }
 ```
 keys: Alt+Enter, choose "Change to canonical form"
 ```after
 class A {
-    double d = 0.03;
+    double d = 0.75;
 }
 ```
 
@@ -367,13 +367,13 @@ settings: enable inspection ConstantMathCall
 language: java
 ```before
 class A {
-    double v = Math.<caret>sin(0.0);
+    double v = Math.<caret>cos(0.0);
 }
 ```
 keys: Alt+Enter, choose "Simplify"
 ```after
 class A {
-    double v = 0.0;
+    double v = 1.0;
 }
 ```
 
@@ -427,16 +427,16 @@ settings: enable inspection ImplicitNumericConversion
 language: java
 ```before
 class A {
-    double m(int i) {
-        return <caret>i * 10;
+    double scale(int n) {
+        return <caret>n * 3;
     }
 }
 ```
 keys: Alt+Enter, choose "Convert to 'double'"
 ```after
 class A {
-    double m(int i) {
-        return (double) (i * 10);
+    double scale(int n) {
+        return (double) (n * 3);
     }
 }
 ```
@@ -466,7 +466,7 @@ class A {
 ```
 keys: Alt+Enter
 ```after
-the intention list does not contain "Insert underscores into numeric literal"; no problem reported
+no quick fix "Insert underscores into numeric literal" in the popup
 ```
 
 ### JAVA-ICB-281 case 1: Cast numerator
@@ -474,13 +474,13 @@ settings: default
 language: java
 ```before
 class A {
-    float x = 3.0F + <caret>3 * 2 / 5;
+    float ratio = 1.5F + <caret>7 * 3 / 4;
 }
 ```
 keys: Alt+Enter, choose "Cast the numerator to 'float'"
 ```after
 class A {
-    float x = 3.0F + ((float) (3 * 2)) / 5;
+    float ratio = 1.5F + ((float) (7 * 3)) / 4;
 }
 ```
 
@@ -502,13 +502,13 @@ settings: default
 language: java
 ```before
 class A {
-    long nights = <caret>100l;
+    long span = <caret>86400l;
 }
 ```
-keys: Alt+Enter, choose "Replace '100l' with '100L'"
+keys: Alt+Enter, choose "Replace '86400l' with '86400L'"
 ```after
 class A {
-    long nights = 100L;
+    long span = 86400L;
 }
 ```
 
@@ -517,7 +517,7 @@ settings: default
 language: java
 ```before
 class A {
-    long nights = <caret>100L;
+    long span = <caret>86400L;
 }
 ```
 keys: inspect
@@ -527,22 +527,22 @@ no problem reported
 
 ### JAVA-ICB-283 case 1: Cast after expanding
 settings: default
-language: java
 status: unverified (the shape of the produced expression)
+language: java
 ```before
 class A {
     void m() {
-        long c = 1;
-        c += <caret>1.2;
+        int k = 1;
+        k += <caret>2.5;
     }
 }
 ```
-keys: Alt+Enter, choose "Cast to 'long' after expanding compound assignment"
+keys: Alt+Enter, choose "Cast to 'int' after expanding compound assignment"
 ```after
 class A {
     void m() {
-        long c = 1;
-        c += (long) 1.2;
+        int k = 1;
+        k += (int) 2.5;
     }
 }
 ```
@@ -568,13 +568,13 @@ settings: default
 language: java
 ```before
 class A {
-    long mask = <caret>0xFFFF_FFFF;
+    long speed = <caret>0xFFFF_FFFF;
 }
 ```
 keys: Alt+Enter, choose "Add 'L' suffix (changes semantics)"
 ```after
 class A {
-    long mask = 0xFFFF_FFFFL;
+    long speed = 0xFFFF_FFFFL;
 }
 ```
 
@@ -583,7 +583,7 @@ settings: default
 language: java
 ```before
 class A {
-    long mask = <caret>0x7FFF_FFFF;
+    long stride = <caret>0x7FFF_FFFF;
 }
 ```
 keys: inspect
@@ -615,12 +615,12 @@ settings: default
 language: java
 ```before
 class A {
-    long b = <caret>30 * 24 * 60 * 60 * 1000;
+    long micros = <caret>3600 * 24 * 365 * 1000 * 1000;
 }
 ```
 keys: inspect
 ```after
-problem: warning `30 * 24 * 60 * 60 * 1000` "Numeric overflow in expression"
+problem: warning `3600 * 24 * 365 * 1000 * 1000` "Numeric overflow in expression"
 ```
 
 ### JAVA-ICB-286 case 2: No overflow with long
@@ -641,13 +641,13 @@ settings: enable inspection OctalAndDecimalIntegersMixed
 language: java
 ```before
 class A {
-    int[] elapsed = <caret>{1, 13, 052};
+    int[] stock = <caret>{1, 13, 052};
 }
 ```
 keys: Alt+Enter, choose "Remove leading zeroes to make decimals"
 ```after
 class A {
-    int[] elapsed = {1, 13, 52};
+    int[] stock = {1, 13, 52};
 }
 ```
 
@@ -684,14 +684,14 @@ settings: enable inspection OverlyComplexArithmeticExpression
 language: java
 ```before
 class A {
-    int calc(int a, int b) {
-        return <caret>a + a + a + b + b + b + b;
+    int bake(int a, int b) {
+        return <caret>a + a + b + b + b + a + b + a;
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `a + a + a + b + b + b + b` "Overly complex arithmetic expression"
+problem: warning `a + a + b + b + b + a + b + a` "Overly complex arithmetic expression"
 ```
 
 ### JAVA-ICB-290 case 1: Add zero
@@ -699,8 +699,8 @@ settings: default
 language: java
 ```before
 class A {
-    int f(int a) {
-        int y = <caret>a + 0;
+    int f(int n) {
+        int y = <caret>n * 1;
         return y;
     }
 }
@@ -708,8 +708,8 @@ class A {
 keys: Alt+Enter, choose "Simplify"
 ```after
 class A {
-    int f(int a) {
-        int y = a;
+    int f(int n) {
+        int y = n;
         return y;
     }
 }
@@ -756,7 +756,7 @@ class A {
 ```
 keys: Alt+Enter
 ```after
-the intention list does not contain "Remove underscores from numeric literal"; no problem reported
+no quick fix "Remove underscores from numeric literal" in the popup
 ```
 
 ### JAVA-ICB-292 case 1: 1_000_0000
@@ -764,12 +764,12 @@ settings: enable inspection SuspiciousLiteralUnderscore
 language: java
 ```before
 class A {
-    int oneMillion = <caret>1_000_0000;
+    int count = <caret>10_00_000;
 }
 ```
 keys: inspect
 ```after
-problem: warning `1_000_0000` "Group in number literal with underscores does not have length 3"
+problem: warning `10_00_000` "Group in number literal with underscores does not have length 3"
 ```
 
 ### JAVA-ICB-293 case 1: Double plus
@@ -777,7 +777,7 @@ settings: default
 language: java
 ```before
 class A {
-    int unaryPlus(int i) {
+    int trace(int i) {
         int x = <caret>+ +i;
         return x;
     }
@@ -786,7 +786,7 @@ class A {
 keys: Alt+Enter, choose "Remove unary '+'"
 ```after
 class A {
-    int unaryPlus(int i) {
+    int trace(int i) {
         int x = i;
         return x;
     }
@@ -814,7 +814,7 @@ settings: default
 language: java
 ```before
 class A {
-    void unaryMinus(int i) {
+    void relay(int i) {
         i += <caret>- 8;
     }
 }
@@ -822,7 +822,7 @@ class A {
 keys: Alt+Enter, choose "Remove unary minus and invert parent operation sign"
 ```after
 class A {
-    void unaryMinus(int i) {
+    void relay(int i) {
         i -= 8;
     }
 }
@@ -845,22 +845,22 @@ no problem reported
 
 ### JAVA-ICB-295 case 1: Replace with string constructor
 settings: default
-language: java
 status: unverified (exact text of the first fix name; the second fix is "Replace with 'BigDecimal.valueOf()'")
+language: java
 ```before
 import java.math.BigDecimal;
-class Constructor {
-    void foo() {
-        <caret>new BigDecimal(0.1);
+class Satellite {
+    void shuffle() {
+        <caret>new BigDecimal(0.3);
     }
 }
 ```
-keys: Alt+Enter, choose "Replace with '"0.1"'"
+keys: Alt+Enter, choose "Replace with '"0.3"'"
 ```after
 import java.math.BigDecimal;
-class Constructor {
-    void foo() {
-        new BigDecimal("0.1");
+class Satellite {
+    void shuffle() {
+        new BigDecimal("0.3");
     }
 }
 ```
@@ -870,8 +870,8 @@ settings: default
 language: java
 ```before
 import java.math.BigDecimal;
-class Constructor {
-    void foo(double d) {
+class Falcon {
+    void polish(double d) {
         <caret>new BigDecimal(d);
     }
 }
@@ -892,7 +892,7 @@ class <caret>A { q.B b; }
 package q;
 public class B {}
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning `A` "Class A has only dependencies on and/or dependents in package 'q'"
 ```
@@ -911,7 +911,7 @@ class B { C c; }
 package p;
 class C {}
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning `A` "Class A has no dependencies or dependents in its package"
 ```
@@ -933,7 +933,7 @@ class C { D d; }
 package p;
 class D {}
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning package `p` "Package p can be decomposed into 2 independent packages"
 ```
@@ -949,7 +949,7 @@ public class MyException extends Exception {}
 package errors;
 public class OtherException extends RuntimeException {}
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning package `errors` "Package 'errors' contains only exception classes"
 ```
@@ -966,7 +966,7 @@ class A {}
 package p;
 class B {}
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning package `p` "Package 'p' has classes in modules 'a' and 'b'"
 ```
@@ -979,7 +979,7 @@ language: java
 package p;
 class A {}
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning package `p` "Package 'p' contains too few classes (1 < 3)"
 ```
@@ -998,7 +998,7 @@ class B {}
 package p;
 class C {}
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning package `p` "Package 'p' contains too many classes (3 > 2)"
 ```
@@ -1009,14 +1009,14 @@ language: java
 ```before
 import java.util.*;
 class A {
-    List<String> one = Arrays.<caret>asList("one");
+    List<String> entries = Arrays.<caret>asList("one");
 }
 ```
 keys: Alt+Enter, choose "Replace with 'Collections.singletonList()'"
 ```after
 import java.util.*;
 class A {
-    List<String> one = Collections.singletonList("one");
+    List<String> entries = Collections.singletonList("one");
 }
 ```
 
@@ -1039,13 +1039,13 @@ settings: enable inspection AutoBoxing
 language: java
 ```before
 class A {
-    Integer x = <caret>42;
+    Long count = <caret>7L;
 }
 ```
 keys: Alt+Enter, choose "Make boxing explicit"
 ```after
 class A {
-    Integer x = Integer.valueOf(42);
+    Long count = Long.valueOf(7L);
 }
 ```
 
@@ -1075,13 +1075,13 @@ settings: default
 language: java
 ```before
 class A {
-    Boolean b1 = <caret>new Boolean(true);
+    Boolean flag = <caret>new Boolean(false);
 }
 ```
 keys: Alt+Enter, choose "Simplify"
 ```after
 class A {
-    Boolean b1 = Boolean.TRUE;
+    Boolean flag = Boolean.FALSE;
 }
 ```
 
@@ -1103,20 +1103,20 @@ settings: default
 language: java
 ```before
 class A {
-    void method(Integer i) {}
+    void ration(Integer i) {}
     void m() {
         Integer value = 1;
-        method(Integer.valueOf(<caret>value));
+        ration(Integer.valueOf(<caret>value));
     }
 }
 ```
 keys: Alt+Enter, choose "Remove unnecessary boxing"
 ```after
 class A {
-    void method(Integer i) {}
+    void ration(Integer i) {}
     void m() {
         Integer value = 1;
-        method(value);
+        ration(value);
     }
 }
 ```
@@ -1126,10 +1126,10 @@ settings: default
 language: java
 ```before
 class A {
-    void method(Integer i) {}
+    void mend(Integer i) {}
     void m() {
         int value = 1;
-        method(Integer.valueOf(<caret>value));
+        mend(Integer.valueOf(<caret>value));
     }
 }
 ```
@@ -1144,8 +1144,8 @@ language: java
 ```before
 import java.io.*;
 class A {
-    boolean isNewFile(File file, long lastModified) throws IOException {
-        return file.<caret>isFile() && file.lastModified() > lastModified;
+    boolean isArchive(File label, long height) throws IOException {
+        return label.<caret>isFile() && label.lastModified() > height;
     }
 }
 ```
@@ -1155,9 +1155,9 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.attribute.BasicFileAttributes;
 class A {
-    boolean isNewFile(File file, long lastModified) throws IOException {
-        var fileAttributes = Files.readAttributes(file.toPath(), BasicFileAttributes.class);
-        return fileAttributes.isRegularFile() && fileAttributes.lastModifiedTime().toMillis() > lastModified;
+    boolean isArchive(File label, long height) throws IOException {
+        var fileAttributes = Files.readAttributes(label.toPath(), BasicFileAttributes.class);
+        return fileAttributes.isRegularFile() && fileAttributes.lastModifiedTime().toMillis() > height;
     }
 }
 ```
@@ -1166,27 +1166,25 @@ class A {
 settings: enable inspection CallToSimpleGetterInClass
 language: java
 ```before
-public class Salient {
-    private String name;
-    public String getName() {
-        return name;
+public class Mason {
+    private int size;
+    public int getSize() {
+        return size;
     }
-    @Override
-    public String toString() {
-        return <caret>getName();
+    public int doubled() {
+        return <caret>getSize() * 2;
     }
 }
 ```
 keys: Alt+Enter, choose "Inline call to getter"
 ```after
-public class Salient {
-    private String name;
-    public String getName() {
-        return name;
+public class Mason {
+    private int size;
+    public int getSize() {
+        return size;
     }
-    @Override
-    public String toString() {
-        return name;
+    public int doubled() {
+        return size * 2;
     }
 }
 ```
@@ -1195,25 +1193,25 @@ public class Salient {
 settings: enable inspection CallToSimpleSetterInClass
 language: java
 ```before
-class Foo {
-    private int index;
-    public Foo(int idx) {
-        <caret>setIndex(idx);
+class Glacier {
+    private int limit;
+    public void reset() {
+        <caret>setLimit(0);
     }
-    public void setIndex(int idx) {
-        index = idx;
+    public void setLimit(int v) {
+        limit = v;
     }
 }
 ```
 keys: Alt+Enter, choose "Inline call to setter"
 ```after
-class Foo {
-    private int index;
-    public Foo(int idx) {
-        index = idx;
+class Glacier {
+    private int limit;
+    public void reset() {
+        limit = 0;
     }
-    public void setIndex(int idx) {
-        index = idx;
+    public void setLimit(int v) {
+        limit = v;
     }
 }
 ```
@@ -1223,18 +1221,18 @@ settings: enable inspection ClassInitializerMayBeStatic
 language: java
 ```before
 class A {
-    public static String CONSTANT;
+    public static int COUNT;
     <caret>{
-        CONSTANT = "Hello";
+        COUNT = 5;
     }
 }
 ```
 keys: Alt+Enter, choose "Make 'static'"
 ```after
 class A {
-    public static String CONSTANT;
+    public static int COUNT;
     static {
-        CONSTANT = "Hello";
+        COUNT = 5;
     }
 }
 ```
@@ -1246,8 +1244,8 @@ language: java
 import java.util.*;
 class A {
     void m() {
-        Set<String> set = new HashSet<>();
-        set.<caret>addAll(Arrays.asList("alpha", "beta", "gamma"));
+        List<Integer> ids = new ArrayList<>();
+        ids.<caret>addAll(Arrays.asList(4, 5, 6));
     }
 }
 ```
@@ -1256,7 +1254,7 @@ keys: Alt+Enter, choose "Replace 'addAll()' call with parametrized constructor c
 import java.util.*;
 class A {
     void m() {
-        Set<String> set = new HashSet<>(Arrays.asList("alpha", "beta", "gamma"));
+        List<Integer> ids = new ArrayList<>(Arrays.asList(4, 5, 6));
     }
 }
 ```
@@ -1268,9 +1266,9 @@ language: java
 import java.util.*;
 class A {
     void m() {
-        Set<String> set = new HashSet<>();
+        List<Integer> ids = new ArrayList<>();
         System.out.println();
-        set.<caret>addAll(Arrays.asList("alpha"));
+        ids.<caret>addAll(Arrays.asList(4));
     }
 }
 ```
@@ -1281,8 +1279,8 @@ no problem reported
 
 ### JAVA-ICB-313 case 1: HashMap without capacity
 settings: enable inspection CollectionsMustHaveInitialCapacity
-language: java
 status: unverified (rendering of #ref for a new expression)
+language: java
 ```before
 import java.util.*;
 class A {
@@ -1298,12 +1296,12 @@ problem: warning `new` "new HashMap() without initial capacity"
 
 ### JAVA-ICB-314 case 1: replaceAll with literal
 settings: default
-language: java
 status: unverified (generated constant name and placement)
+language: java
 ```before
 class A {
-    String m(String text, String replacement) {
-        return text.<caret>replaceAll("abc", replacement);
+    String m(String line, String repl) {
+        return line.<caret>replaceAll("xyz", repl);
     }
 }
 ```
@@ -1312,9 +1310,9 @@ keys: Alt+Enter, choose "Replace with call to method of compiled 'Pattern' const
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 class A {
-    private static final Pattern ABC = Pattern.compile("abc", Pattern.LITERAL);
-    String m(String text, String replacement) {
-        return ABC.matcher(text).replaceAll(Matcher.quoteReplacement(replacement));
+    private static final Pattern XYZ = Pattern.compile("xyz", Pattern.LITERAL);
+    String m(String line, String repl) {
+        return XYZ.matcher(line).replaceAll(Matcher.quoteReplacement(repl));
     }
 }
 ```
@@ -1324,14 +1322,14 @@ settings: default
 language: java
 ```before
 class A {
-    String m(String text, String regex, String replacement) {
-        return text.<caret>replaceAll(regex, replacement);
+    String m(String footer, String regex, String label) {
+        return footer.<caret>replaceAll(regex, label);
     }
 }
 ```
 keys: Alt+Enter
 ```after
-the intention list does not contain "Replace with call to method of compiled 'Pattern' constant"; no problem reported
+no quick fix "Replace with call to method of compiled 'Pattern' constant" in the popup
 ```
 
 ### JAVA-ICB-315 case 1: orElse to orElseGet
@@ -1340,9 +1338,9 @@ language: java
 ```before
 import java.util.Optional;
 class A {
-    String createDefaultValue() { return "x"; }
-    String m(Optional<String> optional) {
-        return optional.orElse(<caret>createDefaultValue());
+    String createRelay() { return "x"; }
+    String m(Optional<String> notes) {
+        return notes.orElse(<caret>createRelay());
     }
 }
 ```
@@ -1350,9 +1348,9 @@ keys: Alt+Enter, choose "Use 'orElseGet' method with functional argument"
 ```after
 import java.util.Optional;
 class A {
-    String createDefaultValue() { return "x"; }
-    String m(Optional<String> optional) {
-        return optional.orElseGet(this::createDefaultValue);
+    String createRelay() { return "x"; }
+    String m(Optional<String> notes) {
+        return notes.orElseGet(this::createRelay);
     }
 }
 ```
@@ -1363,14 +1361,14 @@ language: java
 ```before
 import java.util.Optional;
 class A {
-    String m(Optional<String> optional, String dflt) {
-        return optional.orElse(<caret>dflt);
+    String m(Optional<String> volume, String dflt) {
+        return volume.orElse(<caret>dflt);
     }
 }
 ```
 keys: Alt+Enter
 ```after
-the intention list does not contain "Use 'orElseGet' method with functional argument"; no problem reported
+no quick fix "Use 'orElseGet' method with functional argument" in the popup
 ```
 
 ### JAVA-ICB-316 case 1: Final constant field
@@ -1378,13 +1376,13 @@ settings: enable inspection FieldMayBeStatic
 language: java
 ```before
 public class A {
-    public final String <caret>str = "sample";
+    public final String <caret>street = "sample";
 }
 ```
 keys: Alt+Enter, choose "Make 'static'"
 ```after
 public class A {
-    public static final String str = "sample";
+    public static final String street = "sample";
 }
 ```
 
@@ -1394,14 +1392,14 @@ language: java
 ```before
 import java.util.Objects;
 class A {
-    boolean m(int[] arr, int value) {
-        boolean found = false;
-        for (int i = 0; i < arr.length; i++) {
-            <caret>if (Objects.equals(value, arr[i])) {
-                found = true;
+    boolean m(int[] rows, int value) {
+        boolean armed = false;
+        for (int i = 0; i < rows.length; i++) {
+            <caret>if (Objects.equals(value, rows[i])) {
+                armed = true;
             }
         }
-        return found;
+        return armed;
     }
 }
 ```
@@ -1409,15 +1407,15 @@ keys: Alt+Enter, choose "Add 'break'"
 ```after
 import java.util.Objects;
 class A {
-    boolean m(int[] arr, int value) {
-        boolean found = false;
-        for (int i = 0; i < arr.length; i++) {
-            if (Objects.equals(value, arr[i])) {
-                found = true;
+    boolean m(int[] rows, int value) {
+        boolean armed = false;
+        for (int i = 0; i < rows.length; i++) {
+            if (Objects.equals(value, rows[i])) {
+                armed = true;
                 break;
             }
         }
-        return found;
+        return armed;
     }
 }
 ```
@@ -1427,10 +1425,10 @@ settings: default
 language: java
 ```before
 class A {
-    int m(int[] arr, int value) {
+    int m(int[] pile, int value) {
         int count = 0;
-        for (int i = 0; i < arr.length; i++) {
-            <caret>if (arr[i] == value) {
+        for (int i = 0; i < pile.length; i++) {
+            <caret>if (pile[i] == value) {
                 count++;
             }
         }
@@ -1445,8 +1443,8 @@ no problem reported
 
 ### JAVA-ICB-318 case 1: Non-final lazy constant
 settings: default
-language: java
 status: unverified (requires a JDK that ships java.lang.LazyConstant, a preview API of recent JDKs)
+language: java
 ```before
 class A {
     private java.lang.LazyConstant<String> <caret>x = java.lang.LazyConstant.of(() -> "expensive string");
@@ -1461,8 +1459,8 @@ class A {
 
 ### JAVA-ICB-318 case 2: Final lazy constant
 settings: default
-language: java
 status: unverified (requires a JDK that ships java.lang.LazyConstant)
+language: java
 ```before
 class A {
     private final java.lang.LazyConstant<String> <caret>x = java.lang.LazyConstant.of(() -> "expensive string");
@@ -1477,16 +1475,16 @@ no problem reported
 settings: default
 language: java
 ```before
-class Sample {}
+class Lynx {}
 class A {
-    Class<?> c = <caret>new Sample().getClass();
+    Class<?> c = <caret>new Lynx().getClass();
 }
 ```
 keys: Alt+Enter, choose "Replace with direct class object access"
 ```after
-class Sample {}
+class Lynx {}
 class A {
-    Class<?> c = Sample.class;
+    Class<?> c = Lynx.class;
 }
 ```
 
@@ -1494,9 +1492,9 @@ class A {
 settings: default
 language: java
 ```before
-class Sample {}
+class Sculptor {}
 class A {
-    Class<?> c = <caret>Sample.class;
+    Class<?> c = <caret>Sculptor.class;
 }
 ```
 keys: inspect
@@ -1510,8 +1508,8 @@ language: java
 ```before
 import java.io.*;
 class A {
-    InputStream m(File file) throws IOException {
-        return new BufferedInputStream(<caret>new FileInputStream(file));
+    InputStream m(File color) throws IOException {
+        return new BufferedInputStream(<caret>new FileInputStream(color));
     }
 }
 ```
@@ -1520,8 +1518,8 @@ keys: Alt+Enter, choose "Replace with 'Files.newInputStream()'"
 import java.io.*;
 import java.nio.file.Files;
 class A {
-    InputStream m(File file) throws IOException {
-        return new BufferedInputStream(Files.newInputStream(file.toPath()));
+    InputStream m(File color) throws IOException {
+        return new BufferedInputStream(Files.newInputStream(color.toPath()));
     }
 }
 ```
@@ -1533,8 +1531,8 @@ language: java
 import java.io.*;
 import java.nio.file.Files;
 class A {
-    InputStream m(File file) throws IOException {
-        return <caret>Files.newInputStream(file.toPath());
+    InputStream m(File rider) throws IOException {
+        return <caret>Files.newInputStream(rider.toPath());
     }
 }
 ```
@@ -1545,14 +1543,14 @@ no problem reported
 
 ### JAVA-ICB-321 case 1: keySet then get
 settings: enable inspection KeySetIterationMayUseEntrySet
-language: java
 status: unverified (item name and the exact body after the replacement)
+language: java
 ```before
 import java.util.*;
 class A {
-    void m(Map<Object, Object> map) {
-        for (Object key : map.<caret>keySet()) {
-            Object val = map.get(key);
+    void m(Map<Object, Object> registry) {
+        for (Object key : registry.<caret>keySet()) {
+            Object tick = registry.get(key);
         }
     }
 }
@@ -1561,8 +1559,8 @@ keys: Alt+Enter, choose "Replace with 'values()'"
 ```after
 import java.util.*;
 class A {
-    void m(Map<Object, Object> map) {
-        for (Object val : map.values()) {
+    void m(Map<Object, Object> registry) {
+        for (Object tick : registry.values()) {
         }
     }
 }
@@ -1573,16 +1571,16 @@ settings: enable inspection LengthOneStringInIndexOf
 language: java
 ```before
 class A {
-    int m(String s) {
-        return s.indexOf(<caret>"x");
+    int pos(String text) {
+        return text.indexOf(<caret>"q");
     }
 }
 ```
 keys: Alt+Enter, choose "Replace with character"
 ```after
 class A {
-    int m(String s) {
-        return s.indexOf('x');
+    int pos(String text) {
+        return text.indexOf('q');
     }
 }
 ```
@@ -1618,7 +1616,7 @@ class A {
 ```
 keys: Alt+Enter
 ```after
-the intention list does not contain "Replace with character"; no problem reported
+no quick fix "Replace with character" in the popup
 ```
 
 ### JAVA-ICB-324 case 1: Remove range
@@ -1627,9 +1625,9 @@ language: java
 ```before
 import java.util.List;
 class A {
-    void removeRange(List<String> list, int from, int to) {
-        <caret>for (int i = from; i < to; i++) {
-            list.remove(from);
+    void drop(List<String> items, int lo, int hi) {
+        <caret>for (int k = lo; k < hi; k++) {
+            items.remove(lo);
         }
     }
 }
@@ -1638,9 +1636,9 @@ keys: Alt+Enter, choose "Replace with 'List.subList().clear()'"
 ```after
 import java.util.List;
 class A {
-    void removeRange(List<String> list, int from, int to) {
-        if (to > from) {
-            list.subList(from, to).clear();
+    void drop(List<String> items, int lo, int hi) {
+        if (hi > lo) {
+            items.subList(lo, hi).clear();
         }
     }
 }
@@ -1652,9 +1650,9 @@ language: java
 ```before
 import java.util.List;
 class A {
-    void m(List<String> list, int from, int to) {
-        <caret>for (int i = from; i < to; i++) {
-            list.remove(i);
+    void drop(List<String> items, int lo, int hi) {
+        <caret>for (int k = lo; k < hi; k++) {
+            items.remove(k);
         }
     }
 }
@@ -1669,9 +1667,9 @@ settings: default
 language: java
 ```before
 class A {
-    void m(int[] array, int[] newArray) {
-        <caret>for (int i = 0; i < array.length; i++) {
-            newArray[i] = array[i];
+    void m(int[] cargo, int[] rows) {
+        <caret>for (int i = 0; i < cargo.length; i++) {
+            rows[i] = cargo[i];
         }
     }
 }
@@ -1679,8 +1677,8 @@ class A {
 keys: Alt+Enter, choose "Replace with 'System.arraycopy()'"
 ```after
 class A {
-    void m(int[] array, int[] newArray) {
-        System.arraycopy(array, 0, newArray, 0, array.length);
+    void m(int[] cargo, int[] rows) {
+        System.arraycopy(cargo, 0, rows, 0, cargo.length);
     }
 }
 ```
@@ -1690,9 +1688,9 @@ settings: default
 language: java
 ```before
 class A {
-    void m(int[] array, int[] newArray) {
-        <caret>for (int i = 0; i < array.length; i++) {
-            newArray[i] = array[i] + 1;
+    void m(int[] cells, int[] rows) {
+        <caret>for (int i = 0; i < cells.length; i++) {
+            rows[i] = cells[i] + 1;
         }
     }
 }
@@ -1708,10 +1706,10 @@ language: java
 ```before
 import java.util.*;
 class A {
-    void addAll(List<String> list, String[] arr) {
-        <caret>for (int i = 0; i < arr.length; i++) {
-            String s = arr[i];
-            list.add(s);
+    void copy(List<String> entries, String[] cells) {
+        <caret>for (int i = 0; i < cells.length; i++) {
+            String s = cells[i];
+            entries.add(s);
         }
     }
 }
@@ -1720,8 +1718,8 @@ keys: Alt+Enter, choose "Replace with 'Collections.addAll()'"
 ```after
 import java.util.*;
 class A {
-    void addAll(List<String> list, String[] arr) {
-        Collections.addAll(list, arr);
+    void copy(List<String> entries, String[] cells) {
+        Collections.addAll(entries, cells);
     }
 }
 ```
@@ -1732,10 +1730,10 @@ language: java
 ```before
 import java.util.*;
 class A {
-    void addAll(List<String> list, String[] arr) {
-        <caret>for (int i = 0; i < arr.length; i++) {
-            System.out.println(arr[i]);
-            list.add(arr[i]);
+    void copy(List<String> entries, String[] cells) {
+        <caret>for (int i = 0; i < cells.length; i++) {
+            System.out.println(cells[i]);
+            entries.add(cells[i]);
         }
     }
 }
@@ -1750,17 +1748,17 @@ settings: enable inspection MapReplaceableByEnumMap
 language: java
 ```before
 import java.util.*;
-enum MyEnum { A }
+enum Reactor { A }
 class X {
-    Map<MyEnum, String> myEnums = <caret>new HashMap<>();
+    Map<Reactor, String> roster = <caret>new HashMap<>();
 }
 ```
 keys: Alt+Enter, choose "Replace with 'EnumMap'"
 ```after
 import java.util.*;
-enum MyEnum { A }
+enum Reactor { A }
 class X {
-    Map<MyEnum, String> myEnums = new EnumMap<>(MyEnum.class);
+    Map<Reactor, String> roster = new EnumMap<>(Reactor.class);
 }
 ```
 
@@ -1785,14 +1783,14 @@ class A {
 
 ### JAVA-ICB-329 case 1: new in loop
 settings: enable inspection ObjectAllocationInLoop
-language: java
 status: unverified (rendering of #ref for the new expression)
+language: java
 ```before
 import java.util.*;
 class A {
-    void m(Map<Integer, List<String>> declarationsMap, int[] keys) {
+    void m(Map<Integer, List<String>> catalog, int[] keys) {
         for (int key : keys) {
-            declarationsMap.put(key, <caret>new ArrayList<>());
+            catalog.put(key, <caret>new ArrayList<>());
         }
     }
 }
@@ -1847,17 +1845,17 @@ settings: enable inspection ObjectInstantiationInEqualsHashCode
 language: java
 ```before
 import java.util.Arrays;
-class Person {
-    private String name;
-    private int age;
+class Receipt {
+    private String code;
+    private int cents;
     public boolean equals(Object o) {
-        return Arrays.equals(<caret>new Object[] {name, age}, new Object[] {((Person) o).name, ((Person) o).age});
+        return Arrays.equals(<caret>new Object[] {code, cents}, new Object[] {((Receipt) o).code, ((Receipt) o).cents});
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `new Object[] {name, age}` "Object instantiation inside 'equals()'"
+problem: warning `new Object[] {code, cents}` "Object instantiation inside 'equals()'"
 ```
 
 ### JAVA-ICB-332 case 1: nextDouble times size
@@ -1866,9 +1864,8 @@ language: java
 ```before
 import java.util.Random;
 class A {
-    static final int SIZE = 10;
-    int getRandomInt() {
-        return (int) ((new Random()).<caret>nextDouble() * SIZE);
+    int roll() {
+        return (int) ((new Random()).<caret>nextDouble() * 6);
     }
 }
 ```
@@ -1876,9 +1873,8 @@ keys: Alt+Enter, choose "Replace with 'nextInt()'"
 ```after
 import java.util.Random;
 class A {
-    static final int SIZE = 10;
-    int getRandomInt() {
-        return (new Random()).nextInt(SIZE);
+    int roll() {
+        return (new Random()).nextInt(6);
     }
 }
 ```
@@ -1888,16 +1884,16 @@ settings: default
 language: java
 ```before
 class A {
-    void m() {
-        System.out.println(String.<caret>format("Total count: %d", 42));
+    void m(String name) {
+        System.out.println(String.<caret>format("Items: %s", name));
     }
 }
 ```
 keys: Alt+Enter, choose "Remove redundant call to 'String.format()'"
 ```after
 class A {
-    void m() {
-        System.out.printf("Total count: %d%n", 42);
+    void m(String name) {
+        System.out.printf("Items: %s%n", name);
     }
 }
 ```
@@ -1908,7 +1904,7 @@ language: java
 ```before
 class A {
     String m() {
-        String s = String.<caret>format("Total count: %d", 42);
+        String s = String.<caret>format("Items: %d", 42);
         return s;
     }
 }
@@ -1994,40 +1990,40 @@ settings: enable inspection SetReplaceableByEnumSet
 language: java
 ```before
 import java.util.*;
-enum MyEnum { FOO, BAR }
+enum Fjord { FOO, BAR }
 class A {
-    Set<MyEnum> enums = <caret>new HashSet<MyEnum>();
+    Set<Fjord> entries = <caret>new HashSet<Fjord>();
 }
 ```
 keys: Alt+Enter, choose "Replace with 'EnumSet'"
 ```after
 import java.util.*;
-enum MyEnum { FOO, BAR }
+enum Fjord { FOO, BAR }
 class A {
-    Set<MyEnum> enums = EnumSet.noneOf(MyEnum.class);
+    Set<Fjord> entries = EnumSet.noneOf(Fjord.class);
 }
 ```
 
 ### JAVA-ICB-337 case 1: removeAll with a list
 settings: default
-language: java
 status: unverified (name of the fix with the generated text)
+language: java
 ```before
 import java.util.*;
 class A {
-    Set<String> mySet = new HashSet<>();
-    public void check(String... ss) {
-        mySet.<caret>removeAll(List.of(ss));
+    Set<String> stock = new HashSet<>();
+    public void gather(String... ss) {
+        stock.<caret>removeAll(List.of(ss));
     }
 }
 ```
-keys: Alt+Enter, choose "Replace with 'List.of(ss).forEach(mySet::remove)'"
+keys: Alt+Enter, choose "Replace with 'List.of(ss).forEach(stock::remove)'"
 ```after
 import java.util.*;
 class A {
-    Set<String> mySet = new HashSet<>();
-    public void check(String... ss) {
-        List.of(ss).forEach(mySet::remove);
+    Set<String> stock = new HashSet<>();
+    public void gather(String... ss) {
+        List.of(ss).forEach(stock::remove);
     }
 }
 ```
@@ -2038,9 +2034,9 @@ language: java
 ```before
 import java.util.*;
 class A {
-    Set<String> mySet = new HashSet<>();
-    public void check(Set<String> other) {
-        mySet.<caret>removeAll(other);
+    Set<String> tray = new HashSet<>();
+    public void polish(Set<String> other) {
+        tray.<caret>removeAll(other);
     }
 }
 ```
@@ -2055,17 +2051,17 @@ language: java
 ```before
 import java.util.*;
 class A {
-    public boolean check(List<String> list, Collection<String> collection) {
-        return list.<caret>containsAll(collection);
+    public boolean pack(List<String> fleet, Collection<String> shelf) {
+        return fleet.<caret>containsAll(shelf);
     }
 }
 ```
-keys: Alt+Enter, choose "Wrap 'list' in 'HashSet' constructor"
+keys: Alt+Enter, choose "Wrap 'fleet' in 'HashSet' constructor"
 ```after
 import java.util.*;
 class A {
-    public boolean check(List<String> list, Collection<String> collection) {
-        return new HashSet<>(list).containsAll(collection);
+    public boolean pack(List<String> fleet, Collection<String> shelf) {
+        return new HashSet<>(fleet).containsAll(shelf);
     }
 }
 ```
@@ -2076,8 +2072,8 @@ language: java
 ```before
 import java.util.*;
 class A {
-    public boolean check(Set<String> set, Collection<String> collection) {
-        return set.<caret>containsAll(collection);
+    public boolean stamp(Set<String> set, Collection<String> tray) {
+        return set.<caret>containsAll(tray);
     }
 }
 ```
@@ -2088,12 +2084,12 @@ no problem reported
 
 ### JAVA-ICB-339 case 1: StringBuilder without capacity
 settings: enable inspection StringBufferMustHaveInitialCapacity
-language: java
 status: unverified (rendering of #ref for a new expression)
+language: java
 ```before
 class A {
     void m() {
-        var sb = <caret>new StringBuilder();
+        StringBuilder buf = <caret>new StringBuilder();
     }
 }
 ```
@@ -2108,25 +2104,25 @@ language: java
 ```before
 class A {
     String m() {
-        String str = "";
-        for (int i = 0; i < 10; i++) {
-            str <caret>+= i;
+        String line = "";
+        for (int k = 0; k < 5; k++) {
+            line <caret>+= k;
         }
-        return str;
+        return line;
     }
 }
 ```
-keys: Alt+Enter, choose "Introduce new StringBuilder to update variable 'str'"
+keys: Alt+Enter, choose "Introduce new StringBuilder to update variable 'line'"
 ```after
 class A {
     String m() {
-        String str = "";
-        StringBuilder strBuilder = new StringBuilder(str);
-        for (int i = 0; i < 10; i++) {
-            strBuilder.append(i);
+        String line = "";
+        StringBuilder strBuilder = new StringBuilder(line);
+        for (int k = 0; k < 5; k++) {
+            strBuilder.append(k);
         }
-        str = strBuilder.toString();
-        return str;
+        line = strBuilder.toString();
+        return line;
     }
 }
 ```
@@ -2137,9 +2133,9 @@ language: java
 ```before
 class A {
     String m(int i) {
-        String str = "";
-        str <caret>+= i;
-        return str;
+        String city = "";
+        city <caret>+= i;
+        return city;
     }
 }
 ```
@@ -2153,16 +2149,16 @@ settings: default
 language: java
 ```before
 class A {
-    void bar(StringBuilder builder, String name) {
-        builder.<caret>append("Hello," + name);
+    void pack(StringBuilder builder, String user) {
+        builder.<caret>append("Dear " + user);
     }
 }
 ```
 keys: Alt+Enter, choose "Replace with chained 'append()' calls"
 ```after
 class A {
-    void bar(StringBuilder builder, String name) {
-        builder.append("Hello,").append(name);
+    void pack(StringBuilder builder, String user) {
+        builder.append("Dear ").append(user);
     }
 }
 ```
@@ -2172,7 +2168,7 @@ settings: default
 language: java
 ```before
 class A {
-    void bar(StringBuilder builder) {
+    void survey(StringBuilder builder) {
         builder.<caret>append("Hello," + "world");
     }
 }
@@ -2221,10 +2217,10 @@ settings: enable inspection StringReplaceableByStringBuffer
 language: java
 ```before
 class A {
-    String m(String[] names) {
+    String m(String[] stock) {
         String <caret>s = "";
-        for (int i = 0; i < names.length; i++) {
-            s = s + names[i];
+        for (int i = 0; i < stock.length; i++) {
+            s = s + stock[i];
         }
         return s;
     }
@@ -2240,11 +2236,11 @@ settings: default
 language: java
 ```before
 class A {
-    int factorial(int val, int runningVal) {
-        if (val == 1) {
-            return runningVal;
+    int sum(int n, int acc) {
+        if (n == 0) {
+            return acc;
         } else {
-            return <caret>factorial(val - 1, runningVal * val);
+            return <caret>sum(n - 1, acc + n);
         }
     }
 }
@@ -2252,13 +2248,13 @@ class A {
 keys: Alt+Enter, choose "Replace tail recursion with iteration"
 ```after
 class A {
-    int factorial(int val, int runningVal) {
+    int sum(int n, int acc) {
         while (true) {
-            if (val == 1) {
-                return runningVal;
+            if (n == 0) {
+                return acc;
             } else {
-                runningVal = runningVal * val;
-                val = val - 1;
+                acc = acc + n;
+                n = n - 1;
             }
         }
     }
@@ -2278,7 +2274,7 @@ class A {
 ```
 keys: Alt+Enter
 ```after
-the intention list does not contain "Replace tail recursion with iteration"; no problem reported
+no quick fix "Replace tail recursion with iteration" in the popup
 ```
 
 ### JAVA-ICB-345 case 1: Pre-sized to empty
@@ -2287,8 +2283,8 @@ language: java
 ```before
 import java.util.*;
 class A {
-    String[] m(List<String> c) {
-        return c.<caret>toArray(new String[c.size()]);
+    Integer[] m(List<Integer> ids) {
+        return ids.<caret>toArray(new Integer[ids.size()]);
     }
 }
 ```
@@ -2296,8 +2292,8 @@ keys: Alt+Enter, choose "Replace argument with empty array"
 ```after
 import java.util.*;
 class A {
-    String[] m(List<String> c) {
-        return c.toArray(new String[0]);
+    Integer[] m(List<Integer> ids) {
+        return ids.toArray(new Integer[0]);
     }
 }
 ```
@@ -2320,8 +2316,8 @@ no problem reported
 
 ### JAVA-ICB-346 case 1: Temporary Integer
 settings: default
-language: java
 status: unverified (the inspection description shows `Integer.valueOf("3")`, the fix builds the call from the type's parse method, here `parseInt`)
+language: java
 ```before
 class A {
     int m() {
@@ -2353,21 +2349,21 @@ keys: inspect
 no problem reported
 ```
 
-### JAVA-ICB-347 case 1: Temporary Integer toString
+### JAVA-ICB-347 case 1: Temporary Double toString
 settings: default
 language: java
 ```before
 class A {
     String m() {
-        return <caret>new Integer(3).toString();
+        return <caret>new Double(2.5).toString();
     }
 }
 ```
-keys: Alt+Enter, choose "Replace with 'Integer.toString(3)'"
+keys: Alt+Enter, choose "Replace with 'Double.toString(2.5)'"
 ```after
 class A {
     String m() {
-        return Integer.toString(3);
+        return Double.toString(2.5);
     }
 }
 ```
@@ -2393,10 +2389,10 @@ language: java
 ```before
 import java.util.*;
 class A {
-    void test(Collection<Integer> numbers) {
-        List<Integer> result = new ArrayList<>();
-        for (Integer i : numbers) {
-            result.<caret>add(i);
+    void test(Collection<Integer> rows) {
+        List<Integer> pile = new ArrayList<>();
+        for (Integer i : rows) {
+            pile.<caret>add(i);
         }
     }
 }
@@ -2405,9 +2401,9 @@ keys: Alt+Enter, choose "Replace iteration with bulk 'addAll()' call"
 ```after
 import java.util.*;
 class A {
-    void test(Collection<Integer> numbers) {
-        List<Integer> result = new ArrayList<>();
-        result.addAll(numbers);
+    void test(Collection<Integer> rows) {
+        List<Integer> pile = new ArrayList<>();
+        pile.addAll(rows);
     }
 }
 ```
@@ -2418,10 +2414,10 @@ language: java
 ```before
 import java.util.*;
 class A {
-    void test(Collection<Integer> numbers) {
-        List<Integer> result = new ArrayList<>();
-        for (Integer i : numbers) {
-            result.<caret>add(i + 1);
+    void test(Collection<Integer> roster) {
+        List<Integer> entries = new ArrayList<>();
+        for (Integer i : roster) {
+            entries.<caret>add(i + 1);
         }
     }
 }
@@ -2436,13 +2432,13 @@ settings: default
 language: java
 ```before
 class A {
-    void needPrimitive(int value) {}
-    void needBox(Integer value) {}
-    public void example() {
-        <caret>Integer value = 12;
-        needBox(value);
+    void usePrim(long v) {}
+    void useBoxed(Long v) {}
+    public void run() {
+        <caret>Long total = 12L;
+        useBoxed(total);
         for (int i = 0; i < 10; i++) {
-            needPrimitive(value);
+            usePrim(total);
         }
     }
 }
@@ -2450,13 +2446,13 @@ class A {
 keys: Alt+Enter, choose "Convert wrapper type to primitive"
 ```after
 class A {
-    void needPrimitive(int value) {}
-    void needBox(Integer value) {}
-    public void example() {
-        int value = 12;
-        needBox(value);
+    void usePrim(long v) {}
+    void useBoxed(Long v) {}
+    public void run() {
+        long total = 12L;
+        useBoxed(total);
         for (int i = 0; i < 10; i++) {
-            needPrimitive(value);
+            usePrim(total);
         }
     }
 }
@@ -2467,10 +2463,10 @@ settings: default
 language: java
 ```before
 class A {
-    void needBox(Integer value) {}
-    public void example() {
-        <caret>Integer value = 12;
-        needBox(value);
+    void useBoxed(Long v) {}
+    public void run() {
+        <caret>Long total = 12L;
+        useBoxed(total);
     }
 }
 ```
@@ -2500,7 +2496,7 @@ settings: enable inspection HardcodedLineSeparators
 language: java
 ```before
 class A {
-    String count = <caret>"first\nsecond\rthird";
+    String tag = <caret>"first\nsecond\rthird";
 }
 ```
 keys: inspect
@@ -2571,7 +2567,7 @@ settings: enable inspection UseOfAWTPeerClass, language level 8
 language: java
 ```before
 import java.awt.peer.ButtonPeer;
-abstract class Sample implements <caret>ButtonPeer {
+abstract class Citadel implements <caret>ButtonPeer {
 }
 ```
 keys: inspect
@@ -2581,8 +2577,8 @@ problem: warning `ButtonPeer` "Use of AWT peer class ButtonPeer is non-portable"
 
 ### JAVA-ICB-357 case 1: Concrete driver class
 settings: enable inspection UseOfJDBCDriverClass
-language: java
 status: unverified (needs the driver library on the classpath; the interface java.sql.Driver itself is the allowed form)
+language: java
 ```before
 class A {
     void m() {
@@ -2624,4 +2620,3 @@ keys: inspect
 ```after
 problem: warning `sun.misc.Unsafe` "Use of Sun-supplied class sun.misc.Unsafe is non-portable"
 ```
-

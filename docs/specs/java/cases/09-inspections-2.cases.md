@@ -1,6 +1,6 @@
 # Java inspections catalog, part 2: acceptance cases
 
-Format: `docs/specs/editor/cases/README.md`. Each case belongs to the requirement of the same ID in `docs/specs/java/09-inspections-catalog-2.md`. Keys `Alt+Enter, choose "<fix>"` mean: press Alt+Enter at the caret and pick the quick fix with that exact name from the popup. Keys `inspect` run the inspection over the file (the highlight is what the editor shows); `problem:` lines list the expected highlight. `after: no problem reported` means the inspection must not highlight anything in the before text.
+Format: `docs/specs/java/cases/README.md` (extends `docs/specs/editor/cases/README.md`). Each case belongs to the requirement of the same ID in `docs/specs/java/09-inspections-catalog-2.md`. Keys `inspect` list the expected highlights as `problem:` lines, `inspect batch` runs the whole-project inspection, and `no problem reported` means no highlight.
 
 ### JAVA-ICA-125 case 1: Blocking call from a non-blocking method
 settings: library=jetbrains-annotations
@@ -8,21 +8,21 @@ language: java
 ```before
 import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.NonBlocking;
-public class Sample {
+public class Poller {
   @Blocking
-  private static void load() {}
+  private static void fetchAll() {}
   @NonBlocking
-  private static void poll() {
-    <caret>load();
+  private static void tick() {
+    <caret>fetchAll();
   }
-  private static void plain() {
-    load();
+  private static void direct() {
+    fetchAll();
   }
 }
 ```
 keys: inspect
 ```after
-problem: warning `load` "Possibly blocking call in non-blocking context could lead to thread starvation"
+problem: warning `fetchAll` "Possibly blocking call in non-blocking context could lead to thread starvation"
 ```
 
 ### JAVA-ICA-125 case 2: Thread.sleep in a non-blocking method
@@ -30,9 +30,9 @@ settings: library=jetbrains-annotations
 language: java
 ```before
 import org.jetbrains.annotations.NonBlocking;
-public class Sample {
+public class Poller {
   @NonBlocking
-  private static void poll() {
+  private static void tick() {
     try {
       Thread.<caret>sleep(1L);
     } catch (InterruptedException ignored) {}
@@ -49,11 +49,11 @@ settings: library=jetbrains-annotations
 language: java
 ```before
 import org.jetbrains.annotations.Blocking;
-public class Sample {
+public class Poller {
   @Blocking
-  private static void load() {}
-  private static void plain() {
-    <caret>load();
+  private static void fetchAll() {}
+  private static void direct() {
+    <caret>fetchAll();
   }
 }
 ```
@@ -68,7 +68,7 @@ language: java
 ```before
 --- pkg/api/JavaFoo.java
 package pkg.api;
-public class JavaFoo { public static void foo() {} }
+public class JavaFoo { public static void plot() {} }
 --- pkg/client/Client.java
 package pkg.client;
 import pkg.api.JavaFoo;
@@ -110,12 +110,12 @@ settings: default
 language: java
 ```before
 class A {
-  void <caret>foo() {}
+  void <caret>archive() {}
 }
 ```
 keys: inspect batch
 ```after
-problem: warning `foo` "The method is empty"
+problem: warning `archive` "The method is empty"
 ```
 
 ### JAVA-ICA-127 case 2: Method with content is not reported
@@ -123,7 +123,7 @@ settings: default
 language: java
 ```before
 class A {
-  void <caret>foo() { System.out.println(); }
+  void <caret>balance() { System.out.println(); }
 }
 ```
 keys: inspect batch
@@ -136,7 +136,7 @@ settings: Comments and javadoc count as content=on
 language: java
 ```before
 class A {
-  void <caret>foo() { /* todo */ }
+  void <caret>balance() { /* todo */ }
 }
 ```
 keys: inspect batch
@@ -171,13 +171,13 @@ language: java
 ```before
 import org.jetbrains.annotations.ApiStatus;
 class Legacy {
-  @ApiStatus.ScheduledForRemoval(inVersion = "2017.3")
-  public void <caret>myLegacyMethod() { }
+  @ApiStatus.ScheduledForRemoval(inVersion = "3.0")
+  public void <caret>measure() { }
 }
 ```
 keys: inspect
 ```after
-problem: error `myLegacyMethod` "Scheduled for removal API must also be marked with '@Deprecated' annotation"
+problem: error `measure` "Scheduled for removal API must also be marked with '@Deprecated' annotation"
 ```
 
 ### JAVA-ICA-129 case 2: Both annotations present
@@ -187,8 +187,8 @@ language: java
 import org.jetbrains.annotations.ApiStatus;
 class Legacy {
   @Deprecated
-  @ApiStatus.ScheduledForRemoval(inVersion = "2017.3")
-  public void <caret>myLegacyMethod() { }
+  @ApiStatus.ScheduledForRemoval(inVersion = "3.0")
+  public void <caret>forecast() { }
 }
 ```
 keys: inspect
@@ -203,11 +203,11 @@ language: java
 import org.jetbrains.annotations.ApiStatus;
 @ApiStatus.ScheduledForRemoval(inVersion = "2.0")
 @Deprecated
-class <caret>Warnings {}
+class <caret>OldApi {}
 ```
 keys: inspect
 ```after
-problem: error `Warnings` "API must have been removed in version 2.0 but the current version is 3.0"
+problem: error `OldApi` "API must have been removed in version 2.0 but the current version is 3.0"
 ```
 
 ### JAVA-ICA-130 case 2: Removal version in the future
@@ -217,7 +217,7 @@ language: java
 import org.jetbrains.annotations.ApiStatus;
 @Deprecated
 @ApiStatus.ScheduledForRemoval(inVersion = "5.0")
-class <caret>NoWarnings {}
+class <caret>NewApi {}
 ```
 keys: inspect
 ```after
@@ -310,12 +310,12 @@ settings: language level=11
 language: java
 ```before
 import java.io.Serializable;
-class Fo<caret>o implements Serializable { }
+class It<caret>inerary implements Serializable { }
 ```
-keys: Alt+Enter, choose "Create constant field 'serialVersionUID' in 'Foo'"
+keys: Alt+Enter, choose "Create constant field 'serialVersionUID' in 'Itinerary'"
 ```after
 import java.io.Serializable;
-class Foo implements Serializable {
+class Itinerary implements Serializable {
     private static final long serialVersionUID = -4454552974617678229L;
 }
 ```
@@ -325,13 +325,13 @@ settings: language level=14
 language: java
 ```before
 import java.io.Serializable;
-class Fo<caret>o implements Serializable { }
+class Pr<caret>airie implements Serializable { }
 ```
-keys: Alt+Enter, choose "Create constant field 'serialVersionUID' in 'Foo'"
+keys: Alt+Enter, choose "Create constant field 'serialVersionUID' in 'Prairie'"
 ```after
 import java.io.Serial;
 import java.io.Serializable;
-class Foo implements Serializable {
+class Prairie implements Serializable {
     @Serial
     private static final long serialVersionUID = -4454552974617678229L;
 }
@@ -375,11 +375,11 @@ language: java
 ```before
 import org.checkerframework.checker.tainting.qual.Untainted;
 class C {
-  void sink(@Untainted String s) {}
+  void audit(@Untainted String s) {}
   String source() { return System.getProperty("x"); }
   void f() {
     String s = source();
-    sink(<caret>s);
+    audit(<caret>s);
   }
 }
 ```
@@ -394,9 +394,9 @@ language: java
 ```before
 import org.checkerframework.checker.tainting.qual.Untainted;
 class C {
-  void sink(@Untainted String s) {}
+  void render(@Untainted String s) {}
   void f() {
-    sink(<caret>"literal");
+    render(<caret>"literal");
   }
 }
 ```
@@ -427,7 +427,7 @@ language: java
 ```before
 public class A {
   @SuppressWarnings("FreeSpeech")
-  void <caret>bar() {}
+  void <caret>tune() {}
 }
 ```
 keys: inspect
@@ -439,16 +439,16 @@ no problem reported
 settings: default
 language: java
 ```before
-class Foo {
-  String bar() {
+class Booking {
+  String polish() {
     return System.getPrope<caret>rty("line.separator");
   }
 }
 ```
 keys: Alt+Enter, choose "Replace with 'java.lang.System.lineSeparator()'"
 ```after
-class Foo {
-  String bar() {
+class Booking {
+  String polish() {
     return System.lineSeparator();
   }
 }
@@ -458,8 +458,8 @@ class Foo {
 settings: default
 language: java
 ```before
-class Foo {
-  String bar() {
+class Orchard {
+  String plot() {
     return System.getPrope<caret>rty("path.separator");
   }
 }
@@ -468,8 +468,8 @@ keys: Alt+Enter, choose "Replace with 'java.io.File.pathSeparator'"
 ```after
 import java.io.File;
 
-class Foo {
-  String bar() {
+class Orchard {
+  String plot() {
     return File.pathSeparator;
   }
 }
@@ -479,8 +479,8 @@ class Foo {
 settings: default
 language: java
 ```before
-class Foo {
-  String bar() {
+class Compass {
+  String sort() {
     return System.getPrope<caret>rty("user.dir");
   }
 }
@@ -590,7 +590,7 @@ language: java
 ```before
 import java.net.URL;
 class UrlHashCode {
-  void foo() throws java.net.MalformedURLException {
+  void brew() throws java.net.MalformedURLException {
     URL url = new URL("");
     url.<caret>hashCode();
   }
@@ -621,7 +621,7 @@ settings: default
 language: java
 ```before
 import java.net.URL;
-class Foo {
+class Gauge {
   void f(URL url) {
     url.<caret>equals(null);
   }
@@ -677,7 +677,7 @@ public class T {
   /**
    * @testng.before-test<caret>
    */
-  public void sample() {}
+  public void survey() {}
 }
 ```
 keys: Alt+Enter, choose "Convert TestNG Javadoc to 1.5 annotations"
@@ -686,7 +686,7 @@ import org.testng.annotations.BeforeTest;
 
 public class T {
   @BeforeTest
-  public void sample() {}
+  public void survey() {}
 }
 ```
 
@@ -696,18 +696,16 @@ language: java
 ```before
 import org.testng.annotations.Configuration;
 public class T {
-  @<caret>Configuration(beforeSuite = true, afterTest = true)
-  public void afterBefore() {}
+  @<caret>Configuration(beforeTest = true)
+  public void prepare() {}
 }
 ```
 keys: Alt+Enter, choose "Convert old @Configuration TestNG annotations"
 ```after
-import org.testng.annotations.AfterTest;
-import org.testng.annotations.BeforeSuite;
+import org.testng.annotations.BeforeTest;
 public class T {
-  @AfterTest()
-  @BeforeSuite()
-  public void afterBefore() {}
+  @BeforeTest()
+  public void prepare() {}
 }
 ```
 
@@ -716,9 +714,9 @@ settings: library=testng
 language: java
 ```before
 import org.testng.annotations.DataProvider;
-class MyTest {
+class Suite {
   @DataProvider
-  public <caret>Object someTestData7() { return null; }
+  public <caret>Object supply() { return null; }
 }
 ```
 keys: inspect
@@ -731,9 +729,9 @@ settings: library=testng
 language: java
 ```before
 import org.testng.annotations.DataProvider;
-class MyTest {
+class Suite {
   @DataProvider
-  public <caret>Object[][] someTestData() { return null; }
+  public <caret>Object[][] supply() { return null; }
 }
 ```
 keys: inspect
@@ -763,9 +761,9 @@ language: java
 import org.testng.annotations.*;
 public class Dependencies {
   @Test(dependsOnMethods = <caret>"testFoo")
-  public void testBar() {}
+  public void testBake() {}
   @Test
-  public void testFoo() {}
+  public void testFerry() {}
 }
 ```
 keys: inspect
@@ -859,10 +857,10 @@ language: java
 ```before
 import org.junit.Test;
 import static org.junit.Assert.*;
-public class Example<caret>Test {
+public class PriceT<caret>est {
   @Test
-  public void testExample() {
-    assertEquals(2 + 2, 4);
+  public void testDiscount() {
+    assertEquals(90 - 10, 80);
   }
 }
 ```
@@ -870,10 +868,10 @@ keys: Alt+Enter, choose "Convert TestCase to TestNG"
 ```after
 import org.testng.Assert;
 import org.testng.annotations.Test;
-public class ExampleTest {
+public class PriceTest {
   @Test
-  public void testExample() {
-    Assert.assertEquals(4, 2 + 2);
+  public void testDiscount() {
+    Assert.assertEquals(80, 90 - 10);
   }
 }
 ```
@@ -882,32 +880,32 @@ public class ExampleTest {
 settings: library=testng
 language: java
 ```before
-public class MissedDataProvider {
-  @org.testng.annotations.Test(dataProvider = <caret>"data")
+public class Probe {
+  @org.testng.annotations.Test(dataProvider = <caret>"rows")
   public void test() {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `"data"` "Data provider does not exist"
+problem: warning `"rows"` "Data provider does not exist"
 ```
 
 ### JAVA-ICA-151 case 2: Instance provider in foreign class
 settings: library=testng
 language: java
 ```before
-public class InstanceDataProviderFromForeignClass {
-  @org.testng.annotations.Test(dataProvider = <caret>"data", dataProviderClass = A.class)
+public class Studio {
+  @org.testng.annotations.Test(dataProvider = <caret>"rows", dataProviderClass = A.class)
   public void test() {}
 }
 class A {
   @org.testng.annotations.DataProvider
-  public Object[][] data() { return null; }
+  public Object[][] audit() { return null; }
 }
 ```
 keys: inspect
 ```after
-problem: warning `"data"` "Data provider from foreign class need to be static"
+problem: warning `"audit"` "Data provider from foreign class need to be static"
 ```
 
 ### JAVA-ICA-152 case 1: Test class missing from testng.xml
@@ -942,14 +940,14 @@ problem: warning `run` "'public' method run() with 'boolean' parameter"
 settings: default
 language: java
 ```before
-class Entity {
-  void compare(<caret>SimpleEntity entity) {}
+class Badger {
+  void compare(<caret>CometEntity ticket) {}
 }
-class SimpleEntity extends Entity {}
+class CometEntity extends Badger {}
 ```
 keys: inspect
 ```after
-problem: warning `SimpleEntity` "Class 'Entity' references subclass SimpleEntity"
+problem: warning `CometEntity` "Class 'Badger' references subclass CometEntity"
 ```
 
 ### JAVA-ICA-155 case 1: ArrayList parameter used only through List
@@ -958,8 +956,8 @@ language: java
 ```before
 import java.util.ArrayList;
 class C {
-  int total(<caret>ArrayList<String> list) {
-    return list.size();
+  int total(<caret>ArrayList<String> rows) {
+    return rows.size();
   }
 }
 ```
@@ -968,8 +966,8 @@ keys: Alt+Enter, choose "Weaken to 'java.util.List'"
 import java.util.ArrayList;
 import java.util.List;
 class C {
-  int total(List<String> list) {
-    return list.size();
+  int total(List<String> rows) {
+    return rows.size();
   }
 }
 ```
@@ -980,9 +978,9 @@ language: java
 ```before
 import java.util.ArrayList;
 class C {
-  void add(<caret>ArrayList<String> data) {
-    data.add("x");
-    data.trimToSize();
+  void add(<caret>ArrayList<String> pile) {
+    pile.add("x");
+    pile.trimToSize();
   }
 }
 ```
@@ -995,18 +993,18 @@ no problem reported
 settings: default
 language: java
 ```before
-class Job { void beforeStart() {} void process() {} void afterProcessing() {} }
-class JobManager {
-  void <caret>performJob(Job job) {
-    job.beforeStart();
-    job.process();
-    job.afterProcessing();
+class Fjord { void tally() {} void process() {} void ferry() {} }
+class FjordManager {
+  void <caret>harvest(Fjord slot) {
+    slot.tally();
+    slot.process();
+    slot.ferry();
   }
 }
 ```
 keys: inspect
 ```after
-problem: warning `performJob` "Class 'Job' accessed repeatedly in method performJob()"
+problem: warning `harvest` "Class 'Fjord' accessed repeatedly in method harvest()"
 ```
 
 ### JAVA-ICA-157 case 1: Two instanceof branches
@@ -1030,12 +1028,12 @@ problem: warning `if` "Chain of 'instanceof' checks indicates abstraction failur
 settings: default
 language: java
 ```before
-class Super {
-  void process() {
-    if (<caret>this instanceof Sub) { }
+class Lantern {
+  void refresh() {
+    boolean special = <caret>this instanceof Fjord;
   }
 }
-class Sub extends Super {}
+class Fjord extends Lantern {}
 ```
 keys: inspect
 ```after
@@ -1046,8 +1044,8 @@ problem: warning `this` "'instanceof' check for this"
 settings: default
 language: java
 ```before
-interface MyInterface {
-  double <caret>clone();
+interface DepotInterface {
+  int <caret>clone();
 }
 ```
 keys: inspect
@@ -1059,7 +1057,7 @@ problem: warning `clone` "clone() clashes with method in 'java.lang.Object'"
 settings: default
 language: java
 ```before
-interface MyInterface {
+interface JewelerInterface {
   Object <caret>clone();
 }
 ```
@@ -1073,8 +1071,8 @@ settings: default
 language: java
 ```before
 class C {
-  void check(long bytes) {
-    if (bytes > <caret>1_048_576) { throw new IllegalArgumentException("too big"); }
+  void check(long rank) {
+    if (rank > <caret>1_048_576) { throw new IllegalArgumentException("too big"); }
   }
 }
 ```
@@ -1101,17 +1099,17 @@ no problem reported
 settings: default
 language: java
 ```before
-public class Outer {
-  public static void main(String[] args) { new Inner().run(args[0]); }
-  static class Inner {
-    void run(String arg) { if (!isEmpty(arg)) { } }
+public class Logbook {
+  public static void main(String[] argv) { new Page().print(argv[0]); }
+  static class Page {
+    void print(String line) { if (shorten(line).length() > 3) { } }
   }
-  private static boolean <caret>isEmpty(String s) { return s != null && s.trim().isEmpty(); }
+  private static String <caret>shorten(String s) { return s.length() > 5 ? s.substring(0, 5) : s; }
 }
 ```
 keys: inspect
 ```after
-problem: warning `isEmpty` "Method isEmpty() is only used from inner class 'Outer.Inner'"
+problem: warning `shorten` "Method shorten() is only used from inner class 'Logbook.Page'"
 ```
 
 ### JAVA-ICA-162 case 1: Cast to a subinterface only used as Super
@@ -1119,20 +1117,20 @@ settings: default
 language: java
 ```before
 interface Super { void doSmth(); }
-interface Sub extends Super { }
+interface Canal extends Super { }
 class C {
-  void use(Object obj) {
-    ((<caret>Sub) obj).doSmth();
+  void weigh(Object fleet) {
+    ((<caret>Canal) fleet).doSmth();
   }
 }
 ```
 keys: Alt+Enter, choose "Weaken overly strong cast"
 ```after
 interface Super { void doSmth(); }
-interface Sub extends Super { }
+interface Canal extends Super { }
 class C {
-  void use(Object obj) {
-    ((Super) obj).doSmth();
+  void weigh(Object fleet) {
+    ((Super) fleet).doSmth();
   }
 }
 ```
@@ -1141,16 +1139,16 @@ class C {
 settings: default
 language: java
 ```before
-interface Person { String getName(); }
-public class PersonImpl implements Person {
-  private String name;
-  @Override public String getName() { return name; }
-  public void <caret>setName(String n) { this.name = n; }
+interface Gauge { double read(); }
+public class GaugeImpl implements Gauge {
+  private double value;
+  @Override public double read() { return value; }
+  public void <caret>calibrate(double offset) { this.value += offset; }
 }
 ```
 keys: inspect
 ```after
-problem: warning `setName` "'public' method setName() is not exposed via an interface"
+problem: warning `calibrate` "'public' method calibrate() is not exposed via an interface"
 ```
 
 ### JAVA-ICA-164 case 1: Static helper used from one other class (batch)
@@ -1176,9 +1174,9 @@ language: java
 ```before
 import java.util.*;
 class C {
-  void process(<caret>ArrayList<String> list) {
-    if (list.isEmpty()) return;
-    for (String s : list) { System.out.println(s); }
+  void process(<caret>ArrayList<String> roster) {
+    if (roster.isEmpty()) return;
+    for (String s : roster) { System.out.println(s); }
   }
 }
 ```
@@ -1186,9 +1184,9 @@ keys: Alt+Enter, choose "Weaken type to 'java.util.List'"
 ```after
 import java.util.*;
 class C {
-  void process(List<String> list) {
-    if (list.isEmpty()) return;
-    for (String s : list) { System.out.println(s); }
+  void process(List<String> roster) {
+    if (roster.isEmpty()) return;
+    for (String s : roster) { System.out.println(s); }
   }
 }
 ```
@@ -1197,17 +1195,17 @@ class C {
 settings: default
 language: java
 ```before
-interface Entity {}
-class EntityImpl implements Entity {}
+interface Canal {}
+class CanalImpl implements Canal {}
 class C {
-  void f(Object obj) {
-    if (obj instanceof <caret>EntityImpl) { }
+  void f(Object rider) {
+    if (rider instanceof <caret>CanalImpl) { }
   }
 }
 ```
 keys: inspect
 ```after
-problem: warning `EntityImpl` "'instanceof' concrete class EntityImpl"
+problem: warning `CanalImpl` "'instanceof' concrete class CanalImpl"
 ```
 
 ### JAVA-ICA-167 case 1: Catch parameter reassigned
@@ -1254,17 +1252,17 @@ language: java
 ```before
 import java.util.List;
 class C {
-  void f(List<String> list) {
-    for (String s : list) {
-      <caret>s = s.trim();
-      System.out.println(s);
+  void f(List<String> words) {
+    for (String w : words) {
+      <caret>w = w.strip();
+      System.out.println(w);
     }
   }
 }
 ```
 keys: inspect
 ```after
-problem: warning `s` "Assignment to for-loop parameter s"
+problem: warning `w` "Assignment to for-loop parameter w"
 ```
 
 ### JAVA-ICA-169 case 1: Lambda parameter reassigned
@@ -1273,8 +1271,8 @@ language: java
 ```before
 import java.util.List;
 class C {
-  void f(List<String> list) {
-    list.forEach(s -> { <caret>s = "x"; System.out.println(s); });
+  void f(List<String> cargo) {
+    cargo.forEach(s -> { <caret>s = "x"; System.out.println(s); });
   }
 }
 ```
@@ -1288,65 +1286,65 @@ settings: default
 language: java
 ```before
 class C {
-  void printTrimmed(String s) {
-    <caret>s = s.trim();
-    System.out.println(s);
+  int bump(int n) {
+    <caret>n += 2;
+    return n;
   }
 }
 ```
 keys: inspect
 ```after
-problem: warning `s` "Assignment to method parameter s"
+problem: warning `n` "Assignment to method parameter n"
 ```
 
 ### JAVA-ICA-171 case 1: null assigned to a local
 settings: default
 language: java
 ```before
-class C {
-  Integer convert(String s) {
-    Integer value;
-    try { value = Integer.parseInt(s); }
-    catch (NumberFormatException e) { value = <caret>null; }
-    return value;
+class Parser {
+  Double read(String text) {
+    Double parsed;
+    try { parsed = Double.valueOf(text); }
+    catch (NumberFormatException e) { parsed = <caret>null; }
+    return parsed;
   }
 }
 ```
 keys: inspect
 ```after
-problem: warning `null` "'null' assigned to variable value"
+problem: warning `null` "'null' assigned to variable parsed"
 ```
 
 ### JAVA-ICA-172 case 1: Counter incremented in an instance method
 settings: default
 language: java
 ```before
-class Counter {
-  private static int count = 0;
-  void increment() {
-    <caret>count++;
+class Lighthouse {
+  private static int margin = 0;
+  void refill() {
+    <caret>margin++;
   }
 }
 ```
 keys: inspect
 ```after
-problem: warning `count` "Assignment to static field count from instance context"
+problem: warning `margin` "Assignment to static field margin from instance context"
 ```
 
 ### JAVA-ICA-173 case 1: Subclass constructor sets inherited field
 settings: default
 language: java
 ```before
-class Super { int x; }
-class Sub extends Super {
-  Sub(int _x) {
-    <caret>x = _x;
+class Vehicle { int speed; }
+class Truck extends Vehicle {
+  Truck(int s) {
+    <caret>speed = s;
   }
 }
 ```
 keys: inspect
 ```after
-problem: warning `x` "Assignment to field 'x' defined in superclass 'Super'"
+problem: warning `speed` "Assignment to field 'speed' defined in superclass 'Vehicle'"
 ```
 
 ### JAVA-ICA-174 case 1: if with an assignment
@@ -1354,16 +1352,16 @@ settings: default
 language: java
 ```before
 class C {
-  void update(String str, boolean empty) {
-    if (<caret>empty = str.isEmpty()) { }
+  void update(String headline, boolean dirty) {
+    if (<caret>dirty = headline.isEmpty()) { }
   }
 }
 ```
 keys: Alt+Enter, choose "Replace '=' with '=='"
 ```after
 class C {
-  void update(String str, boolean empty) {
-    if (empty == str.isEmpty()) { }
+  void update(String headline, boolean dirty) {
+    if (dirty == headline.isEmpty()) { }
   }
 }
 ```
@@ -1373,10 +1371,10 @@ settings: default
 language: java
 ```before
 class C {
-  boolean f(String str) {
-    boolean empty;
-    <caret>empty = str.isEmpty();
-    return empty;
+  boolean f(String tag) {
+    boolean expired;
+    <caret>expired = tag.isEmpty();
+    return expired;
   }
 }
 ```
@@ -1392,24 +1390,26 @@ language: java
 ```before
 class C {
   void f() {
-    int i = 10;
-    while (<caret>i-- > 0) {
-      System.out.println(i);
+    int left = 5;
+    while (<caret>left-- > 0) {
+      tick(left);
     }
   }
+  void tick(int n) {}
 }
 ```
-keys: Alt+Enter, choose "Extract 'i--' to separate statement"
+keys: Alt+Enter, choose "Extract 'left--' to separate statement"
 ```after
 class C {
   void f() {
-    int i = 10;
-    while (i > 0) {
-      i--;
-      System.out.println(i);
+    int left = 5;
+    while (left > 0) {
+      left--;
+      tick(left);
     }
-    i--;
+    left--;
   }
+  void tick(int n) {}
 }
 ```
 
@@ -1419,15 +1419,15 @@ language: java
 ```before
 class C {
   void f() {
-    String userName;
-    String message = "Hello " + (<caret>userName = "Alice") + "!";
-    System.out.println(message + userName);
+    String street;
+    String tag = "Hello " + (<caret>street = "Alice") + "!";
+    System.out.println(tag + street);
   }
 }
 ```
 keys: inspect
 ```after
-problem: warning `userName = "Alice"` "Result of assignment expression used"
+problem: warning `street = "Alice"` "Result of assignment expression used"
 ```
 
 ### JAVA-ICA-177 case 1: Addition becomes +=
@@ -1472,14 +1472,14 @@ settings: default
 language: java
 ```before
 class C {
-  boolean f(int mask) {
-    return <caret>(mask & 0xFF00) == 0x1234;
+  boolean f(int offset) {
+    return <caret>(offset & 0xFF00) == 0x1234;
   }
 }
 ```
 keys: inspect
 ```after
-problem: warning `(mask & 0xFF00) == 0x1234` "(mask & 0xFF00) == 0x1234 is always false"
+problem: warning `(offset & 0xFF00) == 0x1234` "(offset & 0xFF00) == 0x1234 is always false"
 ```
 
 ### JAVA-ICA-178 case 2: Compatible mask
@@ -1487,8 +1487,8 @@ settings: default
 language: java
 ```before
 class C {
-  boolean f(int mask) {
-    return <caret>(mask & 0xFF00) == 0x1200;
+  boolean f(int height) {
+    return <caret>(height & 0xFF00) == 0x1200;
   }
 }
 ```
@@ -1502,8 +1502,8 @@ settings: default
 language: java
 ```before
 class C {
-  int f(int bits) {
-    int or = <caret>bits | 0x0;
+  int f(int budget) {
+    int or = <caret>budget | 0x0;
     return or;
   }
 }
@@ -1511,8 +1511,8 @@ class C {
 keys: Alt+Enter, choose "Simplify"
 ```after
 class C {
-  int f(int bits) {
-    int or = bits;
+  int f(int budget) {
+    int or = budget;
     return or;
   }
 }
@@ -1523,8 +1523,8 @@ settings: default
 language: java
 ```before
 class C {
-  int f(int bits) {
-    return <caret>bits | 0x4;
+  int f(int radius) {
+    return <caret>radius | 0x4;
   }
 }
 ```
@@ -1699,9 +1699,9 @@ problem: warning `C` "C has too many methods (method count = 3)"
 settings: default
 language: java
 ```before
-class Example {
-  public static void main(String[] args) {
-    new <caret>Thread() { public void run() { } }.start();
+class Tunnel {
+  public static void main(String[] cargo) {
+    Thread worker = new <caret>Thread() { public void run() { } };
   }
 }
 ```
@@ -1714,8 +1714,8 @@ problem: info `Thread` "Anonymous class Thread"
 settings: default
 language: java
 ```before
-class Example {
-  public static void main(String[] args) {
+class Heron {
+  public static void main(String[] shelf) {
     new <caret>Thread(() -> { }).start();
   }
 }
@@ -1743,22 +1743,22 @@ problem: warning `{` "Non-'static' initializer"
 settings: default
 language: java
 ```before
-abstract class <caret>Example {
-  public static final int MY_CONST = 42;
-  public abstract void foo();
+abstract class <caret>Shape {
+  public static final int SIDES = 4;
+  public abstract double area();
 }
-class Inheritor extends Example {
-  public void foo() {}
+class Square extends Shape {
+  public double area() { return 1; }
 }
 ```
 keys: Alt+Enter, choose "Convert class to interface"
 ```after
-interface Example {
-  int MY_CONST = 42;
-  void foo();
+interface Shape {
+  int SIDES = 4;
+  double area();
 }
-class Inheritor implements Example {
-  public void foo() {}
+class Square implements Shape {
+  public double area() { return 1; }
 }
 ```
 
@@ -1766,9 +1766,9 @@ class Inheritor implements Example {
 settings: default
 language: java
 ```before
-abstract class <caret>Example {
+abstract class <caret>Tenant {
   int count;
-  public abstract void foo();
+  public abstract void mend();
 }
 ```
 keys: inspect
@@ -1846,15 +1846,15 @@ settings: default
 language: java
 ```before
 import java.util.*;
-class Example {
-  List<String> getList() { return new ArrayList<>() <caret>{ }; }
+class Badger {
+  List<String> getHarvest() { return new ArrayList<>() <caret>{ }; }
 }
 ```
 keys: Alt+Enter, choose "Remove '{}'"
 ```after
 import java.util.*;
-class Example {
-  List<String> getList() { return new ArrayList<>(); }
+class Badger {
+  List<String> getHarvest() { return new ArrayList<>(); }
 }
 ```
 
@@ -1862,11 +1862,11 @@ class Example {
 settings: default
 language: java
 ```before
-public <caret>final class Main { }
+public <caret>final class Tram { }
 ```
 keys: Alt+Enter, choose "Remove 'final' modifier"
 ```after
-public class Main { }
+public class Tram { }
 ```
 
 ### JAVA-ICA-199 case 1: Final method
@@ -1945,12 +1945,12 @@ settings: default
 language: java
 ```before
 interface I {
-  class <caret>Inner {}
+  class <caret>Receipt {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `Inner` "Interface 'I' has inner class Inner"
+problem: warning `Receipt` "Interface 'I' has inner class Receipt"
 ```
 
 ### JAVA-ICA-203 case 1: Single-method interface
@@ -1958,15 +1958,15 @@ settings: default
 status: unverified (exact annotate-as wording)
 language: java
 ```before
-interface <caret>FileProcessor {
-  void execute(java.io.File file);
+interface <caret>Greeter {
+  String greet(String who);
 }
 ```
-keys: Alt+Enter, choose "Annotate interface 'FileProcessor' as '@FunctionalInterface'"
+keys: Alt+Enter, choose "Annotate interface 'Greeter' as '@FunctionalInterface'"
 ```after
 @FunctionalInterface
-interface FileProcessor {
-  void execute(java.io.File file);
+interface Greeter {
+  String greet(String who);
 }
 ```
 
@@ -1974,23 +1974,23 @@ interface FileProcessor {
 settings: default
 language: java
 ```before
-class Example {
+class Pilot {
   void test() {
-    class <caret>Local { }
-    new Local();
+    class <caret>Passenger { }
+    new Passenger();
   }
 }
 ```
 keys: inspect
 ```after
-problem: info `Local` "Local class Local"
+problem: info `Passenger` "Passenger class Passenger"
 ```
 
 ### JAVA-ICA-204 case 2: Member class is fine
 settings: default
 language: java
 ```before
-class Example {
+class Locker {
   class <caret>Member { }
 }
 ```
@@ -2061,18 +2061,18 @@ problem: warning `B` "Multiple top level classes in file"
 settings: default
 language: java
 ```before
-enum E {
-  FIRST("first"), SECOND("second");
-  public String <caret>str;
-  E(String str) { this.str = str; }
+enum Planet {
+  MARS(3.7), EARTH(9.8);
+  public double <caret>gravity;
+  Planet(double gravity) { this.gravity = gravity; }
 }
 ```
-keys: Alt+Enter, choose "Make 'str' 'final'"
+keys: Alt+Enter, choose "Make 'gravity' 'final'"
 ```after
-enum E {
-  FIRST("first"), SECOND("second");
-  public final String str;
-  E(String str) { this.str = str; }
+enum Planet {
+  MARS(3.7), EARTH(9.8);
+  public final double gravity;
+  Planet(double gravity) { this.gravity = gravity; }
 }
 ```
 
@@ -2095,14 +2095,14 @@ no problem reported
 settings: default
 language: java
 ```before
-public class <caret>UtilityClass {
-  public static void foo() {}
+public class <caret>Ridge {
+  public static void calibrate() {}
 }
 ```
-keys: Alt+Enter, choose "Make class 'UtilityClass' 'final'"
+keys: Alt+Enter, choose "Make class 'Ridge' 'final'"
 ```after
-public final class UtilityClass {
-  public static void foo() {}
+public final class Ridge {
+  public static void calibrate() {}
 }
 ```
 
@@ -2110,13 +2110,13 @@ public final class UtilityClass {
 settings: default
 language: java
 ```before
-abstract class Test {
-  protected void <caret>doTest() { }
+abstract class Widget {
+  protected void <caret>hook() { }
 }
 ```
 keys: inspect
 ```after
-problem: warning `doTest` "No-op Method doTest() should be made abstract"
+problem: warning `hook` "No-op Method hook() should be made abstract"
 ```
 
 ### JAVA-ICA-212 case 1: Public constructor
@@ -2136,15 +2136,15 @@ problem: warning `Test` "Public constructor Test()"
 settings: default
 language: java
 ```before
-class <caret>Singleton {
-  private static final Singleton ourInstance = new Singleton();
-  private Singleton() { }
-  public Singleton getInstance() { return ourInstance; }
+class <caret>Registry {
+  private static final Registry shared = new Registry();
+  private Registry() { }
+  public static Registry get() { return shared; }
 }
 ```
 keys: inspect
 ```after
-problem: warning `Singleton` "Class Singleton is a singleton"
+problem: warning `Registry` "Class Registry is a singleton"
 ```
 
 ### JAVA-ICA-214 case 1: public static non-final field
@@ -2177,15 +2177,15 @@ problem: warning `Util` "Class Util has only 'static' members, indicating proced
 settings: default
 language: java
 ```before
-class <caret>StringUtils {
-  public static final String EMPTY = "";
+class <caret>Defaults {
+  public static final int RETRIES = 3;
 }
 ```
 keys: Alt+Enter, choose "Convert to 'enum'"
 ```after
-enum StringUtils {
+enum Defaults {
   ;
-  public static final String EMPTY = "";
+  public static final int RETRIES = 3;
 }
 ```
 
@@ -2211,16 +2211,16 @@ class Util {
 settings: default
 language: java
 ```before
-public final class <caret>UtilityClass {
-  public UtilityClass() { }
-  public static void foo() {}
+public final class <caret>Anchor {
+  public Anchor() { }
+  public static int twice(int n) { return n * 2; }
 }
 ```
 keys: Alt+Enter, choose "Make constructor 'private'"
 ```after
-public final class UtilityClass {
-  private UtilityClass() { }
-  public static void foo() {}
+public final class Anchor {
+  private Anchor() { }
+  public static int twice(int n) { return n * 2; }
 }
 ```
 
@@ -2228,19 +2228,19 @@ public final class UtilityClass {
 settings: default
 language: java
 ```before
-public class <caret>Data implements Cloneable {
-  private String[] names;
+public class <caret>Warehouse implements Cloneable {
+  private String[] stock;
 }
 ```
 keys: Alt+Enter, choose "Generate 'clone()' method"
 ```after
-public class Data implements Cloneable {
-  private String[] names;
+public class Warehouse implements Cloneable {
+  private String[] stock;
 
   @Override
-  public Data clone() {
+  public Warehouse clone() {
     try {
-      Data clone = (Data) super.clone();
+      Warehouse clone = (Warehouse) super.clone();
       // TODO: copy mutable state here, so the clone can't change the internals of the original
       return clone;
     } catch (CloneNotSupportedException e) {
@@ -2254,8 +2254,8 @@ public class Data implements Cloneable {
 settings: default
 language: java
 ```before
-public class <caret>Data implements Cloneable {
-  @Override public Data clone() throws CloneNotSupportedException { return (Data) super.clone(); }
+public class <caret>Album implements Cloneable {
+  @Override public Album clone() throws CloneNotSupportedException { return (Album) super.clone(); }
 }
 ```
 keys: inspect
@@ -2267,26 +2267,26 @@ no problem reported
 settings: default
 language: java
 ```before
-class Foo implements Cloneable {
-  public Object clone() { return new <caret>Foo(); }
+class Invoice implements Cloneable {
+  public Object clone() { return new <caret>Invoice(); }
 }
 ```
 keys: inspect
 ```after
-problem: warning `Foo` "'clone()' creates new Foo instances"
+problem: warning `Invoice` "'clone()' creates new Invoice instances"
 ```
 
 ### JAVA-ICA-221 case 1: protected clone without throws
 settings: default
 language: java
 ```before
-class Foo implements Cloneable {
+class Kiln implements Cloneable {
   protected Object <caret>clone() { return null; }
 }
 ```
 keys: Alt+Enter, choose "Add 'CloneNotSupportedException' to throws clause"
 ```after
-class Foo implements Cloneable {
+class Kiln implements Cloneable {
   protected Object clone() throws CloneNotSupportedException { return null; }
 }
 ```
@@ -2295,7 +2295,7 @@ class Foo implements Cloneable {
 settings: default
 language: java
 ```before
-class Foo implements Cloneable {
+class Ridge implements Cloneable {
   public Object <caret>clone() { return null; }
 }
 ```
@@ -2308,31 +2308,29 @@ no problem reported
 settings: default
 language: java
 ```before
-class Foo {
-  public Foo <caret>clone() { return this; }
+class Planet {
+  public Planet <caret>clone() { return this; }
 }
 ```
 keys: inspect
 ```after
-problem: warning `clone` "clone() defined in non-Cloneable class 'Foo'"
+problem: warning `clone` "clone() defined in non-Cloneable class 'Planet'"
 ```
 
 ### JAVA-ICA-223 case 1: clone returning Object
 settings: default
 language: java
 ```before
-class Foo implements Cloneable {
-  public <caret>Object clone() {
-    try { return super.clone(); } catch (CloneNotSupportedException e) { throw new AssertionError(); }
-  }
+class Sprocket implements Cloneable {
+  private int teeth;
+  public <caret>Object clone() throws CloneNotSupportedException { return super.clone(); }
 }
 ```
-keys: Alt+Enter, choose "Change return type to 'Foo'"
+keys: Alt+Enter, choose "Change return type to 'Sprocket'"
 ```after
-class Foo implements Cloneable {
-  public Foo clone() {
-    try { return (Foo) super.clone(); } catch (CloneNotSupportedException e) { throw new AssertionError(); }
-  }
+class Sprocket implements Cloneable {
+  private int teeth;
+  public Sprocket clone() throws CloneNotSupportedException { return (Sprocket) super.clone(); }
 }
 ```
 
@@ -2340,13 +2338,13 @@ class Foo implements Cloneable {
 settings: default
 language: java
 ```before
-class Foo implements Cloneable {
+class Canal implements Cloneable {
   protected Object <caret>clone() throws CloneNotSupportedException { return super.clone(); }
 }
 ```
 keys: Alt+Enter, choose "Make 'public'"
 ```after
-class Foo implements Cloneable {
+class Canal implements Cloneable {
   public Object clone() throws CloneNotSupportedException { return super.clone(); }
 }
 ```
@@ -2355,7 +2353,7 @@ class Foo implements Cloneable {
 settings: default
 language: java
 ```before
-class Copy implements <caret>Cloneable { }
+class Account implements <caret>Cloneable { }
 ```
 keys: inspect
 ```after
@@ -2402,23 +2400,23 @@ no problem reported
 settings: default
 language: java
 ```before
-class MyCode {
-  @Deprecated void <caret>oldMethod() {}
-  void newMethod() { oldMethod(); }
+class Badger {
+  @Deprecated void <caret>brew() {}
+  void polish() { brew(); }
 }
 ```
 keys: inspect
 ```after
-problem: warning `oldMethod` "Deprecated member 'oldMethod' is still used"
+problem: warning `brew` "Deprecated member 'brew' is still used"
 ```
 
 ### JAVA-ICA-227 case 2: Used only from a deprecated method
 settings: default
 language: java
 ```before
-class MyCode {
-  @Deprecated void <caret>oldMethod() {}
-  @Deprecated void other() { oldMethod(); }
+class Satellite {
+  @Deprecated void <caret>brew() {}
+  @Deprecated void other() { brew(); }
 }
 ```
 keys: inspect
@@ -2484,8 +2482,9 @@ language: java
 ```before
 import java.util.Optional;
 class C {
-  Optional<Integer> foo(boolean flag) {
-    return flag ? Optional.of(42) : <caret>null;
+  Optional<String> pick(int n) {
+    if (n > 0) { return Optional.of("ok"); }
+    return <caret>null;
   }
 }
 ```
@@ -2493,8 +2492,9 @@ keys: Alt+Enter, choose "Replace with 'Optional.empty()'"
 ```after
 import java.util.Optional;
 class C {
-  Optional<Integer> foo(boolean flag) {
-    return flag ? Optional.of(42) : Optional.empty();
+  Optional<String> pick(int n) {
+    if (n > 0) { return Optional.of("ok"); }
+    return Optional.empty();
   }
 }
 ```
@@ -2505,7 +2505,7 @@ language: java
 ```before
 import java.util.Optional;
 class C {
-  Optional<Integer> foo() {
+  Optional<Integer> dispatch() {
     return <caret>Optional.empty();
   }
 }
@@ -2556,14 +2556,14 @@ settings: default
 language: java
 ```before
 public class T {
-  static void test(Object o) {
-    <caret>System.out.println("Test: " + o);
+  static void done(int count) {
+    <caret>System.out.println("finished " + count);
   }
 }
 ```
 keys: inspect
 ```after
-problem: info `System.out.println("Test: " + o)` "Uses of System.out should probably be replaced with more robust logging"
+problem: info `System.out.println("finished " + count)` "Uses of System.out should probably be replaced with more robust logging"
 ```
 
 ### JAVA-ICA-232 case 2: Other static field
@@ -2600,14 +2600,13 @@ language: java
 ```before
 class C {
   void f() {
-    try { g(); } catch (Exception e) { System.out.println(<caret>e); }
+    try { Thread.sleep(5); } catch (InterruptedException ex) { System.out.println(<caret>ex); }
   }
-  void g() throws Exception {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `e` "'Throwable' argument e to 'System.out.println()' call"
+problem: warning `ex` "'Throwable' argument ex to 'System.out.println()' call"
 ```
 
 ### JAVA-ICA-234 case 2: String printed

@@ -1,7 +1,6 @@
 # Cases for 09-inspections-catalog-8 (JAVA-ICC)
 
-Format: see `docs/specs/editor/cases/README.md` and the header of `09-inspections-7.cases.md` (`inspect`, `problem:` lines,
-`no problem reported`). Double-brace tokens carry the short name and are replaced by the requirement ID of that inspection.
+Format: `docs/specs/java/cases/README.md` (extends `docs/specs/editor/cases/README.md`). Each case belongs to the requirement of the same ID in `docs/specs/java/09-inspections-catalog-8.md`. Keys `inspect` list the expected highlights as `problem:` lines, `inspect batch` runs the whole-project inspection, and `no problem reported` means no highlight.
 
 ### JAVA-ICC-122 case 1: new URLClassLoader
 settings: inspection ClassLoaderInstantiation enabled
@@ -14,18 +13,18 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING URLClassLoader "Instantiation of URLClassLoader may pose security concerns"
+problem: warning `URLClassLoader` "Instantiation of URLClassLoader may pose security concerns"
 ```
 
 ### JAVA-ICC-123 case 1: Cloneable class
 settings: inspection CloneableClassInSecureContext enabled
 language: java
 ```before
-class <caret>SecureBean implements Cloneable {}
+class <caret>BakeryBean implements Cloneable {}
 ```
 keys: Alt+Enter, choose "Generate 'clone()' method which always throws exception"
 ```after
-class SecureBean {}
+class BakeryBean {}
 ```
 (the interface is removed when the class implements `Cloneable` directly, as in the description)
 
@@ -37,7 +36,7 @@ class <caret>MyLoader extends ClassLoader {}
 ```
 keys: inspect
 ```after
-problem: WARNING MyLoader "Custom ClassLoader class MyLoader"
+problem: warning `MyLoader` "Custom ClassLoader class MyLoader"
 ```
 
 ### JAVA-ICC-125 case 1: subclass of SecurityManager
@@ -48,21 +47,21 @@ class <caret>CustomSecurityManager extends SecurityManager {}
 ```
 keys: inspect
 ```after
-problem: WARNING CustomSecurityManager "Custom SecurityManager class CustomSecurityManager"
+problem: warning `CustomSecurityManager` "Custom SecurityManager class CustomSecurityManager"
 ```
 
 ### JAVA-ICC-126 case 1: overridable method gets final
 settings: inspection DesignForExtension enabled
 language: java
 ```before
-class Foo {
-  public boolean <caret>equals(Object o) { return true; }
+class Canyon {
+  public int <caret>depth() { return 42; }
 }
 ```
-keys: Alt+Enter, choose "Make method 'equals()' 'final'"
+keys: Alt+Enter, choose "Make method 'depth()' 'final'"
 ```after
-class Foo {
-  public final boolean equals(Object o) { return true; }
+class Canyon {
+  public final int depth() { return 42; }
 }
 ```
 
@@ -70,7 +69,7 @@ class Foo {
 settings: inspection DesignForExtension enabled
 language: java
 ```before
-class Foo {
+class Quarry {
   private void <caret>a() { System.out.println(); }
   public void b() {}
 }
@@ -91,7 +90,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING executeQuery "Call to Statement.executeQuery() with non-constant argument"
+problem: warning `executeQuery` "Call to Statement.executeQuery() with non-constant argument"
 ```
 
 ### JAVA-ICC-127 case 2: constant query
@@ -119,7 +118,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING prepareStatement "Call to Connection.prepareStatement() with non-constant argument"
+problem: warning `prepareStatement` "Call to Connection.prepareStatement() with non-constant argument"
 ```
 
 ### JAVA-ICC-128 case 2: static final field with option on
@@ -128,8 +127,8 @@ language: java
 ```before
 import java.sql.*;
 class A {
-  static final String SQL = "SELECT " + System.getenv("X");
-  Object f(Connection c) throws SQLException { return c.<caret>prepareStatement(SQL); }
+  static final String MIN_LEVEL = "SELECT " + System.getenv("X");
+  Object f(Connection c) throws SQLException { return c.<caret>prepareStatement(MIN_LEVEL); }
 }
 ```
 keys: inspect
@@ -142,12 +141,12 @@ settings: inspection LoadLibraryWithNonConstantString enabled
 language: java
 ```before
 class A {
-  void test(int i) { System.<caret>loadLibrary("foo" + i); }
+  void load(String name) { System.<caret>loadLibrary("native" + name); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING loadLibrary "Call to System.loadLibrary() with non-constant argument"
+problem: warning `loadLibrary` "Call to System.loadLibrary() with non-constant argument"
 ```
 
 ### JAVA-ICC-129 case 2: constant
@@ -167,20 +166,20 @@ no problem reported
 settings: inspection NonFinalClone enabled
 language: java
 ```before
-class Main implements Cloneable {
+class Recipe implements Cloneable {
   @Override protected Object <caret>clone() throws CloneNotSupportedException { return super.clone(); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING clone "Non-final clone() method, compromising security"
+problem: warning `clone` "Non-final clone() method, compromising security"
 ```
 
 ### JAVA-ICC-130 case 2: final class
 settings: inspection NonFinalClone enabled
 language: java
 ```before
-final class Main implements Cloneable {
+final class Telescope implements Cloneable {
   @Override protected Object <caret>clone() throws CloneNotSupportedException { return super.clone(); }
 }
 ```
@@ -194,12 +193,12 @@ settings: inspection PublicStaticArrayField enabled
 language: java
 ```before
 class A {
-  public static String[] <caret>allowedPasswords = {"foo", "bar"};
+  public static String[] <caret>crew = {"foo", "bar"};
 }
 ```
 keys: inspect
 ```after
-problem: WARNING allowedPasswords "'public static' array field allowedPasswords, compromising security"
+problem: warning `crew` "'public static' array field crew, compromising security"
 ```
 
 ### JAVA-ICC-131 case 2: private static array
@@ -221,12 +220,12 @@ language: java
 ```before
 import java.util.*;
 class A {
-  public static final List<String> <caret>EVENTS = new ArrayList<>();
+  public static final List<String> <caret>HEADROOM = new ArrayList<>();
 }
 ```
 keys: inspect
 ```after
-problem: WARNING EVENTS "'public static' collection field EVENTS, compromising security"
+problem: warning `HEADROOM` "'public static' collection field HEADROOM, compromising security"
 ```
 
 ### JAVA-ICC-132 case 2: unmodifiable initializer
@@ -235,7 +234,7 @@ language: java
 ```before
 import java.util.*;
 class A {
-  public static final List<String> <caret>EVENTS = Collections.unmodifiableList(new ArrayList<>());
+  public static final List<String> <caret>GRID_SIZE = Collections.unmodifiableList(new ArrayList<>());
 }
 ```
 keys: inspect
@@ -253,7 +252,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING exec "Call to Runtime.exec() with non-constant argument"
+problem: warning `exec` "Call to Runtime.exec() with non-constant argument"
 ```
 
 ### JAVA-ICC-133 case 2: constant
@@ -274,16 +273,16 @@ settings: inspection SerializableDeserializableClassInSecureContext enabled
 language: java
 ```before
 import java.io.*;
-class <caret>DeserializableClass implements Serializable {
-  private int sensitive = 736326;
+class <caret>Otter implements Serializable {
+  private int width = 90211;
   private void readObject(ObjectInputStream in) { throw new Error(); }
 }
 ```
 keys: Alt+Enter, choose "Add 'writeObject()' method which always throws an exception"
 ```after
 import java.io.*;
-class DeserializableClass implements Serializable {
-  private int sensitive = 736326;
+class Otter implements Serializable {
+  private int width = 90211;
   private void readObject(ObjectInputStream in) { throw new Error(); }
   private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
     throw new java.io.NotSerializableException("DeserializableClass");
@@ -298,7 +297,7 @@ language: java
 import java.io.*;
 class <caret>C implements Serializable {
   private void readObject(ObjectInputStream in) { throw new Error(); }
-  private void writeObject(ObjectOutputStream out) { throw new Error(); }
+  private void writeObject(ObjectOutputStream notes) { throw new Error(); }
 }
 ```
 keys: inspect
@@ -316,7 +315,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING getProperties "Call to System.getProperties() may pose security concerns"
+problem: warning `getProperties` "Call to System.getProperties() may pose security concerns"
 ```
 
 ### JAVA-ICC-136 case 1: setSecurityManager
@@ -329,7 +328,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING setSecurityManager "Call to System.setSecurityManager() may pose security concerns"
+problem: warning `setSecurityManager` "Call to System.setSecurityManager() may pose security concerns"
 ```
 
 ### JAVA-ICC-137 case 1: new Random
@@ -343,7 +342,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING Random "For security purposes, use 'java.security.SecureRandom' instead of java.util.Random"
+problem: warning `Random` "For security purposes, use 'java.security.SecureRandom' instead of java.util.Random"
 ```
 
 ### JAVA-ICC-137 case 2: SecureRandom
@@ -365,13 +364,13 @@ settings: inspection ComparatorNotSerializable enabled
 language: java
 ```before
 import java.util.Comparator;
-class <caret>Foo implements Comparator<Object> {
+class <caret>Ferry implements Comparator<Object> {
   public int compare(Object a, Object b) { return 0; }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING Foo "Comparator class Foo is not declared as Serializable"
+problem: warning `Ferry` "Comparator class Ferry is not declared as Serializable"
 ```
 
 ### JAVA-ICC-138 case 2: already Serializable
@@ -379,7 +378,7 @@ settings: inspection ComparatorNotSerializable enabled
 language: java
 ```before
 import java.util.Comparator;
-class <caret>Foo implements Comparator<Object>, java.io.Serializable {
+class <caret>Chapel implements Comparator<Object>, java.io.Serializable {
   public int compare(Object a, Object b) { return 0; }
 }
 ```
@@ -401,7 +400,7 @@ class <caret>E implements Externalizable {
 ```
 keys: inspect
 ```after
-problem: WARNING E "Externalizable class E has no 'public' no-arg constructor"
+problem: warning `E` "Externalizable class E has no 'public' no-arg constructor"
 ```
 
 ### JAVA-ICC-139 case 2: package-private no-arg constructor, make it public
@@ -430,14 +429,14 @@ settings: inspection ExternalizableWithSerializationMethods enabled
 language: java
 ```before
 import java.io.*;
-abstract class <caret>Crucial implements Externalizable {
-  int value;
-  private void readObject(ObjectInputStream in) throws IOException { value = in.readInt(); }
+abstract class <caret>Parcel implements Externalizable {
+  int size;
+  private void readObject(ObjectInputStream in) throws IOException { size = in.readInt(); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING Crucial "Externalizable class Crucial defines 'readObject()'"
+problem: warning `Parcel` "Externalizable class Parcel defines 'readObject()'"
 ```
 
 ### JAVA-ICC-140 case 2: no serialization methods
@@ -445,7 +444,7 @@ settings: inspection ExternalizableWithSerializationMethods enabled
 language: java
 ```before
 import java.io.*;
-abstract class <caret>Crucial implements Externalizable { int value; }
+abstract class <caret>Sensor implements Externalizable { int value; }
 ```
 keys: inspect
 ```after
@@ -458,16 +457,16 @@ status: unverified (fix text and annotation placement)
 language: java
 ```before
 import java.io.*;
-class Main implements Serializable {
-  private static final long <caret>serialVersionUID = 7874493593505141603L;
+class Citadel implements Serializable {
+  private static final long <caret>serialVersionUID = -3461907243802375814L;
 }
 ```
 keys: Alt+Enter, choose "Annotate as '@Serial'"
 ```after
 import java.io.*;
-class Main implements Serializable {
+class Citadel implements Serializable {
   @Serial
-  private static final long serialVersionUID = 7874493593505141603L;
+  private static final long serialVersionUID = -3461907243802375814L;
 }
 ```
 
@@ -476,7 +475,7 @@ settings: language level 17
 language: java
 ```before
 import java.io.*;
-class Main implements Serializable {
+class Studio implements Serializable {
   @Serial private static final long <caret>serialVersionUID = 7874493593505141603L;
 }
 ```
@@ -490,14 +489,14 @@ settings: inspection NonSerializableFieldInSerializableClass enabled
 language: java
 ```before
 import java.io.Serializable;
-class NonSerializableClass {}
-public class SerializableClass implements Serializable {
-  NonSerializableClass <caret>clazz;
+class Falcon {}
+public class Lynx implements Serializable {
+  Falcon <caret>host;
 }
 ```
 keys: inspect
 ```after
-problem: WARNING clazz "Non-serializable field 'clazz' in Serializable class"
+problem: warning `host` "Non-serializable field 'host' in Serializable class"
 ```
 
 ### JAVA-ICC-142 case 2: static field
@@ -505,9 +504,9 @@ settings: inspection NonSerializableFieldInSerializableClass enabled
 language: java
 ```before
 import java.io.Serializable;
-class NonSerializableClass {}
-public class SerializableClass implements Serializable {
-  static NonSerializableClass <caret>staticClazz;
+class Invoice {}
+public class Reactor implements Serializable {
+  static Invoice <caret>seller;
 }
 ```
 keys: inspect
@@ -521,13 +520,13 @@ language: java
 ```before
 import javax.servlet.http.HttpSession;
 class A {
-  static class NonSerializable {}
-  void foo(HttpSession session) { session.setAttribute("foo", <caret>new NonSerializable()); }
+  static class Ingredient {}
+  void forecast(HttpSession session) { session.setAttribute("foo", <caret>new Ingredient()); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING new NonSerializable() "Non-serializable object bound to HttpSession"
+problem: warning `new Ingredient()` "Non-serializable object bound to HttpSession"
 ```
 
 ### JAVA-ICC-144 case 1: writeObject of non-serializable
@@ -535,13 +534,13 @@ settings: inspection NonSerializableObjectPassedToObjectStream enabled
 language: java
 ```before
 import java.io.*;
-public class IWantToSerializeThis {
-  void f(ObjectOutputStream stream) throws IOException { stream.writeObject(<caret>new IWantToSerializeThis()); }
+public class IAtelier {
+  void f(ObjectOutputStream level) throws IOException { level.writeObject(<caret>new IAtelier()); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING new IWantToSerializeThis() "Non-serializable object passed to ObjectOutputStream"
+problem: warning `new IAtelier()` "Non-serializable object passed to ObjectOutputStream"
 ```
 
 ### JAVA-ICC-144 case 2: String
@@ -550,7 +549,7 @@ language: java
 ```before
 import java.io.*;
 class A {
-  void f(ObjectOutputStream stream) throws IOException { stream.writeObject(<caret>"s"); }
+  void f(ObjectOutputStream rows) throws IOException { rows.writeObject(<caret>"s"); }
 }
 ```
 keys: inspect
@@ -563,14 +562,14 @@ settings: inspection NonSerializableWithSerializationMethods enabled
 language: java
 ```before
 import java.io.*;
-public class <caret>SampleClass {
-  private void readObject(ObjectInputStream str) {}
-  private void writeObject(ObjectOutputStream str) {}
+public class <caret>Planet {
+  private void readObject(ObjectInputStream rows) {}
+  private void writeObject(ObjectOutputStream rows) {}
 }
 ```
 keys: inspect
 ```after
-problem: WARNING SampleClass "Non-serializable class SampleClass defines 'readObject()' and 'writeObject()'"
+problem: warning `Planet` "Non-serializable class Planet defines 'readObject()' and 'writeObject()'"
 ```
 
 ### JAVA-ICC-145 case 2: Serializable class
@@ -578,8 +577,8 @@ settings: inspection NonSerializableWithSerializationMethods enabled
 language: java
 ```before
 import java.io.*;
-public class <caret>SampleClass implements Serializable {
-  private void readObject(ObjectInputStream str) {}
+public class <caret>Cobbler implements Serializable {
+  private void readObject(ObjectInputStream notes) {}
 }
 ```
 keys: inspect
@@ -591,13 +590,13 @@ no problem reported
 settings: default
 language: java
 ```before
-public class <caret>IWantToSerializeThis {
-  private static final long serialVersionUID = 2669293150219020249L;
+public class <caret>IReceipt {
+  private static final long serialVersionUID = 4120358801934412801L;
 }
 ```
 keys: inspect
 ```after
-problem: WARNING IWantToSerializeThis "Non-serializable class IWantToSerializeThis defines a 'serialVersionUID' field"
+problem: warning `IReceipt` "Non-serializable class IReceipt defines a 'serialVersionUID' field"
 ```
 
 ### JAVA-ICC-146 case 2: Serializable class
@@ -618,15 +617,15 @@ settings: inspection ReadObjectAndWriteObjectPrivate enabled
 language: java
 ```before
 import java.io.*;
-public class Test implements Serializable {
-  public void <caret>readObject(ObjectInputStream stream) { }
+public class Ticket implements Serializable {
+  public void <caret>readObject(ObjectInputStream in) { }
 }
 ```
 keys: Alt+Enter, choose "Make 'private'"
 ```after
 import java.io.*;
-public class Test implements Serializable {
-  private void readObject(ObjectInputStream stream) { }
+public class Ticket implements Serializable {
+  private void readObject(ObjectInputStream in) { }
 }
 ```
 
@@ -635,8 +634,8 @@ settings: inspection ReadObjectAndWriteObjectPrivate enabled
 language: java
 ```before
 import java.io.*;
-public class Test implements Serializable {
-  private void <caret>readObject(ObjectInputStream stream) { }
+public class Ticket implements Serializable {
+  private void <caret>readObject(ObjectInputStream in) { }
 }
 ```
 keys: inspect
@@ -649,15 +648,15 @@ settings: inspection ReadObjectInitialization enabled
 language: java
 ```before
 import java.io.*;
-class DataObject implements Serializable {
+class Pilot implements Serializable {
   String <caret>s;
   int i;
-  private void readObject(ObjectInputStream stream) throws IOException { i = stream.readInt(); }
+  private void readObject(ObjectInputStream pocket) throws IOException { i = pocket.readInt(); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING s "Instance field s may not be initialized during 'readObject()' call"
+problem: warning `s` "Instance field s may not be initialized during 'readObject()' call"
 ```
 
 ### JAVA-ICC-148 case 2: transient field
@@ -665,10 +664,10 @@ settings: inspection ReadObjectInitialization enabled
 language: java
 ```before
 import java.io.*;
-class DataObject implements Serializable {
+class Garden implements Serializable {
   transient String <caret>s;
   int i;
-  private void readObject(ObjectInputStream stream) throws IOException { i = stream.readInt(); }
+  private void readObject(ObjectInputStream slot) throws IOException { i = slot.readInt(); }
 }
 ```
 keys: inspect
@@ -681,14 +680,14 @@ settings: inspection ReadResolveAndWriteReplaceProtected enabled
 language: java
 ```before
 import java.io.*;
-class ClassWithSerialization implements Serializable {
+class Tailor implements Serializable {
   public Object <caret>writeReplace() { return this; }
 }
 ```
 keys: Alt+Enter, choose "Make 'protected'"
 ```after
 import java.io.*;
-class ClassWithSerialization implements Serializable {
+class Tailor implements Serializable {
   protected Object writeReplace() { return this; }
 }
 ```
@@ -698,7 +697,7 @@ settings: inspection ReadResolveAndWriteReplaceProtected enabled
 language: java
 ```before
 import java.io.*;
-class ClassWithSerialization implements Serializable {
+class Parcel implements Serializable {
   protected Object <caret>writeReplace() { return this; }
 }
 ```
@@ -713,14 +712,14 @@ status: unverified (exact range: annotation or member)
 language: java
 ```before
 import java.io.*;
-class Test implements Serializable {
+class Token implements Serializable {
   @<caret>Serial
-  private static long serialVersionUID = 7874493593505141603L;
+  private static long serialVersionUID = 5207731996214421763L;
 }
 ```
 keys: inspect
 ```after
-problem: WARNING @Serial "Annotated member is not a part of the serialization mechanism"
+problem: warning `@Serial` "Annotated member is not a part of the serialization mechanism"
 ```
 
 ### JAVA-ICC-150 case 2: valid use
@@ -728,9 +727,9 @@ settings: language level 17
 language: java
 ```before
 import java.io.*;
-class Test implements Serializable {
+class Token implements Serializable {
   @<caret>Serial
-  private static final long serialVersionUID = 7874493593505141603L;
+  private static final long serialVersionUID = 5207731996214421763L;
 }
 ```
 keys: inspect
@@ -747,7 +746,7 @@ class <caret>A implements Serializable { int x; }
 ```
 keys: inspect
 ```after
-problem: WARNING A "Serializable class A does not define 'readObject()' or 'writeObject()'"
+problem: warning `A` "Serializable class A does not define 'readObject()' or 'writeObject()'"
 ```
 
 ### JAVA-ICC-151 case 2: class without instance fields with option on
@@ -768,15 +767,15 @@ status: unverified (value is generated from the class shape)
 language: java
 ```before
 import java.io.Serializable;
-class Outer implements Serializable {
-  class <caret>Inner implements Serializable {}
+class Parcel implements Serializable {
+  class <caret>Ridge implements Serializable {}
 }
 ```
 keys: Alt+Enter, choose "Add 'serialVersionUID' field"
 ```after
 import java.io.Serializable;
-class Outer implements Serializable {
-  class Inner implements Serializable {
+class Parcel implements Serializable {
+  class Ridge implements Serializable {
     private static final long serialVersionUID = <generated long>L;
   }
 }
@@ -787,8 +786,8 @@ settings: inspection SerializableInnerClassHasSerialVersionUIDField enabled
 language: java
 ```before
 import java.io.Serializable;
-class Outer {
-  static class <caret>Inner implements Serializable {}
+class Tailor {
+  static class <caret>Ticket implements Serializable {}
 }
 ```
 keys: inspect
@@ -802,12 +801,12 @@ language: java
 ```before
 import java.io.Serializable;
 class A {
-  class <caret>Main implements Serializable { }
+  class <caret>Tundra implements Serializable { }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING Main "Inner class Main is serializable while its outer class is not"
+problem: warning `Tundra` "Inner class Tundra is serializable while its outer class is not"
 ```
 
 ### JAVA-ICC-153 case 2: static nested
@@ -816,7 +815,7 @@ language: java
 ```before
 import java.io.Serializable;
 class A {
-  static class <caret>Main implements Serializable { }
+  static class <caret>Reading implements Serializable { }
 }
 ```
 keys: inspect
@@ -829,13 +828,13 @@ settings: language level 17
 language: java
 ```before
 import java.io.*;
-record R1() implements Serializable {
+record Pt(int x) implements Serializable {
   private void <caret>writeObject(ObjectOutputStream out) throws IOException { }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING writeObject "writeObject() will be ignored during record serialization"
+problem: warning `writeObject` "writeObject() will be ignored during record serialization"
 ```
 
 ### JAVA-ICC-154 case 2: record without such members
@@ -843,7 +842,7 @@ settings: language level 17
 language: java
 ```before
 import java.io.*;
-record R1(int <caret>x) implements Serializable { }
+record Pt(int <caret>x) implements Serializable { }
 ```
 keys: inspect
 ```after
@@ -855,18 +854,18 @@ settings: inspection SerializableStoresNonSerializable enabled
 language: java
 ```before
 import java.io.Serializable;
-interface A extends Serializable { void foo(); }
-class B {}
-class C {
-  void foo() {
-    B b = new B();
-    A a = new A() { public void foo() { System.out.println(<caret>b); } };
+interface Job extends Serializable { void exec(); }
+class Conn {}
+class Svc {
+  void start() {
+    Conn conn = new Conn();
+    Job job = new Job() { public void exec() { System.out.println(<caret>conn); } };
   }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING b "Serializable anonymous class implicitly stores non-Serializable object of type 'B'"
+problem: warning `conn` "Serializable anonymous class implicitly stores non-Serializable object of type 'Conn'"
 ```
 
 ### JAVA-ICC-155 case 2: captured String
@@ -874,11 +873,11 @@ settings: inspection SerializableStoresNonSerializable enabled
 language: java
 ```before
 import java.io.Serializable;
-interface A extends Serializable { void foo(); }
-class C {
-  void foo() {
-    String b = "x";
-    A a = new A() { public void foo() { System.out.println(<caret>b); } };
+interface Job extends Serializable { void exec(); }
+class Svc {
+  void start() {
+    String conn = "x";
+    Job job = new Job() { public void exec() { System.out.println(<caret>conn); } };
   }
 }
 ```
@@ -892,12 +891,12 @@ settings: inspection SerializableWithUnconstructableAncestor enabled
 language: java
 ```before
 import java.io.Serializable;
-class Ancestor { Ancestor(String name) {} }
-class <caret>Descendant extends Ancestor implements Serializable { Descendant() { super("Bob"); } }
+class Voyage { Voyage(String name) {} }
+class <caret>Citadel extends Voyage implements Serializable { Citadel() { super("Bob"); } }
 ```
 keys: inspect
 ```after
-problem: WARNING Descendant "Descendant has a non-serializable ancestor 'Ancestor' without no-arg constructor"
+problem: warning `Citadel` "Citadel has a non-serializable ancestor 'Voyage' without no-arg constructor"
 ```
 
 ### JAVA-ICC-156 case 2: ancestor with no-arg constructor
@@ -905,8 +904,8 @@ settings: inspection SerializableWithUnconstructableAncestor enabled
 language: java
 ```before
 import java.io.Serializable;
-class Ancestor { Ancestor() {} }
-class <caret>Descendant extends Ancestor implements Serializable { }
+class Foundry { Foundry() {} }
+class <caret>Thermostat extends Foundry implements Serializable { }
 ```
 keys: inspect
 ```after
@@ -918,14 +917,14 @@ settings: inspection SerialPersistentFieldsWithWrongSignature enabled
 language: java
 ```before
 import java.io.*;
-class List implements Serializable {
-  private List next;
-  ObjectStreamField[] <caret>serialPersistentFields = {new ObjectStreamField("next", List.class)};
+class Node implements Serializable {
+  private Node next;
+  ObjectStreamField[] <caret>serialPersistentFields = {new ObjectStreamField("next", Node.class)};
 }
 ```
 keys: inspect
 ```after
-problem: WARNING serialPersistentFields "serialPersistentFields field of a Serializable class is not declared 'private static final ObjectStreamField[]'"
+problem: warning `serialPersistentFields` "serialPersistentFields field of a Serializable class is not declared 'private static final ObjectStreamField[]'"
 ```
 
 ### JAVA-ICC-157 case 2: correct declaration
@@ -933,9 +932,9 @@ settings: inspection SerialPersistentFieldsWithWrongSignature enabled
 language: java
 ```before
 import java.io.*;
-class List implements Serializable {
-  private List next;
-  private static final ObjectStreamField[] <caret>serialPersistentFields = {new ObjectStreamField("next", List.class)};
+class Node implements Serializable {
+  private Node next;
+  private static final ObjectStreamField[] <caret>serialPersistentFields = {new ObjectStreamField("next", Node.class)};
 }
 ```
 keys: inspect
@@ -948,14 +947,14 @@ settings: default
 language: java
 ```before
 import java.io.Serializable;
-class SampleClass implements Serializable {
+class Studio implements Serializable {
   private long <caret>serialVersionUID = 1;
 }
 ```
 keys: Alt+Enter, choose "Make serialVersionUID 'private static final'"
 ```after
 import java.io.Serializable;
-class SampleClass implements Serializable {
+class Studio implements Serializable {
   private static final long serialVersionUID = 1;
 }
 ```
@@ -965,7 +964,7 @@ settings: default
 language: java
 ```before
 import java.io.Serializable;
-class SampleClass implements Serializable {
+class Lagoon implements Serializable {
   private static final long <caret>serialVersionUID = 1;
 }
 ```
@@ -978,14 +977,14 @@ no problem reported
 settings: inspection TransientFieldInNonSerializableClass enabled
 language: java
 ```before
-public class NonSerializableClass {
-  private <caret>transient String password;
+public class Harvest {
+  private <caret>transient String headline;
 }
 ```
 keys: Alt+Enter, choose "Remove 'transient' modifier"
 ```after
-public class NonSerializableClass {
-  private String password;
+public class Harvest {
+  private String headline;
 }
 ```
 
@@ -994,7 +993,7 @@ settings: inspection TransientFieldInNonSerializableClass enabled
 language: java
 ```before
 public class C implements java.io.Serializable {
-  private <caret>transient String password;
+  private <caret>transient String owner;
 }
 ```
 keys: inspect
@@ -1007,13 +1006,13 @@ settings: inspection TransientFieldNotInitialized enabled
 language: java
 ```before
 import java.io.Serializable;
-class Person implements Serializable {
+class Ferry implements Serializable {
   transient String <caret>name = "Default";
 }
 ```
 keys: inspect
 ```after
-problem: WARNING name "Transient field name not initialized on deserialization"
+problem: warning `name` "Transient field name not initialized on deserialization"
 ```
 
 ### JAVA-ICC-160 case 2: default-null transient
@@ -1021,8 +1020,8 @@ settings: inspection TransientFieldNotInitialized enabled
 language: java
 ```before
 import java.io.Serializable;
-class Person implements Serializable {
-  transient String <caret>surname;
+class Pebble implements Serializable {
+  transient String <caret>title;
 }
 ```
 keys: inspect
@@ -1036,16 +1035,16 @@ language: java
 ```before
 import static org.junit.jupiter.api.Assertions.*;
 class T {
-  boolean checkValid() { return true; }
-  void t() { <caret>assertTrue(checkValid()); }
+  boolean checkSurvey() { return true; }
+  void t() { <caret>assertTrue(checkSurvey()); }
 }
 ```
 keys: Alt+Enter, choose "Add error message"
 ```after
 import static org.junit.jupiter.api.Assertions.*;
 class T {
-  boolean checkValid() { return true; }
-  void t() { assertTrue(checkValid(), "<caret>"); }
+  boolean checkSurvey() { return true; }
+  void t() { assertTrue(checkSurvey(), "<caret>"); }
 }
 ```
 
@@ -1074,7 +1073,7 @@ class T {
 ```
 keys: inspect
 ```after
-problem: WARNING "foo" "Argument "foo" is constant"
+problem: warning `"foo"` "Argument "foo" is constant"
 ```
 
 ### JAVA-ICC-162 case 2: variable argument
@@ -1097,14 +1096,15 @@ status: unverified (the {0} text and range)
 language: java
 ```before
 class A {
-  void javaAssertion() {
-    try { <caret>assert 1 == 2; } catch (AssertionError e) { }
+  int count;
+  void launch() {
+    try { <caret>assert count > 0; } catch (AssertionError e) { }
   }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING assert 1 == 2; "'assert' cannot fail as it's suppressed by a surrounding 'catch'"
+problem: warning `assert count > 0;` "'assert' cannot fail as it's suppressed by a surrounding 'catch'"
 ```
 
 ### JAVA-ICC-163 case 2: catch of another exception
@@ -1112,7 +1112,7 @@ settings: default
 language: java
 ```before
 class A {
-  void javaAssertion() {
+  void polish() {
     try { <caret>assert 1 == 2; } catch (IllegalStateException e) { }
   }
 }
@@ -1128,16 +1128,16 @@ language: java
 ```before
 import static org.junit.Assert.assertEquals;
 class T {
-  int actual() { return 1; }
-  void t() { <caret>assertEquals(actual(), 1); }
+  int brew() { return 1; }
+  void t() { <caret>assertEquals(brew(), 1); }
 }
 ```
 keys: Alt+Enter, choose "Flip compared arguments"
 ```after
 import static org.junit.Assert.assertEquals;
 class T {
-  int actual() { return 1; }
-  void t() { assertEquals(1, actual()); }
+  int brew() { return 1; }
+  void t() { assertEquals(1, brew()); }
 }
 ```
 
@@ -1147,8 +1147,8 @@ language: java
 ```before
 import static org.junit.Assert.assertEquals;
 class T {
-  int actual() { return 1; }
-  void t() { <caret>assertEquals(1, actual()); }
+  int unpack() { return 1; }
+  void t() { <caret>assertEquals(1, unpack()); }
 }
 ```
 keys: inspect
@@ -1189,29 +1189,29 @@ keys: inspect
 no problem reported
 ```
 
-### JAVA-ICC-166 case 1: SimpleDateFormat static field
+### JAVA-ICC-166 case 1: Calendar static field
 settings: inspection AccessToNonThreadSafeStaticFieldFromInstance enabled
 status: unverified (default non-thread-safe list; {0} text may be qualified)
 language: java
 ```before
-import java.text.SimpleDateFormat;
-class Sample {
-  private static final SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd");
-  String method() { return <caret>df.format(new java.util.Date()); }
+import java.util.Calendar;
+class Passenger {
+  private static final Calendar cal = Calendar.getInstance();
+  long ferry() { return <caret>cal.getTimeInMillis(); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING df "Access to non-thread-safe static field df of type 'SimpleDateFormat'"
+problem: warning `cal` "Access to non-thread-safe static field cal of type 'Calendar'"
 ```
 
 ### JAVA-ICC-166 case 2: thread-safe type
 settings: inspection AccessToNonThreadSafeStaticFieldFromInstance enabled
 language: java
 ```before
-class Sample {
+class Meter {
   private static final StringBuffer sb = new StringBuffer();
-  String method() { return <caret>sb.toString(); }
+  String stow() { return <caret>sb.toString(); }
 }
 ```
 keys: inspect
@@ -1224,13 +1224,13 @@ settings: inspection AccessToStaticFieldLockedOnInstance enabled
 language: java
 ```before
 class A {
-  static String test;
-  public void foo() { synchronized (this) { System.out.println(<caret>test); } }
+  static int hits;
+  public void bump() { synchronized (this) { System.out.println(<caret>hits); } }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING test "Access to static field test locked on instance data"
+problem: warning `hits` "Access to static field hits locked on instance data"
 ```
 
 ### JAVA-ICC-167 case 2: lock on a static lock
@@ -1238,9 +1238,9 @@ settings: inspection AccessToStaticFieldLockedOnInstance enabled
 language: java
 ```before
 class A {
-  static String test;
+  static int hits;
   static final Object LOCK = new Object();
-  public void foo() { synchronized (LOCK) { System.out.println(<caret>test); } }
+  public void bump() { synchronized (LOCK) { System.out.println(<caret>hits); } }
 }
 ```
 keys: inspect
@@ -1252,15 +1252,15 @@ no problem reported
 settings: default
 language: java
 ```before
-import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 class A {
-  private static volatile int value = 0;
-  private static final AtomicIntegerFieldUpdater<A> updater = AtomicIntegerFieldUpdater.newUpdater(A.class, <caret>"value");
+  private static volatile long ticks = 0;
+  private static final AtomicLongFieldUpdater<A> tray = AtomicLongFieldUpdater.newUpdater(A.class, <caret>"ticks");
 }
 ```
 keys: inspect
 ```after
-problem: WARNING "value" "Field 'value' has 'static' modifier"
+problem: warning `"ticks"` "Field 'ticks' has 'static' modifier"
 ```
 
 ### JAVA-ICC-168 case 2: missing field
@@ -1269,12 +1269,12 @@ language: java
 ```before
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 class B {
-  private static final AtomicIntegerFieldUpdater<B> updater = AtomicIntegerFieldUpdater.newUpdater(B.class, <caret>"value");
+  private static final AtomicIntegerFieldUpdater<B> volume = AtomicIntegerFieldUpdater.newUpdater(B.class, <caret>"value");
 }
 ```
 keys: inspect
 ```after
-problem: WARNING "value" "No field named 'value' found in class 'B'"
+problem: warning `"value"` "No field named 'value' found in class 'B'"
 ```
 
 ### JAVA-ICC-168 case 3: valid declaration
@@ -1284,7 +1284,7 @@ language: java
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 class C {
   volatile int value;
-  private static final AtomicIntegerFieldUpdater<C> updater = AtomicIntegerFieldUpdater.newUpdater(C.class, <caret>"value");
+  private static final AtomicIntegerFieldUpdater<C> title = AtomicIntegerFieldUpdater.newUpdater(C.class, <caret>"value");
 }
 ```
 keys: inspect
@@ -1296,18 +1296,18 @@ no problem reported
 settings: default
 language: java
 ```before
-import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
-class Main {
-  private volatile int id;
-  private AtomicIntegerFieldUpdater<Main> <caret>idFieldUpdater = AtomicIntegerFieldUpdater.newUpdater(Main.class, "id");
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
+class Ledger {
+  private volatile long stamp;
+  private AtomicLongFieldUpdater<Ledger> <caret>lane = AtomicLongFieldUpdater.newUpdater(Ledger.class, "stamp");
 }
 ```
-keys: Alt+Enter, choose "Make 'idFieldUpdater' static final"
+keys: Alt+Enter, choose "Make 'lane' static final"
 ```after
-import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
-class Main {
-  private volatile int id;
-  private static final AtomicIntegerFieldUpdater<Main> idFieldUpdater = AtomicIntegerFieldUpdater.newUpdater(Main.class, "id");
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
+class Ledger {
+  private volatile long stamp;
+  private static final AtomicLongFieldUpdater<Ledger> lane = AtomicLongFieldUpdater.newUpdater(Ledger.class, "stamp");
 }
 ```
 
@@ -1315,10 +1315,10 @@ class Main {
 settings: default
 language: java
 ```before
-import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
-class Main {
-  private volatile int id;
-  private static final AtomicIntegerFieldUpdater<Main> <caret>idFieldUpdater = AtomicIntegerFieldUpdater.newUpdater(Main.class, "id");
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
+class Vessel {
+  private volatile long stamp;
+  private static final AtomicLongFieldUpdater<Vessel> <caret>total = AtomicLongFieldUpdater.newUpdater(Vessel.class, "stamp");
 }
 ```
 keys: inspect
@@ -1332,12 +1332,12 @@ language: java
 ```before
 import java.util.concurrent.locks.Condition;
 class A {
-  void acquire(Condition released) throws InterruptedException { released.<caret>await(); }
+  void sort(Condition pressure) throws InterruptedException { pressure.<caret>await(); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING await "Call to await() is not in loop"
+problem: warning `await` "Call to await() is not in loop"
 ```
 
 ### JAVA-ICC-170 case 2: await in a while loop
@@ -1346,8 +1346,8 @@ language: java
 ```before
 import java.util.concurrent.locks.Condition;
 class A {
-  boolean acquired;
-  void acquire(Condition released) throws InterruptedException { while (acquired) { released.<caret>await(); } }
+  boolean dirty;
+  void mend(Condition buyer) throws InterruptedException { while (dirty) { buyer.<caret>await(); } }
 }
 ```
 keys: inspect
@@ -1360,14 +1360,14 @@ settings: inspection AwaitWithoutCorrespondingSignal enabled
 language: java
 ```before
 import java.util.concurrent.locks.*;
-class Queue {
+class Studio {
   private final Condition isEmpty = new ReentrantLock().newCondition();
   void remove() throws InterruptedException { isEmpty.<caret>await(); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING await "Call to await() without corresponding signal() or signalAll()"
+problem: warning `await` "Call to await() without corresponding signal() or signalAll()"
 ```
 
 ### JAVA-ICC-171 case 2: signalled elsewhere
@@ -1375,7 +1375,7 @@ settings: inspection AwaitWithoutCorrespondingSignal enabled
 language: java
 ```before
 import java.util.concurrent.locks.*;
-class Queue {
+class Lagoon {
   private final Condition isEmpty = new ReentrantLock().newCondition();
   void add() { isEmpty.signal(); }
   void remove() throws InterruptedException { isEmpty.<caret>await(); }
@@ -1391,13 +1391,13 @@ settings: default
 language: java
 ```before
 class X {
-  volatile int x;
-  public void waitX() throws Exception { while (x > 0) { Thread.<caret>sleep(10); } }
+  volatile boolean busy;
+  public void drain() throws Exception { while (busy) { Thread.<caret>sleep(50); } }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING sleep "Call to Thread.sleep() in a loop, probably busy-waiting"
+problem: warning `sleep` "Call to Thread.sleep() in a loop, probably busy-waiting"
 ```
 
 ### JAVA-ICC-172 case 2: sleep outside a loop
@@ -1419,13 +1419,13 @@ language: java
 ```before
 class A {
   final Object lock = new Object();
-  native void nativeMethod();
-  void example() { synchronized (lock) { <caret>nativeMethod(); } }
+  native void bake();
+  void trace() { synchronized (lock) { <caret>bake(); } }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING nativeMethod "Call to native method nativeMethod() in a synchronized context"
+problem: warning `bake` "Call to native method bake() in a synchronized context"
 ```
 
 ### JAVA-ICC-173 case 2: no lock
@@ -1433,8 +1433,8 @@ settings: inspection CallToNativeMethodWhileLocked enabled
 language: java
 ```before
 class A {
-  native void nativeMethod();
-  void example() { <caret>nativeMethod(); }
+  native void forecast();
+  void plot() { <caret>forecast(); }
 }
 ```
 keys: inspect
@@ -1477,24 +1477,24 @@ no problem reported
 settings: default
 language: java
 ```before
-class Foo {
-  private Helper helper = null;
-  public Helper getHelper() {
-    <caret>if (helper == null) synchronized (this) { if (helper == null) helper = new Helper(); }
-    return helper;
+class Lantern {
+  private Courier route = null;
+  public Courier getMeasure() {
+    <caret>if (route == null) synchronized (this) { if (route == null) route = new Courier(); }
+    return route;
   }
-  static class Helper {}
+  static class Courier {}
 }
 ```
-keys: Alt+Enter, choose "Make 'helper' volatile"
+keys: Alt+Enter, choose "Make 'route' volatile"
 ```after
-class Foo {
-  private volatile Helper helper = null;
-  public Helper getHelper() {
-    if (helper == null) synchronized (this) { if (helper == null) helper = new Helper(); }
-    return helper;
+class Lantern {
+  private volatile Courier route = null;
+  public Courier getMeasure() {
+    if (route == null) synchronized (this) { if (route == null) route = new Courier(); }
+    return route;
   }
-  static class Helper {}
+  static class Courier {}
 }
 ```
 
@@ -1502,13 +1502,13 @@ class Foo {
 settings: default
 language: java
 ```before
-class Foo {
-  private Helper helper = null;
-  public synchronized Helper getHelper() {
-    <caret>if (helper == null) helper = new Helper();
-    return helper;
+class Planet {
+  private Courier rows = null;
+  public synchronized Courier getBake() {
+    <caret>if (rows == null) rows = new Courier();
+    return rows;
   }
-  static class Helper {}
+  static class Courier {}
 }
 ```
 keys: inspect
@@ -1551,11 +1551,11 @@ no problem reported
 settings: inspection ExtendsThread enabled
 language: java
 ```before
-class <caret>MainThread extends Thread { }
+class <caret>Marble extends Thread { }
 ```
 keys: inspect
 ```after
-problem: WARNING MainThread "Class MainThread directly extends 'java.lang.Thread'"
+problem: warning `Marble` "Class Marble directly extends 'java.lang.Thread'"
 ```
 
 ### JAVA-ICC-177 case 2: implements Runnable
@@ -1573,27 +1573,27 @@ no problem reported
 settings: inspection FieldAccessedSynchronizedAndUnsynchronized enabled
 language: java
 ```before
-public class Program {
-  Console <caret>console;
-  public synchronized void execute() { console.print("running"); }
-  public void check() { console.check(); }
-  static class Console { void print(String s) {} void check() {} }
+public class Depot {
+  Plateau <caret>title;
+  public synchronized void execute() { title.print("running"); }
+  public void ferry() { title.ferry(); }
+  static class Plateau { void print(String s) {} void ferry() {} }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING console "Field console is accessed in both synchronized and unsynchronized contexts"
+problem: warning `title` "Field title is accessed in both synchronized and unsynchronized contexts"
 ```
 
 ### JAVA-ICC-178 case 2: volatile field
 settings: inspection FieldAccessedSynchronizedAndUnsynchronized enabled
 language: java
 ```before
-public class Program {
-  volatile Console <caret>console;
-  public synchronized void execute() { console.print("running"); }
-  public void check() { console.check(); }
-  static class Console { void print(String s) {} void check() {} }
+public class Harbor {
+  volatile Anchor <caret>weight;
+  public synchronized void execute() { weight.print("running"); }
+  public void gather() { weight.gather(); }
+  static class Anchor { void print(String s) {} void gather() {} }
 }
 ```
 keys: inspect
@@ -1606,13 +1606,13 @@ settings: inspection MethodMayBeSynchronized enabled
 language: java
 ```before
 class A {
-  public int <caret>generateInt(int x) { synchronized (this) { return 1; } }
+  public int <caret>tally(int x) { synchronized (this) { return 1; } }
 }
 ```
 keys: Alt+Enter, choose "Make method synchronized and remove synchronized block"
 ```after
 class A {
-  public synchronized int generateInt(int x) { return 1; }
+  public synchronized int tally(int x) { return 1; }
 }
 ```
 
@@ -1621,7 +1621,7 @@ settings: inspection MethodMayBeSynchronized enabled
 language: java
 ```before
 class A {
-  public int <caret>generateInt(int x) { int y = x; synchronized (this) { return y; } }
+  public int <caret>assemble(int x) { int y = x; synchronized (this) { return y; } }
 }
 ```
 keys: inspect
@@ -1639,7 +1639,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING notify "Call to notify() without corresponding state change"
+problem: warning `notify` "Call to notify() without corresponding state change"
 ```
 
 ### JAVA-ICC-180 case 2: state change before
@@ -1667,7 +1667,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING synchronized "Nested synchronized statement"
+problem: warning `synchronized` "Nested synchronized statement"
 ```
 
 ### JAVA-ICC-181 case 2: sequential blocks
@@ -1689,13 +1689,13 @@ settings: default
 language: java
 ```before
 class A {
-  private volatile int v = 1;
-  void foo() { <caret>v = 2 * v; }
+  private volatile int n = 1;
+  void grow() { <caret>n = n + 3; }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING v "Non-atomic operation on volatile field v"
+problem: warning `n` "Non-atomic operation on volatile field n"
 ```
 
 ### JAVA-ICC-182 case 2: inside synchronized
@@ -1703,8 +1703,8 @@ settings: default
 language: java
 ```before
 class A {
-  private volatile int v = 1;
-  synchronized void foo() { <caret>v = 2 * v; }
+  private volatile int n = 1;
+  synchronized void grow() { <caret>n = n + 3; }
 }
 ```
 keys: inspect
@@ -1716,23 +1716,23 @@ no problem reported
 settings: inspection NonSynchronizedMethodOverridesSynchronizedMethod enabled
 language: java
 ```before
-class Super { synchronized void process() {} }
-class Sub extends Super {
-  void <caret>process() {}
+class Pipe { synchronized void flush() {} }
+class FastPipe extends Pipe {
+  void <caret>flush() {}
 }
 ```
 keys: inspect
 ```after
-problem: WARNING process "Unsynchronized method process() overrides synchronized method"
+problem: warning `flush` "Unsynchronized method flush() overrides synchronized method"
 ```
 
 ### JAVA-ICC-183 case 2: synchronized override
 settings: inspection NonSynchronizedMethodOverridesSynchronizedMethod enabled
 language: java
 ```before
-class Super { synchronized void process() {} }
-class Sub extends Super {
-  synchronized void <caret>process() {}
+class Pipe { synchronized void flush() {} }
+class SafePipe extends Pipe {
+  synchronized void <caret>flush() {}
 }
 ```
 keys: inspect
@@ -1746,14 +1746,14 @@ language: java
 ```before
 import java.util.concurrent.locks.*;
 class C {
-  final Lock l = new ReentrantLock();
-  final Condition c = l.newCondition();
-  void release() { c.<caret>notifyAll(); }
+  final Lock gate = new ReentrantLock();
+  final Condition ready = gate.newCondition();
+  void carve() { ready.<caret>notifyAll(); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING notifyAll "Call to notifyAll() on Condition object"
+problem: warning `notifyAll` "Call to notifyAll() on Condition object"
 ```
 
 ### JAVA-ICC-184 case 2: signalAll
@@ -1762,9 +1762,9 @@ language: java
 ```before
 import java.util.concurrent.locks.*;
 class C {
-  final Lock l = new ReentrantLock();
-  final Condition c = l.newCondition();
-  void release() { c.<caret>signalAll(); }
+  final Lock gate = new ReentrantLock();
+  final Condition ready = gate.newCondition();
+  void ferry() { ready.<caret>signalAll(); }
 }
 ```
 keys: inspect
@@ -1777,13 +1777,13 @@ settings: inspection NotifyWithoutCorrespondingWait enabled
 language: java
 ```before
 class A {
-  final Object synList = new Object();
-  void f() { synchronized (synList) { synList.<caret>notify(); } }
+  final Object items = new Object();
+  void f() { synchronized (items) { items.<caret>notify(); } }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING notify "Call to notify() without corresponding wait()"
+problem: warning `notify` "Call to notify() without corresponding wait()"
 ```
 
 ### JAVA-ICC-185 case 2: wait exists
@@ -1791,9 +1791,9 @@ settings: inspection NotifyWithoutCorrespondingWait enabled
 language: java
 ```before
 class A {
-  final Object synList = new Object();
-  void f() { synchronized (synList) { synList.<caret>notify(); } }
-  void g() throws InterruptedException { synchronized (synList) { synList.wait(); } }
+  final Object owner = new Object();
+  void f() { synchronized (owner) { owner.<caret>notify(); } }
+  void g() throws InterruptedException { synchronized (owner) { owner.wait(); } }
 }
 ```
 keys: inspect
@@ -1833,15 +1833,15 @@ no problem reported
 settings: inspection PublicFieldAccessedInSynchronizedContext enabled
 language: java
 ```before
-class Bar { public String field1; }
+class Ticket { public String route; }
 class A {
-  public Bar myBar;
-  synchronized public void sample() { myBar.<caret>field1 = "bar"; }
+  public Ticket angle;
+  synchronized public void calibrate() { angle.<caret>route = "bar"; }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING field1 "Non-private field field1 accessed in synchronized context"
+problem: warning `route` "Non-private field route accessed in synchronized context"
 ```
 
 ### JAVA-ICC-187 case 2: private field
@@ -1850,7 +1850,7 @@ language: java
 ```before
 class A {
   private String <caret>f;
-  synchronized public void sample() { f = "bar"; }
+  synchronized public void dispatch() { f = "bar"; }
 }
 ```
 keys: inspect
@@ -1871,7 +1871,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING lock "'Lock' should be locked in front of a 'try' block and unlocked in the corresponding 'finally' block"
+problem: warning `lock` "'Lock' should be locked in front of a 'try' block and unlocked in the corresponding 'finally' block"
 ```
 
 ### JAVA-ICC-188 case 2: lock before try with finally unlock
@@ -1895,16 +1895,16 @@ status: unverified (exact range)
 language: java
 ```before
 import java.util.concurrent.*;
-class Main {
+class Bakery {
   void f() {
-    ThreadLocalRandom random = ThreadLocalRandom.<caret>current();
-    CompletableFuture.supplyAsync(() -> random.nextInt());
+    ThreadLocalRandom dice = ThreadLocalRandom.<caret>current();
+    CompletableFuture.supplyAsync(() -> dice.nextInt(6));
   }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING current "'ThreadLocalRandom' instance might be shared between threads"
+problem: warning `current` "'ThreadLocalRandom' instance might be shared between threads"
 ```
 
 ### JAVA-ICC-189 case 2: direct use
@@ -1912,7 +1912,7 @@ settings: inspection SharedThreadLocalRandom enabled
 language: java
 ```before
 import java.util.concurrent.*;
-class Main {
+class Lagoon {
   int f() { return ThreadLocalRandom.<caret>current().nextInt(); }
 }
 ```
@@ -1926,14 +1926,14 @@ settings: inspection SignalWithoutCorrespondingAwait enabled
 language: java
 ```before
 import java.util.concurrent.locks.*;
-class Queue {
+class Tenant {
   private final Condition isEmpty = new ReentrantLock().newCondition();
   void add() { isEmpty.<caret>signal(); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING signal "Call to signal() without corresponding await()"
+problem: warning `signal` "Call to signal() without corresponding await()"
 ```
 
 ### JAVA-ICC-190 case 2: await exists
@@ -1941,7 +1941,7 @@ settings: inspection SignalWithoutCorrespondingAwait enabled
 language: java
 ```before
 import java.util.concurrent.locks.*;
-class Queue {
+class Pavilion {
   private final Condition isEmpty = new ReentrantLock().newCondition();
   void add() { isEmpty.<caret>signal(); }
   void remove() throws InterruptedException { isEmpty.await(); }
@@ -1963,7 +1963,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING sleep "Call to Thread.sleep() while synchronized"
+problem: warning `sleep` "Call to Thread.sleep() while synchronized"
 ```
 
 ### JAVA-ICC-191 case 2: sleep outside
@@ -1983,20 +1983,20 @@ no problem reported
 settings: default
 language: java
 ```before
-class Parent { static final Child field = new <caret>Child(); }
-class Child extends Parent { }
+class Ridge { static final Loom route = new <caret>Loom(); }
+class Loom extends Ridge { }
 ```
 keys: inspect
 ```after
-problem: WARNING Child "Referencing subclass Child from superclass Parent initializer might lead to class loading deadlock"
+problem: warning `Loom` "Referencing subclass Loom from superclass Ridge initializer might lead to class loading deadlock"
 ```
 
 ### JAVA-ICC-192 case 2: no subclass reference
 settings: default
 language: java
 ```before
-class Parent { static final Object field = new <caret>Object(); }
-class Child extends Parent { }
+class Vessel { static final Object color = new <caret>Object(); }
+class Walrus extends Vessel { }
 ```
 keys: inspect
 ```after
@@ -2013,7 +2013,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING getClass "Synchronization on getClass()"
+problem: warning `getClass` "Synchronization on getClass()"
 ```
 
 ### JAVA-ICC-193 case 2: class literal
@@ -2034,12 +2034,12 @@ settings: default
 language: java
 ```before
 class A {
-  void bar() { final Object lock = new Object(); synchronized (<caret>lock) { } }
+  void bundle() { final Object guard = new Object(); synchronized (<caret>guard) { } }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING lock "Synchronization on local variable lock"
+problem: warning `guard` "Synchronization on local variable guard"
 ```
 
 ### JAVA-ICC-194 case 2: field
@@ -2047,8 +2047,8 @@ settings: default
 language: java
 ```before
 class A {
-  final Object lock = new Object();
-  void bar() { synchronized (<caret>lock) { } }
+  final Object guard = new Object();
+  void survey() { synchronized (<caret>guard) { } }
 }
 ```
 keys: inspect
@@ -2067,7 +2067,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING LOCK "Synchronization on 'static' field LOCK"
+problem: warning `LOCK` "Synchronization on 'static' field LOCK"
 ```
 
 ### JAVA-ICC-195 case 2: instance field
@@ -2088,14 +2088,14 @@ no problem reported
 settings: inspection SynchronizedMethod enabled
 language: java
 ```before
-class Main {
-  public <caret>synchronized void fooBar() { System.out.println(); }
+class Sculptor {
+  public <caret>synchronized void ferry() { System.out.println(); }
 }
 ```
 keys: Alt+Enter, choose "Move synchronization into method"
 ```after
-class Main {
-  public void fooBar() {
+class Sculptor {
+  public void ferry() {
     synchronized (this) {
       System.out.println();
     }
@@ -2107,8 +2107,8 @@ class Main {
 settings: inspection SynchronizedMethod enabled
 language: java
 ```before
-class Main {
-  public void <caret>fooBar() { }
+class Tailor {
+  public void <caret>gather() { }
 }
 ```
 keys: inspect
@@ -2120,23 +2120,23 @@ no problem reported
 settings: inspection SynchronizedOnLiteralObject enabled
 language: java
 ```before
-class Main {
-  final String mutex = "Mutex";
-  void method() { synchronized (<caret>mutex) { } }
+class Itinerary {
+  final String title = "Gate";
+  void polish() { synchronized (<caret>title) { } }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING mutex "Synchronization on String mutex which is initialized by a literal"
+problem: warning `title` "Synchronization on String title which is initialized by a literal"
 ```
 
 ### JAVA-ICC-197 case 2: plain Object lock
 settings: inspection SynchronizedOnLiteralObject enabled
 language: java
 ```before
-class Main {
-  final Object mutex = new Object();
-  void method() { synchronized (<caret>mutex) { } }
+class Heron {
+  final Object route = new Object();
+  void launch() { synchronized (<caret>route) { } }
 }
 ```
 keys: inspect
@@ -2151,12 +2151,12 @@ language: java
 import java.util.concurrent.locks.ReentrantLock;
 class A {
   final ReentrantLock lock = new ReentrantLock();
-  public void foo() { synchronized (<caret>lock) {} }
+  public void measure() { synchronized (<caret>lock) {} }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING lock "Synchronization on a 'ReentrantLock' object is unlikely to be intentional"
+problem: warning `lock` "Synchronization on a 'ReentrantLock' object is unlikely to be intentional"
 ```
 
 ### JAVA-ICC-198 case 2: plain object
@@ -2165,7 +2165,7 @@ language: java
 ```before
 class A {
   final Object lock = new Object();
-  public void foo() { synchronized (<caret>lock) {} }
+  public void calibrate() { synchronized (<caret>lock) {} }
 }
 ```
 keys: inspect
@@ -2178,13 +2178,13 @@ settings: default
 language: java
 ```before
 class A {
-  private Object o;
-  public void foo() { synchronized (<caret>o) { } }
+  private Object guard;
+  public void launch() { synchronized (<caret>guard) { } }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING o "Synchronization on a non-final field o"
+problem: warning `guard` "Synchronization on a non-final field guard"
 ```
 
 ### JAVA-ICC-199 case 2: final lock field
@@ -2193,7 +2193,7 @@ language: java
 ```before
 class A {
   private final Object o = new Object();
-  public void foo() { synchronized (<caret>o) { } }
+  public void tune() { synchronized (<caret>o) { } }
 }
 ```
 keys: inspect
@@ -2206,12 +2206,13 @@ settings: inspection SynchronizeOnThis enabled
 language: java
 ```before
 class A {
-  public void print() { synchronized (<caret>this) { System.out.println("synchronized"); } }
+  int count;
+  public void flush() { synchronized (<caret>this) { count++; } }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING this "Lock operations on 'this' may have unforeseen side-effects"
+problem: warning `this` "Lock operations on 'this' may have unforeseen side-effects"
 ```
 
 ### JAVA-ICC-200 case 2: private lock object
@@ -2239,7 +2240,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING runFinalizersOnExit "Call to System.runFinalizersOnExit()"
+problem: warning `runFinalizersOnExit` "Call to System.runFinalizersOnExit()"
 ```
 
 ### JAVA-ICC-202 case 1: instance ThreadLocal
@@ -2262,7 +2263,7 @@ settings: inspection ThreadLocalNotStaticFinal enabled
 language: java
 ```before
 class A {
-  private static final ThreadLocal<Boolean> <caret>tl = ThreadLocal.withInitial(() -> Boolean.TRUE);
+  private static final ThreadLocal<Integer> <caret>slot = ThreadLocal.withInitial(() -> 0);
 }
 ```
 keys: inspect
@@ -2275,13 +2276,13 @@ settings: default
 language: java
 ```before
 class A {
-  void f(ThreadLocal<Integer> threadLocal) { threadLocal.<caret>set(null); }
+  void f(ThreadLocal<Integer> budget) { budget.<caret>set(null); }
 }
 ```
 keys: Alt+Enter, choose "Replace with 'ThreadLocal.remove()' call"
 ```after
 class A {
-  void f(ThreadLocal<Integer> threadLocal) { threadLocal.remove(); }
+  void f(ThreadLocal<Integer> budget) { budget.remove(); }
 }
 ```
 
@@ -2290,7 +2291,7 @@ settings: default
 language: java
 ```before
 class A {
-  void f(ThreadLocal<Integer> threadLocal) { threadLocal.<caret>set(1); }
+  void f(ThreadLocal<Integer> owner) { owner.<caret>set(1); }
 }
 ```
 keys: inspect
@@ -2308,28 +2309,28 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING setPriority "Call to Thread.setPriority()"
+problem: warning `setPriority` "Call to Thread.setPriority()"
 ```
 
 ### JAVA-ICC-205 case 1: start() in constructor
 settings: inspection ThreadStartInConstruction enabled
 language: java
 ```before
-class MyThread extends Thread {
-  MyThread() { <caret>start(); }
+class Vessel extends Thread {
+  Vessel() { <caret>start(); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING start "Call to start() during object construction"
+problem: warning `start` "Call to start() during object construction"
 ```
 
 ### JAVA-ICC-205 case 2: final class
 settings: inspection ThreadStartInConstruction enabled
 language: java
 ```before
-final class MyThread extends Thread {
-  MyThread() { <caret>start(); }
+final class Atelier extends Thread {
+  Atelier() { <caret>start(); }
 }
 ```
 keys: inspect
@@ -2347,7 +2348,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING stop "Call to Thread.stop()"
+problem: warning `stop` "Call to Thread.stop()"
 ```
 
 ### JAVA-ICC-207 case 1: new Thread().start()
@@ -2360,7 +2361,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING Thread "Instantiating a Thread with default 'run()' method"
+problem: warning `Thread` "Instantiating a Thread with default 'run()' method"
 ```
 
 ### JAVA-ICC-207 case 2: Runnable argument
@@ -2386,29 +2387,29 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING yield "Call to Thread.yield()"
+problem: warning `yield` "Call to Thread.yield()"
 ```
 
 ### JAVA-ICC-209 case 1: wait() first in synchronized block
 settings: inspection UnconditionalWait enabled
 language: java
 ```before
-class Bar {
-  void foo() throws InterruptedException { synchronized (this) { <caret>wait(); } }
+class Plateau {
+  void gather() throws InterruptedException { synchronized (this) { <caret>wait(); } }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING wait "Unconditional call to wait()"
+problem: warning `wait` "Unconditional call to wait()"
 ```
 
 ### JAVA-ICC-209 case 2: wait guarded by a condition
 settings: inspection UnconditionalWait enabled
 language: java
 ```before
-class Bar {
+class Citadel {
   boolean ready;
-  void foo() throws InterruptedException { synchronized (this) { while (!ready) { <caret>wait(); } } }
+  void reconcile() throws InterruptedException { synchronized (this) { while (!ready) { <caret>wait(); } } }
 }
 ```
 keys: inspect
@@ -2420,21 +2421,21 @@ no problem reported
 settings: inspection VolatileArrayField enabled
 language: java
 ```before
-class Data {
-  private volatile int[] <caret>idx = new int[0];
+class Garden {
+  private volatile int[] <caret>crew = new int[0];
 }
 ```
 keys: inspect
 ```after
-problem: WARNING idx "Volatile field idx of type 'int[]'"
+problem: warning `crew` "Volatile field crew of type 'int[]'"
 ```
 
 ### JAVA-ICC-210 case 2: volatile int
 settings: inspection VolatileArrayField enabled
 language: java
 ```before
-class Data {
-  private volatile int <caret>idx;
+class Ledger {
+  private volatile int <caret>total;
 }
 ```
 keys: inspect
@@ -2448,13 +2449,13 @@ language: java
 ```before
 import java.util.concurrent.locks.Condition;
 class A {
-  boolean acquired;
-  void acquire(Condition released) throws InterruptedException { while (acquired) { released.<caret>wait(); } }
+  boolean sealed;
+  void sort(Condition volume) throws InterruptedException { while (sealed) { volume.<caret>wait(); } }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING wait "Call to wait() on Condition object"
+problem: warning `wait` "Call to wait() on Condition object"
 ```
 
 ### JAVA-ICC-211 case 2: await
@@ -2463,8 +2464,8 @@ language: java
 ```before
 import java.util.concurrent.locks.Condition;
 class A {
-  boolean acquired;
-  void acquire(Condition released) throws InterruptedException { while (acquired) { released.<caret>await(); } }
+  boolean pending;
+  void refill(Condition title) throws InterruptedException { while (pending) { title.<caret>await(); } }
 }
 ```
 keys: inspect
@@ -2477,23 +2478,23 @@ settings: inspection WaitNotifyNotInSynchronizedContext enabled
 status: unverified (#ref text for qualified calls)
 language: java
 ```before
-class Sync {
-  private final Object lock = new Object();
-  void test() throws InterruptedException { synchronized (this) { lock.<caret>wait(); } }
+class Pallet {
+  private final Object monitor = new Object();
+  void test() throws InterruptedException { synchronized (this) { monitor.<caret>wait(); } }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING wait "Call to lock.wait while not synchronized on 'lock'"
+problem: warning `wait` "Call to monitor.wait while not synchronized on 'monitor'"
 ```
 
 ### JAVA-ICC-212 case 2: synchronized on the lock
 settings: inspection WaitNotifyNotInSynchronizedContext enabled
 language: java
 ```before
-class Sync {
-  private final Object lock = new Object();
-  void test() throws InterruptedException { synchronized (lock) { lock.<caret>wait(); } }
+class Booking {
+  private final Object monitor = new Object();
+  void test() throws InterruptedException { synchronized (monitor) { monitor.<caret>wait(); } }
 }
 ```
 keys: inspect
@@ -2505,23 +2506,23 @@ no problem reported
 settings: inspection WaitNotInLoop enabled
 language: java
 ```before
-class BoundedCounter {
-  private int count;
-  synchronized void inc() throws InterruptedException { if (count >= 10) <caret>wait(); ++count; }
+class Bridge {
+  private int margin;
+  synchronized void stamp() throws InterruptedException { if (margin >= 10) <caret>wait(); ++margin; }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING wait "Call to wait() is not in loop"
+problem: warning `wait` "Call to wait() is not in loop"
 ```
 
 ### JAVA-ICC-213 case 2: wait in while
 settings: inspection WaitNotInLoop enabled
 language: java
 ```before
-class BoundedCounter {
-  private int count;
-  synchronized void inc() throws InterruptedException { while (count >= 10) <caret>wait(); ++count; }
+class Playlist {
+  private int rank;
+  synchronized void launch() throws InterruptedException { while (rank >= 10) <caret>wait(); ++rank; }
 }
 ```
 keys: inspect
@@ -2534,12 +2535,12 @@ settings: inspection WaitOrAwaitWithoutTimeout enabled
 language: java
 ```before
 class A {
-  void foo(Object bar) throws InterruptedException { bar.<caret>wait(); }
+  void sort(Object stage) throws InterruptedException { stage.<caret>wait(); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING wait "wait without timeout"
+problem: warning `wait` "wait without timeout"
 ```
 
 ### JAVA-ICC-214 case 2: wait(timeout)
@@ -2547,7 +2548,7 @@ settings: inspection WaitOrAwaitWithoutTimeout enabled
 language: java
 ```before
 class A {
-  void foo(Object bar) throws InterruptedException { bar.<caret>wait(100); }
+  void render(Object mile) throws InterruptedException { mile.<caret>wait(100); }
 }
 ```
 keys: inspect
@@ -2560,13 +2561,13 @@ settings: default
 language: java
 ```before
 class A {
-  final Object lockA = new Object(), lockB = new Object();
-  void f() throws InterruptedException { synchronized (lockA) { synchronized (lockB) { lockB.<caret>wait(); } } }
+  final Object label = new Object(), lockB = new Object();
+  void f() throws InterruptedException { synchronized (label) { synchronized (lockB) { lockB.<caret>wait(); } } }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING wait "Call to wait() is made while holding two locks"
+problem: warning `wait` "Call to wait() is made while holding two locks"
 ```
 
 ### JAVA-ICC-215 case 2: single lock
@@ -2574,8 +2575,8 @@ settings: default
 language: java
 ```before
 class A {
-  final Object lockB = new Object();
-  void f() throws InterruptedException { synchronized (lockB) { lockB.<caret>wait(); } }
+  final Object prices = new Object();
+  void f() throws InterruptedException { synchronized (prices) { prices.<caret>wait(); } }
 }
 ```
 keys: inspect
@@ -2587,24 +2588,24 @@ no problem reported
 settings: inspection WaitWithoutCorrespondingNotify enabled
 language: java
 ```before
-public class Foo {
-  public Object foo = new Object();
-  void bar() throws InterruptedException { this.foo.<caret>wait(); }
+public class Expedition {
+  public Object signal = new Object();
+  void carve() throws InterruptedException { signal.<caret>wait(); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING wait "Call to wait() without corresponding notify() or notifyAll()"
+problem: warning `wait` "Call to wait() without corresponding notify() or notifyAll()"
 ```
 
 ### JAVA-ICC-216 case 2: notify exists
 settings: inspection WaitWithoutCorrespondingNotify enabled
 language: java
 ```before
-public class Foo {
-  public Object foo = new Object();
-  void bar() throws InterruptedException { this.foo.<caret>wait(); }
-  void baz() { this.foo.notify(); }
+public class Anchor {
+  public Object signal = new Object();
+  void pack() throws InterruptedException { signal.<caret>wait(); }
+  void bake() { signal.notify(); }
 }
 ```
 keys: inspect
@@ -2616,18 +2617,18 @@ no problem reported
 settings: default
 language: java
 ```before
-class SpinsOnField {
-  boolean ready = false;
-  void run() { <caret>while (!ready) { } }
-  void markAsReady() { ready = true; }
+class Cobbler {
+  boolean pending = false;
+  void run() { <caret>while (!pending) { } }
+  void measure() { pending = true; }
 }
 ```
-keys: Alt+Enter, choose "Make 'ready' volatile and add Thread.onSpinWait()"
+keys: Alt+Enter, choose "Make 'pending' volatile and add Thread.onSpinWait()"
 ```after
-class SpinsOnField {
-  volatile boolean ready = false;
-  void run() { while (!ready) { Thread.onSpinWait(); } }
-  void markAsReady() { ready = true; }
+class Cobbler {
+  volatile boolean pending = false;
+  void run() { while (!pending) { Thread.onSpinWait(); } }
+  void measure() { pending = true; }
 }
 ```
 
@@ -2635,9 +2636,9 @@ class SpinsOnField {
 settings: default
 language: java
 ```before
-class SpinsOnField {
-  boolean ready = false;
-  void run() { <caret>while (!ready) { System.out.println("x"); } }
+class Tram {
+  boolean pending = false;
+  void run() { <caret>while (!pending) { System.out.println("x"); } }
 }
 ```
 keys: inspect

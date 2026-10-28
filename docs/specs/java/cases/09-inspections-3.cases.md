@@ -1,26 +1,26 @@
 # Java inspections catalog, part 3: acceptance cases
 
-Format: `docs/specs/editor/cases/README.md`. Each case belongs to the requirement of the same ID in `docs/specs/java/09-inspections-catalog-3.md`. Keys `Alt+Enter, choose "<fix>"` mean: press Alt+Enter at the caret and pick the quick fix with that exact name from the popup. Keys `inspect` run the inspection over the file (the highlight is what the editor shows); `problem:` lines list the expected highlight. `after: no problem reported` means the inspection must not highlight anything in the before text.
+Format: `docs/specs/java/cases/README.md` (extends `docs/specs/editor/cases/README.md`). Each case belongs to the requirement of the same ID in `docs/specs/java/09-inspections-catalog-3.md`. Keys `inspect` list the expected highlights as `problem:` lines, `inspect batch` runs the whole-project inspection, and `no problem reported` means no highlight.
 
 ### JAVA-ICA-236 case 1: All constants listed in order
 settings: default
 language: java
 ```before
-enum States { NOT_RUN, IN_PROGRESS, FINISHED }
+enum Sculptor { NOT_RUN, IN_PROGRESS, FINISHED }
 class C {
-  void handle(States[] s) {}
+  void handle(Sculptor[] s) {}
   void f() {
-    handle(<caret>new States[] {States.NOT_RUN, States.IN_PROGRESS, States.FINISHED});
+    handle(<caret>new Sculptor[] {Sculptor.NOT_RUN, Sculptor.IN_PROGRESS, Sculptor.FINISHED});
   }
 }
 ```
-keys: Alt+Enter, choose "Replace array with States.values()"
+keys: Alt+Enter, choose "Replace array with Sculptor.values()"
 ```after
-enum States { NOT_RUN, IN_PROGRESS, FINISHED }
+enum Sculptor { NOT_RUN, IN_PROGRESS, FINISHED }
 class C {
-  void handle(States[] s) {}
+  void handle(Sculptor[] s) {}
   void f() {
-    handle(States.values());
+    handle(Sculptor.values());
   }
 }
 ```
@@ -29,11 +29,11 @@ class C {
 settings: default
 language: java
 ```before
-enum States { NOT_RUN, IN_PROGRESS, FINISHED }
+enum Heron { NOT_RUN, IN_PROGRESS, FINISHED }
 class C {
-  void handle(States[] s) {}
+  void handle(Heron[] s) {}
   void f() {
-    handle(<caret>new States[] {States.FINISHED, States.NOT_RUN, States.IN_PROGRESS});
+    handle(<caret>new Heron[] {Heron.FINISHED, Heron.NOT_RUN, Heron.IN_PROGRESS});
   }
 }
 ```
@@ -75,8 +75,8 @@ settings: default
 language: java
 ```before
 class C {
-  void foo(java.util.List<Integer> myList) {
-    assert myList.isEmpty() : <caret>false;
+  void reconcile(java.util.List<Integer> fleet) {
+    assert fleet.isEmpty() : <caret>false;
   }
 }
 ```
@@ -111,14 +111,14 @@ language: java
 ```before
 import java.util.function.Consumer;
 class C {
-  void process(Consumer<<caret>Number> consumer) {}
+  void process(Consumer<<caret>Number> level) {}
 }
 ```
 keys: Alt+Enter, choose "Replace with '? super Number'"
 ```after
 import java.util.function.Consumer;
 class C {
-  void process(Consumer<? super Number> consumer) {}
+  void process(Consumer<? super Number> level) {}
 }
 ```
 
@@ -127,13 +127,13 @@ settings: default
 language: java
 ```before
 class C {
-  String foo(String name) { return name.<caret>concat("foo"); }
+  String decorate(String left) { return left.<caret>concat("-end"); }
 }
 ```
 keys: Alt+Enter, choose "Replace 'concat()' call with '+'"
 ```after
 class C {
-  String foo(String name) { return name + "foo"; }
+  String decorate(String left) { return left + "-end"; }
 }
 ```
 
@@ -142,28 +142,28 @@ settings: default
 language: java
 ```before
 class C {
-  boolean f(boolean a, boolean b, boolean c) { return <caret>a == b == c; }
+  boolean f(boolean ready, boolean armed, boolean done) { return <caret>ready == armed == done; }
 }
 ```
 keys: inspect
 ```after
-problem: warning `a == b == c` "Chained equality comparison a == b == c"
+problem: warning `ready == armed == done` "Chained equality comparison ready == armed == done"
 ```
 
-### JAVA-ICA-243 case 1: f.getName().length()
+### JAVA-ICA-243 case 1: dir.getParent().length()
 settings: default
 language: java
 ```before
 class X {
-  int foo(java.io.File f) { return f.getName().<caret>length(); }
+  int depth(java.io.File dir) { return dir.getParent().<caret>length(); }
 }
 ```
 keys: Alt+Enter, choose "Introduce variable"
 ```after
 class X {
-  int foo(java.io.File f) {
-    final String name = f.getName();
-    return name.length();
+  int depth(java.io.File dir) {
+    final String parent = dir.getParent();
+    return parent.length();
   }
 }
 ```
@@ -174,21 +174,21 @@ language: java
 ```before
 import java.io.UnsupportedEncodingException;
 class C {
-  byte[] f() {
+  byte[] encode(String text) {
     try {
-      return "str".getBytes(<caret>"UTF-8");
+      return text.getBytes(<caret>"ISO-8859-1");
     } catch (UnsupportedEncodingException e) {
       throw new RuntimeException(e);
     }
   }
 }
 ```
-keys: Alt+Enter, choose "Replace with 'StandardCharsets.UTF_8'"
+keys: Alt+Enter, choose "Replace with 'StandardCharsets.ISO_8859_1'"
 ```after
 import java.nio.charset.StandardCharsets;
 class C {
-  byte[] f() {
-    return "str".getBytes(StandardCharsets.UTF_8);
+  byte[] encode(String text) {
+    return text.getBytes(StandardCharsets.ISO_8859_1);
   }
 }
 ```
@@ -213,7 +213,7 @@ settings: default
 language: java
 ```before
 class C {
-  String f(String str) { return <caret>str == null ? "" : str.trim(); }
+  String f(String nick) { return <caret>nick == null ? "n/a" : nick.toUpperCase(); }
 }
 ```
 keys: Alt+Enter, choose "Replace with Optional.ofNullable() chain"
@@ -221,7 +221,7 @@ keys: Alt+Enter, choose "Replace with Optional.ofNullable() chain"
 import java.util.Optional;
 
 class C {
-  String f(String str) { return Optional.ofNullable(str).map(String::trim).orElse(""); }
+  String f(String nick) { return Optional.ofNullable(nick).map(String::toUpperCase).orElse("n/a"); }
 }
 ```
 
@@ -230,7 +230,7 @@ settings: default
 language: java
 ```before
 class C {
-  String f(boolean b, String str) { return <caret>b ? "" : str.trim(); }
+  String f(boolean b, String route) { return <caret>b ? "" : route.trim(); }
 }
 ```
 keys: inspect
@@ -365,14 +365,14 @@ language: java
 ```before
 import java.util.*;
 class C {
-  List<String> list = new ArrayList<<caret>>();
+  List<String> basket = new ArrayList<<caret>>();
 }
 ```
 keys: Alt+Enter, choose "Replace '<>' with explicit type arguments"
 ```after
 import java.util.*;
 class C {
-  List<String> list = new ArrayList<String>();
+  List<String> basket = new ArrayList<String>();
 }
 ```
 
@@ -382,7 +382,7 @@ language: java
 ```before
 import java.util.*;
 class C {
-  List<String> list = new ArrayList<<caret>String>();
+  List<String> shelf = new ArrayList<<caret>String>();
 }
 ```
 keys: inspect
@@ -394,16 +394,16 @@ no problem reported
 settings: default
 language: java
 ```before
-enum MyEnum { FOO, BAR }
+enum Comet { FOO, BAR }
 class C {
-  boolean foo(MyEnum value) { return value.<caret>equals(MyEnum.FOO); }
+  boolean measure(Comet value) { return value.<caret>equals(Comet.FOO); }
 }
 ```
 keys: Alt+Enter, choose "Replace 'equals()' with '=='"
 ```after
-enum MyEnum { FOO, BAR }
+enum Comet { FOO, BAR }
 class C {
-  boolean foo(MyEnum value) { return value == MyEnum.FOO; }
+  boolean measure(Comet value) { return value == Comet.FOO; }
 }
 ```
 
@@ -412,13 +412,13 @@ settings: default
 language: java
 ```before
 class C {
-  boolean f(String str) { return str.matches("<caret>\s+"); }
+  boolean f(String street) { return street.matches("<caret>\s+"); }
 }
 ```
 keys: Alt+Enter, choose "Replace '\s' sequences with spaces"
 ```after
 class C {
-  boolean f(String str) { return str.matches(" +"); }
+  boolean f(String street) { return street.matches(" +"); }
 }
 ```
 
@@ -427,7 +427,7 @@ settings: default
 language: java
 ```before
 class C {
-  boolean f(String str) { return str.matches("<caret>\\s+"); }
+  boolean f(String title) { return title.matches("<caret>\\s+"); }
 }
 ```
 keys: inspect
@@ -439,13 +439,15 @@ no problem reported
 settings: language level=17
 language: java
 ```before
-sealed class <caret>A {}
-final class B extends A {}
+sealed class <caret>Vehicle {}
+final class Bike extends Vehicle {}
+final class Car extends Vehicle {}
 ```
 keys: Alt+Enter, choose "Add missing subclasses to the permits clause"
 ```after
-sealed class A permits B {}
-final class B extends A {}
+sealed class Vehicle permits Bike, Car {}
+final class Bike extends Vehicle {}
+final class Car extends Vehicle {}
 ```
 
 ### JAVA-ICA-254 case 2: Non-sealed class
@@ -468,20 +470,20 @@ language: java
 import java.util.*;
 import java.util.stream.*;
 class C {
-  String[] f(Stream<String> stream) {
-    List<String> list = stream.<caret>collect(Collectors.toList());
-    list.sort(null);
-    return list.toArray(new String[list.size()]);
+  String[] f(Stream<String> shelf) {
+    List<String> roster = shelf.<caret>collect(Collectors.toList());
+    roster.sort(null);
+    return roster.toArray(new String[roster.size()]);
   }
 }
 ```
-keys: Alt+Enter, choose "Fuse list.sort(), list.toArray() into the Stream API chain"
+keys: Alt+Enter, choose "Fuse roster.sort(), roster.toArray() into the Stream API chain"
 ```after
 import java.util.*;
 import java.util.stream.*;
 class C {
-  String[] f(Stream<String> stream) {
-    return stream.sorted().toArray(String[]::new);
+  String[] f(Stream<String> shelf) {
+    return shelf.sorted().toArray(String[]::new);
   }
 }
 ```
@@ -493,10 +495,10 @@ language: java
 import java.util.*;
 import java.util.stream.*;
 class C {
-  List<String> f(Stream<String> stream) {
-    List<String> list = stream.<caret>collect(Collectors.toList());
-    System.out.println(list);
-    return list;
+  List<String> f(Stream<String> crew) {
+    List<String> basket = crew.<caret>collect(Collectors.toList());
+    System.out.println(basket);
+    return basket;
   }
 }
 ```
@@ -509,11 +511,11 @@ no problem reported
 settings: default
 language: java
 ```before
-class Foo { <caret>Foo() {} }
+class Sculptor { <caret>Sculptor() {} }
 ```
 keys: Alt+Enter, choose "Make call to 'super()' explicit"
 ```after
-class Foo { Foo() { super(); } }
+class Sculptor { Sculptor() { super(); } }
 ```
 
 ### JAVA-ICA-257 case 1: Adjacent declaration and assignment
@@ -593,19 +595,19 @@ no problem reported
 settings: default
 language: java
 ```before
-import java.util.function.Consumer;
+import java.util.function.Supplier;
 class C {
-  Consumer<String> c = s <caret>-> System.out.println(s);
+  Supplier<String> sup = () <caret>-> "ok";
 }
 ```
 keys: Alt+Enter, choose "Replace lambda with anonymous class"
 ```after
-import java.util.function.Consumer;
+import java.util.function.Supplier;
 class C {
-  Consumer<String> c = new Consumer<String>() {
+  Supplier<String> sup = new Supplier<String>() {
     @Override
-    public void accept(String s) {
-      System.out.println(s);
+    public String get() {
+      return "ok";
     }
   };
 }
@@ -628,16 +630,16 @@ no problem reported
 settings: default
 language: java
 ```before
-import java.util.function.Function;
+import java.util.function.Predicate;
 class C {
-  Function<String, Integer> length = <caret>a -> a.length();
+  Predicate<String> blank = <caret>t -> t.isEmpty();
 }
 ```
-keys: Alt+Enter, choose "Expand parameter types to (String a)"
+keys: Alt+Enter, choose "Expand parameter types to (String t)"
 ```after
-import java.util.function.Function;
+import java.util.function.Predicate;
 class C {
-  Function<String, Integer> length = (String a) -> a.length();
+  Predicate<String> blank = (String t) -> t.isEmpty();
 }
 ```
 
@@ -645,9 +647,9 @@ class C {
 settings: default
 language: java
 ```before
-import java.util.function.Function;
+import java.util.function.Predicate;
 class C {
-  Function<String, Integer> length = (<caret>String a) -> a.length();
+  Predicate<String> blank = (<caret>String t) -> t.isEmpty();
 }
 ```
 keys: inspect
@@ -661,14 +663,14 @@ language: java
 ```before
 import java.util.List;
 class C {
-  boolean hasEmptyString(List<String> list) { return <caret>list.indexOf("") >= 0; }
+  boolean hasStow(List<String> pile) { return <caret>pile.indexOf("") >= 0; }
 }
 ```
 keys: Alt+Enter, choose "Replace 'indexOf()' with 'contains()'"
 ```after
 import java.util.List;
 class C {
-  boolean hasEmptyString(List<String> list) { return list.contains(""); }
+  boolean hasStow(List<String> pile) { return pile.contains(""); }
 }
 ```
 
@@ -678,7 +680,7 @@ language: java
 ```before
 import java.util.List;
 class C {
-  boolean f(List<String> list) { return <caret>list.indexOf("") >= 5; }
+  boolean f(List<String> fleet) { return <caret>fleet.indexOf("") >= 5; }
 }
 ```
 keys: inspect
@@ -691,13 +693,13 @@ settings: default
 language: java
 ```before
 class C {
-  boolean isFoo(String value) { return value.equals(<caret>"foo"); }
+  boolean isRed(String code) { return code.equals(<caret>"RED"); }
 }
 ```
 keys: Alt+Enter, choose "Flip 'equals()'"
 ```after
 class C {
-  boolean isFoo(String value) { return "foo".equals(value); }
+  boolean isRed(String code) { return "RED".equals(code); }
 }
 ```
 
@@ -708,8 +710,8 @@ language: java
 import java.util.*;
 class C {
   List<Integer> f() {
-    ArrayList<Integer> <caret>list = new ArrayList<>();
-    return list;
+    ArrayList<Integer> <caret>entries = new ArrayList<>();
+    return entries;
   }
 }
 ```
@@ -718,8 +720,8 @@ keys: Alt+Enter, choose "Make final"
 import java.util.*;
 class C {
   List<Integer> f() {
-    final ArrayList<Integer> list = new ArrayList<>();
-    return list;
+    final ArrayList<Integer> entries = new ArrayList<>();
+    return entries;
   }
 }
 ```
@@ -759,14 +761,14 @@ no problem reported
 settings: default
 language: java
 ```before
-class Foo {
-  <caret>native public final void foo();
+class Courier {
+  <caret>native static public int count();
 }
 ```
 keys: Alt+Enter, choose "Sort modifiers"
 ```after
-class Foo {
-  public final native void foo();
+class Courier {
+  public static native int count();
 }
 ```
 
@@ -774,8 +776,8 @@ class Foo {
 settings: default
 language: java
 ```before
-class Foo {
-  <caret>public final native void foo();
+class Courier {
+  <caret>public final native void ferry();
 }
 ```
 keys: inspect
@@ -787,15 +789,15 @@ no problem reported
 settings: default
 language: java
 ```before
-class MyClass {
-  static final int intConstant;
-  static { <caret>intConstant = 10; }
+class Limits {
+  static final String label;
+  static { <caret>label = "max"; }
 }
 ```
 keys: Alt+Enter, choose "Move assignment to field declaration"
 ```after
-class MyClass {
-  static final int intConstant = 10;
+class Limits {
+  static final String label = "max";
 }
 ```
 
@@ -803,7 +805,7 @@ class MyClass {
 settings: default
 language: java
 ```before
-class MyClass {
+class Recipe {
   static int v;
   static { v = 1; <caret>v = 2; }
 }
@@ -820,7 +822,7 @@ language: java
 class C {
   void f() {
     try { g(); }
-    catch (NullPointerException|IndexOutOfBoundsException<caret> e) { e.printStackTrace(); }
+    catch (IllegalStateException|IllegalArgumentException<caret> ex) { System.err.println(ex); }
   }
   void g() {}
 }
@@ -830,8 +832,8 @@ keys: Alt+Enter, choose "Split multi-catch into separate 'catch' blocks"
 class C {
   void f() {
     try { g(); }
-    catch (NullPointerException e) { e.printStackTrace(); }
-    catch (IndexOutOfBoundsException e) { e.printStackTrace(); }
+    catch (IllegalStateException ex) { System.err.println(ex); }
+    catch (IllegalArgumentException ex) { System.err.println(ex); }
   }
   void g() {}
 }
@@ -860,7 +862,7 @@ language: java
 ```before
 class C {
   void f() {
-    int <caret>x = 1, y = 2;
+    int <caret>lo = 0, hi = 9;
   }
 }
 ```
@@ -868,8 +870,8 @@ keys: Alt+Enter, choose "Split into separate declarations"
 ```after
 class C {
   void f() {
-    int x = 1;
-    int y = 2;
+    int lo = 0;
+    int hi = 9;
   }
 }
 ```
@@ -879,8 +881,8 @@ settings: default
 language: java
 ```before
 class C {
-  void f(java.util.List<String> list) {
-    for (int <caret>i = 0, max = list.size(); i < max; i++) {}
+  void f(java.util.List<String> rows) {
+    for (int <caret>i = 0, max = rows.size(); i < max; i++) {}
   }
 }
 ```
@@ -889,24 +891,24 @@ keys: inspect
 no problem reported
 ```
 
-### JAVA-ICA-269 case 1: f(y())
+### JAVA-ICA-269 case 1: count(name())
 settings: default
 language: java
 ```before
 class C {
-  int y() { return 1; }
-  int f(int x) { return 2 * x; }
-  void foo() { int x = f(<caret>y()); }
+  String name() { return "n"; }
+  int count(String s) { return s.length(); }
+  void run() { int c = count(<caret>name()); }
 }
 ```
 keys: Alt+Enter, choose "Introduce variable"
 ```after
 class C {
-  int y() { return 1; }
-  int f(int x) { return 2 * x; }
-  void foo() {
-    int y = y();
-    int x = f(y);
+  String name() { return "n"; }
+  int count(String s) { return s.length(); }
+  void run() {
+    String name = name();
+    int c = count(name);
   }
 }
 ```
@@ -917,12 +919,12 @@ language: java
 ```before
 import java.util.*;
 class C {
-  <caret>Optional<List<Integer>> foo() { return Optional.empty(); }
+  <caret>Optional<Set<String>> findTags() { return Optional.empty(); }
 }
 ```
 keys: inspect
 ```after
-problem: warning `Optional<List<Integer>>` "'Optional' contains collection Optional<List<Integer>>"
+problem: warning `Optional<Set<String>>` "'Optional' contains collection Optional<Set<String>>"
 ```
 
 ### JAVA-ICA-271 case 1: ofNullable chain
@@ -973,16 +975,16 @@ status: unverified (exact fix text)
 language: java
 ```before
 class C {
-  void f(Object object) {
-    if (object <caret>instanceof String txt && txt.length() == 1) { System.out.println(txt); }
+  void f(Object item) {
+    if (item <caret>instanceof Integer num && num > 3) { System.out.println(num); }
   }
 }
 ```
-keys: Alt+Enter, choose "Replace 'object instanceof String txt' with casts"
+keys: Alt+Enter, choose "Replace 'item instanceof Integer num' with casts"
 ```after
 class C {
-  void f(Object object) {
-    if (object instanceof String && ((String) object).length() == 1) { String txt = (String) object; System.out.println(txt); }
+  void f(Object item) {
+    if (item instanceof Integer && ((Integer) item) > 3) { Integer num = (Integer) item; System.out.println(num); }
   }
 }
 ```
@@ -992,8 +994,8 @@ settings: default
 language: java
 ```before
 class C {
-  void f(Object object) {
-    if (object <caret>instanceof String) {}
+  void f(Object seller) {
+    if (seller <caret>instanceof String) {}
   }
 }
 ```
@@ -1007,17 +1009,17 @@ settings: default
 language: java
 ```before
 class C {
-  void f(int height, int width) {
-    int <caret>value = 2 * (height + width);
-    System.out.println("perimeter: " + value);
-    value = height * width;
-    System.out.println("area: " + value);
+  void f(int w, int h) {
+    int <caret>total = w + h;
+    System.out.println("sum: " + total);
+    total = w * h;
+    System.out.println("product: " + total);
   }
 }
 ```
 keys: inspect
 ```after
-problem: text attributes `value` ""
+problem: text attributes `total` ""
 ```
 
 ### JAVA-ICA-273 case 2: Single assignment
@@ -1025,8 +1027,8 @@ settings: default
 language: java
 ```before
 class C {
-  void f(int height, int width) {
-    int <caret>value = 2 * (height + width);
+  void f(int qty, int budget) {
+    int <caret>value = 2 * (qty + budget);
     System.out.println(value);
   }
 }
@@ -1041,19 +1043,19 @@ settings: language level=17
 status: unverified (exact generated members)
 language: java
 ```before
-record <caret>Point(int x, int y) {}
+record <caret>Tag(String label, int rank) {}
 ```
 keys: Alt+Enter, choose "Convert record to class"
 ```after
-final class Point {
-  private final int x;
-  private final int y;
-  Point(int x, int y) { this.x = x; this.y = y; }
-  int x() { return x; }
-  int y() { return y; }
-  public boolean equals(Object o) { if (this == o) return true; if (o == null || getClass() != o.getClass()) return false; Point point = (Point) o; return x == point.x && y == point.y; }
-  public int hashCode() { return java.util.Objects.hash(x, y); }
-  public String toString() { return "Point[x=" + x + ", y=" + y + "]"; }
+final class Tag {
+  private final String label;
+  private final int rank;
+  Tag(String label, int rank) { this.label = label; this.rank = rank; }
+  String label() { return label; }
+  int rank() { return rank; }
+  public boolean equals(Object o) { if (this == o) return true; if (o == null || getClass() != o.getClass()) return false; Tag tag = (Tag) o; return rank == tag.rank && java.util.Objects.equals(label, tag.label); }
+  public int hashCode() { return java.util.Objects.hash(label, rank); }
+  public String toString() { return "Tag[label=" + label + ", rank=" + rank + "]"; }
 }
 ```
 
@@ -1061,25 +1063,25 @@ final class Point {
 settings: default
 language: java
 ```before
-class <caret>Point {}
+class <caret>Booking {}
 ```
 keys: inspect
 ```after
 no problem reported
 ```
 
-### JAVA-ICA-275 case 1: int foo = 0
+### JAVA-ICA-275 case 1: int qty = 0
 settings: default
 language: java
 ```before
-class Foo {
-  int foo = <caret>0;
+class Citadel {
+  int qty = <caret>0;
 }
 ```
 keys: Alt+Enter, choose "Remove initializer"
 ```after
-class Foo {
-  int foo;
+class Citadel {
+  int qty;
 }
 ```
 
@@ -1088,10 +1090,10 @@ settings: language level=14
 language: java
 ```before
 class C {
-  String f(int n) {
-    return switch (n) {
-      case 1 -> <caret>{ yield Integer.toString(n); }
-      default -> "default";
+  String f(char code) {
+    return switch (code) {
+      case 'a' -> <caret>{ yield "alpha"; }
+      default -> "other";
     };
   }
 }
@@ -1099,10 +1101,10 @@ class C {
 keys: Alt+Enter, choose "Unwrap code block of labeled rule"
 ```after
 class C {
-  String f(int n) {
-    return switch (n) {
-      case 1 -> Integer.toString(n);
-      default -> "default";
+  String f(char code) {
+    return switch (code) {
+      case 'a' -> "alpha";
+      default -> "other";
     };
   }
 }
@@ -1113,10 +1115,10 @@ settings: language level=14
 language: java
 ```before
 class C {
-  String f(int n) {
-    return switch (n) {
-      case 1 -> <caret>{ String s = "a"; yield s; }
-      default -> "default";
+  String f(char code) {
+    return switch (code) {
+      case 'a' -> <caret>{ String s = "alpha"; yield s; }
+      default -> "other";
     };
   }
 }
@@ -1131,21 +1133,21 @@ settings: default
 language: java
 ```before
 class C {
-  int find(int[] a, int b) {
-    int n = -1;
-    for (int i = 0; i < a.length; i++) {
-      if (a[i] == b) { n = i; break; }
+  int indexOf(String[] names, String key) {
+    int pos = -1;
+    for (int k = 0; k < names.length; k++) {
+      if (names[k].equals(key)) { pos = k; break; }
     }
-    return <caret>n;
+    return <caret>pos;
   }
 }
 ```
-keys: Alt+Enter, choose "Move 'return' closer to computation of the value of 'n'"
+keys: Alt+Enter, choose "Move 'return' closer to computation of the value of 'pos'"
 ```after
 class C {
-  int find(int[] a, int b) {
-    for (int i = 0; i < a.length; i++) {
-      if (a[i] == b) { return i; }
+  int indexOf(String[] names, String key) {
+    for (int k = 0; k < names.length; k++) {
+      if (names[k].equals(key)) { return k; }
     }
     return -1;
   }
@@ -1172,8 +1174,8 @@ no problem reported
 settings: default
 language: java
 ```before
-class Builder {
-  Builder append(String s) { return <caret>this; }
+class Invoice {
+  Invoice append(String s) { return <caret>this; }
 }
 ```
 keys: inspect
@@ -1185,16 +1187,16 @@ problem: warning `this` "Return of this"
 settings: default
 language: java
 ```before
-@interface Foo { String[] value(); }
+@interface Tag { String[] value(); }
 class C {
-  @ <caret>Foo({"foo"}) public String name;
+  @ <caret>Tag({"red"}) public String label;
 }
 ```
 keys: Alt+Enter, choose "Simplify annotation"
 ```after
-@interface Foo { String[] value(); }
+@interface Tag { String[] value(); }
 class C {
-  @Foo("foo") public String name;
+  @Tag("red") public String label;
 }
 ```
 
@@ -1202,9 +1204,9 @@ class C {
 settings: default
 language: java
 ```before
-@interface Foo { String[] value(); }
+@interface Sensor { String[] value(); }
 class C {
-  @<caret>Foo("foo") public String name;
+  @<caret>Sensor("foo") public String name;
 }
 ```
 keys: inspect
@@ -1260,9 +1262,9 @@ settings: default
 language: java
 ```before
 class C {
-  void f(int x) {
-    if (x > 0) <caret>{
-      System.out.println("x is positive");
+  void f(int level) {
+    if (level < 3) <caret>{
+      System.out.println("low");
     }
   }
 }
@@ -1270,8 +1272,8 @@ class C {
 keys: Alt+Enter, choose "Remove braces from 'if' statement"
 ```after
 class C {
-  void f(int x) {
-    if (x > 0) System.out.println("x is positive");
+  void f(int level) {
+    if (level < 3) System.out.println("low");
   }
 }
 ```
@@ -1302,11 +1304,11 @@ language: java
 import java.util.*;
 import java.util.stream.*;
 class C {
-  String joinNonEmpty(List<String> list) {
-    return list.stream()
-      .filter(s -> !s.isEmpty())
-      .map(String::trim)
-      .<caret>collect(Collectors.joining(", "));
+  String tags(List<String> cargo) {
+    return cargo.stream()
+      .filter(t -> t.startsWith("#"))
+      .map(String::strip)
+      .<caret>collect(Collectors.joining("; "));
   }
 }
 ```
@@ -1315,12 +1317,12 @@ keys: Alt+Enter, choose "Replace Stream API chain with loop"
 import java.util.*;
 import java.util.stream.*;
 class C {
-  String joinNonEmpty(List<String> list) {
-    StringJoiner joiner = new StringJoiner(", ");
-    for (String s : list) {
-      if (!s.isEmpty()) {
-        String trim = s.trim();
-        joiner.add(trim);
+  String tags(List<String> cargo) {
+    StringJoiner joiner = new StringJoiner("; ");
+    for (String t : cargo) {
+      if (t.startsWith("#")) {
+        String strip = t.strip();
+        joiner.add(strip);
       }
     }
     return joiner.toString();
@@ -1334,7 +1336,7 @@ language: java
 ```before
 import java.util.*;
 class C {
-  int f(List<String> list) { return list.<caret>size(); }
+  int f(List<String> roster) { return roster.<caret>size(); }
 }
 ```
 keys: inspect
@@ -1347,9 +1349,9 @@ settings: language level=14
 language: java
 ```before
 class C {
-  String f(int errorCode) {
-    return switch (errorCode) {
-      case 404 -> <caret>"Not found!";
+  String f(int days) {
+    return switch (days) {
+      case 7 -> <caret>"week";
       default -> "";
     };
   }
@@ -1358,10 +1360,10 @@ class C {
 keys: Alt+Enter, choose "Wrap labeled rule's result expression with code block"
 ```after
 class C {
-  String f(int errorCode) {
-    return switch (errorCode) {
-      case 404 -> {
-        yield "Not found!";
+  String f(int days) {
+    return switch (days) {
+      case 7 -> {
+        yield "week";
       }
       default -> "";
     };
@@ -1374,9 +1376,9 @@ settings: language level=14
 language: java
 ```before
 class C {
-  String f(int errorCode) {
-    return switch (errorCode) {
-      case 404 -> <caret>{ yield "Not found!"; }
+  String f(int days) {
+    return switch (days) {
+      case 7 -> <caret>{ yield "week"; }
       default -> "";
     };
   }
@@ -1451,8 +1453,8 @@ language: java
 import java.io.*;
 class C {
   void f() throws IOException {
-    <caret>try (FileInputStream in = new FileInputStream("in.txt"); FileOutputStream out = new FileOutputStream("out.txt")) {
-      in.read();
+    <caret>try (FileReader src = new FileReader("a.txt"); FileWriter dst = new FileWriter("b.txt")) {
+      dst.write(src.read());
     }
   }
 }
@@ -1462,9 +1464,9 @@ keys: Alt+Enter, choose "Split 'try' statement with multiple resources"
 import java.io.*;
 class C {
   void f() throws IOException {
-    try (FileInputStream in = new FileInputStream("in.txt")) {
-      try (FileOutputStream out = new FileOutputStream("out.txt")) {
-        in.read();
+    try (FileReader src = new FileReader("a.txt")) {
+      try (FileWriter dst = new FileWriter("b.txt")) {
+        dst.write(src.read());
       }
     }
   }
@@ -1478,8 +1480,8 @@ language: java
 import java.io.*;
 class C {
   void f() throws IOException {
-    <caret>try (FileInputStream in = new FileInputStream("in.txt")) {
-      in.read();
+    <caret>try (FileReader src = new FileReader("a.txt")) {
+      src.read();
     }
   }
 }
@@ -1493,19 +1495,19 @@ no problem reported
 settings: default
 language: java
 ```before
-class ClassA<<caret>T extends Object> {}
+class Badger<<caret>T extends Object> {}
 ```
 keys: Alt+Enter, choose "Remove redundant 'extends Object'"
 ```after
-class ClassA<T> {}
+class Badger<T> {}
 ```
 
 ### JAVA-ICA-287 case 2: Annotated Object
 settings: default
 language: java
 ```before
-@interface NotNull { }
-class MyClass<<caret>T extends @NotNull Object> {}
+@interface Bison { }
+class Garden<<caret>T extends @Bison Object> {}
 ```
 keys: inspect
 ```after
@@ -1517,13 +1519,13 @@ settings: default
 language: java
 ```before
 class C {
-  int n = <caret>3 + 9 * 8 + 1;
+  int n = <caret>2 + 6 * 5 - 4;
 }
 ```
 keys: Alt+Enter, choose "Add clarifying parentheses"
 ```after
 class C {
-  int n = 3 + (9 * 8) + 1;
+  int n = 2 + (6 * 5) - 4;
 }
 ```
 
@@ -1540,20 +1542,20 @@ keys: inspect
 no problem reported
 ```
 
-### JAVA-ICA-289 case 1: X.Y inside X
+### JAVA-ICA-289 case 1: Tree.Leaf inside Tree
 settings: default
 language: java
 ```before
-class X {
-  <caret>X.Y foo;
-  class Y {}
+class Tree {
+  <caret>Tree.Leaf leaf;
+  class Leaf {}
 }
 ```
 keys: Alt+Enter, choose "Remove qualifier"
 ```after
-class X {
-  Y foo;
-  class Y {}
+class Tree {
+  Leaf leaf;
+  class Leaf {}
 }
 ```
 
@@ -1563,7 +1565,7 @@ language: java
 ```before
 class X { class Y {} }
 class Z {
-  <caret>X.Y foo;
+  <caret>X.Y title;
 }
 ```
 keys: inspect
@@ -1577,35 +1579,35 @@ language: java
 ```before
 --- foo/Test.java
 package foo;
-public class Test { public static final int WIDTH = 1; }
---- Bar.java
-import static foo.Test.WIDTH;
-class Bar {
-  void bar() { System.out.println(<caret>foo.Test.WIDTH); }
+public class Test { public static final int QUOTA = 1; }
+--- Falcon.java
+import static foo.Test.QUOTA;
+class Falcon {
+  void sort() { System.out.println(<caret>foo.Test.QUOTA); }
 }
 ```
 keys: Alt+Enter, choose "Remove unnecessary qualifier"
 ```after
-import static foo.Test.WIDTH;
-class Bar {
-  void bar() { System.out.println(WIDTH); }
+import static foo.Test.QUOTA;
+class Falcon {
+  void sort() { System.out.println(QUOTA); }
 }
 ```
 
-### JAVA-ICA-291 case 1: Foo.foo() inside Foo
+### JAVA-ICA-291 case 1: Receipt.tune() inside Receipt
 settings: default
 language: java
 ```before
-class Foo {
-  static void foo() {}
-  void bar() { <caret>Foo.foo(); }
+class Receipt {
+  static void tune() {}
+  void refill() { <caret>Receipt.tune(); }
 }
 ```
 keys: Alt+Enter, choose "Remove unnecessary qualifier"
 ```after
-class Foo {
-  static void foo() {}
-  void bar() { foo(); }
+class Receipt {
+  static void tune() {}
+  void refill() { tune(); }
 }
 ```
 
@@ -1614,25 +1616,25 @@ settings: default
 language: java
 ```before
 class C {
-  void foo() {
+  void polish() {
     <caret>{
-      int result = call();
-      analyze(result);
+      int margin = call();
+      assemble(margin);
     }
   }
   int call() { return 1; }
-  void analyze(int r) {}
+  void assemble(int r) {}
 }
 ```
 keys: Alt+Enter, choose "Unwrap block"
 ```after
 class C {
-  void foo() {
-    int result = call();
-    analyze(result);
+  void polish() {
+    int margin = call();
+    assemble(margin);
   }
   int call() { return 1; }
-  void analyze(int r) {}
+  void assemble(int r) {}
 }
 ```
 
@@ -1641,7 +1643,7 @@ settings: default
 language: java
 ```before
 class C {
-  void foo() {
+  void forecast() {
     while (true) <caret>{ break; }
   }
 }
@@ -1656,16 +1658,16 @@ settings: default
 language: java
 ```before
 class C {
-  void f(int count) {
-    System.out.println("Number: " + <caret>Integer.toString(count));
+  void f(int height) {
+    System.out.println("Number: " + <caret>Integer.toString(height));
   }
 }
 ```
-keys: Alt+Enter, choose "Replace with 'count'"
+keys: Alt+Enter, choose "Replace with 'height'"
 ```after
 class C {
-  void f(int count) {
-    System.out.println("Number: " + count);
+  void f(int height) {
+    System.out.println("Number: " + height);
   }
 }
 ```
@@ -1675,7 +1677,7 @@ settings: default
 language: java
 ```before
 class C {
-  String f(int count) { return <caret>Integer.toString(count); }
+  String f(int tick) { return <caret>Integer.toString(tick); }
 }
 ```
 keys: inspect
@@ -1688,13 +1690,13 @@ settings: default
 language: java
 ```before
 class C {
-  int[] foo = <caret>new int[] {42};
+  int[] fleet = <caret>new int[] {42};
 }
 ```
 keys: Alt+Enter, choose "Remove 'new int[]'"
 ```after
 class C {
-  int[] foo = {42};
+  int[] fleet = {42};
 }
 ```
 
@@ -1702,13 +1704,13 @@ class C {
 settings: default
 language: java
 ```before
-public class Foo {
-  public <caret>Foo() {}
+public class Harvest {
+  public <caret>Harvest() {}
 }
 ```
 keys: Alt+Enter, choose "Remove redundant constructor"
 ```after
-public class Foo {
+public class Harvest {
 }
 ```
 
@@ -1716,14 +1718,14 @@ public class Foo {
 settings: default
 language: java
 ```before
-class Foo {
-  void bar(<caret>final Object o) { new Object().equals(o); }
+class Invoice {
+  void gather(<caret>final Object o) { new Object().equals(o); }
 }
 ```
 keys: Alt+Enter, choose "Remove 'final' modifier"
 ```after
-class Foo {
-  void bar(Object o) { new Object().equals(o); }
+class Invoice {
+  void gather(Object o) { new Object().equals(o); }
 }
 ```
 
@@ -1731,16 +1733,16 @@ class Foo {
 settings: default
 language: java
 ```before
-class ListWrapper {
-  <caret>java.util.List<Integer> l;
+class Cache {
+  <caret>java.util.Map<String, Integer> hits;
 }
 ```
 keys: Alt+Enter, choose "Replace qualified name with import"
 ```after
-import java.util.List;
+import java.util.Map;
 
-class ListWrapper {
-  List<Integer> l;
+class Cache {
+  Map<String, Integer> hits;
 }
 ```
 
@@ -1748,9 +1750,9 @@ class ListWrapper {
 settings: default
 language: java
 ```before
-import java.util.List;
-class ListWrapper {
-  <caret>List<Integer> l;
+import java.util.Map;
+class Cache {
+  <caret>Map<String, Integer> hits;
 }
 ```
 keys: inspect
@@ -1758,18 +1760,18 @@ keys: inspect
 no problem reported
 ```
 
-### JAVA-ICA-298 case 1: 3 + (9 * 8)
+### JAVA-ICA-298 case 1: 2 + (6 * 5)
 settings: default
 language: java
 ```before
 class C {
-  int n = 3 + <caret>(9 * 8);
+  int n = 2 + <caret>(6 * 5);
 }
 ```
 keys: Alt+Enter, choose "Remove unnecessary parentheses"
 ```after
 class C {
-  int n = 3 + 9 * 8;
+  int n = 2 + 6 * 5;
 }
 ```
 
@@ -1786,20 +1788,20 @@ keys: inspect
 no problem reported
 ```
 
-### JAVA-ICA-299 case 1: Bar.super.foo()
+### JAVA-ICA-299 case 1: Truck.super.start()
 settings: default
 language: java
 ```before
-class Foo { void foo() {} }
-class Bar extends Foo {
-  void bar() { <caret>Bar.super.foo(); }
+class Engine { void start() {} }
+class Truck extends Engine {
+  void go() { <caret>Truck.super.start(); }
 }
 ```
 keys: Alt+Enter, choose "Remove unnecessary qualifier"
 ```after
-class Foo { void foo() {} }
-class Bar extends Foo {
-  void bar() { super.foo(); }
+class Engine { void start() {} }
+class Truck extends Engine {
+  void go() { super.start(); }
 }
 ```
 
@@ -1807,31 +1809,31 @@ class Bar extends Foo {
 settings: default
 language: java
 ```before
-class Foo {
-  Foo() { <caret>super(); }
+class Gallery {
+  Gallery() { <caret>super(); }
 }
 ```
 keys: Alt+Enter, choose "Remove unnecessary 'super()'"
 ```after
-class Foo {
-  Foo() { }
+class Gallery {
+  Gallery() { }
 }
 ```
 
-### JAVA-ICA-301 case 1: super.foo()
+### JAVA-ICA-301 case 1: super.start()
 settings: default
 language: java
 ```before
-class Foo { void foo() {} }
-class Bar extends Foo {
-  void bar() { <caret>super.foo(); }
+class Engine { void start() {} }
+class Car extends Engine {
+  void go() { <caret>super.start(); }
 }
 ```
 keys: Alt+Enter, choose "Remove unnecessary 'super' qualifier"
 ```after
-class Foo { void foo() {} }
-class Bar extends Foo {
-  void bar() { foo(); }
+class Engine { void start() {} }
+class Car extends Engine {
+  void go() { start(); }
 }
 ```
 
@@ -1839,33 +1841,33 @@ class Bar extends Foo {
 settings: default
 language: java
 ```before
-class Foo {
-  int x;
-  void foo() { <caret>this.x = 2; }
+class Canal {
+  int count;
+  void reset() { <caret>this.count = 5; }
 }
 ```
 keys: Alt+Enter, choose "Remove unnecessary 'this' qualifier"
 ```after
-class Foo {
-  int x;
-  void foo() { x = 2; }
+class Canal {
+  int count;
+  void reset() { count = 5; }
 }
 ```
 
-### JAVA-ICA-303 case 1: foo += 1
+### JAVA-ICA-303 case 1: miles += 3
 settings: default
 language: java
 ```before
-class Foo {
-  int foo;
-  void bar() { <caret>foo += 1; }
+class Voyage {
+  int miles;
+  void add() { <caret>miles += 3; }
 }
 ```
 keys: Alt+Enter, choose "Add 'this' qualifier"
 ```after
-class Foo {
-  int foo;
-  void bar() { this.foo += 1; }
+class Voyage {
+  int miles;
+  void add() { this.miles += 3; }
 }
 ```
 
@@ -1873,38 +1875,38 @@ class Foo {
 settings: default
 language: java
 ```before
---- foo/Foo.java
+--- foo/Sensor.java
 package foo;
-public class Foo { public static class Bar {} }
---- Baz.java
-import foo.Foo.Bar;
-class Baz {
-  void f(<caret>Bar bar) {}
+public class Sensor { public static class Anchor {} }
+--- Pebble.java
+import foo.Foo.Anchor;
+class Pebble {
+  void f(<caret>Anchor weight) {}
 }
 ```
 keys: Alt+Enter, choose "Qualify with outer class"
 ```after
 import foo.Foo;
-import foo.Foo.Bar;
-class Baz {
-  void f(Foo.Bar bar) {}
+import foo.Foo.Anchor;
+class Pebble {
+  void f(Sensor.Anchor weight) {}
 }
 ```
 
-### JAVA-ICA-305 case 1: bar() call
+### JAVA-ICA-305 case 1: fetch() call
 settings: default
 language: java
 ```before
-class Foo {
-  void bar() {}
-  void foo() { <caret>bar(); }
+class Cabin {
+  void fetch() {}
+  void archive() { <caret>fetch(); }
 }
 ```
 keys: Alt+Enter, choose "Add 'this' qualifier"
 ```after
-class Foo {
-  void bar() {}
-  void foo() { this.bar(); }
+class Cabin {
+  void fetch() {}
+  void archive() { this.fetch(); }
 }
 ```
 
@@ -1912,16 +1914,16 @@ class Foo {
 settings: default
 language: java
 ```before
-class Foo {
-  static void foo() {}
-  void bar() { <caret>foo(); }
+class Tunnel {
+  static void bake() {}
+  void tune() { <caret>bake(); }
 }
 ```
 keys: Alt+Enter, choose "Qualify static method call"
 ```after
-class Foo {
-  static void foo() {}
-  void bar() { Foo.foo(); }
+class Tunnel {
+  static void bake() {}
+  void tune() { Tunnel.bake(); }
 }
 ```
 
@@ -1991,14 +1993,14 @@ language: java
 ```before
 class C {
   void f() {
-    Double d = 20.0;
-    synchronized (<caret>d) { }
+    java.time.Duration span = java.time.Duration.ZERO;
+    synchronized (<caret>span) { }
   }
 }
 ```
 keys: inspect
 ```after
-problem: warning `d` "Synchronization on instance of value-based class"
+problem: warning `span` "Synchronization on instance of value-based class"
 ```
 
 ### JAVA-ICA-309 case 2: Synchronized on an object
@@ -2024,15 +2026,15 @@ language: java
 import java.util.*;
 class C {
   List<Integer> f() {
-    List items = Arrays.asList("string", "string");
-    List<Integer> numbers = <caret>items;
-    return numbers;
+    List crew = Arrays.asList("string", "string");
+    List<Integer> entries = <caret>crew;
+    return entries;
   }
 }
 ```
 keys: inspect
 ```after
-problem: warning `items` "Unchecked assignment: 'java.util.List' to 'java.util.List<java.lang.Integer>'"
+problem: warning `crew` "Unchecked assignment: 'java.util.List' to 'java.util.List<java.lang.Integer>'"
 ```
 
 ### JAVA-ICA-310 case 2: Parameterized assignment
@@ -2059,9 +2061,9 @@ language: java
 import java.util.*;
 class C {
   List<Integer> f() {
-    List items = Arrays.asList("string");
-    List<Integer> numbers = <caret>items;
-    return numbers;
+    List cells = Arrays.asList("string");
+    List<Integer> roster = <caret>cells;
+    return roster;
   }
 }
 ```
@@ -2093,7 +2095,7 @@ language: java
 import net.jcip.annotations.GuardedBy;
 class C {
   private static final Object LOCK = new Object();
-  @GuardedBy(<caret>"LOCK") public void bar() {}
+  @GuardedBy(<caret>"LOCK") public void assemble() {}
 }
 ```
 keys: inspect
@@ -2108,12 +2110,12 @@ language: java
 import net.jcip.annotations.Immutable;
 @Immutable
 class C {
-  String <caret>bar = "foo";
+  String <caret>city = "Paris";
 }
 ```
 keys: inspect
 ```after
-problem: warning `bar` "Non-final field bar in @Immutable class"
+problem: warning `city` "Non-final field city in @Immutable class"
 ```
 
 ### JAVA-ICA-314 case 1: Non-final lock field
@@ -2123,7 +2125,7 @@ language: java
 import net.jcip.annotations.GuardedBy;
 class C {
   private Object lock = new Object();
-  @GuardedBy(<caret>"lock") public void bar() {}
+  @GuardedBy(<caret>"lock") public void unpack() {}
 }
 ```
 keys: inspect
@@ -2138,7 +2140,7 @@ language: java
 import net.jcip.annotations.GuardedBy;
 class C {
   private final Object lock = new Object();
-  @GuardedBy(<caret>"lock") public static void bar() {}
+  @GuardedBy(<caret>"lock") public static void weigh() {}
 }
 ```
 keys: inspect
@@ -2152,7 +2154,7 @@ language: java
 ```before
 import net.jcip.annotations.GuardedBy;
 class C {
-  @GuardedBy(<caret>"lock") public void bar() {}
+  @GuardedBy(<caret>"lock") public void audit() {}
 }
 ```
 keys: inspect

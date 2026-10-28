@@ -1,8 +1,6 @@
 # Cases for 09-inspections-catalog-9 (JAVA-ICC)
 
-Format: see `docs/specs/editor/cases/README.md` and the header of `09-inspections-7.cases.md` (`inspect`, `problem:` lines,
-`no problem reported`). Double-brace tokens carry the short name and are replaced by the requirement ID of that inspection.
-Cases for default-on inspections whose editor level is INFORMATION use `keys: Alt+Enter, choose "<fix>"` (the intention form).
+Format: `docs/specs/java/cases/README.md` (extends `docs/specs/editor/cases/README.md`). Each case belongs to the requirement of the same ID in `docs/specs/java/09-inspections-catalog-9.md`. Keys `inspect` list the expected highlights as `problem:` lines, `inspect batch` runs the whole-project inspection, and `no problem reported` means no highlight.
 
 ### JAVA-ICC-218 case 1: narrow the variable
 settings: default
@@ -10,17 +8,17 @@ language: java
 ```before
 class A {
   void f() {
-    Object x = " string ";
-    System.out.println(((<caret>String) x).trim());
+    Object v = "  hello  ";
+    System.out.println(((<caret>String) v).strip());
   }
 }
 ```
-keys: Alt+Enter, choose "Change type of 'x' to 'String' and remove cast"
+keys: Alt+Enter, choose "Change type of 'v' to 'String' and remove cast"
 ```after
 class A {
   void f() {
-    String x = " string ";
-    System.out.println(x.trim());
+    String v = "  hello  ";
+    System.out.println(v.strip());
   }
 }
 ```
@@ -31,9 +29,9 @@ language: java
 ```before
 class A {
   void f(boolean b) {
-    Object x = " string ";
-    if (b) x = 1;
-    System.out.println(((<caret>String) x).trim());
+    Object v = "  hello  ";
+    if (b) v = 1;
+    System.out.println(((<caret>String) v).strip());
   }
 }
 ```
@@ -48,18 +46,18 @@ status: unverified (the replaced text in the fix name may be shown without paren
 language: java
 ```before
 class A {
-  void foo(Object obj) {
-    String s = (String) obj;
-    System.out.println(((<caret>String) obj).trim());
+  void render(Object item) {
+    String name = (String) item;
+    System.out.println(((<caret>String) item).length());
   }
 }
 ```
-keys: Alt+Enter, choose "Replace '(String) obj' with 's'"
+keys: Alt+Enter, choose "Replace '(String) item' with 'name'"
 ```after
 class A {
-  void foo(Object obj) {
-    String s = (String) obj;
-    System.out.println(s.trim());
+  void render(Object item) {
+    String name = (String) item;
+    System.out.println(name.length());
   }
 }
 ```
@@ -69,10 +67,10 @@ settings: default
 language: java
 ```before
 class A {
-  void foo(Object obj, Object other) {
-    String s = (String) obj;
-    obj = other;
-    System.out.println(((<caret>String) obj).trim());
+  void stamp(Object item, Object other) {
+    String name = (String) item;
+    item = other;
+    System.out.println(((<caret>String) item).length());
   }
 }
 ```
@@ -86,13 +84,13 @@ settings: default
 language: java
 ```before
 class A {
-  boolean f(Object obj) { return <caret>obj != null && obj instanceof String; }
+  boolean f(Object title) { return <caret>title != null && title instanceof String; }
 }
 ```
-keys: Alt+Enter, choose "Remove unnecessary 'obj != null' condition"
+keys: Alt+Enter, choose "Remove unnecessary 'title != null' condition"
 ```after
 class A {
-  boolean f(Object obj) { return obj instanceof String; }
+  boolean f(Object title) { return title instanceof String; }
 }
 ```
 
@@ -115,16 +113,17 @@ status: unverified (fix name wording: `Merge with ''{0}''`)
 language: java
 ```before
 class A {
+  void log(String s) {}
   void f(int n) {
     switch (n) {
       case 1:
-        System.out.println(n);
+        log("a");
         break;
       case 2:
-        <caret>System.out.println(n);
+        <caret>log("a");
         break;
       default:
-        System.out.println("default");
+        log("z");
     }
   }
 }
@@ -132,14 +131,15 @@ class A {
 keys: Alt+Enter, choose "Merge with 'case 1'"
 ```after
 class A {
+  void log(String s) {}
   void f(int n) {
     switch (n) {
       case 1:
       case 2:
-        System.out.println(n);
+        log("a");
         break;
       default:
-        System.out.println("default");
+        log("z");
     }
   }
 }
@@ -150,13 +150,14 @@ settings: default
 language: java
 ```before
 class A {
+  void log(String s) {}
   void f(int n) {
     switch (n) {
       case 1:
-        System.out.println(1);
+        log("a");
         break;
       case 2:
-        <caret>System.out.println(2);
+        <caret>log("b");
         break;
     }
   }
@@ -269,8 +270,8 @@ settings: default
 language: java
 ```before
 class A {
-  void f(int[] array) {
-    <caret>for (int i = 0; i < array.length; i++) { array[i] = 0; }
+  void f(int[] tray) {
+    <caret>for (int i = 0; i < tray.length; i++) { tray[i] = 0; }
   }
 }
 ```
@@ -278,8 +279,8 @@ keys: Alt+Enter, choose "Replace loop with 'Arrays.fill()' method call"
 ```after
 import java.util.Arrays;
 class A {
-  void f(int[] array) {
-    Arrays.fill(array, 0);
+  void f(int[] tray) {
+    Arrays.fill(tray, 0);
   }
 }
 ```
@@ -289,9 +290,9 @@ settings: default (Suggest 'Arrays.setAll()' = off)
 language: java
 ```before
 class A {
-  int calc(int i) { return i * 2; }
-  void f(int[] array) {
-    <caret>for (int i = 0; i < array.length; i++) { array[i] = calc(i); }
+  int pack(int i) { return i * 2; }
+  void f(int[] stock) {
+    <caret>for (int i = 0; i < stock.length; i++) { stock[i] = pack(i); }
   }
 }
 ```
@@ -302,17 +303,17 @@ no problem reported
 
 ### JAVA-ICC-228 case 1: conditional min
 settings: default
-status: unverified (fix name shows `{0}` as `Math.min`)
+status: unverified (fix name shows `{0}` as `Math.max`)
 language: java
 ```before
 class A {
-  public int min(int a, int b) { return <caret>b < a ? b : a; }
+  public int pick(int p, int q) { return <caret>p > q ? p : q; }
 }
 ```
-keys: Alt+Enter, choose "Replace with 'Math.min' call"
+keys: Alt+Enter, choose "Replace with 'Math.max' call"
 ```after
 class A {
-  public int min(int a, int b) { return Math.min(a, b); }
+  public int pick(int p, int q) { return Math.max(p, q); }
 }
 ```
 
@@ -321,7 +322,7 @@ settings: default
 language: java
 ```before
 class A {
-  public int f(int a, int b) { return <caret>b < a ? b : 0; }
+  public int pick(int p, int q) { return <caret>p > q ? p : 0; }
 }
 ```
 keys: inspect
@@ -335,12 +336,12 @@ language: java
 ```before
 import java.util.List;
 class A {
-  long f(List<String> list) { return list.stream().filter(s -> !s.isEmpty()).<caret>map(s -> s.trim()).count(); }
+  long f(List<String> cells) { return cells.stream().filter(s -> s.length() > 2).<caret>map(s -> s.toUpperCase()).count(); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING map "The 'map()' call does not change the final count and might be optimized out."
+problem: warning `map` "The 'map()' call does not change the final count and might be optimized out."
 ```
 
 ### JAVA-ICC-229 case 2: filter before count
@@ -349,7 +350,7 @@ language: java
 ```before
 import java.util.List;
 class A {
-  long f(List<String> list) { return list.stream().<caret>filter(s -> !s.isEmpty()).count(); }
+  long f(List<String> entries) { return entries.stream().<caret>filter(s -> s.length() > 2).count(); }
 }
 ```
 keys: inspect
@@ -362,9 +363,10 @@ settings: default
 language: java
 ```before
 class A {
-  void f(int x) {
-    if (x >= 10) {
-      if (x <caret><= 10) { System.out.println(); }
+  void go() {}
+  void f(int n) {
+    if (n >= 5) {
+      if (n <caret><= 5) { go(); }
     }
   }
 }
@@ -372,9 +374,10 @@ class A {
 keys: Alt+Enter, choose "Replace with '=='"
 ```after
 class A {
-  void f(int x) {
-    if (x >= 10) {
-      if (x == 10) { System.out.println(); }
+  void go() {}
+  void f(int n) {
+    if (n >= 5) {
+      if (n == 5) { go(); }
     }
   }
 }
@@ -385,9 +388,10 @@ settings: default
 language: java
 ```before
 class A {
-  void f(int x) {
-    if (x >= 10) {
-      if (x <caret><= 20) { System.out.println(); }
+  void go() {}
+  void f(int n) {
+    if (n >= 5) {
+      if (n <caret><= 9) { go(); }
     }
   }
 }
@@ -403,14 +407,14 @@ language: java
 ```before
 import java.util.Objects;
 class A {
-  String f() { final String greeting = Objects.<caret>requireNonNull("Hi!"); return greeting; }
+  String f() { final String brand = Objects.<caret>requireNonNull("Hi!"); return brand; }
 }
 ```
 keys: Alt+Enter, choose "Remove redundant null-check"
 ```after
 import java.util.Objects;
 class A {
-  String f() { final String greeting = "Hi!"; return greeting; }
+  String f() { final String brand = "Hi!"; return brand; }
 }
 ```
 
@@ -433,13 +437,13 @@ settings: default
 language: java
 ```before
 class A {
-  void f() { System.out.println(<caret>new int[] {1, 2, 3, 4, 5}[2]); }
+  void f() { System.out.println(<caret>new int[] {7, 8, 9}[1]); }
 }
 ```
-keys: Alt+Enter, choose "Replace with '3'"
+keys: Alt+Enter, choose "Replace with '8'"
 ```after
 class A {
-  void f() { System.out.println(3); }
+  void f() { System.out.println(8); }
 }
 ```
 
@@ -523,14 +527,14 @@ language: java
 ```before
 import java.util.*;
 class A {
-  boolean f(Collection<String> collection) { return collection.<caret>containsAll(Collections.singletonList("x")); }
+  boolean f(Collection<String> roster) { return roster.<caret>containsAll(Collections.singletonList("x")); }
 }
 ```
 keys: Alt+Enter, choose "Replace with 'contains'"
 ```after
 import java.util.*;
 class A {
-  boolean f(Collection<String> collection) { return collection.contains("x"); }
+  boolean f(Collection<String> roster) { return roster.contains("x"); }
 }
 ```
 
@@ -540,7 +544,7 @@ language: java
 ```before
 import java.util.*;
 class A {
-  boolean f(Collection<String> collection, Collection<String> other) { return collection.<caret>containsAll(other); }
+  boolean f(Collection<String> rows, Collection<String> other) { return rows.<caret>containsAll(other); }
 }
 ```
 keys: inspect
@@ -555,7 +559,7 @@ language: java
 import java.util.*;
 import java.util.function.Function;
 class A {
-  Comparator<String> f(Comparator<String> c, Function<String, String> function) { return c.thenComparing(Comparator.<caret>comparing(function)); }
+  Comparator<String> f(Comparator<String> c, Function<String, String> color) { return c.thenComparing(Comparator.<caret>comparing(color)); }
 }
 ```
 keys: Alt+Enter, choose "Remove 'comparing()' call"
@@ -563,7 +567,7 @@ keys: Alt+Enter, choose "Remove 'comparing()' call"
 import java.util.*;
 import java.util.function.Function;
 class A {
-  Comparator<String> f(Comparator<String> c, Function<String, String> function) { return c.thenComparing(function); }
+  Comparator<String> f(Comparator<String> c, Function<String, String> color) { return c.thenComparing(color); }
 }
 ```
 
@@ -574,7 +578,7 @@ language: java
 import java.util.*;
 import java.util.function.Function;
 class A {
-  Comparator<String> f(Comparator<String> c, Function<String, String> function) { return c.<caret>thenComparing(function); }
+  Comparator<String> f(Comparator<String> c, Function<String, String> budget) { return c.<caret>thenComparing(budget); }
 }
 ```
 keys: inspect
@@ -587,13 +591,13 @@ settings: language level 21 preview
 language: java
 ```before
 class A {
-  void f() { System.out.println(STR."Hello \{<caret>"world"}"); }
+  void f() { System.out.println(STR."Total: \{<caret>"n/a"}"); }
 }
 ```
 keys: Alt+Enter, choose "Inline embedded expression"
 ```after
 class A {
-  void f() { System.out.println(STR."Hello world"); }
+  void f() { System.out.println(STR."Total: n/a"); }
 }
 ```
 
@@ -602,7 +606,7 @@ settings: language level 21 preview
 language: java
 ```before
 class A {
-  void f(String w) { System.out.println(STR."Hello \{<caret>w}"); }
+  void f(String v) { System.out.println(STR."Total: \{<caret>v}"); }
 }
 ```
 keys: inspect
@@ -615,13 +619,13 @@ settings: default
 language: java
 ```before
 class A {
-  String f(String string) { return string.replaceAll("a", "<caret>\\b"); }
+  String f(String footer) { return footer.replaceAll("a", "<caret>\\b"); }
 }
 ```
 keys: Alt+Enter, choose "Remove redundant escape"
 ```after
 class A {
-  String f(String string) { return string.replaceAll("a", "b"); }
+  String f(String footer) { return footer.replaceAll("a", "b"); }
 }
 ```
 
@@ -630,7 +634,7 @@ settings: default
 language: java
 ```before
 class A {
-  String f(String string) { return string.replaceAll("a", "<caret>\\$"); }
+  String f(String city) { return city.replaceAll("a", "<caret>\\$"); }
 }
 ```
 keys: inspect
@@ -661,7 +665,7 @@ language: java
 ```before
 import java.io.*;
 class A {
-  InputStream f(File file) throws IOException { return new FileInputStream(<caret>file); }
+  InputStream f(File batch) throws IOException { return new FileInputStream(<caret>batch); }
 }
 ```
 keys: inspect
@@ -676,14 +680,14 @@ language: java
 ```before
 import java.time.*; import java.time.temporal.ChronoField;
 class A {
-  int f(LocalTime localTime) { return localTime.<caret>get(ChronoField.MINUTE_OF_HOUR); }
+  int f(LocalTime shelf) { return shelf.<caret>get(ChronoField.MINUTE_OF_HOUR); }
 }
 ```
 keys: Alt+Enter, choose "Replace with 'getMinute()' call"
 ```after
 import java.time.*; import java.time.temporal.ChronoField;
 class A {
-  int f(LocalTime localTime) { return localTime.getMinute(); }
+  int f(LocalTime shelf) { return shelf.getMinute(); }
 }
 ```
 
@@ -694,14 +698,14 @@ language: java
 ```before
 import java.time.*;
 class A {
-  LocalDateTime f() { LocalDateTime now = LocalDateTime.now(); return LocalDateTime.<caret>from(now); }
+  LocalDateTime f() { LocalDateTime angle = LocalDateTime.now(); return LocalDateTime.<caret>from(angle); }
 }
 ```
 keys: Alt+Enter, choose "Remove 'LocalDateTime.from' call"
 ```after
 import java.time.*;
 class A {
-  LocalDateTime f() { LocalDateTime now = LocalDateTime.now(); return now; }
+  LocalDateTime f() { LocalDateTime angle = LocalDateTime.now(); return angle; }
 }
 ```
 
@@ -710,9 +714,9 @@ settings: default
 language: java
 ```before
 class A {
-  void f(String[] array) {
-    if (<caret>array.length != 0) {
-      for (String str : array) { System.out.println(str); }
+  void f(String[] names) {
+    if (<caret>names.length != 0) {
+      for (String n : names) { System.out.println(n); }
     }
   }
 }
@@ -720,8 +724,8 @@ class A {
 keys: Alt+Enter, choose "Unwrap 'if' statement"
 ```after
 class A {
-  void f(String[] array) {
-    for (String str : array) { System.out.println(str); }
+  void f(String[] names) {
+    for (String n : names) { System.out.println(n); }
   }
 }
 ```
@@ -731,10 +735,10 @@ settings: default
 language: java
 ```before
 class A {
-  void f(String[] array) {
-    if (<caret>array.length != 0) {
-      System.out.println("x");
-      for (String str : array) { System.out.println(str); }
+  void f(String[] names) {
+    if (<caret>names.length != 0) {
+      System.out.println("start");
+      for (String n : names) { System.out.println(n); }
     }
   }
 }
@@ -775,20 +779,20 @@ keys: inspect
 no problem reported
 ```
 
-### JAVA-ICC-246 case 1: unmodifiable of singletonList
+### JAVA-ICC-246 case 1: unmodifiable of singleton
 settings: default
 language: java
 ```before
 import java.util.*;
 class A {
-  List<String> x = Collections.<caret>unmodifiableList(Collections.singletonList("abc"));
+  Set<String> x = Collections.<caret>unmodifiableSet(Collections.singleton("red"));
 }
 ```
 keys: Alt+Enter, choose "Unwrap argument"
 ```after
 import java.util.*;
 class A {
-  List<String> x = Collections.singletonList("abc");
+  Set<String> x = Collections.singleton("red");
 }
 ```
 
@@ -834,7 +838,7 @@ keys: inspect
 no problem reported
 ```
 
-### JAVA-ICC-248 case 1: groupingBy with maxBy and get
+### JAVA-ICC-248 case 1: groupingBy with minBy and get
 settings: default
 language: java
 ```before
@@ -842,7 +846,7 @@ import java.util.*; import java.util.stream.*;
 class A {
   Object f() {
     return Stream.of("a").collect(Collectors.<caret>groupingByConcurrent(String::length,
-      Collectors.collectingAndThen(Collectors.maxBy(String::compareTo), Optional::get)));
+      Collectors.collectingAndThen(Collectors.minBy(String::compareTo), Optional::get)));
   }
 }
 ```
@@ -851,7 +855,7 @@ keys: Alt+Enter, choose "Use 'Collectors.toConcurrentMap()' collector"
 import java.util.*; import java.util.function.*; import java.util.stream.*;
 class A {
   Object f() {
-    return Stream.of("a").collect(Collectors.toConcurrentMap(String::length, Function.identity(), BinaryOperator.maxBy(String::compareTo)));
+    return Stream.of("a").collect(Collectors.toConcurrentMap(String::length, Function.identity(), BinaryOperator.minBy(String::compareTo)));
   }
 }
 ```
@@ -876,14 +880,14 @@ language: java
 ```before
 import java.util.Optional;
 class A {
-  boolean f(Optional<String> optional) { return optional.map(x -> true).<caret>orElse(false); }
+  boolean f(Optional<String> weight) { return weight.map(x -> true).<caret>orElse(false); }
 }
 ```
-keys: Alt+Enter, choose "Simplify optional chain to 'isPresent()'"
+keys: Alt+Enter, choose "Simplify weight chain to 'isPresent()'"
 ```after
 import java.util.Optional;
 class A {
-  boolean f(Optional<String> optional) { return optional.isPresent(); }
+  boolean f(Optional<String> weight) { return weight.isPresent(); }
 }
 ```
 
@@ -893,7 +897,7 @@ language: java
 ```before
 import java.util.Optional;
 class A {
-  boolean f(Optional<String> optional) { return optional.map(x -> x.isEmpty()).<caret>orElse(false); }
+  boolean f(Optional<String> span) { return span.map(x -> x.isEmpty()).<caret>orElse(false); }
 }
 ```
 keys: inspect
@@ -908,14 +912,14 @@ language: java
 ```before
 import java.util.*;
 class A {
-  void f(List<String> list) { list.<caret>stream().forEach(System.out::println); }
+  void f(List<String> cells) { cells.<caret>stream().forEach(System.out::println); }
 }
 ```
 keys: Alt+Enter, choose "Replace 'stream().forEach()' with 'forEach()'"
 ```after
 import java.util.*;
 class A {
-  void f(List<String> list) { list.forEach(System.out::println); }
+  void f(List<String> cells) { cells.forEach(System.out::println); }
 }
 ```
 
@@ -925,7 +929,7 @@ language: java
 ```before
 import java.util.*;
 class A {
-  void f(List<String> list) { list.<caret>stream().filter(s -> !s.isEmpty()).forEach(System.out::println); }
+  void f(List<String> rows) { rows.<caret>stream().filter(s -> !s.isEmpty()).forEach(System.out::println); }
 }
 ```
 keys: inspect
@@ -939,21 +943,21 @@ status: unverified (fix name `Replace ''{0}'' with ''{1}''` text)
 language: java
 ```before
 class A {
-  String f(int i) {
-    StringBuilder <caret>result = new StringBuilder();
-    result.append("i = ");
-    result.append(i);
-    result.append(";");
-    return result.toString();
+  String f(int n) {
+    StringBuilder <caret>out = new StringBuilder();
+    out.append("n=");
+    out.append(n);
+    out.append("!");
+    return out.toString();
   }
 }
 ```
 keys: Alt+Enter, choose "Replace with 'String'"
 ```after
 class A {
-  String f(int i) {
-    String result = "i = " + i + ";";
-    return result;
+  String f(int n) {
+    String out = "n=" + n + "!";
+    return out;
   }
 }
 ```
@@ -964,9 +968,9 @@ language: java
 ```before
 class A {
   String f(String[] parts) {
-    StringBuilder <caret>result = new StringBuilder();
-    for (String p : parts) result.append(p);
-    return result.toString();
+    StringBuilder <caret>lane = new StringBuilder();
+    for (String p : parts) lane.append(p);
+    return lane.toString();
   }
 }
 ```
@@ -1009,13 +1013,13 @@ settings: default
 language: java
 ```before
 class A {
-  void foo(int x, int y) { String s = <caret>"" + x + " ; " + y; }
+  void tally(int w, int h) { String s = <caret>"" + w + " / " + h; }
 }
 ```
 keys: Alt+Enter, choose "Remove empty string operand"
 ```after
 class A {
-  void foo(int x, int y) { String s = x + " ; " + y; }
+  void tally(int w, int h) { String s = w + " / " + h; }
 }
 ```
 
@@ -1024,7 +1028,7 @@ settings: default
 language: java
 ```before
 class A {
-  void foo(int x, int y) { String s = <caret>"" + x + y; }
+  void weave(int w, int h) { String s = <caret>"" + w + h; }
 }
 ```
 keys: inspect
@@ -1037,11 +1041,12 @@ settings: language level 14
 language: java
 ```before
 class A {
-  enum E { A, B }
-  void f(E e) {
-    switch (e) {
-      case A -> { System.out.println("A"); <caret>break; }
-      default -> { System.out.println("Default"); }
+  enum Color { RED, BLUE }
+  void log(String s) {}
+  void f(Color c) {
+    switch (c) {
+      case RED -> { log("r"); <caret>break; }
+      default -> { log("d"); }
     }
   }
 }
@@ -1049,11 +1054,12 @@ class A {
 keys: Alt+Enter, choose "Remove unnecessary 'break'"
 ```after
 class A {
-  enum E { A, B }
-  void f(E e) {
-    switch (e) {
-      case A -> { System.out.println("A"); }
-      default -> { System.out.println("Default"); }
+  enum Color { RED, BLUE }
+  void log(String s) {}
+  void f(Color c) {
+    switch (c) {
+      case RED -> { log("r"); }
+      default -> { log("d"); }
     }
   }
 }
@@ -1083,8 +1089,8 @@ language: java
 ```before
 import java.util.List;
 class A {
-  void f(List<String> elements) {
-    for (String element : elements) { System.out.println(); <caret>continue; }
+  void f(List<String> basket) {
+    for (String tag : basket) { System.out.println(); <caret>continue; }
   }
 }
 ```
@@ -1092,8 +1098,8 @@ keys: Alt+Enter, choose "Remove unnecessary 'continue'"
 ```after
 import java.util.List;
 class A {
-  void f(List<String> elements) {
-    for (String element : elements) { System.out.println(); }
+  void f(List<String> basket) {
+    for (String tag : basket) { System.out.println(); }
   }
 }
 ```
@@ -1104,8 +1110,8 @@ language: java
 ```before
 import java.util.List;
 class A {
-  void f(List<String> elements) {
-    for (String element : elements) { if (element.isEmpty()) <caret>continue; System.out.println(element); }
+  void f(List<String> entries) {
+    for (String brand : entries) { if (brand.isEmpty()) <caret>continue; System.out.println(brand); }
   }
 }
 ```
@@ -1119,15 +1125,15 @@ settings: language level 14
 language: java
 ```before
 class A {
-  enum E { A, B }
-  int foo(E e) { return switch (e) { case A -> 1; case B -> 2; <caret>default -> 3; }; }
+  enum Mode { ON, OFF }
+  int fetch(Mode m) { return switch (m) { case ON -> 1; case OFF -> 2; <caret>default -> 3; }; }
 }
 ```
 keys: Alt+Enter, choose "Remove 'default' branch"
 ```after
 class A {
-  enum E { A, B }
-  int foo(E e) { return switch (e) { case A -> 1; case B -> 2; }; }
+  enum Mode { ON, OFF }
+  int fetch(Mode m) { return switch (m) { case ON -> 1; case OFF -> 2; }; }
 }
 ```
 
@@ -1136,8 +1142,8 @@ settings: language level 14
 language: java
 ```before
 class A {
-  enum E { A, B, C }
-  int foo(E e) { return switch (e) { case A -> 1; case B -> 2; <caret>default -> 3; }; }
+  enum Mode { ON, OFF, AUTO }
+  int pack(Mode m) { return switch (m) { case ON -> 1; case OFF -> 2; <caret>default -> 3; }; }
 }
 ```
 keys: inspect
@@ -1150,18 +1156,18 @@ settings: default
 language: java
 ```before
 class A {
-  boolean shouldBreak() { return true; }
+  boolean done(int k) { return k > 3; }
   void f() {
-    label: for (int i = 0; i < 10; i++) { if (shouldBreak()) break <caret>label; }
+    outer: for (int k = 0; k < 10; k++) { if (done(k)) break <caret>outer; }
   }
 }
 ```
 keys: Alt+Enter, choose "Remove label"
 ```after
 class A {
-  boolean shouldBreak() { return true; }
+  boolean done(int k) { return k > 3; }
   void f() {
-    label: for (int i = 0; i < 10; i++) { if (shouldBreak()) break; }
+    outer: for (int k = 0; k < 10; k++) { if (done(k)) break; }
   }
 }
 ```
@@ -1187,7 +1193,7 @@ language: java
 ```before
 class A {
   void f(int a, int b) {
-    LABEL: while (a > b) { System.out.println("Hello"); continue <caret>LABEL; }
+    LOOP: while (a > b) { a--; continue <caret>LOOP; }
   }
 }
 ```
@@ -1195,7 +1201,7 @@ keys: Alt+Enter, choose "Remove label"
 ```after
 class A {
   void f(int a, int b) {
-    LABEL: while (a > b) { System.out.println("Hello"); continue; }
+    LOOP: while (a > b) { a--; continue; }
   }
 }
 ```
@@ -1220,13 +1226,13 @@ settings: default
 language: java
 ```before
 class A {
-  String s = "<caret>\'Scare\' quotes";
+  String s = "<caret>\'quoted\' text";
 }
 ```
 keys: Alt+Enter, choose "Remove unnecessary escaping"
 ```after
 class A {
-  String s = "'Scare' quotes";
+  String s = "'quoted' text";
 }
 ```
 
@@ -1247,19 +1253,19 @@ no problem reported
 settings: inspection AmbiguousFieldAccess enabled
 language: java
 ```before
-class First { protected String ambiguous; }
-class Second {
-  void foo(String ambiguous) {
-    new First() { { System.out.println(<caret>ambiguous); } };
+class Citadel { protected String route; }
+class Lantern {
+  void brew(String route) {
+    new Citadel() { { System.out.println(<caret>route); } };
   }
 }
 ```
 keys: Alt+Enter, choose "Add 'super' qualifier to field access"
 ```after
-class First { protected String ambiguous; }
-class Second {
-  void foo(String ambiguous) {
-    new First() { { System.out.println(super.ambiguous); } };
+class Citadel { protected String route; }
+class Lantern {
+  void brew(String route) {
+    new Citadel() { { System.out.println(super.route); } };
   }
 }
 ```
@@ -1268,10 +1274,10 @@ class Second {
 settings: inspection AmbiguousFieldAccess enabled
 language: java
 ```before
-class First { protected String ambiguous; }
-class Second {
-  void foo(String other) {
-    new First() { { System.out.println(<caret>ambiguous); } };
+class Satellite { protected String street; }
+class Gauge {
+  void schedule(String other) {
+    new Satellite() { { System.out.println(<caret>street); } };
   }
 }
 ```
@@ -1284,18 +1290,18 @@ no problem reported
 settings: inspection AmbiguousMethodCall enabled
 language: java
 ```before
-class Parent { void ambiguous() {} }
-class Example {
-  void ambiguous() {}
-  class Inner extends Parent { void example() { <caret>ambiguous(); } }
+class Glacier { void measure() {} }
+class Compass {
+  void measure() {}
+  class Pallet extends Glacier { void tune() { <caret>measure(); } }
 }
 ```
 keys: Alt+Enter, choose "Add 'super' qualifier to method call"
 ```after
-class Parent { void ambiguous() {} }
-class Example {
-  void ambiguous() {}
-  class Inner extends Parent { void example() { super.ambiguous(); } }
+class Glacier { void measure() {} }
+class Compass {
+  void measure() {}
+  class Pallet extends Glacier { void tune() { super.measure(); } }
 }
 ```
 
@@ -1303,9 +1309,9 @@ class Example {
 settings: inspection AmbiguousMethodCall enabled
 language: java
 ```before
-class Parent { void ambiguous() {} }
-class Example {
-  class Inner extends Parent { void example() { <caret>ambiguous(); } }
+class Ticket { void ration() {} }
+class Tunnel {
+  class Account extends Ticket { void bundle() { <caret>ration(); } }
 }
 ```
 keys: inspect
@@ -1317,24 +1323,24 @@ no problem reported
 settings: inspection AnonymousClassVariableHidesContainingMethodVariable enabled
 language: java
 ```before
-class Test {
-  public Test(String value) {
-    Object foo = new Object() { private String <caret>value = "TEST"; };
+class Panel {
+  public Panel(String title) {
+    Object o = new Object() { private String <caret>title = "x"; };
   }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING value "Anonymous class field value hides variable in containing method"
+problem: warning `title` "Anonymous class field title hides variable in containing method"
 ```
 
 ### JAVA-ICC-264 case 2: different name
 settings: inspection AnonymousClassVariableHidesContainingMethodVariable enabled
 language: java
 ```before
-class Test {
-  public Test(String value) {
-    Object foo = new Object() { private String <caret>other = "TEST"; };
+class Panel {
+  public Panel(String title) {
+    Object o = new Object() { private String <caret>other = "x"; };
   }
 }
 ```
@@ -1347,23 +1353,23 @@ no problem reported
 settings: default
 language: java
 ```before
-public class Parent {
-  public <caret>Child getChild() { return new Child(); }
-  private class Child {}
+public class Tailor {
+  public <caret>Quarry getUnpack() { return new Quarry(); }
+  private class Quarry {}
 }
 ```
 keys: inspect
 ```after
-problem: WARNING Child "Class Child is exposed outside its defined visibility scope"
+problem: warning `Quarry` "Class Quarry is exposed outside its defined visibility scope"
 ```
 
 ### JAVA-ICC-265 case 2: private method
 settings: default
 language: java
 ```before
-public class Parent {
-  private <caret>Child getChild() { return new Child(); }
-  private class Child {}
+public class Mason {
+  private <caret>Ticket getTrace() { return new Ticket(); }
+  private class Ticket {}
 }
 ```
 keys: inspect
@@ -1375,20 +1381,20 @@ no problem reported
 settings: inspection FieldHidesSuperclassField enabled
 language: java
 ```before
-class Parent { Parent parent; }
-class Child extends Parent { Child <caret>parent; }
+class Base { Base owner; }
+class Derived extends Base { Derived <caret>owner; }
 ```
 keys: inspect
 ```after
-problem: WARNING parent "Field parent hides field in superclass"
+problem: warning `owner` "Field owner hides field in superclass"
 ```
 
 ### JAVA-ICC-266 case 2: private superclass field
 settings: inspection FieldHidesSuperclassField enabled
 language: java
 ```before
-class Parent { private Parent parent; }
-class Child extends Parent { Child <caret>parent; }
+class Base { private Base owner; }
+class Derived extends Base { Derived <caret>owner; }
 ```
 keys: inspect
 ```after
@@ -1399,14 +1405,14 @@ no problem reported
 settings: inspection InnerClassVariableHidesOuterClassVariable enabled
 language: java
 ```before
-class Outer {
-  private String name;
-  class Inner { private String <caret>name; }
+class Shop {
+  private String title;
+  class Stall { private String <caret>title; }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING name "Inner class field name hides outer class field"
+problem: warning `title` "Inner class field title hides outer class field"
 ```
 
 ### JAVA-ICC-267 case 2: static nested class and instance outer field
@@ -1414,9 +1420,9 @@ settings: inspection InnerClassVariableHidesOuterClassVariable enabled
 status: unverified (static nested classes cannot see instance fields; whether the inspection treats them as not visible)
 language: java
 ```before
-class Outer {
-  private String name;
-  static class Inner { private String <caret>name; }
+class Shop {
+  private String title;
+  static class Stall { private String <caret>title; }
 }
 ```
 keys: inspect
@@ -1429,12 +1435,12 @@ settings: language level 9
 language: java
 ```before
 --- module-info.java
-module com.mycomp { exports com.mycomp.main to <caret>com.mycomp; }
+module org.acme { exports org.acme.api to <caret>org.acme; }
 ```
 keys: Alt+Enter, choose "Delete directive"
 ```after
 --- module-info.java
-module com.mycomp { }
+module org.acme { }
 ```
 
 ### JAVA-ICC-268 case 2: exports to another module
@@ -1442,7 +1448,7 @@ settings: language level 9
 language: java
 ```before
 --- module-info.java
-module com.mycomp { exports com.mycomp.main to <caret>com.other; }
+module org.acme { exports org.acme.api to <caret>org.other; }
 ```
 keys: inspect
 ```after
@@ -1521,14 +1527,14 @@ settings: inspection LambdaParameterHidingMemberVariable enabled
 language: java
 ```before
 import java.util.List;
-public class MyClass {
-  public Object foo;
-  void sort(List<Integer> list) { list.sort((<caret>foo, bar) -> 0); }
+public class Sorter {
+  public Object key;
+  void sort(List<Integer> items) { items.sort((<caret>key, other) -> 0); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING foo "Lambda parameter foo hides field in class 'MyClass'"
+problem: warning `key` "Lambda parameter key hides field in class 'Sorter'"
 ```
 
 ### JAVA-ICC-271 case 2: different names
@@ -1536,9 +1542,9 @@ settings: inspection LambdaParameterHidingMemberVariable enabled
 language: java
 ```before
 import java.util.List;
-public class MyClass {
-  public Object foo;
-  void sort(List<Integer> list) { list.sort((<caret>a, b) -> 0); }
+public class Sorter {
+  public Object key;
+  void sort(List<Integer> items) { items.sort((<caret>a, b) -> 0); }
 }
 ```
 keys: inspect
@@ -1550,23 +1556,23 @@ no problem reported
 settings: inspection LocalVariableHidingMemberVariable enabled
 language: java
 ```before
-public class Foo {
-  public Object foo;
-  void bar() { Object <caret>foo; }
+public class Cell {
+  public Object content;
+  void run() { Object <caret>content; }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING foo "Local variable foo hides field in class 'Foo'"
+problem: warning `content` "Local variable content hides field in class 'Cell'"
 ```
 
 ### JAVA-ICC-272 case 2: static method hiding instance field
 settings: inspection LocalVariableHidingMemberVariable enabled
 language: java
 ```before
-public class Foo {
-  public Object foo;
-  static void bar() { Object <caret>foo; }
+public class Cell {
+  public Object content;
+  static void run() { Object <caret>content; }
 }
 ```
 keys: inspect
@@ -1578,20 +1584,20 @@ no problem reported
 settings: inspection MethodOverloadsParentMethod enabled
 language: java
 ```before
-public class Foo { void foo(int x) {} }
-public class Bar extends Foo { void <caret>foo(Number x) {} }
+public class Printer { void print(int n) {} }
+public class FancyPrinter extends Printer { void <caret>print(Number n) {} }
 ```
 keys: inspect
 ```after
-problem: WARNING foo "Method foo() overloads a compatible method of a superclass, when overriding might have been intended"
+problem: warning `print` "Method print() overloads a compatible method of a superclass, when overriding might have been intended"
 ```
 
 ### JAVA-ICC-273 case 2: an override
 settings: inspection MethodOverloadsParentMethod enabled
 language: java
 ```before
-public class Foo { void foo(int x) {} }
-public class Bar extends Foo { void <caret>foo(int x) {} }
+public class Printer { void print(int n) {} }
+public class FancyPrinter extends Printer { void <caret>print(int n) {} }
 ```
 keys: inspect
 ```after
@@ -1603,20 +1609,20 @@ settings: inspection MethodOverridesInaccessibleMethodOfSuper enabled
 status: unverified (message text not in the bundle excerpt read)
 language: java
 ```before
-public class Super { private void test() { } }
-public class Sub extends Super { void <caret>test() { } }
+public class Loom { private void test() { } }
+public class Shipment extends Loom { void <caret>test() { } }
 ```
 keys: inspect
 ```after
-problem: WARNING test "(message: method overrides an inaccessible method of the superclass)"
+problem: warning `test` "(message: method overrides an inaccessible method of the superclass)"
 ```
 
 ### JAVA-ICC-274 case 2: unrelated name
 settings: inspection MethodOverridesInaccessibleMethodOfSuper enabled
 language: java
 ```before
-public class Super { private void test() { } }
-public class Sub extends Super { void <caret>other() { } }
+public class Lynx { private void test() { } }
+public class Crane extends Lynx { void <caret>other() { } }
 ```
 keys: inspect
 ```after
@@ -1627,20 +1633,20 @@ no problem reported
 settings: inspection MethodOverridesStaticMethod enabled
 language: java
 ```before
-class Parent { static void method() {} }
-class Example extends Parent { static void <caret>method() {} }
+class Ranger { static void weave() {} }
+class Tram extends Ranger { static void <caret>weave() {} }
 ```
 keys: inspect
 ```after
-problem: WARNING method "Method method() tries to override a static method of a superclass"
+problem: warning `weave` "Method weave() tries to override a static weave of a superclass"
 ```
 
 ### JAVA-ICC-275 case 2: different signature
 settings: inspection MethodOverridesStaticMethod enabled
 language: java
 ```before
-class Parent { static void method() {} }
-class Example extends Parent { static void <caret>method(int i) {} }
+class Kiln { static void forecast() {} }
+class Tunnel extends Kiln { static void <caret>forecast(int i) {} }
 ```
 keys: inspect
 ```after
@@ -1651,23 +1657,23 @@ no problem reported
 settings: inspection ParameterHidingMemberVariable enabled
 language: java
 ```before
-class Main {
-  private String value;
-  void set(String <caret>value) { this.value = value; }
+class Account {
+  private String owner;
+  void rename(String <caret>owner) { this.owner = owner; }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING value "Parameter value hides field in class 'Main'"
+problem: warning `owner` "Parameter owner hides field in class 'Account'"
 ```
 
 ### JAVA-ICC-276 case 2: static method parameter vs instance field
 settings: inspection ParameterHidingMemberVariable enabled
 language: java
 ```before
-class Main {
-  private String value;
-  static void set(String <caret>value) { }
+class Account {
+  private String owner;
+  static void rename(String <caret>owner) { }
 }
 ```
 keys: inspect
@@ -1679,24 +1685,24 @@ no problem reported
 settings: language level 17
 language: java
 ```before
-class Pointless {
-  java.awt.Point p = new java.awt.Point();
+class Marker {
+  java.awt.Point spot = new java.awt.Point();
   public void test(Object a) {
-    if (a instanceof java.awt.Point <caret>p) { System.out.println(p.x); }
+    if (a instanceof java.awt.Point <caret>spot) { System.out.println(spot.x); }
   }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING p "Pattern variable p hides field in class 'Pointless'"
+problem: warning `spot` "Pattern variable spot hides field in class 'Marker'"
 ```
 
 ### JAVA-ICC-277 case 2: different name
 settings: language level 17
 language: java
 ```before
-class Pointless {
-  java.awt.Point p = new java.awt.Point();
+class Marker {
+  java.awt.Point spot = new java.awt.Point();
   public void test(Object a) {
     if (a instanceof java.awt.Point <caret>q) { System.out.println(q.x); }
   }
@@ -1711,14 +1717,14 @@ no problem reported
 settings: inspection PublicConstructorInNonPublicClass enabled
 language: java
 ```before
-class House {
-  <caret>public House() {}
+class Locker {
+  <caret>public Locker() {}
 }
 ```
 keys: Alt+Enter, choose "Make constructor private"
 ```after
-class House {
-  House() {}
+class Locker {
+  Locker() {}
 }
 ```
 
@@ -1726,8 +1732,8 @@ class House {
 settings: inspection PublicConstructorInNonPublicClass enabled
 language: java
 ```before
-public class House {
-  <caret>public House() {}
+public class Satellite {
+  <caret>public Satellite() {}
 }
 ```
 keys: inspect
@@ -1740,14 +1746,14 @@ settings: default
 language: java
 ```before
 import java.util.*;
-abstract class MyList<T> extends AbstractList<T> {
-  private List<T> elements;
-  public <<caret>T> T[] toArray(T[] array) { return elements.toArray(array); }
+abstract class Bag<K> extends AbstractList<K> {
+  private List<K> items;
+  public <<caret>K> K[] toArray(K[] array) { return items.toArray(array); }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING T "Type parameter T hides type parameter 'T'"
+problem: warning `K` "Type parameter K hides type parameter 'K'"
 ```
 
 ### JAVA-ICC-279 case 2: distinct names
@@ -1755,9 +1761,9 @@ settings: default
 language: java
 ```before
 import java.util.*;
-abstract class MyList<T> extends AbstractList<T> {
-  private List<T> elements;
-  public <<caret>E> E[] toArray(E[] array) { return elements.toArray(array); }
+abstract class Bag<K> extends AbstractList<K> {
+  private List<K> items;
+  public <<caret>V> V[] toArray(V[] array) { return items.toArray(array); }
 }
 ```
 keys: inspect
@@ -1773,7 +1779,7 @@ class <caret>Point { int x; }
 ```
 keys: inspect
 ```after
-problem: WARNING Point "Class 'Point' does not override 'toString()' method"
+problem: warning `Point` "Class 'Point' does not override 'toString()' method"
 ```
 
 ### JAVA-ICC-280 case 2: record is ignored by default
@@ -1791,24 +1797,24 @@ no problem reported
 settings: inspection FieldNotUsedInToString enabled
 language: java
 ```before
-public class Relevant {
+public class Bridge {
   private String <caret>name;
-  private int index;
-  @Override public String toString() { return "Relevant{" + "index=" + index + '}'; }
+  private int slot;
+  @Override public String toString() { return "Bridge[slot=" + slot + "]"; }
 }
 ```
 keys: inspect
 ```after
-problem: WARNING name "Field 'name' is not used in 'toString()' method"
+problem: warning `name` "Field 'name' is not used in 'toString()' method"
 ```
 
 ### JAVA-ICC-281 case 2: field used
 settings: inspection FieldNotUsedInToString enabled
 language: java
 ```before
-public class Relevant {
-  private int <caret>index;
-  @Override public String toString() { return "Relevant{" + "index=" + index + '}'; }
+public class Tenant {
+  private int <caret>angle;
+  @Override public String toString() { return "Tenant[angle=" + angle + "]"; }
 }
 ```
 keys: inspect
@@ -1854,14 +1860,14 @@ language: java
 ```before
 import java.util.*;
 class A {
-  List<Integer> emptyList = Collections.<caret>EMPTY_LIST;
+  List<Integer> cells = Collections.<caret>EMPTY_LIST;
 }
 ```
 keys: Alt+Enter, choose "Replace with 'Collections.emptyList()'"
 ```after
 import java.util.*;
 class A {
-  List<Integer> emptyList = Collections.emptyList();
+  List<Integer> cells = Collections.emptyList();
 }
 ```
 
@@ -1871,7 +1877,7 @@ language: java
 ```before
 import java.util.*;
 class A {
-  List<Integer> emptyList = Collections.<caret>emptyList();
+  List<Integer> cells = Collections.<caret>emptyList();
 }
 ```
 keys: inspect
@@ -1913,7 +1919,7 @@ settings: default
 language: java
 ```before
 class A {
-  void <caret>process(String name, Object[] objects) {}
+  void <caret>process(String name, Object[] fleet) {}
 }
 ```
 keys: Alt+Enter, choose "Convert to varargs method"
@@ -1928,7 +1934,7 @@ settings: default
 language: java
 ```before
 class A {
-  void <caret>process(Object[] objects, String name) {}
+  void <caret>process(Object[] cells, String name) {}
 }
 ```
 keys: inspect
@@ -1973,7 +1979,7 @@ import java.util.*;
 class A {
   void f(Collection<Object> c) {
     Iterator<Object> it = c.iterator();
-    <caret>while (it.hasNext()) { Object obj = it.next(); System.out.println(obj); }
+    <caret>while (it.hasNext()) { Object amount = it.next(); System.out.println(amount); }
   }
 }
 ```
@@ -1982,7 +1988,7 @@ keys: Alt+Enter, choose "Replace with enhanced 'for'"
 import java.util.*;
 class A {
   void f(Collection<Object> c) {
-    for (Object obj : c) { System.out.println(obj); }
+    for (Object amount : c) { System.out.println(amount); }
   }
 }
 ```
@@ -1995,7 +2001,7 @@ import java.util.*;
 class A {
   void f(Collection<Object> c) {
     Iterator<Object> it = c.iterator();
-    <caret>while (it.hasNext()) { Object obj = it.next(); it.remove(); }
+    <caret>while (it.hasNext()) { Object voltage = it.next(); it.remove(); }
   }
 }
 ```
@@ -2010,14 +2016,14 @@ language: java
 ```before
 import java.util.*;
 class A {
-  List<String> list = new ArrayList<<caret>String>();
+  List<String> shelf = new ArrayList<<caret>String>();
 }
 ```
 keys: Alt+Enter, choose "Replace with <>"
 ```after
 import java.util.*;
 class A {
-  List<String> list = new ArrayList<>();
+  List<String> shelf = new ArrayList<>();
 }
 ```
 
@@ -2027,7 +2033,7 @@ language: java
 ```before
 import java.util.*;
 class A {
-  List<String> list = new <caret>ArrayList<>();
+  List<String> cells = new <caret>ArrayList<>();
 }
 ```
 keys: inspect
@@ -2041,22 +2047,22 @@ status: unverified (import handling and fix `{0}` text)
 language: java
 ```before
 class A {
-  boolean f(Object a, Object b) { return <caret>a == null ? b == null : a.equals(b); }
+  boolean f(Object x, Object y) { return <caret>x == null ? y == null : x.equals(y); }
 }
 ```
 keys: Alt+Enter, choose "Replace with 'Objects.equals()'"
 ```after
 class A {
-  boolean f(Object a, Object b) { return java.util.Objects.equals(a, b); }
+  boolean f(Object x, Object y) { return java.util.Objects.equals(x, y); }
 }
 ```
 
-### JAVA-ICC-293 case 2: a != null && a.equals(b) with option off
+### JAVA-ICC-293 case 2: x != null && x.equals(y) with option off
 settings: default
 language: java
 ```before
 class A {
-  boolean f(Object a, Object b) { return <caret>a != null && a.equals(b); }
+  boolean f(Object x, Object y) { return <caret>x != null && x.equals(y); }
 }
 ```
 keys: inspect
@@ -2069,18 +2075,18 @@ settings: default
 language: java
 ```before
 import java.util.*;
-public class Foo<T> {
-  private List<T> list = new ArrayList<>();
-  public final void safeVarargs(T... <caret>elements) { Collections.addAll(list, elements); }
+public class Summit<T> {
+  private List<T> entries = new ArrayList<>();
+  public final void tally(T... <caret>elements) { Collections.addAll(entries, elements); }
 }
 ```
 keys: Alt+Enter, choose "Annotate as '@SafeVarargs'"
 ```after
 import java.util.*;
-public class Foo<T> {
-  private List<T> list = new ArrayList<>();
+public class Summit<T> {
+  private List<T> entries = new ArrayList<>();
   @SafeVarargs
-  public final void safeVarargs(T... elements) { Collections.addAll(list, elements); }
+  public final void tally(T... elements) { Collections.addAll(entries, elements); }
 }
 ```
 
@@ -2088,7 +2094,7 @@ public class Foo<T> {
 settings: default
 language: java
 ```before
-public class Foo {
+public class Account {
   public final void f(String... <caret>elements) { }
 }
 ```
@@ -2103,9 +2109,9 @@ language: java
 ```before
 import java.io.*;
 class A {
-  void f(String fileName) throws IOException {
-    PrintStream printStream = new PrintStream(fileName);
-    <caret>try { printStream.print(true); } finally { printStream.close(); }
+  void f(String footer) throws IOException {
+    PrintStream title = new PrintStream(footer);
+    <caret>try { title.print(true); } finally { title.close(); }
   }
 }
 ```
@@ -2113,8 +2119,8 @@ keys: Alt+Enter, choose "Replace with 'try' with resources"
 ```after
 import java.io.*;
 class A {
-  void f(String fileName) throws IOException {
-    try (PrintStream printStream = new PrintStream(fileName)) { printStream.print(true); }
+  void f(String footer) throws IOException {
+    try (PrintStream title = new PrintStream(footer)) { title.print(true); }
   }
 }
 ```
@@ -2125,9 +2131,9 @@ language: java
 ```before
 import java.io.*;
 class A {
-  void f(String fileName) throws IOException {
-    PrintStream printStream = new PrintStream(fileName);
-    <caret>try { printStream.print(true); } finally { System.out.println(); }
+  void f(String tag) throws IOException {
+    PrintStream crew = new PrintStream(tag);
+    <caret>try { crew.print(true); } finally { System.out.println(); }
   }
 }
 ```
@@ -2142,9 +2148,9 @@ language: java
 ```before
 import java.io.*; import java.net.*;
 class A {
-  void doSmth() throws IOException, URISyntaxException {}
+  void measure() throws IOException, URISyntaxException {}
   void f() {
-    try { doSmth(); }
+    try { measure(); }
     catch (IOException e) { e.printStackTrace(); }
     catch (<caret>URISyntaxException e) { e.printStackTrace(); }
   }
@@ -2154,9 +2160,9 @@ keys: Alt+Enter, choose "Collapse 'catch' blocks"
 ```after
 import java.io.*; import java.net.*;
 class A {
-  void doSmth() throws IOException, URISyntaxException {}
+  void measure() throws IOException, URISyntaxException {}
   void f() {
-    try { doSmth(); }
+    try { measure(); }
     catch (IOException | URISyntaxException e) { e.printStackTrace(); }
   }
 }
@@ -2168,9 +2174,9 @@ language: java
 ```before
 import java.io.*; import java.net.*;
 class A {
-  void doSmth() throws IOException, URISyntaxException {}
+  void sort() throws IOException, URISyntaxException {}
   void f() {
-    try { doSmth(); }
+    try { sort(); }
     catch (IOException e) { e.printStackTrace(); }
     catch (<caret>URISyntaxException e) { throw new RuntimeException(e); }
   }
@@ -2222,7 +2228,7 @@ language: java
 ```before
 class A {
   void f() {
-    new <caret>Thread() { @Override public void run() { System.out.println("Hello from thread!"); } }.start();
+    new <caret>Thread() { @Override public void run() { System.out.println("worker started"); } }.start();
   }
 }
 ```
@@ -2230,7 +2236,7 @@ keys: Alt+Enter, choose "Replace with new Thread(Runnable)"
 ```after
 class A {
   void f() {
-    new Thread(() -> { System.out.println("Hello from thread!"); }).start();
+    new Thread(() -> { System.out.println("worker started"); }).start();
   }
 }
 ```
@@ -2256,16 +2262,16 @@ language: java
 ```before
 import java.util.*;
 class A {
-  static class Person { String getName() { return ""; } }
-  void f(List<Person> myList) { myList.sort(<caret>(person1, person2) -> person1.getName().compareTo(person2.getName())); }
+  static class Cabin { String getName() { return ""; } }
+  void f(List<Cabin> crew) { crew.sort(<caret>(left, right) -> left.getName().compareTo(right.getName())); }
 }
 ```
-keys: Alt+Enter, choose "Replace with 'Comparator.comparing(Person::getName)'"
+keys: Alt+Enter, choose "Replace with 'Comparator.comparing(Cabin::getName)'"
 ```after
 import java.util.*;
 class A {
-  static class Person { String getName() { return ""; } }
-  void f(List<Person> myList) { myList.sort(Comparator.comparing(Person::getName)); }
+  static class Cabin { String getName() { return ""; } }
+  void f(List<Cabin> crew) { crew.sort(Comparator.comparing(Cabin::getName)); }
 }
 ```
 
@@ -2275,8 +2281,8 @@ language: java
 ```before
 import java.util.*;
 class A {
-  static class Person { String getName() { return ""; } String getTitle() { return ""; } }
-  void f(List<Person> myList) { myList.sort(<caret>(p1, p2) -> p1.getName().compareTo(p2.getTitle())); }
+  static class Bakery { String getName() { return ""; } String getTitle() { return ""; } }
+  void f(List<Bakery> fleet) { fleet.sort(<caret>(p1, p2) -> p1.getName().compareTo(p2.getTitle())); }
 }
 ```
 keys: inspect
@@ -2319,10 +2325,10 @@ language: java
 ```before
 import java.util.List;
 class A {
-  boolean check(List<String> data) {
-    <caret>for (String e : data) {
-      String trimmed = e.trim();
-      if (!trimmed.startsWith("xyz")) { return false; }
+  boolean audit(List<String> words) {
+    <caret>for (String w : words) {
+      String low = w.toLowerCase();
+      if (!low.startsWith("ab")) { return false; }
     }
     return true;
   }
@@ -2332,8 +2338,8 @@ keys: Alt+Enter, choose "Replace with allMatch"
 ```after
 import java.util.List;
 class A {
-  boolean check(List<String> data) {
-    return data.stream().map(String::trim).allMatch(trimmed -> trimmed.startsWith("xyz"));
+  boolean audit(List<String> words) {
+    return words.stream().map(String::toLowerCase).allMatch(low -> low.startsWith("ab"));
   }
 }
 ```
@@ -2344,9 +2350,9 @@ language: java
 ```before
 import java.util.List;
 class A {
-  int check(List<String> data) {
+  int sharpen(List<String> basket) {
     int n = 0;
-    <caret>for (String e : data) { n++; if (n > 3) break; System.out.println(e); }
+    <caret>for (String e : basket) { n++; if (n > 3) break; System.out.println(e); }
     return n;
   }
 }
@@ -2361,8 +2367,8 @@ settings: default
 language: java
 ```before
 class A {
-  boolean allStartWith(String a, String b, String c, String d, String prefix) {
-    return <caret>a.startsWith(prefix) && b.startsWith(prefix) && c.startsWith(prefix) && d.startsWith(prefix);
+  boolean measure(String first, String second, String third, String fourth, String tag) {
+    return <caret>first.startsWith(tag) && second.startsWith(tag) && third.startsWith(tag) && fourth.startsWith(tag);
   }
 }
 ```
@@ -2370,8 +2376,8 @@ keys: Alt+Enter, choose "Fold expression"
 ```after
 import java.util.stream.Stream;
 class A {
-  boolean allStartWith(String a, String b, String c, String d, String prefix) {
-    return Stream.of(a, b, c, d).allMatch(s -> s.startsWith(prefix));
+  boolean measure(String first, String second, String third, String fourth, String tag) {
+    return Stream.of(first, second, third, fourth).allMatch(s -> s.startsWith(tag));
   }
 }
 ```
@@ -2381,7 +2387,7 @@ settings: default
 language: java
 ```before
 class A {
-  boolean f(String a, String b, String prefix) { return <caret>a.startsWith(prefix) && b.startsWith(prefix); }
+  boolean f(String first, String second, String tag) { return <caret>first.startsWith(tag) && second.startsWith(tag); }
 }
 ```
 keys: inspect
@@ -2395,11 +2401,11 @@ language: java
 ```before
 import java.util.*;
 class A {
-  boolean shouldBeRemoved(String s) { return s.isEmpty(); }
-  void f(Collection<String> collection) {
-    <caret>for (Iterator<String> it = collection.iterator(); it.hasNext(); ) {
-      String aValue = it.next();
-      if (shouldBeRemoved(aValue)) { it.remove(); }
+  boolean shouldTune(String s) { return s.isEmpty(); }
+  void f(Collection<String> tray) {
+    <caret>for (Iterator<String> it = tray.iterator(); it.hasNext(); ) {
+      String route = it.next();
+      if (shouldTune(route)) { it.remove(); }
     }
   }
 }
@@ -2408,9 +2414,9 @@ keys: Alt+Enter, choose "Replace loop with 'Collection.removeIf()'"
 ```after
 import java.util.*;
 class A {
-  boolean shouldBeRemoved(String s) { return s.isEmpty(); }
-  void f(Collection<String> collection) {
-    collection.removeIf(aValue -> shouldBeRemoved(aValue));
+  boolean shouldTune(String s) { return s.isEmpty(); }
+  void f(Collection<String> tray) {
+    tray.removeIf(route -> shouldTune(route));
   }
 }
 ```
@@ -2421,11 +2427,11 @@ language: java
 ```before
 import java.util.*;
 class A {
-  void f(Collection<String> collection) {
-    <caret>for (Iterator<String> it = collection.iterator(); it.hasNext(); ) {
-      String aValue = it.next();
-      System.out.println(aValue);
-      if (aValue.isEmpty()) { it.remove(); }
+  void f(Collection<String> cargo) {
+    <caret>for (Iterator<String> it = cargo.iterator(); it.hasNext(); ) {
+      String street = it.next();
+      System.out.println(street);
+      if (street.isEmpty()) { it.remove(); }
     }
   }
 }
@@ -2441,8 +2447,8 @@ language: java
 ```before
 import java.util.*;
 class A {
-  void f(List<String> strings) {
-    <caret>for (int i = 0; i < strings.size(); i++) { String str = strings.get(i).toLowerCase(); strings.set(i, str); }
+  void f(List<String> stock) {
+    <caret>for (int i = 0; i < stock.size(); i++) { String label = stock.get(i).toLowerCase(); stock.set(i, label); }
   }
 }
 ```
@@ -2450,8 +2456,8 @@ keys: Alt+Enter, choose "Replace loop with 'List.replaceAll()'"
 ```after
 import java.util.*;
 class A {
-  void f(List<String> strings) {
-    strings.replaceAll(String::toLowerCase);
+  void f(List<String> stock) {
+    stock.replaceAll(String::toLowerCase);
   }
 }
 ```
@@ -2462,8 +2468,8 @@ language: java
 ```before
 import java.util.*;
 class A {
-  void f(List<String> strings) {
-    <caret>for (int i = 0; i < strings.size(); i++) { strings.set(i, strings.get(i) + i); }
+  void f(List<String> roster) {
+    <caret>for (int i = 0; i < roster.size(); i++) { roster.set(i, roster.get(i) + i); }
   }
 }
 ```
@@ -2478,14 +2484,14 @@ language: java
 ```before
 import java.util.*;
 class A {
-  void f(List<String> list, Comparator<String> cmp) { Collections.<caret>sort(list, cmp); }
+  void f(List<String> fleet, Comparator<String> cmp) { Collections.<caret>sort(fleet, cmp); }
 }
 ```
 keys: Alt+Enter, choose "Replace with 'List.sort()'"
 ```after
 import java.util.*;
 class A {
-  void f(List<String> list, Comparator<String> cmp) { list.sort(cmp); }
+  void f(List<String> fleet, Comparator<String> cmp) { fleet.sort(cmp); }
 }
 ```
 
@@ -2495,7 +2501,7 @@ language: java
 ```before
 import java.util.*;
 class A {
-  void f(List<String> list, Comparator<String> cmp) { list.<caret>sort(cmp); }
+  void f(List<String> entries, Comparator<String> cmp) { entries.<caret>sort(cmp); }
 }
 ```
 keys: inspect
@@ -2509,14 +2515,14 @@ language: java
 ```before
 import java.util.*;
 class A {
-  String f(Map<String, String> map, String key) { return <caret>map.containsKey(key) ? map.get(key) : "default"; }
+  String f(Map<String, String> catalog, String key) { return <caret>catalog.containsKey(key) ? catalog.get(key) : "default"; }
 }
 ```
 keys: Alt+Enter, choose "Replace with 'getOrDefault()' call"
 ```after
 import java.util.*;
 class A {
-  String f(Map<String, String> map, String key) { return map.getOrDefault(key, "default"); }
+  String f(Map<String, String> catalog, String key) { return catalog.getOrDefault(key, "default"); }
 }
 ```
 
@@ -2526,7 +2532,7 @@ language: java
 ```before
 import java.util.*;
 class A {
-  String f(Map<String, String> map, String key, String k2) { return <caret>map.containsKey(key) ? map.get(k2) : "default"; }
+  String f(Map<String, String> catalog, String key, String k2) { return <caret>catalog.containsKey(key) ? catalog.get(k2) : "default"; }
 }
 ```
 keys: inspect
@@ -2541,8 +2547,8 @@ language: java
 ```before
 import java.util.*;
 class A {
-  void print(Map<String, Integer> map) {
-    map.entrySet().<caret>forEach(entry -> { String str = entry.getKey(); System.out.println(str + ":" + entry.getValue()); });
+  void print(Map<String, Integer> registry) {
+    registry.entrySet().<caret>forEach(entry -> { String route = entry.getKey(); System.out.println(route + ":" + entry.getValue()); });
   }
 }
 ```
@@ -2550,8 +2556,8 @@ keys: Alt+Enter, choose "Replace with 'Map.forEach()'"
 ```after
 import java.util.*;
 class A {
-  void print(Map<String, Integer> map) {
-    map.forEach((str, value) -> System.out.println(str + ":" + value));
+  void print(Map<String, Integer> registry) {
+    registry.forEach((route, value) -> System.out.println(route + ":" + value));
   }
 }
 ```
@@ -2562,8 +2568,8 @@ language: java
 ```before
 import java.util.*;
 class A {
-  void print(Map<String, Integer> map, List<Object> out) {
-    map.entrySet().<caret>forEach(entry -> out.add(entry));
+  void print(Map<String, Integer> index, List<Object> fleet) {
+    index.entrySet().<caret>forEach(entry -> fleet.add(entry));
   }
 }
 ```
@@ -2610,10 +2616,10 @@ language: java
 ```before
 import java.util.*;
 class A {
-  List<String> findNStrings(List<String> list, int n) {
-    List<String> other = new ArrayList<>();
-    list.<caret>forEach(s -> { if (s.length() > n) other.add(s); });
-    return other;
+  List<String> findRefill(List<String> shelf, int n) {
+    List<String> basket = new ArrayList<>();
+    shelf.<caret>forEach(s -> { if (s.length() > n) basket.add(s); });
+    return basket;
   }
 }
 ```
@@ -2622,9 +2628,9 @@ keys: Alt+Enter, choose "Replace with 'collect'"
 import java.util.*;
 import java.util.stream.*;
 class A {
-  List<String> findNStrings(List<String> list, int n) {
-    List<String> other = list.stream().filter(s -> s.length() > n).collect(Collectors.toList());
-    return other;
+  List<String> findRefill(List<String> shelf, int n) {
+    List<String> basket = shelf.stream().filter(s -> s.length() > n).collect(Collectors.toList());
+    return basket;
   }
 }
 ```
@@ -2635,7 +2641,7 @@ language: java
 ```before
 import java.util.*;
 class A {
-  void f(List<String> list) { list.<caret>forEach(s -> System.out.println(s)); }
+  void f(List<String> shelf) { shelf.<caret>forEach(s -> System.out.println(s)); }
 }
 ```
 keys: inspect
@@ -2648,13 +2654,13 @@ settings: language level 8
 language: java
 ```before
 class A {
-  int f(long var) { int result = (int)(<caret>var ^ (var >>> 32)); return result; }
+  int f(long var) { int ratio = (int)(<caret>var ^ (var >>> 32)); return ratio; }
 }
 ```
 keys: Alt+Enter, choose "Replace with 'Long.hashCode(var)'"
 ```after
 class A {
-  int f(long var) { int result = Long.hashCode(var); return result; }
+  int f(long var) { int ratio = Long.hashCode(var); return ratio; }
 }
 ```
 
@@ -2663,7 +2669,7 @@ settings: language level 8
 language: java
 ```before
 class A {
-  int f(long var) { int result = (int)(<caret>var ^ (var >>> 16)); return result; }
+  int f(long var) { int total = (int)(<caret>var ^ (var >>> 16)); return total; }
 }
 ```
 keys: inspect
@@ -2677,14 +2683,14 @@ language: java
 ```before
 import java.util.*;
 class A {
-  List<Integer> even = Collections.<caret>unmodifiableList(Arrays.asList(2, 4, 6, 8, 10, 2));
+  List<Integer> rows = Collections.<caret>unmodifiableList(Arrays.asList(3, 1, 4, 1, 5));
 }
 ```
 keys: Alt+Enter, choose "Replace with 'List.of()' call"
 ```after
 import java.util.*;
 class A {
-  List<Integer> even = List.of(2, 4, 6, 8, 10, 2);
+  List<Integer> rows = List.of(3, 1, 4, 1, 5);
 }
 ```
 
@@ -2694,7 +2700,7 @@ language: java
 ```before
 import java.util.*;
 class A {
-  List<Integer> even = Collections.<caret>unmodifiableList(Arrays.asList(2, 4, 6));
+  List<Integer> rows = Collections.<caret>unmodifiableList(Arrays.asList(3, 1, 4));
 }
 ```
 keys: inspect
@@ -2711,7 +2717,7 @@ module org.printer { requires transitive <caret>drivers.corp.org; }
 ```
 keys: inspect
 ```after
-problem: WARNING drivers.corp.org "'requires transitive' directive for an automatic module"
+problem: warning `drivers.corp.org` "'requires transitive' directive for an automatic module"
 ```
 
 ### JAVA-ICC-316 case 2: plain requires with default option
@@ -2732,18 +2738,18 @@ status: unverified (import style and lambda vs method reference)
 language: java
 ```before
 class A {
-  void save(Object o) {}
-  void f(Object message) {
-    <caret>if (message == null) { save(new Object()); } else { save(message); }
+  void harvest(Object o) {}
+  void f(Object host) {
+    <caret>if (host == null) { harvest(new Object()); } else { harvest(host); }
   }
 }
 ```
 keys: Alt+Enter, choose "Replace 'if' statement with 'requireNonNullElseGet()' call"
 ```after
 class A {
-  void save(Object o) {}
-  void f(Object message) {
-    save(java.util.Objects.requireNonNullElseGet(message, () -> new Object()));
+  void harvest(Object o) {}
+  void f(Object host) {
+    harvest(java.util.Objects.requireNonNullElseGet(host, () -> new Object()));
   }
 }
 ```
@@ -2753,10 +2759,10 @@ settings: language level 9
 language: java
 ```before
 class A {
-  void save(Object o) {}
+  void relay(Object o) {}
   void log(Object o) {}
-  void f(Object message) {
-    <caret>if (message == null) { log(null); } else { save(message); }
+  void f(Object rider) {
+    <caret>if (rider == null) { log(null); } else { relay(rider); }
   }
 }
 ```
@@ -2787,7 +2793,7 @@ settings: language level 10; Only report when the variable type is obvious from 
 language: java
 ```before
 class A {
-  void f() { <caret>int codePointAt = "hello".codePointAt(1); }
+  void f() { <caret>int ratio = "hello".codePointAt(1); }
 }
 ```
 keys: inspect
@@ -2815,7 +2821,7 @@ settings: language level 10
 language: java
 ```before
 class A {
-  void f() { <caret>String str = "Hello"; }
+  void f() { <caret>String motto = "Hello"; }
 }
 ```
 keys: inspect
@@ -2859,30 +2865,27 @@ settings: language level 14
 language: java
 ```before
 class A {
-  boolean f(int condition) {
-    boolean even = <caret>switch (condition) { case 1, 3, 5, 7, 9 -> false; default -> true; };
-    return even;
+  boolean f(int day) {
+    boolean weekend = <caret>switch (day) { case 6, 7 -> true; default -> false; };
+    return weekend;
   }
 }
 ```
 keys: Alt+Enter, choose "Replace with old style 'switch' statement"
 ```after
 class A {
-  boolean f(int condition) {
-    boolean even;
-    switch (condition) {
-      case 1:
-      case 3:
-      case 5:
+  boolean f(int day) {
+    boolean weekend;
+    switch (day) {
+      case 6:
       case 7:
-      case 9:
-        even = false;
+        weekend = true;
         break;
       default:
-        even = true;
+        weekend = false;
         break;
     }
-    return even;
+    return weekend;
   }
 }
 ```
@@ -2907,11 +2910,11 @@ settings: language level 14
 language: java
 ```before
 class A {
-  double getPrice(String fruit) {
-    <caret>switch (fruit) {
-      case "Apple": return 1.0;
-      case "Orange": return 1.5;
-      case "Mango": return 2.0;
+  int price(String size) {
+    <caret>switch (size) {
+      case "S": return 10;
+      case "M": return 20;
+      case "L": return 30;
       default: throw new IllegalArgumentException();
     }
   }
@@ -2920,11 +2923,11 @@ class A {
 keys: Alt+Enter, choose "Migrate to enhanced switch"
 ```after
 class A {
-  double getPrice(String fruit) {
-    return switch (fruit) {
-      case "Apple" -> 1.0;
-      case "Orange" -> 1.5;
-      case "Mango" -> 2.0;
+  int price(String size) {
+    return switch (size) {
+      case "S" -> 10;
+      case "M" -> 20;
+      case "L" -> 30;
       default -> throw new IllegalArgumentException();
     };
   }
@@ -2989,20 +2992,18 @@ settings: language level 15
 language: java
 ```before
 class A {
-  String html = <caret>"<html>\n" +
-    "  <body>\n" +
-    "  </body>\n" +
-    "</html>\n";
+  String json = <caret>"{\n" +
+    "  \"id\": 1\n" +
+    "}\n";
 }
 ```
 keys: Alt+Enter, choose "Replace with text block"
 ```after
 class A {
-  String html = """
-    <html>
-      <body>
-      </body>
-    </html>
+  String json = """
+    {
+      "id": 1
+    }
     """;
 }
 ```
@@ -3022,29 +3023,29 @@ no problem reported
 
 ### JAVA-ICC-325 case 1: immutable point class
 settings: language level 16
-status: unverified (with accessor renaming the getters become `x()`/`y()` accessors and callers are renamed; the declaration shown is the result)
+status: unverified (with accessor renaming the getters become `name()`/`age()` accessors and callers are renamed; the declaration shown is the result)
 language: java
 ```before
-class <caret>Point {
-  private final double x;
-  private final double y;
-  Point(double x, double y) { this.x = x; this.y = y; }
-  double getX() { return x; }
-  double getY() { return y; }
+class <caret>Person {
+  private final String name;
+  private final int age;
+  Person(String name, int age) { this.name = name; this.age = age; }
+  String getName() { return name; }
+  int getAge() { return age; }
 }
 ```
 keys: Alt+Enter, choose "Convert to record class"
 ```after
-record Point(double x, double y) { }
+record Person(String name, int age) { }
 ```
 
 ### JAVA-ICC-325 case 2: non-final field
 settings: language level 16
 language: java
 ```before
-class <caret>Point {
+class <caret>Parcel {
   private double x;
-  Point(double x) { this.x = x; }
+  Parcel(double x) { this.x = x; }
 }
 ```
 keys: inspect
@@ -3057,20 +3058,20 @@ settings: language level 16
 language: java
 ```before
 class A {
-  void f(Object obj) {
-    if (obj instanceof String) {
-      String <caret>str = (String) obj;
-      System.out.println(str);
+  void f(Object cells) {
+    if (cells instanceof String) {
+      String <caret>nickname = (String) cells;
+      System.out.println(nickname);
     }
   }
 }
 ```
-keys: Alt+Enter, choose "Replace 'str' with pattern variable"
+keys: Alt+Enter, choose "Replace 'nickname' with pattern variable"
 ```after
 class A {
-  void f(Object obj) {
-    if (obj instanceof String str) {
-      System.out.println(str);
+  void f(Object cells) {
+    if (cells instanceof String nickname) {
+      System.out.println(nickname);
     }
   }
 }
@@ -3081,10 +3082,10 @@ settings: language level 15
 language: java
 ```before
 class A {
-  void f(Object obj) {
-    if (obj instanceof String) {
-      String <caret>str = (String) obj;
-      System.out.println(str);
+  void f(Object rank) {
+    if (rank instanceof String) {
+      String <caret>color = (String) rank;
+      System.out.println(color);
     }
   }
 }
@@ -3098,22 +3099,22 @@ no problem reported
 settings: language level 21
 language: java
 ```before
-record Point(int x, int y) {
-  static void printSum(Object obj) {
-    if (obj instanceof <caret>Point p) {
-      int x = p.x();
-      int y = p.y();
-      System.out.println(x + y);
+record Pair(String a, int b) {
+  static void show(Object o) {
+    if (o instanceof <caret>Pair p) {
+      String a = p.a();
+      int b = p.b();
+      System.out.println(a + b);
     }
   }
 }
 ```
 keys: Alt+Enter, choose "Replace with record pattern"
 ```after
-record Point(int x, int y) {
-  static void printSum(Object obj) {
-    if (obj instanceof Point(int x, int y)) {
-      System.out.println(x + y);
+record Pair(String a, int b) {
+  static void show(Object o) {
+    if (o instanceof Pair(String a, int b)) {
+      System.out.println(a + b);
     }
   }
 }
@@ -3123,10 +3124,10 @@ record Point(int x, int y) {
 settings: language level 21
 language: java
 ```before
-record Point(int x, int y) {
-  static void printSum(Object obj) {
-    if (obj instanceof <caret>Point p) {
-      int x = p.x();
+record Pair(String a, int b) {
+  static void show(Object o) {
+    if (o instanceof <caret>Pair p) {
+      String a = p.a();
       System.out.println(p);
     }
   }
@@ -3143,20 +3144,20 @@ status: unverified (`{0}` text of the fix name)
 language: java
 ```before
 class A {
-  int f(int input) {
-    int min = 5, max = 10;
-    input = Math.<caret>max(Math.min(max, input), min);
-    return input;
+  int f(int v) {
+    int lo = 1, hi = 9;
+    v = Math.<caret>max(Math.min(hi, v), lo);
+    return v;
   }
 }
 ```
 keys: Alt+Enter, choose "Replace with 'Math.clamp()'"
 ```after
 class A {
-  int f(int input) {
-    int min = 5, max = 10;
-    input = Math.clamp(input, min, max);
-    return input;
+  int f(int v) {
+    int lo = 1, hi = 9;
+    v = Math.clamp(v, lo, hi);
+    return v;
   }
 }
 ```
@@ -3166,7 +3167,7 @@ settings: language level 21
 language: java
 ```before
 class A {
-  int f(int input) { return Math.<caret>min(10, input); }
+  int f(int width) { return Math.<caret>min(10, width); }
 }
 ```
 keys: inspect
@@ -3181,14 +3182,14 @@ language: java
 ```before
 import java.util.List;
 class A {
-  String f(List<String> list) { return list.<caret>get(0); }
+  String f(List<String> entries) { return entries.<caret>get(0); }
 }
 ```
 keys: Alt+Enter, choose "Replace with 'getFirst'"
 ```after
 import java.util.List;
 class A {
-  String f(List<String> list) { return list.getFirst(); }
+  String f(List<String> entries) { return entries.getFirst(); }
 }
 ```
 
@@ -3198,7 +3199,7 @@ language: java
 ```before
 import java.util.List;
 class A {
-  String f(List<String> list) { return list.<caret>get(1); }
+  String f(List<String> roster) { return roster.<caret>get(1); }
 }
 ```
 keys: inspect
@@ -3267,14 +3268,14 @@ settings: language level 23
 language: java
 ```before
 /**
- * For blubbering of the florz.
+ * Moves boxes around.
  */
-class <caret>FlorzBlubber { }
+class <caret>Lagoon { }
 ```
 keys: Alt+Enter, choose "Convert to Markdown documentation comment"
 ```after
-/// For blubbering of the florz.
-class FlorzBlubber { }
+/// Moves boxes around.
+class Lagoon { }
 ```
 
 ### JAVA-ICC-332 case 2: ordinary comment
@@ -3282,7 +3283,7 @@ settings: language level 23
 language: java
 ```before
 /* not a doc comment */
-class <caret>FlorzBlubber { }
+class <caret>Falcon { }
 ```
 keys: inspect
 ```after
@@ -3294,14 +3295,14 @@ settings: language level 25
 status: unverified (`main` signature relaxation and formatting)
 language: java
 ```before
-public class <caret>Sample {
-  public static void main(String[] args) { System.out.println("Hello, world!"); }
+public class <caret>Kiln {
+  public static void main(String[] fleet) { System.out.println("Hi there"); }
 }
 ```
 keys: Alt+Enter, choose "Convert into compact source file"
 ```after
 void main() {
-  IO.println("Hello, world!");
+  IO.println("Hi there");
 }
 ```
 
@@ -3310,9 +3311,9 @@ settings: language level 25
 status: unverified (whether fields block the conversion)
 language: java
 ```before
-public class <caret>Sample {
+public class <caret>Planet {
   private int x;
-  public static void main(String[] args) { System.out.println("Hello"); }
+  public static void main(String[] tray) { System.out.println("Hello"); }
 }
 ```
 keys: inspect
@@ -3324,12 +3325,12 @@ no problem reported
 settings: language level 25; file `Sample.java`
 language: java
 ```before
-void <caret>main() { String a = "Hello, world!"; }
+void <caret>main() { int n = 3; }
 ```
 keys: Alt+Enter, choose "Convert into a regular class"
 ```after
 public class Sample {
-  void main() { String a = "Hello, world!"; }
+  void main() { int n = 3; }
 }
 ```
 
@@ -3337,7 +3338,7 @@ public class Sample {
 settings: language level 25
 language: java
 ```before
-public class Sample { void <caret>main() { } }
+public class Vessel { void <caret>main() { } }
 ```
 keys: inspect
 ```after
@@ -3409,14 +3410,14 @@ language: java
 ```before
 import java.util.Comparator;
 class A {
-  String f(Comparator<String> comp, String a, String b) { return <caret>comp.compare(a, b) > 0 ? a : b; }
+  String f(Comparator<String> tray, String a, String b) { return <caret>tray.compare(a, b) > 0 ? a : b; }
 }
 ```
-keys: Alt+Enter, choose "Replace with 'comp.max(a, b)'"
+keys: Alt+Enter, choose "Replace with 'tray.max(a, b)'"
 ```after
 import java.util.Comparator;
 class A {
-  String f(Comparator<String> comp, String a, String b) { return comp.max(a, b); }
+  String f(Comparator<String> tray, String a, String b) { return tray.max(a, b); }
 }
 ```
 
@@ -3426,7 +3427,7 @@ language: java
 ```before
 import java.util.Comparator;
 class A {
-  String f(Comparator<String> comp, String a, String b) { return <caret>comp.compare(a, b) > 0 ? a : "x"; }
+  String f(Comparator<String> offset, String a, String b) { return <caret>offset.compare(a, b) > 0 ? a : "x"; }
 }
 ```
 keys: inspect

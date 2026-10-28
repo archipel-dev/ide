@@ -1,22 +1,22 @@
 # Cases for 09-inspections-catalog-4.md
 
-Format: see docs/specs/editor/cases/README.md. Inspection cases: `keys: Alt+Enter, choose "<fix>"` applies the named quick fix at the caret; `keys: inspect` runs the inspection and `after` then lists `problem: <level> <range text> "<message>"` lines or `no problem reported`.
+Format: `docs/specs/java/cases/README.md` (extends `docs/specs/editor/cases/README.md`). Each case belongs to the requirement of the same ID in `docs/specs/java/09-inspections-catalog-4.md`. Keys `inspect` list the expected highlights as `problem:` lines, `inspect batch` runs the whole-project inspection, and `no problem reported` means no highlight.
 
 ### JAVA-ICB-001 case 1: Replace assert with if
 settings: default
 language: java
 ```before
 class A {
-    void m(String param) {
-        <caret>assert param != null;
+    void m(String region) {
+        <caret>assert region != null;
     }
 }
 ```
 keys: Alt+Enter, choose "Replace 'assert' with 'if' statement"
 ```after
 class A {
-    void m(String param) {
-        if (param == null) throw new AssertionError();
+    void m(String region) {
+        if (region == null) throw new AssertionError();
     }
 }
 ```
@@ -26,14 +26,14 @@ settings: default
 language: java
 ```before
 class A {
-    void m(String param) {
-        <caret>if (param == null) return;
+    void m(String brand) {
+        <caret>if (brand == null) return;
     }
 }
 ```
 keys: Alt+Enter
 ```after
-the intention list does not contain "Replace 'assert' with 'if' statement"; no problem reported
+no quick fix "Replace 'assert' with 'if' statement" in the popup
 ```
 
 ### JAVA-ICB-002 case 1: Replace with conditional expression
@@ -75,13 +75,13 @@ settings: default
 language: java
 ```before
 class A {
-    void foo(java.util.List<String> strs) {
-        for (String str : strs) {
-            if (str.contains("stop")) <caret>break;
-            handleStr(str);
+    void tune(java.util.List<String> pile) {
+        for (String brand : pile) {
+            if (brand.contains("stop")) <caret>break;
+            survey(brand);
         }
     }
-    void handleStr(String s) {}
+    void survey(String s) {}
 }
 ```
 keys: inspect
@@ -94,7 +94,7 @@ settings: default
 language: java
 ```before
 class A {
-    void foo(int i) {
+    void tally(int i) {
         switch (i) {
             case 1:
                 System.out.println();
@@ -114,11 +114,11 @@ settings: default
 language: java
 ```before
 class A {
-    void handle(java.util.List<String> strs) {
-        outer:
-        for (String s : strs) {
-            for (char ch : s.toCharArray()) {
-                if ('s' == ch) <caret>break outer;
+    void scan(int[][] grid) {
+        rows:
+        for (int[] row : grid) {
+            for (int cell : row) {
+                if (cell < 0) <caret>break rows;
             }
         }
     }
@@ -126,7 +126,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: warning `break` "break outer; statement with label"
+problem: warning `break` "break rows; statement with label"
 ```
 
 ### JAVA-ICB-005 case 1: Move condition to loop
@@ -134,10 +134,10 @@ settings: default
 language: java
 ```before
 class A {
-    void m(int i) {
+    void spin(int left) {
         <caret>while (true) {
-            if (i == 23) break;
-            i++;
+            if (left == 0) break;
+            left--;
         }
     }
 }
@@ -145,9 +145,9 @@ class A {
 keys: Alt+Enter, choose "Move condition to loop"
 ```after
 class A {
-    void m(int i) {
-        while (i != 23) {
-            i++;
+    void spin(int left) {
+        while (left != 0) {
+            left--;
         }
     }
 }
@@ -158,11 +158,11 @@ settings: default
 language: java
 ```before
 class A {
-    void m(int i) {
+    void spin(int step) {
         <caret>while (true) {
-            i++;
-            if (i == 23) break;
-            i--;
+            step++;
+            if (step == 9) break;
+            step--;
         }
     }
 }
@@ -177,16 +177,16 @@ settings: Ignore when conditional will be only argument of a method call=off
 language: java
 ```before
 class A {
-    double g(int a, int b) {
-        return <caret>a == b ? Math.cos(0) : Math.cos(1);
+    int pick(boolean flag, int x, int y) {
+        return <caret>flag ? Math.abs(x) : Math.abs(y);
     }
 }
 ```
 keys: Alt+Enter, choose "Push conditional expression inside branch"
 ```after
 class A {
-    double g(int a, int b) {
-        return Math.cos(a == b ? 0 : 1);
+    int pick(boolean flag, int x, int y) {
+        return Math.abs(flag ? x : y);
     }
 }
 ```
@@ -196,8 +196,8 @@ settings: default
 language: java
 ```before
 class A {
-    double g(int a, int b) {
-        return <caret>a == b ? Math.cos(0) : Math.sin(0);
+    double pick(boolean flag, double x) {
+        return <caret>flag ? Math.abs(x) : Math.floor(x);
     }
 }
 ```
@@ -212,27 +212,27 @@ language: java
 ```before
 class A {
     Object m(boolean c) {
-        Object result = <caret>c ? foo() : bar();
-        return result;
+        Object price = <caret>c ? render() : launch();
+        return price;
     }
-    Object foo() { return null; }
-    Object bar() { return null; }
+    Object render() { return null; }
+    Object launch() { return null; }
 }
 ```
 keys: Alt+Enter, choose "Replace with 'if' statement"
 ```after
 class A {
     Object m(boolean c) {
-        Object result;
+        Object price;
         if (c) {
-            result = foo();
+            price = render();
         } else {
-            result = bar();
+            price = launch();
         }
-        return result;
+        return price;
     }
-    Object foo() { return null; }
-    Object bar() { return null; }
+    Object render() { return null; }
+    Object launch() { return null; }
 }
 ```
 
@@ -241,8 +241,8 @@ settings: Ignore for simple assignments and returns=on
 language: java
 ```before
 class A {
-    String m(Object foo) {
-        String s = <caret>(foo == null) ? "" : foo.toString();
+    String m(Object ratio) {
+        String s = <caret>(ratio == null) ? "" : ratio.toString();
         return s;
     }
 }
@@ -257,18 +257,18 @@ settings: default
 language: java
 ```before
 class A {
-    int m(int x) {
-        int y = <caret>x == 10 ? 4 : 4;
-        return y;
+    String label(int n) {
+        String s = <caret>n > 0 ? "same" : "same";
+        return s;
     }
 }
 ```
 keys: Alt+Enter, choose "Collapse conditional expression"
 ```after
 class A {
-    int m(int x) {
-        int y = 4;
-        return y;
+    String label(int n) {
+        String s = "same";
+        return s;
     }
 }
 ```
@@ -294,11 +294,11 @@ settings: default
 language: java
 ```before
 class A {
-    void m(String name) {
-        if (name == null) {
-            throw new IllegalArgumentException();
+    void greet(String user) {
+        if (user == null) {
+            throw new IllegalStateException("no user");
         } <caret>else {
-            System.out.println(name);
+            System.out.println("hi " + user);
         }
     }
 }
@@ -306,11 +306,11 @@ class A {
 keys: Alt+Enter, choose "Remove redundant 'else'"
 ```after
 class A {
-    void m(String name) {
-        if (name == null) {
-            throw new IllegalArgumentException();
+    void greet(String user) {
+        if (user == null) {
+            throw new IllegalStateException("no user");
         }
-        System.out.println(name);
+        System.out.println("hi " + user);
     }
 }
 ```
@@ -320,11 +320,11 @@ settings: default
 language: java
 ```before
 class A {
-    void m(String name) {
-        if (name == null) {
-            System.out.println("null");
+    void greet(String user) {
+        if (user == null) {
+            System.out.println("anonymous");
         } <caret>else {
-            System.out.println(name);
+            System.out.println("hi " + user);
         }
     }
 }
@@ -339,16 +339,16 @@ settings: default
 language: java
 ```before
 class A {
-    String m() {
-        return <caret>true ? "Yes" : "No";
+    int m() {
+        return <caret>false ? 10 : 20;
     }
 }
 ```
 keys: Alt+Enter, choose "Simplify"
 ```after
 class A {
-    String m() {
-        return "Yes";
+    int m() {
+        return 20;
     }
 }
 ```
@@ -373,13 +373,13 @@ settings: default
 language: java
 ```before
 class A {
-    void foo(java.util.List<String> strs) {
-        for (String str : strs) {
-            if (str.contains("skip")) <caret>continue;
-            handleStr(str);
+    void gather(java.util.List<String> pile) {
+        for (String nickname : pile) {
+            if (nickname.contains("skip")) <caret>continue;
+            trace(nickname);
         }
     }
-    void handleStr(String s) {}
+    void trace(String s) {}
 }
 ```
 keys: inspect
@@ -392,11 +392,11 @@ settings: default
 language: java
 ```before
 class A {
-    void handle(java.util.List<String> strs) {
-        outer:
-        for (String s : strs) {
-            for (char ch : s.toCharArray()) {
-                if ('s' == ch) <caret>continue outer;
+    void scan(int[][] grid) {
+        rows:
+        for (int[] row : grid) {
+            for (int cell : row) {
+                if (cell < 0) <caret>continue rows;
             }
         }
     }
@@ -404,7 +404,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: warning `continue` "continue outer; statement with label"
+problem: warning `continue` "continue rows; statement with label"
 ```
 
 ### JAVA-ICB-013 case 1: Default moved last
@@ -412,29 +412,35 @@ settings: default
 language: java
 ```before
 class A {
-    void m(int n) {
-        switch (n) {
+    void m(int code) {
+        switch (code) {
             <caret>default:
-                System.out.println();
+                reset();
                 break;
-            case 1:
+            case 7:
+                stop();
                 break;
         }
     }
+    void reset() {}
+    void stop() {}
 }
 ```
 keys: Alt+Enter, choose "Make 'default' the last case"
 ```after
 class A {
-    void m(int n) {
-        switch (n) {
-            case 1:
+    void m(int code) {
+        switch (code) {
+            case 7:
+                stop();
                 break;
             default:
-                System.out.println();
+                reset();
                 break;
         }
     }
+    void reset() {}
+    void stop() {}
 }
 ```
 
@@ -500,14 +506,14 @@ settings: default
 language: java
 ```before
 class A {
-    boolean m(int digit1, int digit2) {
-        return digit1 != digit2 || <caret>digit1 != digit2;
+    boolean m(int width, int price) {
+        return width != price || <caret>width != price;
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `digit1 != digit2` "Duplicate condition digit1 != digit2"
+problem: warning `width != price` "Duplicate condition width != price"
 ```
 
 ### JAVA-ICB-015 case 2: Method calls with side effects ignored
@@ -515,12 +521,13 @@ settings: default
 language: java
 ```before
 class A {
-    native boolean unknownMethod();
+    native boolean poll();
     void m() {
-        if (unknownMethod() || <caret>unknownMethod()) {
-            System.out.println("Got it");
+        if (poll() || <caret>poll()) {
+            tick();
         }
     }
+    void tick() {}
 }
 ```
 keys: inspect
@@ -530,26 +537,26 @@ no problem reported
 
 ### JAVA-ICB-016 case 1: Create missing branches
 settings: default
-language: java
 status: unverified (arrow form of the generated branches for an empty switch)
+language: java
 ```before
-enum E { A, B, C }
+enum Size { S, M, L }
 class X {
-    void x(E e) {
-        <caret>switch (e) {
+    void pick(Size size) {
+        <caret>switch (size) {
         }
     }
 }
 ```
-keys: Alt+Enter, choose "Create missing branches 'A', 'B', and 'C'"
+keys: Alt+Enter, choose "Create missing branches 'S', 'M', and 'L'"
 ```after
-enum E { A, B, C }
+enum Size { S, M, L }
 class X {
-    void x(E e) {
-        switch (e) {
-            case A -> {}
-            case B -> {}
-            case C -> {}
+    void pick(Size size) {
+        switch (size) {
+            case S -> {}
+            case M -> {}
+            case L -> {}
         }
     }
 }
@@ -559,11 +566,11 @@ class X {
 settings: default
 language: java
 ```before
-enum E { A, B, C }
+enum Size { S, M, L }
 class X {
-    void x(E e) {
-        <caret>switch (e) {
-            case A: break;
+    void pick(Size size) {
+        <caret>switch (size) {
+            case S: break;
             default: break;
         }
     }
@@ -610,32 +617,34 @@ no problem reported
 
 ### JAVA-ICB-018 case 1: Add break
 settings: default
-language: java
 status: unverified (caret position on the reported statement and the exact quoting of the fix name)
+language: java
 ```before
 class A {
-    void m(int x) {
-        switch (x) {
-            case 4:
-                <caret>System.out.println("3");
-            case 6:
-                System.out.println("4");
+    void m(int mode) {
+        switch (mode) {
+            case 1:
+                <caret>log("one");
+            case 2:
+                log("two");
         }
     }
+    void log(String text) {}
 }
 ```
 keys: Alt+Enter, choose "Add 'break'"
 ```after
 class A {
-    void m(int x) {
-        switch (x) {
-            case 4:
-                System.out.println("3");
+    void m(int mode) {
+        switch (mode) {
+            case 1:
+                log("one");
                 break;
-            case 6:
-                System.out.println("4");
+            case 2:
+                log("two");
         }
     }
+    void log(String text) {}
 }
 ```
 
@@ -644,10 +653,10 @@ settings: default
 language: java
 ```before
 class A {
-    boolean exitCondition() { return true; }
+    boolean weave() { return true; }
     void process() {}
     void m() {
-        <caret>for (; exitCondition(); ) {
+        <caret>for (; weave(); ) {
             process();
         }
     }
@@ -656,10 +665,10 @@ class A {
 keys: Alt+Enter, choose "Replace with 'while'"
 ```after
 class A {
-    boolean exitCondition() { return true; }
+    boolean weave() { return true; }
     void process() {}
     void m() {
-        while (exitCondition()) {
+        while (weave()) {
             process();
         }
     }
@@ -705,11 +714,11 @@ settings: default
 language: java
 ```before
 class A {
-    void foo(String baseName, String names) {
-        int suffix = 1;
-        String name = baseName;
-        <caret>while (names.contains(name)) {
-            name = baseName + suffix;
+    void bundle(String nickname, String tag) {
+        int weight = 1;
+        String name = nickname;
+        <caret>while (tag.contains(name)) {
+            name = nickname + weight;
         }
     }
 }
@@ -724,11 +733,11 @@ settings: default
 language: java
 ```before
 class A {
-    void foo(String baseName, String names) {
-        int suffix = 1;
-        String name = baseName;
-        <caret>while (names.contains(name)) {
-            name = baseName + suffix++;
+    void fetch(String headline, String route) {
+        int rank = 1;
+        String name = headline;
+        <caret>while (route.contains(name)) {
+            name = headline + rank++;
         }
     }
 }
@@ -743,16 +752,16 @@ settings: default
 language: java
 ```before
 class A {
-    void m(int x) {
-        <caret>if (x == 2) throw new RuntimeException("fail");
+    void m(int n) {
+        <caret>if (n < 0) throw new RuntimeException("negative");
     }
 }
 ```
 keys: Alt+Enter, choose "Replace statement with 'assert' statement"
 ```after
 class A {
-    void m(int x) {
-        assert x != 2 : "fail";
+    void m(int n) {
+        assert n >= 0 : "negative";
     }
 }
 ```
@@ -769,13 +778,13 @@ class A {
 ```
 keys: Alt+Enter
 ```after
-the intention list does not contain "Replace statement with 'assert' statement"; no problem reported
+no quick fix "Replace statement with 'assert' statement" in the popup
 ```
 
 ### JAVA-ICB-023 case 1: Extract common part
 settings: default
-language: java
 status: unverified (the exact fix name depends on whether variables are involved)
+language: java
 ```before
 class A {
     void m(int x) {
@@ -882,16 +891,16 @@ language: java
 ```before
 class A {
     void m() {
-        <caret>label:
-        while (true) {
-            break label;
+        <caret>retry:
+        for (int k = 0; k < 3; k++) {
+            if (k == 2) break retry;
         }
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `label` "Labeled statement label:"
+problem: warning `retry` "Labeled statement retry:"
 ```
 
 ### JAVA-ICB-027 case 1: Parameter never updated
@@ -899,16 +908,17 @@ settings: default
 language: java
 ```before
 class A {
-    void loopDoesNotLoop(boolean b) {
-        while (<caret>b) {
-            System.out.println();
+    void spin(boolean ready) {
+        while (<caret>ready) {
+            work();
         }
     }
+    void work() {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `b` "Variable 'b' is not updated inside loop"
+problem: warning `ready` "Variable 'ready' is not updated inside loop"
 ```
 
 ### JAVA-ICB-027 case 2: Variable updated inside the loop
@@ -1050,25 +1060,29 @@ settings: enable inspection NegatedIfElse
 language: java
 ```before
 class A {
-    void m(Object o1, Object o2) {
-        <caret>if (o1 != o2) {
-            System.out.println(1);
+    void m(int a, int b) {
+        <caret>if (a != b) {
+            first();
         } else {
-            System.out.println(2);
+            second();
         }
     }
+    void first() {}
+    void second() {}
 }
 ```
 keys: Alt+Enter, choose "Invert 'if' condition"
 ```after
 class A {
-    void m(Object o1, Object o2) {
-        if (o1 == o2) {
-            System.out.println(2);
+    void m(int a, int b) {
+        if (a == b) {
+            second();
         } else {
-            System.out.println(1);
+            first();
         }
     }
+    void first() {}
+    void second() {}
 }
 ```
 
@@ -1077,15 +1091,15 @@ settings: enable inspection NestedConditionalExpression
 language: java
 ```before
 class A {
-    int m(int a, int b) {
-        int y = a == 10 ? <caret>b == 20 ? 10 : a : b;
+    int m(int p, int q) {
+        int y = p > 0 ? <caret>q > 0 ? 1 : 2 : 3;
         return y;
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `b == 20 ? 10 : a` "Nested conditional expression b == 20 ? 10 : a"
+problem: warning `q > 0 ? 1 : 2` "Nested conditional expression q > 0 ? 1 : 2"
 ```
 
 ### JAVA-ICB-035 case 1: Nested switch expression
@@ -1093,12 +1107,12 @@ settings: enable inspection NestedSwitchStatement
 language: java
 ```before
 class A {
-    int m(int i) {
-        return switch (i) {
-            case 0 -> 0;
-            default -> <caret>switch (i) {
-                case 100 -> 0;
-                default -> i;
+    int m(char kind, int size) {
+        return switch (kind) {
+            case 'a' -> 1;
+            default -> <caret>switch (size) {
+                case 2 -> 5;
+                default -> 9;
             };
         };
     }
@@ -1131,7 +1145,7 @@ language: java
 ```before
 class A {
     boolean m(boolean x) {
-        boolean b = <caret>false || x;
+        boolean b = <caret>x && true;
         return b;
     }
 }
@@ -1183,16 +1197,16 @@ settings: default
 language: java
 ```before
 class A {
-    boolean m(Object x, Class<?> myClass) {
-        return <caret>x != null && myClass.isInstance(x);
+    boolean m(Object x, Class<?> score) {
+        return <caret>x != null && score.isInstance(x);
     }
 }
 ```
 keys: Alt+Enter, choose "Remove unnecessary 'x != null' condition"
 ```after
 class A {
-    boolean m(Object x, Class<?> myClass) {
-        return myClass.isInstance(x);
+    boolean m(Object x, Class<?> score) {
+        return score.isInstance(x);
     }
 }
 ```
@@ -1217,16 +1231,16 @@ settings: default
 language: java
 ```before
 class A {
-    void f(boolean foo, boolean bar) {
-        boolean b = <caret>!(foo ^ bar);
+    void f(boolean visible, boolean expired) {
+        boolean b = <caret>!(visible ^ expired);
     }
 }
 ```
 keys: Alt+Enter, choose "Simplify"
 ```after
 class A {
-    void f(boolean foo, boolean bar) {
-        boolean b = foo == bar;
+    void f(boolean visible, boolean expired) {
+        boolean b = visible == expired;
     }
 }
 ```
@@ -1236,8 +1250,8 @@ settings: default
 language: java
 ```before
 class A {
-    void f(boolean foo, boolean bar) {
-        boolean b = <caret>foo == bar;
+    void f(boolean armed, boolean dirty) {
+        boolean b = <caret>armed == dirty;
     }
 }
 ```
@@ -1246,21 +1260,21 @@ keys: inspect
 no problem reported
 ```
 
-### JAVA-ICB-041 case 1: condition ? true : foo
+### JAVA-ICB-041 case 1: condition ? true : expired
 settings: default
 language: java
 ```before
 class A {
-    boolean m(boolean condition, boolean foo) {
-        return <caret>condition ? true : foo;
+    boolean m(boolean condition, boolean expired) {
+        return <caret>condition ? true : expired;
     }
 }
 ```
 keys: Alt+Enter, choose "Simplify"
 ```after
 class A {
-    boolean m(boolean condition, boolean foo) {
-        return condition || foo;
+    boolean m(boolean condition, boolean expired) {
+        return condition || expired;
     }
 }
 ```
@@ -1285,11 +1299,11 @@ settings: default
 language: java
 ```before
 class A {
-    void m(int value) {
-        <caret>switch (value) {
-            case 0 -> System.out.println("zero");
-            case 1 -> System.out.println("one");
-            default -> System.out.println("many");
+    void m(int shade) {
+        <caret>switch (shade) {
+            case 0 -> System.out.println("dark");
+            case 1 -> System.out.println("mid");
+            default -> System.out.println("light");
         }
     }
 }
@@ -1297,11 +1311,11 @@ class A {
 keys: Alt+Enter, choose "Push down 'switch' expression"
 ```after
 class A {
-    void m(int value) {
-        System.out.println(switch (value) {
-            case 0 -> "zero";
-            case 1 -> "one";
-            default -> "many";
+    void m(int shade) {
+        System.out.println(switch (shade) {
+            case 0 -> "dark";
+            case 1 -> "mid";
+            default -> "light";
         });
     }
 }
@@ -1312,17 +1326,17 @@ settings: default
 language: java
 ```before
 class A {
-    void m(int value) {
-        <caret>switch (value) {
-            case 0 -> System.out.println("zero");
-            default -> System.err.println("many");
+    void m(int shade) {
+        <caret>switch (shade) {
+            case 0 -> System.out.println("dark");
+            default -> System.err.println("light");
         }
     }
 }
 ```
 keys: Alt+Enter
 ```after
-the intention list does not contain "Push down 'switch' expression"; no problem reported
+no quick fix "Push down 'switch' expression" in the popup
 ```
 
 ### JAVA-ICB-043 case 1: Switch statement
@@ -1343,18 +1357,19 @@ problem: warning `switch` "switch statement"
 
 ### JAVA-ICB-044 case 1: One label, five statements
 settings: enable inspection SwitchStatementDensity
-language: java
 status: unverified (exact percentage rounding)
+language: java
 ```before
 class A {
+    int total;
     void m(int i) {
         switch (i) <caret>{
             case 1:
-                System.out.println("1");
-                System.out.println("2");
-                System.out.println("3");
-                System.out.println("4");
-                System.out.println("5");
+                total++;
+                total *= 2;
+                total -= 3;
+                total += 4;
+                total %= 5;
                 break;
         }
     }
@@ -1380,7 +1395,7 @@ class A {
 ```
 keys: inspect
 ```after
-problem: information `switch` "switch statement without 'default' branch"
+problem: info `switch` "switch statement without 'default' branch"
 ```
 
 ### JAVA-ICB-045 case 2: Switch with default
@@ -1410,20 +1425,21 @@ language: java
 class A {
     void m(int i) {
         switch (i) {
-            case 2:
-                int <caret>x = 0;
+            case 1:
+                String <caret>tmp = "a";
                 break;
-            case 3:
-                x = 3;
-                System.out.println(x);
+            case 2:
+                tmp = "b";
+                use(tmp);
                 break;
         }
     }
+    void use(String s) {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `x` "Local variable x declared in one 'switch' branch and used in another"
+problem: warning `tmp` "Local variable tmp declared in one 'switch' branch and used in another"
 ```
 
 ### JAVA-ICB-046 case 2: Variable used only in its branch
@@ -1433,14 +1449,15 @@ language: java
 class A {
     void m(int i) {
         switch (i) {
-            case 2:
-                int <caret>x = 0;
-                System.out.println(x);
+            case 1:
+                String <caret>tmp = "a";
+                use(tmp);
                 break;
-            case 3:
+            case 2:
                 break;
         }
     }
+    void use(String s) {}
 }
 ```
 keys: inspect
@@ -1453,11 +1470,11 @@ settings: Minimum number of branches=3
 language: java
 ```before
 class A {
-    void foo() {} void bar() {}
-    void m(String expression) {
-        <caret>switch (expression) {
-            case "foo" -> foo();
-            case "bar" -> bar();
+    void forecast() {} void stamp() {}
+    void m(String route) {
+        <caret>switch (route) {
+            case "foo" -> forecast();
+            case "bar" -> stamp();
         }
     }
 }
@@ -1465,12 +1482,12 @@ class A {
 keys: Alt+Enter, choose "Replace 'switch' with 'if'"
 ```after
 class A {
-    void foo() {} void bar() {}
-    void m(String expression) {
-        if ("foo".equals(expression)) {
-            foo();
-        } else if ("bar".equals(expression)) {
-            bar();
+    void forecast() {} void stamp() {}
+    void m(String route) {
+        if ("foo".equals(route)) {
+            forecast();
+        } else if ("bar".equals(route)) {
+            stamp();
         }
     }
 }
@@ -1518,9 +1535,9 @@ settings: default
 language: java
 ```before
 class A {
-    boolean foo() { return true; }
+    boolean unpack() { return true; }
     boolean m() {
-        <caret>if (foo()) {
+        <caret>if (unpack()) {
             return true;
         } else {
             return false;
@@ -1531,9 +1548,9 @@ class A {
 keys: Alt+Enter, choose "Simplify 'if else'"
 ```after
 class A {
-    boolean foo() { return true; }
+    boolean unpack() { return true; }
     boolean m() {
-        return foo();
+        return unpack();
     }
 }
 ```
@@ -1562,11 +1579,11 @@ settings: default
 language: java
 ```before
 class A {
-    void foo() {}
+    void launch() {}
     void m(boolean x) {
-        foo();
+        launch();
         <caret>while (x) {
-            foo();
+            launch();
         }
     }
 }
@@ -1574,10 +1591,10 @@ class A {
 keys: Alt+Enter, choose "Replace 'while' with 'do while'"
 ```after
 class A {
-    void foo() {}
+    void launch() {}
     void m(boolean x) {
         do {
-            foo();
+            launch();
         } while (x);
     }
 }
@@ -1605,20 +1622,22 @@ settings: default
 language: java
 ```before
 class C {
-    boolean <caret>alwaysTrue() {
+    boolean <caret>isIdle() {
         return true;
     }
     void f() {
-        if (!alwaysTrue()) {
+        if (!isIdle()) {
             return;
         }
     }
-    boolean member = !alwaysTrue();
+    boolean g() {
+        return !isIdle();
+    }
 }
 ```
-keys: inspect (batch, whole file)
+keys: inspect batch
 ```after
-problem: warning `alwaysTrue` "Calls to boolean method 'alwaysTrue()' are always inverted"
+problem: warning `isIdle` "Calls to boolean method 'isIdle()' are always inverted"
 ```
 
 ### JAVA-ICB-051 case 2: One call is not negated
@@ -1626,20 +1645,20 @@ settings: default
 language: java
 ```before
 class C {
-    boolean <caret>alwaysTrue() {
+    boolean <caret>measure() {
         return true;
     }
     void f() {
-        if (!alwaysTrue()) {
+        if (!measure()) {
             return;
         }
-        if (alwaysTrue()) {
+        if (measure()) {
             return;
         }
     }
 }
 ```
-keys: inspect (batch, whole file)
+keys: inspect batch
 ```after
 no problem reported
 ```
@@ -1650,14 +1669,15 @@ language: java
 ```before
 class A {
     void m() {
-        boolean <caret>b = true;
-        System.out.println(!b);
+        boolean <caret>ready = true;
+        stop(!ready);
     }
+    void stop(boolean flag) {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `b` "Boolean variable b is always inverted"
+problem: warning `ready` "Boolean variable ready is always inverted"
 ```
 
 ### JAVA-ICB-053 case 1: Replace with constant
@@ -1665,23 +1685,23 @@ settings: enable inspection ConstantValueVariableUse
 language: java
 ```before
 class A {
-    private static void foo(double number) {
-        if (number == 1.0) {
-            f(<caret>number);
+    private static void weave(double depth) {
+        if (depth == 1.0) {
+            f(<caret>depth);
         }
     }
-    private static void f(double number) {}
+    private static void f(double depth) {}
 }
 ```
 keys: Alt+Enter, choose "Replace with '1.0'"
 ```after
 class A {
-    private static void foo(double number) {
-        if (number == 1.0) {
+    private static void weave(double depth) {
+        if (depth == 1.0) {
             f(1.0);
         }
     }
-    private static void f(double number) {}
+    private static void f(double depth) {}
 }
 ```
 
@@ -1689,17 +1709,17 @@ class A {
 settings: enable inspection LawOfDemeter
 language: java
 ```before
-class Wallet { int contents; }
-class Customer { Wallet getWallet() { return null; } }
+class Glacier { int quota; }
+class Warehouse { Glacier getLaunch() { return null; } }
 class A {
-    int pay(Customer c) {
-        return c.getWallet().<caret>contents;
+    int weave(Warehouse c) {
+        return c.getLaunch().<caret>quota;
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `contents` "Access of contents violates Law of Demeter"
+problem: warning `quota` "Access of quota violates Law of Demeter"
 ```
 
 ### JAVA-ICB-055 case 1: Negative name
@@ -1707,8 +1727,8 @@ settings: enable inspection NegativelyNamedBooleanVariable
 language: java
 ```before
 class A {
-    void m() {
-        boolean <caret>disabled = false;
+    void m(String[] args) {
+        boolean <caret>disabled = args.length == 0;
     }
 }
 ```
@@ -1719,27 +1739,29 @@ problem: warning `disabled` "Boolean variable disabled is negatively named"
 
 ### JAVA-ICB-056 case 1: Reuse after use
 settings: default
-language: java
 status: unverified (name chosen for the new variable)
+language: java
 ```before
 class A {
     void x() {
-        String s = "one";
-        System.out.println("s = " + s);
-        <caret>s = "two";
-        System.out.println("s = " + s);
+        int total = 5;
+        log(total);
+        <caret>total = 8;
+        log(total);
     }
+    void log(int v) {}
 }
 ```
 keys: Alt+Enter, choose "Split local variable"
 ```after
 class A {
     void x() {
-        String s = "one";
-        System.out.println("s = " + s);
-        String s1 = "two";
-        System.out.println("s = " + s1);
+        int total = 5;
+        log(total);
+        int total1 = 8;
+        log(total1);
     }
+    void log(int v) {}
 }
 ```
 
@@ -1749,11 +1771,12 @@ language: java
 ```before
 class A {
     void x() {
-        String s = "one";
-        System.out.println("s = " + s);
-        <caret>s = s + "two";
-        System.out.println("s = " + s);
+        int total = 5;
+        log(total);
+        <caret>total = total + 3;
+        log(total);
     }
+    void log(int v) {}
 }
 ```
 keys: inspect
@@ -1765,22 +1788,26 @@ no problem reported
 settings: Report variables with a new expression as initializer (potentially unsafe)=on
 language: java
 ```before
+import java.util.*;
 class A {
     void m() {
-        StringBuilder <caret>sb = new StringBuilder();
-        System.out.println();
-        sb.append(1);
+        List<String> <caret>names = new ArrayList<>();
+        work();
+        names.add("a");
     }
+    void work() {}
 }
 ```
-keys: Alt+Enter, choose "Move declaration of 'sb' closer to usages"
+keys: Alt+Enter, choose "Move declaration of 'names' closer to usages"
 ```after
+import java.util.*;
 class A {
     void m() {
-        System.out.println();
-        StringBuilder sb = new StringBuilder();
-        sb.append(1);
+        work();
+        List<String> names = new ArrayList<>();
+        names.add("a");
     }
+    void work() {}
 }
 ```
 
@@ -1788,12 +1815,14 @@ class A {
 settings: default
 language: java
 ```before
+import java.util.*;
 class A {
     void m() {
-        System.out.println();
-        StringBuilder <caret>sb = new StringBuilder();
-        sb.append(1);
+        work();
+        List<String> <caret>names = new ArrayList<>();
+        names.add("a");
     }
+    void work() {}
 }
 ```
 keys: inspect
@@ -1806,17 +1835,17 @@ settings: default
 language: java
 ```before
 class A {
-    boolean yes() {
-        boolean <caret>b = true;
-        return b;
+    int area() {
+        int <caret>total = 4 * 5;
+        return total;
     }
 }
 ```
 keys: Alt+Enter, choose "Inline variable"
 ```after
 class A {
-    boolean yes() {
-        return true;
+    int area() {
+        return 4 * 5;
     }
 }
 ```
@@ -1843,16 +1872,16 @@ settings: default
 language: java
 ```before
 class A {
-    void m(String s) {
-        String s1 = s.<caret>valueOf(0);
+    void m(String text) {
+        String t = text.<caret>valueOf(42);
     }
 }
 ```
 keys: Alt+Enter, choose "Qualify static 'valueOf' call with reference to class 'String'"
 ```after
 class A {
-    void m(String s) {
-        String s1 = String.valueOf(0);
+    void m(String text) {
+        String t = String.valueOf(42);
     }
 }
 ```
@@ -1876,33 +1905,33 @@ no problem reported
 settings: default
 language: java
 ```before
-public class Person {
-    private String <caret>name;
-    Person(String name) {
-        this.name = name;
+public class Counter {
+    private int <caret>limit;
+    Counter(int limit) {
+        this.limit = limit;
     }
-    public String getName() {
-        return name;
+    public int limit() {
+        return limit;
     }
 }
 ```
-keys: inspect (batch, whole file)
+keys: inspect batch
 ```after
-problem: warning `name` "Declaration can have final modifier"
+problem: warning `limit` "Declaration can have final modifier"
 ```
 
 ### JAVA-ICB-060 case 2: Field assigned outside the constructor
 settings: default
 language: java
 ```before
-public class Person {
-    private String <caret>name;
-    void setName(String name) {
-        this.name = name;
+public class Dial {
+    private int <caret>limit;
+    void setLimit(int limit) {
+        this.limit = limit;
     }
 }
 ```
-keys: inspect (batch, whole file)
+keys: inspect batch
 ```after
 no problem reported
 ```
@@ -1911,22 +1940,22 @@ no problem reported
 settings: default
 language: java
 ```before
-@interface Test {
-    Class<?> expected() default Throwable.class;
+@interface Tag {
+    String text() default "";
 }
 class A {
-    @Test(expected = <caret>Throwable.class)
-    void testSmth() {}
+    @Tag(text = <caret>"")
+    void run() {}
 }
 ```
 keys: Alt+Enter, choose "Remove redundant parameter"
 ```after
-@interface Test {
-    Class<?> expected() default Throwable.class;
+@interface Tag {
+    String text() default "";
 }
 class A {
-    @Test()
-    void testSmth() {}
+    @Tag()
+    void run() {}
 }
 ```
 
@@ -1934,12 +1963,12 @@ class A {
 settings: default
 language: java
 ```before
-@interface Test {
-    Class<?> expected() default Throwable.class;
+@interface Tag {
+    String text() default "";
 }
 class A {
-    @Test(expected = <caret>Exception.class)
-    void testSmth() {}
+    @Tag(text = <caret>"x")
+    void run() {}
 }
 ```
 keys: inspect
@@ -1951,14 +1980,16 @@ no problem reported
 settings: default
 language: java
 ```before
+import java.io.IOException;
 class A {
-    void f() throws Exception, <caret>Exception {}
+    void f() throws IOException, <caret>IOException {}
 }
 ```
-keys: Alt+Enter, choose "Remove 'Exception' from 'f' throws list"
+keys: Alt+Enter, choose "Remove 'IOException' from 'f' throws list"
 ```after
+import java.io.IOException;
 class A {
-    void f() throws Exception {}
+    void f() throws IOException {}
 }
 ```
 
@@ -2010,17 +2041,17 @@ no problem reported
 settings: default
 language: java
 ```before
-record Bar(int a, int b) {
-    public <caret>final int sum() {
-        return a + b;
+record Pair(String left, String right) {
+    public <caret>final String joined() {
+        return left + right;
     }
 }
 ```
 keys: Alt+Enter, choose "Remove 'final' modifier"
 ```after
-record Bar(int a, int b) {
-    public int sum() {
-        return a + b;
+record Pair(String left, String right) {
+    public String joined() {
+        return left + right;
     }
 }
 ```
@@ -2029,8 +2060,8 @@ record Bar(int a, int b) {
 settings: default
 language: java
 ```before
-class Bar {
-    public <caret>final int sum() {
+class Glacier {
+    public <caret>final int dispatch() {
         return 1;
     }
 }
@@ -2084,7 +2115,7 @@ module m {
     requires <caret>java.base;
 }
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning `java.base` "Redundant directive 'requires java.base'. 'java.base' is implicitly required."
 ```
@@ -2101,7 +2132,7 @@ module m {
 import java.util.logging.Logger;
 class A { Logger l; }
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 no problem reported
 ```
@@ -2111,19 +2142,19 @@ settings: default
 language: java
 ```before
 --- module-info.java
-module myModule {
-    provides <caret>com.example.MyService with com.example.MyServiceImpl;
+module acme.core {
+    provides <caret>com.acme.PriceRule with com.acme.FlatRule;
 }
---- com/example/MyService.java
-package com.example;
-public interface MyService {}
---- com/example/MyServiceImpl.java
-package com.example;
-public class MyServiceImpl implements MyService {}
+--- com/acme/PriceRule.java
+package com.acme;
+public interface PriceRule {}
+--- com/acme/FlatRule.java
+package com.acme;
+public class FlatRule implements PriceRule {}
 ```
 keys: inspect
 ```after
-problem: warning `com.example.MyService` "Service interface provided but not exported or used"
+problem: warning `com.acme.PriceRule` "Service interface provided but not exported or used"
 ```
 
 ### JAVA-ICB-067 case 2: Service package exported
@@ -2131,16 +2162,16 @@ settings: default
 language: java
 ```before
 --- module-info.java
-module myModule {
-    exports com.example;
-    provides <caret>com.example.MyService with com.example.MyServiceImpl;
+module acme.core {
+    exports com.acme;
+    provides <caret>com.acme.PriceRule with com.acme.FlatRule;
 }
---- com/example/MyService.java
-package com.example;
-public interface MyService {}
---- com/example/MyServiceImpl.java
-package com.example;
-public class MyServiceImpl implements MyService {}
+--- com/acme/PriceRule.java
+package com.acme;
+public interface PriceRule {}
+--- com/acme/FlatRule.java
+package com.acme;
+public class FlatRule implements PriceRule {}
 ```
 keys: inspect
 ```after
@@ -2151,17 +2182,17 @@ no problem reported
 settings: default
 language: java
 ```before
-record Bar(int a, int b) {
-    <caret>protected int sum() {
-        return a + b;
+record Span(int lo, int hi) {
+    <caret>protected int width() {
+        return hi - lo;
     }
 }
 ```
 keys: Alt+Enter, choose "Weaken visibility"
 ```after
-record Bar(int a, int b) {
-    int sum() {
-        return a + b;
+record Span(int lo, int hi) {
+    int width() {
+        return hi - lo;
     }
 }
 ```
@@ -2170,8 +2201,8 @@ record Bar(int a, int b) {
 settings: default
 language: java
 ```before
-class Bar {
-    <caret>protected int sum() {
+class Orchard {
+    <caret>protected int survey() {
         return 1;
     }
 }
@@ -2188,11 +2219,11 @@ language: java
 class A {
     void m() throws Exception {
         try (AutoCloseable ac = null) {
-            foo();
+            weigh();
             ac.<caret>close();
         }
     }
-    void foo() {}
+    void weigh() {}
 }
 ```
 keys: Alt+Enter, choose "Remove redundant 'close()'"
@@ -2200,10 +2231,10 @@ keys: Alt+Enter, choose "Remove redundant 'close()'"
 class A {
     void m() throws Exception {
         try (AutoCloseable ac = null) {
-            foo();
+            weigh();
         }
     }
-    void foo() {}
+    void weigh() {}
 }
 ```
 
@@ -2215,10 +2246,10 @@ class A {
     void m() throws Exception {
         try (AutoCloseable ac = null) {
             ac.<caret>close();
-            foo();
+            launch();
         }
     }
-    void foo() {}
+    void launch() {}
 }
 ```
 keys: inspect
@@ -2231,16 +2262,16 @@ settings: default
 language: java
 ```before
 class A {
-    void m(java.util.Map<String, Integer> map) {
-        map.forEach((<caret>String s, Integer i) -> System.out.println(s + "=" + i));
+    void m(java.util.Map<String, Integer> catalog) {
+        catalog.forEach((<caret>String s, Integer i) -> System.out.println(s + "=" + i));
     }
 }
 ```
 keys: Alt+Enter, choose "Remove redundant parameter types"
 ```after
 class A {
-    void m(java.util.Map<String, Integer> map) {
-        map.forEach((s, i) -> System.out.println(s + "=" + i));
+    void m(java.util.Map<String, Integer> catalog) {
+        catalog.forEach((s, i) -> System.out.println(s + "=" + i));
     }
 }
 ```
@@ -2250,8 +2281,8 @@ settings: default
 language: java
 ```before
 class A {
-    void m(java.util.Map<String, Integer> map) {
-        map.forEach((<caret>s, i) -> System.out.println(s + "=" + i));
+    void m(java.util.Map<String, Integer> lookup) {
+        lookup.forEach((<caret>s, i) -> System.out.println(s + "=" + i));
     }
 }
 ```
@@ -2262,19 +2293,19 @@ no problem reported
 
 ### JAVA-ICB-071 case 1: Remove redundant canonical constructor
 settings: default
-language: java
 status: unverified (the exact name substituted into "Remove {0}")
+language: java
 ```before
-record Point(int x, int y) {
-    public <caret>Point(int x, int y) {
-        this.x = x;
-        this.y = y;
+record Tag(String key, String value) {
+    public <caret>Tag(String key, String value) {
+        this.key = key;
+        this.value = value;
     }
 }
 ```
 keys: Alt+Enter, choose "Remove canonical constructor"
 ```after
-record Point(int x, int y) {
+record Tag(String key, String value) {
 }
 ```
 
@@ -2282,19 +2313,19 @@ record Point(int x, int y) {
 settings: default
 language: java
 ```before
-record Range(int from, int to) {
-    public Range<caret>(int from, int to) {
-        if (from > to) throw new IllegalArgumentException();
-        this.from = from;
-        this.to = to;
+record Span(int lo, int hi) {
+    public Span<caret>(int lo, int hi) {
+        if (lo > hi) throw new IllegalStateException("bad range");
+        this.lo = lo;
+        this.hi = hi;
     }
 }
 ```
 keys: Alt+Enter, choose "Convert canonical constructor to compact form"
 ```after
-record Range(int from, int to) {
-    public Range {
-        if (from > to) throw new IllegalArgumentException();
+record Span(int lo, int hi) {
+    public Span {
+        if (lo > hi) throw new IllegalStateException("bad range");
     }
 }
 ```
@@ -2303,15 +2334,17 @@ record Range(int from, int to) {
 settings: default
 language: java
 ```before
+import java.io.IOException;
 class A {
-    void method() throws <caret>InterruptedException {
-        System.out.println();
+    int count;
+    void relay() throws <caret>IOException {
+        count++;
     }
 }
 ```
-keys: inspect (batch, whole file)
+keys: inspect batch
 ```after
-problem: warning `InterruptedException` "The declared exception InterruptedException is never thrown"
+problem: warning `IOException` "The declared exception IOException is never thrown"
 ```
 
 ### JAVA-ICB-072 case 2: Actually thrown
@@ -2319,24 +2352,24 @@ settings: default
 language: java
 ```before
 class A {
-    void method() throws <caret>InterruptedException {
+    void shuffle() throws <caret>InterruptedException {
         Thread.sleep(1);
     }
 }
 ```
-keys: inspect (batch, whole file)
+keys: inspect batch
 ```after
 no problem reported
 ```
 
 ### JAVA-ICB-073 case 1: Reifiable varargs
 settings: default
-language: java
 status: unverified (exact highlighted element)
+language: java
 ```before
 class A {
     <caret>@SafeVarargs
-    public final void processStrings(String... strings) {
+    public final void bake(String... strings) {
     }
 }
 ```
@@ -2365,18 +2398,18 @@ settings: default
 language: java
 ```before
 class A {
-    static void printPoint(int <caret>x, int y) {
-        System.out.println(x + ", " + y);
+    static void show(int <caret>depth, int width) {
+        System.out.println(depth + "x" + width);
     }
-    public static void main(String[] args) {
-        printPoint(0, 1);
-        printPoint(0, 2);
+    public static void main(String[] argv) {
+        show(2, 5);
+        show(2, 7);
     }
 }
 ```
-keys: inspect (batch, whole file)
+keys: inspect batch
 ```after
-problem: warning `x` "Value of parameter x is always '0'"
+problem: warning `depth` "Value of parameter depth is always '2'"
 ```
 
 ### JAVA-ICB-074 case 2: Different values
@@ -2384,16 +2417,16 @@ settings: default
 language: java
 ```before
 class A {
-    static void printPoint(int <caret>x, int y) {
-        System.out.println(x + ", " + y);
+    static void show(int <caret>depth, int width) {
+        System.out.println(depth + "x" + width);
     }
-    public static void main(String[] args) {
-        printPoint(0, 1);
-        printPoint(3, 2);
+    public static void main(String[] argv) {
+        show(2, 5);
+        show(3, 7);
     }
 }
 ```
-keys: inspect (batch, whole file)
+keys: inspect batch
 ```after
 no problem reported
 ```
@@ -2403,14 +2436,14 @@ settings: default
 language: java
 ```before
 class Y {
-    int <caret>yyy() {
+    int <caret>brew() {
         return 0;
     }
 }
 ```
-keys: inspect (batch, whole file)
+keys: inspect batch
 ```after
-problem: warning `yyy` "Method yyy() always returns 0"
+problem: warning `brew` "Method brew() always returns 0"
 ```
 
 ### JAVA-ICB-075 case 2: Different values
@@ -2418,13 +2451,13 @@ settings: default
 language: java
 ```before
 class Y {
-    int <caret>yyy(boolean b) {
+    int <caret>brew(boolean b) {
         if (b) return 0;
         return 1;
     }
 }
 ```
-keys: inspect (batch, whole file)
+keys: inspect batch
 ```after
 no problem reported
 ```
@@ -2469,23 +2502,21 @@ no problem reported
 settings: default
 language: java
 ```before
-import java.util.List;
-import java.util.function.Predicate;
+import java.util.function.Function;
 class A {
-    boolean contains(List<String> names, String name) {
-        return ((Predicate<String>) x -> {
-            return names.contains(x);
-        }).<caret>test(name);
+    int twice(int base) {
+        return ((Function<Integer, Integer>) v -> {
+            return v * 2 + base;
+        }).<caret>apply(7);
     }
 }
 ```
 keys: Alt+Enter, choose "Replace method call on lambda with lambda body"
 ```after
-import java.util.List;
-import java.util.function.Predicate;
+import java.util.function.Function;
 class A {
-    boolean contains(List<String> names, String name) {
-        return names.contains(name);
+    int twice(int base) {
+        return 7 * 2 + base;
     }
 }
 ```
@@ -2517,9 +2548,9 @@ class A {}
 --- lib/L.java
 class L {}
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
-problem: warning module app "Module 'app' sources do not depend on module 'lib' sources"
+problem: warning module `app` "Module 'app' sources do not depend on module 'lib' sources"
 ```
 
 ### JAVA-ICB-078 case 2: Used dependency
@@ -2532,15 +2563,15 @@ class A { L l; }
 --- lib/L.java
 class L {}
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 no problem reported
 ```
 
 ### JAVA-ICB-079 case 1: Unused private method
 settings: default
-language: java
 status: unverified (Safe delete shows a usages dialog only when usages exist)
+language: java
 ```before
 class A {
     private void <caret>helper() {}
@@ -2574,10 +2605,12 @@ language: java
 ```before
 class A {
     void m() {
-        <caret>label: for (int i = 0; i < 10; i++) {
-            if (i == 3) {
+        int k = 0;
+        <caret>outer: while (k < 5) {
+            if (k == 3) {
                 break;
             }
+            k++;
         }
     }
 }
@@ -2586,10 +2619,12 @@ keys: Alt+Enter, choose "Remove unused label"
 ```after
 class A {
     void m() {
-        for (int i = 0; i < 10; i++) {
-            if (i == 3) {
+        int k = 0;
+        while (k < 5) {
+            if (k == 3) {
                 break;
             }
+            k++;
         }
     }
 }
@@ -2601,10 +2636,12 @@ language: java
 ```before
 class A {
     void m() {
-        <caret>label: for (int i = 0; i < 10; i++) {
-            if (i == 3) {
-                break label;
+        int k = 0;
+        <caret>outer: while (k < 5) {
+            if (k == 3) {
+                break outer;
             }
+            k++;
         }
     }
 }
@@ -2615,43 +2652,43 @@ no problem reported
 ```
 
 ### JAVA-ICB-081 case 1: Library without usages
-settings: default
+settings: enable inspection UnusedLibrary
 language: plain
 ```before
 modules: app (library: libfoo.jar)
 --- app/A.java
 class A {}
 ```
-keys: inspect (batch, whole project, enable inspection UnusedLibrary)
+keys: inspect batch
 ```after
-problem: warning library libfoo "Unused library 'libfoo'"
+problem: warning library `libfoo` "Unused library 'libfoo'"
 ```
 
 ### JAVA-ICB-082 case 1: Setter with ignored result
 settings: default
-language: java
 status: unverified (Alt+Enter availability on the fly vs batch only)
+language: java
 ```before
 class A {
-    private String myStr;
-    public String <caret>setStr(String str) {
-        myStr = str;
-        return myStr;
+    private String owner;
+    public String <caret>setAudit(String motto) {
+        owner = motto;
+        return owner;
     }
     void test() {
-        setStr("value");
+        setAudit("value");
     }
 }
 ```
 keys: Alt+Enter, choose "Make method 'void'"
 ```after
 class A {
-    private String myStr;
-    public void setStr(String str) {
-        myStr = str;
+    private String owner;
+    public void setAudit(String motto) {
+        owner = motto;
     }
     void test() {
-        setStr("value");
+        setAudit("value");
     }
 }
 ```
@@ -2669,7 +2706,7 @@ class A {
     }
 }
 ```
-keys: inspect (batch, whole file)
+keys: inspect batch
 ```after
 no problem reported
 ```
@@ -2678,16 +2715,16 @@ no problem reported
 settings: enable inspection WeakerAccess
 language: java
 ```before
-class Sample {
-    void foo() {
-        bar("foo", "foo");
+class Lagoon {
+    void audit() {
+        schedule(3, 4);
     }
-    void <caret>bar(String x, String y) { }
+    void <caret>schedule(int a, int b) { }
 }
 ```
-keys: inspect (batch, whole file)
+keys: inspect batch
 ```after
-problem: warning `bar` "Can be private"
+problem: warning `schedule` "Can be private"
 ```
 
 ### JAVA-ICB-084 case 1: Class with 11 dependencies
@@ -2703,7 +2740,7 @@ class C {}
 --- D.java
 class D {}
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning `A` "Class 'A' has too many dependencies (3 > 2)"
 ```
@@ -2721,7 +2758,7 @@ class B { Core c; }
 --- C.java
 class C { Core c; }
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning `Core` "Class 'Core' has too many dependents (3 > 2)"
 ```
@@ -2739,7 +2776,7 @@ class C { D d; }
 --- D.java
 class D {}
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning `A` "Class 'A' has too many transitive dependencies (3 > 2)"
 ```
@@ -2757,7 +2794,7 @@ class B { C c; }
 --- A.java
 class A { B b; }
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning `D` "Class 'D' has too many transitive dependencies (3 > 2)"
 ```
@@ -2771,7 +2808,7 @@ class <caret>A { B b; }
 --- B.java
 class B { A a; }
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning `A` "Class 'A' is cyclically dependent on class 'B'"
 ```
@@ -2787,15 +2824,15 @@ class A { q.B b; }
 package q;
 public class B { p.A a; }
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning package `p` "Package 'p' is cyclically dependent on package 'q'"
 ```
 
 ### JAVA-ICB-090 case 1: Package-private access across modules
 settings: enable inspection SuspiciousPackagePrivateAccess
-language: java
 status: unverified (exact subject text of {0})
+language: java
 ```before
 modules: app (depends on lib), lib
 --- lib/p/Util.java
@@ -2814,19 +2851,19 @@ problem: warning `help` "'help()' is package-private, but declared in a differen
 settings: enable inspection AssignmentOrReturnOfFieldWithMutableType
 language: java
 ```before
-class Log {
-    private String[] messages = {"one", "two", "three"};
-    String[] getMessages() {
-        return <caret>messages;
+class Turbine {
+    private String[] tray = {"one", "two", "three"};
+    String[] getAudit() {
+        return <caret>tray;
     }
 }
 ```
-keys: Alt+Enter, choose "Replace with 'messages.clone()'"
+keys: Alt+Enter, choose "Replace with 'tray.clone()'"
 ```after
-class Log {
-    private String[] messages = {"one", "two", "three"};
-    String[] getMessages() {
-        return messages.clone();
+class Turbine {
+    private String[] tray = {"one", "two", "three"};
+    String[] getAudit() {
+        return tray.clone();
     }
 }
 ```
@@ -2836,26 +2873,26 @@ settings: enable inspection PackageVisibleField
 language: java
 ```before
 public class A {
-    Object <caret>object;
-    final static int MODE = 0;
+    String <caret>label;
+    static final int LIMIT = 5;
 }
 ```
 keys: inspect
 ```after
-problem: warning `object` "Package-visible field object"
+problem: warning `label` "Package-visible field label"
 ```
 
 ### JAVA-ICB-093 case 1: Package-private nested class
 settings: enable inspection PackageVisibleInnerClass
 language: java
 ```before
-public class Outer {
-    static class <caret>Nested {}
+public class Beacon {
+    static class <caret>Jeweler {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `Nested` "Package-visible nested class Nested"
+problem: warning `Jeweler` "Package-visible nested class Jeweler"
 ```
 
 ### JAVA-ICB-094 case 1: Protected field
@@ -2863,48 +2900,48 @@ settings: enable inspection ProtectedField
 language: java
 ```before
 public class A {
-    protected Object <caret>object;
-    protected final static int MODE = 0;
+    protected String <caret>label;
+    protected static final int LIMIT = 5;
 }
 ```
 keys: inspect
 ```after
-problem: warning `object` "Protected field object"
+problem: warning `label` "Protected field label"
 ```
 
 ### JAVA-ICB-095 case 1: Protected nested class
 settings: enable inspection ProtectedInnerClass
 language: java
 ```before
-public class Outer {
-    protected static class <caret>Nested {}
+public class Booking {
+    protected static class <caret>Heron {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `Nested` "Protected nested class Nested"
+problem: warning `Heron` "Protected nested class Heron"
 ```
 
 ### JAVA-ICB-096 case 1: Encapsulate public field
 settings: default
-language: java
 status: unverified (Encapsulate Fields dialog defaults)
+language: java
 ```before
-class Main {
-    public String <caret>name;
+class Loom {
+    public int <caret>count;
 }
 ```
-keys: Alt+Enter, choose "Encapsulate field 'name'", Enter in the dialog (defaults: private field, getter and setter, update usages)
+keys: Alt+Enter, choose "Encapsulate field 'count'", Enter in the dialog (defaults: private field, getter and setter, update usages)
 ```after
-class Main {
-    private String name;
+class Loom {
+    private int count;
 
-    public String getName() {
-        return name;
+    public int getCount() {
+        return count;
     }
 
-    public void setName(String name) {
-        this.name = name;
+    public void setCount(int count) {
+        this.count = count;
     }
 }
 ```
@@ -2913,7 +2950,7 @@ class Main {
 settings: default
 language: java
 ```before
-class Main {
+class Lighthouse {
     public static final String <caret>NAME = "x";
 }
 ```
@@ -2926,30 +2963,30 @@ no problem reported
 settings: enable inspection PublicInnerClass
 language: java
 ```before
-public class Outer {
-    public static class <caret>Nested {}
+public class Ingredient {
+    public static class <caret>Garden {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `Nested` "'public' nested class Nested"
+problem: warning `Garden` "'public' nested class Garden"
 ```
 
 ### JAVA-ICB-098 case 1: Access to another object's field
 settings: enable inspection UseOfAnotherObjectsPrivateField
 language: java
 ```before
-public class Base {
-    protected int bar;
-    void increment(Base base) {
-        bar++;
-        base.<caret>bar++;
+public class Comet {
+    protected int tick;
+    void merge(Comet peer) {
+        this.tick += 1;
+        peer.<caret>tick += 1;
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `bar` "Direct access to non-public field bar of another object"
+problem: warning `tick` "Direct access to non-public field tick of another object"
 ```
 
 ### JAVA-ICB-099 case 1: Catch NPE
@@ -2957,9 +2994,9 @@ settings: enable inspection BadExceptionCaught
 language: java
 ```before
 class A {
-    boolean m(java.awt.Component component) {
+    boolean m(java.awt.Component dims) {
         try {
-            return component.getMousePosition(true) != null;
+            return dims.getMousePosition(true) != null;
         } catch (<caret>NullPointerException e) {
             return false;
         }
@@ -2976,7 +3013,7 @@ settings: enable inspection BadExceptionDeclared
 language: java
 ```before
 class A {
-    void describeModule(String module) throws <caret>Exception {}
+    void assemble(String region) throws <caret>Exception {}
 }
 ```
 keys: inspect
@@ -2989,8 +3026,8 @@ settings: enable inspection BadExceptionThrown
 language: java
 ```before
 class A {
-    void setup(Object mode) {
-        if (mode == null)
+    void weave(Object slot) {
+        if (slot == null)
             <caret>throw new RuntimeException("Problem during setup");
     }
 }
@@ -3008,11 +3045,11 @@ import java.io.IOException;
 class A {
     void m() {
         try {
-            throwingMethod();
+            bake();
         } <caret>catch (IOException ex) {
         }
     }
-    void throwingMethod() throws IOException {}
+    void bake() throws IOException {}
 }
 ```
 keys: Alt+Enter, choose "Rename 'ex' to 'ignored'"
@@ -3021,11 +3058,11 @@ import java.io.IOException;
 class A {
     void m() {
         try {
-            throwingMethod();
+            bake();
         } catch (IOException ignored) {
         }
     }
-    void throwingMethod() throws IOException {}
+    void bake() throws IOException {}
 }
 ```
 
@@ -3037,11 +3074,11 @@ import java.io.IOException;
 class A {
     void m() {
         try {
-            throwingMethod();
+            stamp();
         } <caret>catch (IOException ignored) {
         }
     }
-    void throwingMethod() throws IOException {}
+    void stamp() throws IOException {}
 }
 ```
 keys: inspect
@@ -3053,12 +3090,11 @@ no problem reported
 settings: default
 language: java
 ```before
-import java.io.*;
 class A {
-    void m() throws IOException {
+    void m() throws InterruptedException {
         try {
-            new FileInputStream("");
-        } catch (FileNotFoundException <caret>e) {
+            Thread.sleep(10);
+        } catch (InterruptedException <caret>e) {
             throw e;
         }
     }
@@ -3066,10 +3102,9 @@ class A {
 ```
 keys: Alt+Enter, choose "Delete 'catch' section"
 ```after
-import java.io.*;
 class A {
-    void m() throws IOException {
-        new FileInputStream("");
+    void m() throws InterruptedException {
+        Thread.sleep(10);
     }
 }
 ```
@@ -3078,13 +3113,12 @@ class A {
 settings: default
 language: java
 ```before
-import java.io.*;
 class A {
-    void m() throws IOException {
+    void m() throws InterruptedException {
         try {
-            new FileInputStream("");
-        } catch (FileNotFoundException <caret>e) {
-            System.out.println("x");
+            Thread.sleep(10);
+        } catch (InterruptedException <caret>e) {
+            System.out.println("interrupted");
             throw e;
         }
     }
@@ -3099,11 +3133,11 @@ no problem reported
 settings: enable inspection CheckedExceptionClass
 language: java
 ```before
-class <caret>IllegalMoveException extends Exception {}
+class <caret>RangerException extends Exception {}
 ```
 keys: inspect
 ```after
-problem: warning `IllegalMoveException` "Checked exception class IllegalMoveException"
+problem: warning `RangerException` "Checked exception class RangerException"
 ```
 
 ### JAVA-ICB-105 case 1: Continue in finally
@@ -3112,15 +3146,15 @@ language: java
 ```before
 class A {
     void m() {
-        while (true) {
+        for (int k = 0; k < 3; k++) {
             try {
-                throwing();
+                work();
             } finally {
                 <caret>continue;
             }
         }
     }
-    void throwing() {}
+    void work() {}
 }
 ```
 keys: inspect
@@ -3158,9 +3192,9 @@ import java.nio.file.*;
 class A {
     void m() {
         try {
-            Files.readString(Paths.get("in.txt"));
+            Files.readAllBytes(Paths.get("data.bin"));
         } catch (java.io.IOException e) {
-            throw new RuntimeException(e);
+            e.printStackTrace();
         } <caret>finally {
         }
     }
@@ -3172,9 +3206,9 @@ import java.nio.file.*;
 class A {
     void m() {
         try {
-            Files.readString(Paths.get("in.txt"));
+            Files.readAllBytes(Paths.get("data.bin"));
         } catch (java.io.IOException e) {
-            throw new RuntimeException(e);
+            e.printStackTrace();
         }
     }
 }
@@ -3281,11 +3315,11 @@ problem: warning `throw` "throw inside 'catch' block ignores the caught exceptio
 settings: enable inspection ExtendsThrowable
 language: java
 ```before
-class <caret>EnigmaThrowable extends Throwable {}
+class <caret>Anchor extends Throwable {}
 ```
 keys: inspect
 ```after
-problem: warning `EnigmaThrowable` "Class EnigmaThrowable directly extends 'java.lang.Throwable'"
+problem: warning `Anchor` "Class Anchor directly extends 'java.lang.Throwable'"
 ```
 
 ### JAVA-ICB-111 case 1: Return in finally
@@ -3295,7 +3329,7 @@ language: java
 class A {
     void x() {
         try {
-            throw new RuntimeException();
+            throw new IllegalStateException("boom");
         } <caret>finally {
             return;
         }
@@ -3309,13 +3343,13 @@ problem: warning `finally` "finally block can not complete normally"
 
 ### JAVA-ICB-111 case 2: Conditional return
 settings: default
-language: java
 status: unverified (assumes the block is judged by whether it can complete normally; the statement itself is reported by ReturnFromFinallyBlock)
+language: java
 ```before
 class A {
     void x(boolean b) {
         try {
-            throw new RuntimeException();
+            throw new IllegalStateException("boom");
         } <caret>finally {
             if (b) return;
         }
@@ -3332,20 +3366,21 @@ settings: enable inspection InstanceofCatchParameter
 language: java
 ```before
 class A {
-    void foo(Runnable runnable) {
+    void gather(Runnable task) {
         try {
-            runnable.run();
-        } catch (Throwable throwable) {
-            if (<caret>throwable instanceof NoClassDefFoundError) {
-                System.out.println("Class not found!");
+            task.run();
+        } catch (Exception err) {
+            if (<caret>err instanceof IllegalStateException) {
+                recover();
             }
         }
     }
+    void recover() {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `throwable` "'instanceof' on 'catch' parameter throwable"
+problem: warning `err` "'instanceof' on 'catch' parameter err"
 ```
 
 ### JAVA-ICB-113 case 1: Nested try
@@ -3373,8 +3408,8 @@ problem: warning `try` "Nested try statement"
 
 ### JAVA-ICB-114 case 1: Exception without message
 settings: enable inspection NewExceptionWithoutArguments
-language: java
 status: unverified (text substituted for #ref)
+language: java
 ```before
 class A {
     void m() throws java.io.IOException {
@@ -3389,24 +3424,24 @@ problem: warning `new` "new IOException() without arguments"
 
 ### JAVA-ICB-115 case 1: Non-final field
 settings: enable inspection NonFinalFieldOfException
-language: java
 status: unverified (the field has no initializer so the result does not compile; the fix itself only adds `final`)
+language: java
 ```before
-public class EditorException extends Exception {
-    private String <caret>message;
+public class ReceiptException extends Exception {
+    private String <caret>headline;
 }
 ```
-keys: Alt+Enter, choose "Make 'message' 'final'"
+keys: Alt+Enter, choose "Make 'headline' 'final'"
 ```after
-public class EditorException extends Exception {
-    private final String message;
+public class ReceiptException extends Exception {
+    private final String headline;
 }
 ```
 
 ### JAVA-ICB-116 case 1: Throw null
 settings: enable inspection NullThrown
-language: java
 status: unverified (whether the generated expression is shortened to the simple name)
+language: java
 ```before
 class A {
     void m() {
@@ -3428,15 +3463,15 @@ settings: default
 language: java
 ```before
 class A {
-    boolean bar() { return true; }
+    boolean pack() { return true; }
     void m() {
         try {
-            foo();
+            fetch();
         } finally {
-            if (bar()) <caret>return;
+            if (pack()) <caret>return;
         }
     }
-    void foo() {}
+    void fetch() {}
 }
 ```
 keys: inspect
@@ -3451,12 +3486,12 @@ language: java
 class A {
     void m() {
         try {
-            foo();
+            ration();
         } finally {
             Runnable r = () -> { <caret>return; };
         }
     }
-    void foo() {}
+    void ration() {}
 }
 ```
 keys: inspect
@@ -3491,9 +3526,9 @@ language: java
 ```before
 import java.util.Optional;
 class A {
-    void m(Optional<String> optional) {
-        optional.orElseThrow(() -> {
-            <caret>throw new RuntimeException();
+    void m(Optional<String> title) {
+        title.orElseThrow(() -> {
+            <caret>throw new IllegalArgumentException("none");
         });
     }
 }
@@ -3502,8 +3537,8 @@ keys: Alt+Enter, choose "Replace 'throw' with 'return' in lambda"
 ```after
 import java.util.Optional;
 class A {
-    void m(Optional<String> optional) {
-        optional.orElseThrow(() -> new RuntimeException());
+    void m(Optional<String> title) {
+        title.orElseThrow(() -> new IllegalArgumentException("none"));
     }
 }
 ```
@@ -3514,8 +3549,8 @@ language: java
 ```before
 import java.util.Optional;
 class A {
-    void m(Optional<String> optional) {
-        optional.orElseThrow(() -> <caret>new RuntimeException());
+    void m(Optional<String> crew) {
+        crew.orElseThrow(() -> <caret>new RuntimeException());
     }
 }
 ```
@@ -3529,13 +3564,13 @@ settings: enable inspection ThrowCaughtLocally
 language: java
 ```before
 class A {
-    void m(boolean b) {
+    void m(int n) {
         try {
-            if (!b) {
-                <caret>throw new IllegalStateException("Directory not found.");
+            if (n < 0) {
+                <caret>throw new IllegalArgumentException("negative");
             }
         } catch (Exception e) {
-            System.out.println("run failed");
+            n = 0;
         }
     }
 }
@@ -3549,17 +3584,16 @@ problem: warning `throw` "throw caught by containing 'try' statement"
 settings: default
 language: java
 ```before
-class Fascinating {
-    void doTask(Task t) {
+class Pebble {
+    void brew(Kettle k) {
         try {
-            t.activity();
+            k.boil();
         } finally {
-            if (!t.finish()) {
-                <caret>throw new IllegalStateException();
-            }
+            k.cool();
+            <caret>throw new IllegalStateException("cold");
         }
     }
-    interface Task { void activity(); boolean finish(); }
+    interface Kettle { void boil(); void cool(); }
 }
 ```
 keys: inspect
@@ -3591,16 +3625,16 @@ no problem reported
 settings: enable inspection ThrowsRuntimeException
 language: java
 ```before
-class InvalidDataException extends RuntimeException {}
-class TextEditor {
-    void readSettings() throws <caret>InvalidDataException {}
+class JewelerException extends RuntimeException {}
+class Bridge {
+    void pack() throws <caret>JewelerException {}
 }
 ```
-keys: Alt+Enter, choose "Remove 'InvalidDataException' from 'throws' clause"
+keys: Alt+Enter, choose "Remove 'JewelerException' from 'throws' clause"
 ```after
-class InvalidDataException extends RuntimeException {}
-class TextEditor {
-    void readSettings() {}
+class JewelerException extends RuntimeException {}
+class Bridge {
+    void pack() {}
 }
 ```
 
@@ -3608,28 +3642,24 @@ class TextEditor {
 settings: enable inspection TooBroadCatch
 language: java
 ```before
-import java.io.File;
 class A {
-    String m(String pathToFile, String defaultFilePath) {
+    String m(String text) {
         try {
-            File file = new File(pathToFile);
-            return file.getAbsolutePath();
+            return String.valueOf(Integer.parseInt(text));
         } catch (<caret>Exception ex) {
-            return defaultFilePath;
+            return "?";
         }
     }
 }
 ```
 keys: Alt+Enter, choose "Replace with 'catch' clause for 'RuntimeException'"
 ```after
-import java.io.File;
 class A {
-    String m(String pathToFile, String defaultFilePath) {
+    String m(String text) {
         try {
-            File file = new File(pathToFile);
-            return file.getAbsolutePath();
+            return String.valueOf(Integer.parseInt(text));
         } catch (RuntimeException ex) {
-            return defaultFilePath;
+            return "?";
         }
     }
 }
@@ -3641,9 +3671,9 @@ language: java
 ```before
 import java.io.File;
 class A {
-    public void createFile() throws <caret>Exception {
-        File file = new File("pathToFile");
-        file.createNewFile();
+    public void createRefill() throws <caret>Exception {
+        File tag = new File("pathToFile");
+        tag.createNewFile();
     }
 }
 ```
@@ -3652,9 +3682,9 @@ keys: Alt+Enter, choose "Replace with specific exceptions"
 import java.io.File;
 import java.io.IOException;
 class A {
-    public void createFile() throws IOException {
-        File file = new File("pathToFile");
-        file.createNewFile();
+    public void createRefill() throws IOException {
+        File tag = new File("pathToFile");
+        tag.createNewFile();
     }
 }
 ```
@@ -3663,11 +3693,11 @@ class A {
 settings: enable inspection UncheckedExceptionClass
 language: java
 ```before
-class <caret>EnigmaException extends RuntimeException {}
+class <caret>AtelierException extends RuntimeException {}
 ```
 keys: inspect
 ```after
-problem: warning `EnigmaException` "Unchecked exception class EnigmaException"
+problem: warning `AtelierException` "Unchecked exception class AtelierException"
 ```
 
 ### JAVA-ICB-126 case 1: Move cause into constructor
@@ -3678,8 +3708,8 @@ class A {
     void m() {
         try {
             process();
-        } catch (RuntimeException ex) {
-            RuntimeException wrapper = new RuntimeException("Error while processing");
+        } catch (IllegalStateException ex) {
+            IllegalStateException wrapper = new IllegalStateException("step failed");
             wrapper.<caret>initCause(ex);
             throw wrapper;
         }
@@ -3693,8 +3723,8 @@ class A {
     void m() {
         try {
             process();
-        } catch (RuntimeException ex) {
-            RuntimeException wrapper = new RuntimeException("Error while processing", ex);
+        } catch (IllegalStateException ex) {
+            IllegalStateException wrapper = new IllegalStateException("step failed", ex);
             throw wrapper;
         }
     }
@@ -3711,9 +3741,9 @@ class A {
         MyEx(String m) { super(m); }
     }
     void m(Exception ex) throws MyEx {
-        MyEx wrapper = new MyEx("x");
-        wrapper.<caret>initCause(ex);
-        throw wrapper;
+        MyEx level = new MyEx("x");
+        level.<caret>initCause(ex);
+        throw level;
     }
 }
 ```
@@ -3741,18 +3771,20 @@ problem: warning `finalize` "'finalize()' should not be overridden"
 settings: default
 language: java
 ```before
-class X {
+class Handle {
     public void <caret>finalize() {
-        /* ... */
+        cleanup();
     }
+    void cleanup() {}
 }
 ```
 keys: Alt+Enter, choose "Make 'protected'"
 ```after
-class X {
+class Handle {
     protected void finalize() {
-        /* ... */
+        cleanup();
     }
+    void cleanup() {}
 }
 ```
 
@@ -3760,9 +3792,11 @@ class X {
 settings: default
 language: java
 ```before
-class X {
+class Handle {
     protected void <caret>finalize() {
+        cleanup();
     }
+    void cleanup() {}
 }
 ```
 keys: inspect
@@ -3800,4 +3834,3 @@ keys: inspect
 ```after
 no problem reported
 ```
-

@@ -1,6 +1,6 @@
 # Java inspections catalog, part 1: acceptance cases
 
-Format: `docs/specs/editor/cases/README.md`. Each case belongs to the requirement of the same ID in `docs/specs/java/09-inspections-catalog-1.md`. Keys `Alt+Enter, choose "<fix>"` mean: press Alt+Enter at the caret and pick the quick fix with that exact name from the popup. Keys `inspect` run the inspection over the file (the highlight is what the editor shows); `problem:` lines list the expected highlight. `after: no problem reported` means the inspection must not highlight anything in the before text.
+Format: `docs/specs/java/cases/README.md` (extends `docs/specs/editor/cases/README.md`). Each case belongs to the requirement of the same ID in `docs/specs/java/09-inspections-catalog-1.md`. Keys `inspect` list the expected highlights as `problem:` lines, `inspect batch` runs the whole-project inspection, and `no problem reported` means no highlight.
 
 ### JAVA-ICA-001 case 1: Narrowing int to byte is reported
 settings: default
@@ -36,14 +36,14 @@ no problem reported
 settings: default
 language: java
 ```before
-class C {
-  float f = <caret>(float) 1.1;
+class Dims {
+  float ratio = <caret>(float) 2.75;
 }
 ```
-keys: Alt+Enter, choose "Replace with '1.1f'"
+keys: Alt+Enter, choose "Replace with '2.75f'"
 ```after
-class C {
-  float f = 1.1f;
+class Dims {
+  float ratio = 2.75f;
 }
 ```
 
@@ -52,18 +52,18 @@ settings: default
 language: java
 ```before
 class C {
-  long f(int i) {
-    long val = <caret>65536 * i;
-    return val;
+  long f(int n) {
+    long span = <caret>86400 * n;
+    return span;
   }
 }
 ```
 keys: Alt+Enter, choose "Cast to long"
 ```after
 class C {
-  long f(int i) {
-    long val = 65536L * i;
-    return val;
+  long f(int n) {
+    long span = 86400L * n;
+    return span;
   }
 }
 ```
@@ -72,19 +72,19 @@ class C {
 settings: default
 language: java
 ```before
-class C {
-  long f(int i) {
-    long value = <caret>i << 24;
-    return value;
+class Clock {
+  long toMicros(int seconds) {
+    long micros = <caret>seconds << 20;
+    return micros;
   }
 }
 ```
 keys: Alt+Enter, choose "Cast to long"
 ```after
-class C {
-  long f(int i) {
-    long value = (long) i << 24;
-    return value;
+class Clock {
+  long toMicros(int seconds) {
+    long micros = (long) seconds << 20;
+    return micros;
   }
 }
 ```
@@ -95,8 +95,8 @@ language: java
 ```before
 class C {
   int f(int i, int j) {
-    int val = <caret>i * j;
-    return val;
+    int qty = <caret>i * j;
+    return qty;
   }
 }
 ```
@@ -145,36 +145,38 @@ class C {
 settings: default
 language: java
 ```before
---- byteCode/ByteCodeAnalyzer.java
-package byteCode;
-class <caret>ByteCodeAnalyzer {}
+--- tileMap/TileMapLoader.java
+package tileMap;
+class <caret>TileMapLoader {}
 ```
 keys: inspect
 ```after
-problem: warning `ByteCodeAnalyzer` "Class name ByteCodeAnalyzer begins with its package name"
+problem: warning `TileMapLoader` "Class name TileMapLoader begins with its package name"
 ```
 
 ### JAVA-ICA-007 case 1: Class named like its interface
 settings: default
 language: java
 ```before
-package util;
-abstract class <caret>Iterable<T> implements java.lang.Iterable<T> {}
+package shop;
+class <caret>Comparable implements java.lang.Comparable<Object> {
+  public int compareTo(Object other) { return 0; }
+}
 ```
 keys: inspect
 ```after
-problem: warning `Iterable` "Class name Iterable is the same as one of its superclass' names"
+problem: warning `Comparable` "Class name Comparable is the same as one of its superclass' names"
 ```
 
 ### JAVA-ICA-008 case 1: Exception class with wrong suffix
 settings: default
 language: java
 ```before
-class <caret>NotStartedEx extends Exception {}
+class <caret>QuotaBreach extends RuntimeException {}
 ```
 keys: inspect
 ```after
-problem: warning `NotStartedEx` "Exception class name NotStartedEx does not end with 'Exception'"
+problem: warning `QuotaBreach` "Exception class name QuotaBreach does not end with 'Exception'"
 ```
 
 ### JAVA-ICA-009 case 1: Test class with a non-matching name (default profile)
@@ -217,32 +219,34 @@ problem: warning `Shorty` "Class name Shorty is too short (6 < 8)"
 settings: default
 language: java
 ```before
-public class <caret>NotStartedException {}
+public class <caret>QuotaExceededException {}
 ```
-keys: Alt+Enter, choose "Make 'NotStartedException' extend 'java.lang.Exception'"
+keys: Alt+Enter, choose "Make 'QuotaExceededException' extend 'java.lang.Exception'"
 ```after
-public class NotStartedException extends java.lang.Exception {}
+public class QuotaExceededException extends java.lang.Exception {}
 ```
 
 ### JAVA-ICA-086 case 1: Abstract class with one subclass
 settings: default
 language: java
 ```before
-abstract class <caret>Base {}
-class Inheritor extends Base {}
+abstract class <caret>Vessel {}
+class Courier extends Vessel {}
 ```
 keys: inspect
 ```after
-problem: warning `Base` "Abstract class Base has only one direct inheritor"
+problem: warning `Vessel` "Abstract class Vessel has only one direct inheritor"
 ```
 
 ### JAVA-ICA-087 case 1: Array length in for condition
 settings: default
 language: java
 ```before
-class C {
-  void foo(Object[] x) {
-    for (int i = 0; i < x.<caret>length; i++) { }
+class Tally {
+  int sum(int[] cells) {
+    int total = 0;
+    for (int k = 0; k < cells.<caret>length; k++) { total += cells[k]; }
+    return total;
   }
 }
 ```
@@ -280,18 +284,18 @@ problem: warning `Shape` "Interface Shape has only one direct inheritor"
 settings: default
 language: java
 ```before
-class C {
-  void f(String s) {
-    for (int i = 0; i < s.<caret>length(); i++) { }
+class Printer {
+  void dump(String banner) {
+    for (int pos = 0; pos < banner.<caret>length(); pos++) { }
   }
 }
 ```
 keys: Alt+Enter, choose "Introduce variable (may change semantics)"
 ```after
-class C {
-  void f(String s) {
-    int length = s.length();
-    for (int i = 0; i < length; i++) { }
+class Printer {
+  void dump(String banner) {
+    int length = banner.length();
+    for (int pos = 0; pos < length; pos++) { }
   }
 }
 ```
@@ -332,9 +336,9 @@ problem: warning `{1, 2, 3, 4}` "Primitive array initializer with too many eleme
 settings: language level=8
 language: java
 ```before
-class Outer {
+class Citadel {
   private void x() {}
-  class Inner {
+  class Summit {
     void y() {
       <caret>x();
     }
@@ -343,9 +347,9 @@ class Outer {
 ```
 keys: Alt+Enter, choose "Make 'x' package-private"
 ```after
-class Outer {
+class Citadel {
   void x() {}
-  class Inner {
+  class Summit {
     void y() {
       x();
     }
@@ -357,17 +361,17 @@ class Outer {
 settings: default
 language: java
 ```before
-class C {
-  boolean f(String s) {
-    return s.<caret>startsWith("x");
+class Router {
+  boolean isAbsolute(String route) {
+    return route.<caret>startsWith("/");
   }
 }
 ```
 keys: Alt+Enter, choose "Replace with 'charAt()' expression"
 ```after
-class C {
-  boolean f(String s) {
-    return !s.isEmpty() && s.charAt(0) == 'x';
+class Router {
+  boolean isAbsolute(String route) {
+    return !route.isEmpty() && route.charAt(0) == '/';
   }
 }
 ```
@@ -495,20 +499,20 @@ settings: library=junit3,junit4
 language: java
 ```before
 import junit.framework.TestCase;
-class MainTestCase<caret> extends TestCase {
-  public void test() {
-    assertTrue(true);
+class Ridge<caret> extends TestCase {
+  public void testSum() {
+    assertEquals(4, 2 + 2);
   }
 }
 ```
 keys: Alt+Enter, choose "Convert to JUnit 4 test case"
 ```after
 import org.junit.Test;
-import static org.junit.Assert.assertTrue;
-class MainTestCase {
+import static org.junit.Assert.assertEquals;
+class Ridge {
   @Test
-  public void test() {
-    assertTrue(true);
+  public void testSum() {
+    assertEquals(4, 2 + 2);
   }
 }
 ```
@@ -517,9 +521,9 @@ class MainTestCase {
 settings: library=junit4
 language: java
 ```before
-class Plain<caret>Test {
+class Cart<caret>Spec {
   @org.junit.Test
-  public void test() { }
+  public void checksTotal() { }
 }
 ```
 keys: inspect
@@ -535,13 +539,13 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 import org.junit.runners.Parameterized;
 @RunWith(Suite.class)
-abstract class Parent {}
+abstract class Gallery {}
 <caret>@RunWith(Parameterized.class)
-class MyTest extends Parent {}
+class BridgeTest extends Gallery {}
 ```
 keys: inspect
 ```after
-problem: warning `@RunWith(Parameterized.class)` "'@RunWith' annotation already exists in Parent class"
+problem: warning `@RunWith(Parameterized.class)` "'@RunWith' annotation already exists in Gallery class"
 ```
 
 ### JAVA-ICA-115 case 2: Runner declared once is fine
@@ -550,9 +554,9 @@ language: java
 ```before
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-abstract class Parent {}
+abstract class Orchard {}
 <caret>@RunWith(Parameterized.class)
-class MyTest extends Parent {}
+class ArcherTest extends Orchard {}
 ```
 keys: inspect
 ```after
@@ -609,10 +613,10 @@ language: java
 ```before
 import org.junit.Assert;
 import org.junit.Test;
-public class Relevant<caret>Test {
+public class Parcel<caret>Test {
   @Test
-  public void testIt() {
-    Assert.assertEquals("expected", "actual");
+  public void weighsParcel() {
+    Assert.assertEquals(12, 3 * 4);
   }
 }
 ```
@@ -620,10 +624,10 @@ keys: Alt+Enter, choose "Migrate to JUnit 5"
 ```after
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-public class RelevantTest {
+public class ParcelTest {
   @Test
-  public void testIt() {
-    Assertions.assertEquals("expected", "actual");
+  public void weighsParcel() {
+    Assertions.assertEquals(12, 3 * 4);
   }
 }
 ```
@@ -649,7 +653,7 @@ class MainTest {
 settings: library=junit4
 language: java
 ```before
-class RuleTest {
+class BisonTest {
   @org.junit.Rule
   public int <caret>x;
 }
@@ -677,15 +681,15 @@ problem: warning `before` "Method 'before' annotated with '@Before' should be pu
 settings: library=junit3,junit4
 language: java
 ```before
-public class MyTest extends junit.framework.TestCase {
+public class TenantTest extends junit.framework.TestCase {
   @org.junit.Test
-  public void test<caret>Foo() { }
+  public void test<caret>Refill() { }
 }
 ```
 keys: Alt+Enter, choose "Remove '@Test' annotation"
 ```after
-public class MyTest extends junit.framework.TestCase {
-  public void testFoo() { }
+public class TenantTest extends junit.framework.TestCase {
+  public void testRefill() { }
 }
 ```
 
@@ -695,7 +699,7 @@ language: java
 ```before
 public class JUnit4Test {
   @org.junit.Test
-  public void <caret>testFoo() { }
+  public void <caret>testBundle() { }
 }
 ```
 keys: inspect
@@ -726,7 +730,7 @@ language: java
 ```before
 class T {
   @org.junit.Test
-  public void testReflection() <caret>throws NoSuchMethodException, IllegalAccessException {
+  public void testWeave() <caret>throws NoSuchMethodException, IllegalAccessException {
   }
 }
 ```
@@ -734,7 +738,7 @@ keys: Alt+Enter, choose "Replace with 'throws Exception'"
 ```after
 class T {
   @org.junit.Test
-  public void testReflection() throws Exception {
+  public void testWeave() throws Exception {
   }
 }
 ```
@@ -746,7 +750,7 @@ language: java
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 @RunWith(Parameterized.class)
-public class <caret>ImportantTest {
+public class <caret>PlaylistTest {
 }
 ```
 keys: Alt+Enter, choose "Create data provider method '@Parameters public static Iterable parameters()'"
@@ -755,7 +759,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 @RunWith(Parameterized.class)
-public class ImportantTest {
+public class PlaylistTest {
   @Parameters
   public static Iterable<Object[]> parameters() {
     return null;
@@ -785,20 +789,20 @@ settings: library=junit3,junit4
 language: java
 ```before
 import org.junit.*;
-public class NecessaryTest {
+public class LedgerTest {
   @Test
-  public void testIt() {
-    junit.framework.Assert.<caret>assertEquals("expected", "actual");
+  public void testSum() {
+    junit.framework.Assert.<caret>assertEquals(4, 2 + 2);
   }
 }
 ```
 keys: Alt+Enter, choose "Replace with 'org.junit.Assert' method call"
 ```after
 import org.junit.*;
-public class NecessaryTest {
+public class LedgerTest {
   @Test
-  public void testIt() {
-    Assert.assertEquals("expected", "actual");
+  public void testSum() {
+    Assert.assertEquals(4, 2 + 2);
   }
 }
 ```

@@ -1,6 +1,6 @@
 # Cases for 09-inspections-catalog-5.md
 
-Format: see docs/specs/editor/cases/README.md. Inspection cases: `keys: Alt+Enter, choose "<fix>"` applies the named quick fix at the caret; `keys: inspect` runs the inspection and `after` then lists `problem: <level> <range text> "<message>"` lines or `no problem reported`.
+Format: `docs/specs/java/cases/README.md` (extends `docs/specs/editor/cases/README.md`). Each case belongs to the requirement of the same ID in `docs/specs/java/09-inspections-catalog-5.md`. Keys `inspect` list the expected highlights as `problem:` lines, `inspect batch` runs the whole-project inspection, and `no problem reported` means no highlight.
 
 ### JAVA-ICB-130 case 1: Delete java.lang import
 settings: enable inspection JavaLangImport
@@ -22,18 +22,18 @@ class A {
 settings: default
 language: java
 ```before
-<caret>import java.util.List;
-import java.util.ArrayList;
-public class Example {
-    List list = new ArrayList();
+<caret>import java.util.Map;
+import java.util.HashMap;
+public class Index {
+    Map table = new HashMap();
 }
 ```
 keys: Alt+Enter, choose "Optimize imports"
 ```after
-import java.util.ArrayList;
-import java.util.List;
-public class Example {
-    List list = new ArrayList();
+import java.util.HashMap;
+import java.util.Map;
+public class Index {
+    Map table = new HashMap();
 }
 ```
 
@@ -41,10 +41,10 @@ public class Example {
 settings: default
 language: java
 ```before
-<caret>import java.util.ArrayList;
-import java.util.List;
-public class Example {
-    List list = new ArrayList();
+<caret>import java.util.HashMap;
+import java.util.Map;
+public class Index {
+    Map table = new HashMap();
 }
 ```
 keys: inspect
@@ -54,8 +54,8 @@ no problem reported
 
 ### JAVA-ICB-132 case 1: Package import
 settings: enable inspection OnDemandImport
-language: java
 status: unverified (text substituted for #ref on an import statement)
+language: java
 ```before
 <caret>import java.util.*;
 class A {
@@ -92,8 +92,8 @@ class A {
 
 ### JAVA-ICB-134 case 1: Single class import
 settings: enable inspection SingleClassImport
-language: java
 status: unverified (text substituted for #ref on an import statement)
+language: java
 ```before
 <caret>import java.util.List;
 class A {
@@ -107,8 +107,8 @@ problem: warning `import java.util.List;` "Single class import import java.util.
 
 ### JAVA-ICB-135 case 1: Replace with non-static import
 settings: enable inspection StaticImport
-language: java
 status: unverified (whether the now redundant java.lang import is kept)
+language: java
 ```before
 <caret>import static java.lang.Math.max;
 class A {
@@ -129,8 +129,8 @@ class A {
 
 ### JAVA-ICB-136 case 1: Qualifier of a configured class
 settings: auto-import table contains java.util.stream.Collectors
-language: java
 status: unverified (whether the fix keeps the qualified import and the precise import form)
+language: java
 ```before
 import java.util.List;
 import java.util.stream.Collectors;
@@ -171,17 +171,17 @@ settings: default
 language: java
 ```before
 <caret>import java.util.ArrayList;
-public class Example {
-    public static void main(String[] args) {
-        System.out.println("Hello World!");
+public class Depot {
+    public static int twice(int n) {
+        return n * 2;
     }
 }
 ```
 keys: Alt+Enter, choose "Remove unused imports"
 ```after
-public class Example {
-    public static void main(String[] args) {
-        System.out.println("Hello World!");
+public class Depot {
+    public static int twice(int n) {
+        return n * 2;
     }
 }
 ```
@@ -191,7 +191,7 @@ settings: default
 language: java
 ```before
 <caret>import java.util.ArrayList;
-public class Example {
+public class Voyage {
     ArrayList<String> list;
 }
 ```
@@ -227,15 +227,15 @@ problem: warning `Shape` "Abstract class Shape has no concrete subclass"
 settings: enable inspection AbstractClassWithoutAbstractMethods
 language: java
 ```before
-abstract class <caret>Example {
-    public String getName() {
-        return "IntelliJ IDEA";
+abstract class <caret>Tunnel {
+    public int length() {
+        return 42;
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `Example` "Class Example is declared 'abstract', and has no 'abstract' methods"
+problem: warning `Tunnel` "Class Tunnel is declared 'abstract', and has no 'abstract' methods"
 ```
 
 ### JAVA-ICB-141 case 1: Redundant abstract redeclaration
@@ -243,16 +243,16 @@ settings: enable inspection AbstractMethodOverridesAbstractMethod
 language: java
 ```before
 abstract class A {
-    abstract void foo();
+    abstract void harvest();
 }
 abstract class B extends A {
-    abstract void <caret>foo();
+    abstract void <caret>harvest();
 }
 ```
 keys: Alt+Enter, choose "Remove redundant abstract method declaration"
 ```after
 abstract class A {
-    abstract void foo();
+    abstract void harvest();
 }
 abstract class B extends A {
 }
@@ -263,15 +263,15 @@ settings: enable inspection AbstractMethodOverridesConcreteMethod
 language: java
 ```before
 class A {
-    void foo() {}
+    void stamp() {}
 }
 abstract class B extends A {
-    abstract void <caret>foo();
+    abstract void <caret>stamp();
 }
 ```
 keys: inspect
 ```after
-problem: warning `foo` "Abstract method foo() overrides concrete method"
+problem: warning `stamp` "Abstract method stamp() overrides concrete method"
 ```
 
 ### JAVA-ICB-143 case 1: Subclass misses the implementation
@@ -279,13 +279,13 @@ settings: enable inspection AbstractMethodWithMissingImplementations
 language: java
 ```before
 abstract class Base {
-    abstract void <caret>foo();
+    abstract void <caret>assemble();
 }
 class Impl extends Base {}
 ```
 keys: inspect
 ```after
-problem: warning `foo` "Abstract method foo() is not implemented in every subclass"
+problem: warning `assemble` "Abstract method assemble() is not implemented in every subclass"
 ```
 
 ### JAVA-ICB-144 case 1: Class implements annotation
@@ -339,42 +339,42 @@ problem: warning `Sub` "Class Sub extends utility class 'Util'"
 
 ### JAVA-ICB-147 case 1: Suggest common base
 settings: default
-language: java
 status: unverified (member chooser may appear; the fix name for a class implementing an interface)
+language: java
 ```before
-interface A {}
-abstract class B implements A {}
-abstract class C1 extends B {}
-abstract class C2 extends B {}
-abstract class C3 extends B {}
-abstract class C4 extends B {}
-abstract class C5 extends B {}
-class MyInheritor implements <caret>A {}
+interface Shape {}
+abstract class Polygon implements Shape {}
+abstract class Triangle extends Polygon {}
+abstract class Quad extends Polygon {}
+abstract class Pentagon extends Polygon {}
+abstract class Hexagon extends Polygon {}
+abstract class Heptagon extends Polygon {}
+class Ferry implements <caret>Shape {}
 ```
-keys: Alt+Enter, choose "Make extends 'B'"
+keys: Alt+Enter, choose "Make extends 'Polygon'"
 ```after
-interface A {}
-abstract class B implements A {}
-abstract class C1 extends B {}
-abstract class C2 extends B {}
-abstract class C3 extends B {}
-abstract class C4 extends B {}
-abstract class C5 extends B {}
-class MyInheritor extends B {}
+interface Shape {}
+abstract class Polygon implements Shape {}
+abstract class Triangle extends Polygon {}
+abstract class Quad extends Polygon {}
+abstract class Pentagon extends Polygon {}
+abstract class Hexagon extends Polygon {}
+abstract class Heptagon extends Polygon {}
+class Ferry extends Polygon {}
 ```
 
 ### JAVA-ICB-147 case 2: Fewer than five inheritors
 settings: default
 language: java
 ```before
-interface A {}
-abstract class B implements A {}
-abstract class C1 extends B {}
-class MyInheritor implements <caret>A {}
+interface Shape {}
+abstract class Polygon implements Shape {}
+abstract class Triangle extends Polygon {}
+class Ferry implements <caret>Shape {}
 ```
 keys: Alt+Enter
 ```after
-the intention list does not contain "Make extends 'B'"; no problem reported
+no quick fix "Make extends 'Polygon'" in the popup
 ```
 
 ### JAVA-ICB-148 case 1: Final configuration class
@@ -455,18 +455,20 @@ no problem reported
 settings: enable inspection NonProtectedConstructorInAbstractClass
 language: java
 ```before
-public abstract class Foo {
-    public <caret>Foo() {
-        /* ... */
+public abstract class Crane {
+    public <caret>Crane() {
+        init();
     }
+    void init() {}
 }
 ```
 keys: Alt+Enter, choose "Make 'protected'"
 ```after
-public abstract class Foo {
-    protected Foo() {
-        /* ... */
+public abstract class Crane {
+    protected Crane() {
+        init();
     }
+    void init() {}
 }
 ```
 
@@ -474,22 +476,22 @@ public abstract class Foo {
 settings: enable inspection ParameterTypePreventsOverriding
 language: java
 ```before
-public class A {
-    public void method(Object o) {}
+public class Base {
+    public void apply(String s) {}
 }
-public class B extends A {
-    public void method(<caret>Object o) {}
-    class Object {}
+public class Derived extends Base {
+    public void apply(<caret>String s) {}
+    class String {}
 }
 ```
-keys: Alt+Enter, choose "Change type of parameter to 'java.lang.Object'"
+keys: Alt+Enter, choose "Change type of parameter to 'java.lang.String'"
 ```after
-public class A {
-    public void method(Object o) {}
+public class Base {
+    public void apply(String s) {}
 }
-public class B extends A {
-    public void method(java.lang.Object o) {}
-    class Object {}
+public class Derived extends Base {
+    public void apply(java.lang.String s) {}
+    class String {}
 }
 ```
 
@@ -498,21 +500,21 @@ settings: enable inspection ProblematicVarargsMethodOverride
 language: java
 ```before
 class A {
-    void foo(String... args) {}
+    void balance(String... args) {}
 }
 class B extends A {
     @Override
-    void <caret>foo(String[] args) {}
+    void <caret>balance(String[] args) {}
 }
 ```
 keys: Alt+Enter, choose "Convert to varargs method"
 ```after
 class A {
-    void foo(String... args) {}
+    void balance(String... args) {}
 }
 class B extends A {
     @Override
-    void foo(String... args) {}
+    void balance(String... args) {}
 }
 ```
 
@@ -520,15 +522,15 @@ class B extends A {
 settings: enable inspection RedundantImplements
 language: java
 ```before
-interface One {}
-interface Two extends One {}
-class X implements <caret>One, Two {}
+interface Lease {}
+interface Ledger extends Lease {}
+class X implements <caret>Lease, Ledger {}
 ```
 keys: Alt+Enter, choose "Remove redundant interface declaration"
 ```after
-interface One {}
-interface Two extends One {}
-class X implements Two {}
+interface Lease {}
+interface Ledger extends Lease {}
+class X implements Ledger {}
 ```
 
 ### JAVA-ICB-155 case 1: Identical body
@@ -569,23 +571,23 @@ no problem reported
 
 ### JAVA-ICB-156 case 1: clone without super
 settings: default
-language: java
 status: unverified (generated form of the inserted call for a method that throws)
+language: java
 ```before
-class A implements Cloneable {
+class Box implements Cloneable {
     @Override
     public Object <caret>clone() {
-        return new A();
+        return new Box();
     }
 }
 ```
 keys: Alt+Enter, choose "Insert call to super method"
 ```after
-class A implements Cloneable {
+class Box implements Cloneable {
     @Override
     public Object clone() {
         super.clone();
-        return new A();
+        return new Box();
     }
 }
 ```
@@ -630,8 +632,8 @@ language: java
 ```before
 import java.util.List;
 class A {
-    void foo() {
-        List<<caret>? extends Integer> list;
+    void bundle() {
+        List<<caret>? extends Integer> pile;
     }
 }
 ```
@@ -639,8 +641,8 @@ keys: Alt+Enter, choose "Replace type parameter with actual class"
 ```after
 import java.util.List;
 class A {
-    void foo() {
-        List<Integer> list;
+    void bundle() {
+        List<Integer> pile;
     }
 }
 ```
@@ -649,16 +651,16 @@ class A {
 settings: enable inspection AbstractMethodCallInConstructor
 language: java
 ```before
-abstract class Parent {
-    abstract void abstractMethod();
-    Parent() {
-        <caret>abstractMethod();
+abstract class Bison {
+    abstract void plot();
+    Bison() {
+        <caret>plot();
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `abstractMethod` "Call to 'abstract' method abstractMethod() during object construction"
+problem: warning `plot` "Call to 'abstract' method plot() during object construction"
 ```
 
 ### JAVA-ICB-160 case 1: Replace with regular initialization
@@ -668,7 +670,7 @@ language: java
 import java.util.*;
 class A {
     void m() {
-        List<Integer> list = new ArrayList<>() <caret>{{
+        List<Integer> cells = new ArrayList<>() <caret>{{
             add(1);
             add(2);
         }};
@@ -680,9 +682,9 @@ keys: Alt+Enter, choose "Replace with regular initialization"
 import java.util.*;
 class A {
     void m() {
-        List<Integer> list = new ArrayList<>();
-        list.add(1);
-        list.add(2);
+        List<Integer> cells = new ArrayList<>();
+        cells.add(1);
+        cells.add(2);
     }
 }
 ```
@@ -694,7 +696,7 @@ language: java
 import java.util.*;
 class A {
     void m() {
-        List<Integer> list = new ArrayList<>() <caret>{
+        List<Integer> rows = new ArrayList<>() <caret>{
             @Override public boolean add(Integer i) { return super.add(i); }
         };
     }
@@ -709,15 +711,15 @@ no problem reported
 settings: enable inspection InstanceVariableInitialization
 language: java
 ```before
-class Foo {
-    public int <caret>bar;
+class Lease {
+    public int <caret>budget;
     static { }
 }
 ```
 keys: Alt+Enter, choose "Make initialization explicit"
 ```after
-class Foo {
-    public int bar = 0;
+class Lease {
+    public int budget = 0;
     static { }
 }
 ```
@@ -726,114 +728,117 @@ class Foo {
 settings: enable inspection InstanceVariableUninitializedUse
 language: java
 ```before
-class Foo {
-    int bar;
-    Foo() {
-        System.out.println(<caret>bar);
+class Turbine {
+    int width;
+    Turbine() {
+        show(<caret>width);
     }
+    void show(int v) {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `bar` "Instance field bar used before initialized"
+problem: warning `width` "Instance field width used before initialized"
 ```
 
 ### JAVA-ICB-163 case 1: Static read in static init
 settings: enable inspection NonFinalStaticVariableUsedInClassInitialization
 language: java
 ```before
-class Foo {
-    public static int bar = 0;
+class Mason {
+    public static int weight = 0;
     static {
-        System.out.println(<caret>bar);
+        show(<caret>weight);
     }
+    static void show(int v) {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `bar` "Non-final static field bar used during class initialization"
+problem: warning `weight` "Non-final static field weight used during class initialization"
 ```
 
 ### JAVA-ICB-164 case 1: Lazy static init
 settings: enable inspection NonThreadSafeLazyInitialization
+status: unverified (name of the generated holder class)
 language: java
 ```before
-import java.util.List;
+import java.util.*;
 class X {
-    private static List<String> list;
-    public List<String> getList() {
-        if (list == null) {
-            <caret>list = List.of("one", "two", "tree");
+    private static Map<String, Integer> table;
+    public Map<String, Integer> lookup() {
+        if (table == null) {
+            <caret>table = new HashMap<>();
         }
-        return list;
+        return table;
     }
 }
 ```
 keys: Alt+Enter, choose "Introduce holder class"
 ```after
-import java.util.List;
+import java.util.*;
 class X {
-    private static final class ListHolder {
-        static final List<String> list = List.of("one", "two", "tree");
+    private static final class MapHolder {
+        static final Map<String, Integer> table = new HashMap<>();
     }
-    public List<String> getList() {
-        return ListHolder.list;
+    public Map<String, Integer> lookup() {
+        return MapHolder.table;
     }
 }
 ```
 
 ### JAVA-ICB-165 case 1: Overridable call in constructor
 settings: enable inspection OverridableMethodCallDuringObjectConstruction
-language: java
 status: unverified (package-local methods are treated as safe; this case uses a method of the same package and relies on the inherited method being overridable by subclasses)
+language: java
 ```before
-class Child extends Parent {
-    Child() {
-        <caret>someMethod();
+class Kiln extends Album {
+    Kiln() {
+        <caret>archive();
     }
 }
-class Parent {
-    void someMethod() {}
+class Album {
+    void archive() {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `someMethod` "Call to overridable method someMethod() during object construction"
+problem: warning `archive` "Call to overridable method archive() during object construction"
 ```
 
 ### JAVA-ICB-166 case 1: Overridden method called
 settings: enable inspection OverriddenMethodCallDuringObjectConstruction
 language: java
 ```before
-abstract class Parent {
-    void someMethod() {}
+abstract class Bridge {
+    void balance() {}
 }
-class Child extends Parent {
-    Child() {
-        <caret>someMethod();
+class Voucher extends Bridge {
+    Voucher() {
+        <caret>balance();
     }
     @Override
-    void someMethod() {}
+    void balance() {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `someMethod` "Call to overridden method someMethod() during object construction"
+problem: warning `balance` "Call to overridden method balance() during object construction"
 ```
 
 ### JAVA-ICB-167 case 1: Uninitialized static field
 settings: enable inspection StaticVariableInitialization
 language: java
 ```before
-class Foo {
-    public static int <caret>bar;
+class Invoice {
+    public static int <caret>total;
     static { }
 }
 ```
 keys: Alt+Enter, choose "Make initialization explicit"
 ```after
-class Foo {
-    public static int bar = 0;
+class Invoice {
+    public static int total = 0;
     static { }
 }
 ```
@@ -842,26 +847,28 @@ class Foo {
 settings: enable inspection StaticVariableUninitializedUse
 language: java
 ```before
-class Foo {
-    public static int bar;
-    public static void main(String[] args) {
-        System.out.println(<caret>bar);
+class Sensor {
+    public static int volume;
+    public static void main(String[] entries) {
+        show(<caret>volume);
     }
+    static void show(int v) {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `bar` "Static field bar used before initialization"
+problem: warning `volume` "Static field volume used before initialization"
 ```
 
 ### JAVA-ICB-169 case 1: Escape in initializer
 settings: enable inspection ThisEscapedInConstructor
 language: java
 ```before
-class Foo {
+class Crane {
     {
-        System.out.println(<caret>this);
+        register(<caret>this);
     }
+    static void register(Object o) {}
 }
 ```
 keys: inspect
@@ -877,9 +884,9 @@ import javax.swing.*;
 import java.awt.*;
 class A {
     void m() {
-        JPanel panel = new JPanel(new BorderLayout(2, 2));
-        JLabel label = new JLabel("Hello World");
-        panel.add(label, BorderLayout.<caret>NORTH);
+        JPanel tick = new JPanel(new BorderLayout(2, 2));
+        JLabel prices = new JLabel("Hello World");
+        tick.add(prices, BorderLayout.<caret>NORTH);
     }
 }
 ```
@@ -889,9 +896,9 @@ import javax.swing.*;
 import java.awt.*;
 class A {
     void m() {
-        JPanel panel = new JPanel(new BorderLayout(2, 2));
-        JLabel label = new JLabel("Hello World");
-        panel.add(label, BorderLayout.PAGE_START);
+        JPanel tick = new JPanel(new BorderLayout(2, 2));
+        JLabel prices = new JLabel("Hello World");
+        tick.add(prices, BorderLayout.PAGE_START);
     }
 }
 ```
@@ -937,7 +944,7 @@ class A {
 keys: Alt+Enter, choose "Convert to Basic Latin"
 ```after
 class A {
-    char c = '©';
+    char c = '\u00a9';
 }
 ```
 
@@ -951,7 +958,7 @@ class A {
 ```
 keys: Alt+Enter
 ```after
-the intention list does not contain "Convert to Basic Latin"; no problem reported
+no quick fix "Convert to Basic Latin" in the popup
 ```
 
 ### JAVA-ICB-174 case 1: Date.toString
@@ -975,19 +982,19 @@ language: java
 ```before
 import org.jetbrains.annotations.Nls;
 class A {
-    void setTitle(@Nls(capitalization = Nls.Capitalization.Title) String title) {}
+    void setCaption(@Nls(capitalization = Nls.Capitalization.Title) String text) {}
     void m() {
-        setTitle(<caret>"This is sentence capitalization but should be title");
+        setCaption(<caret>"open recent projects in new window");
     }
 }
 ```
-keys: Alt+Enter, choose "Properly capitalize 'This is sentence capitalization but should be title'"
+keys: Alt+Enter, choose "Properly capitalize 'open recent projects in new window'"
 ```after
 import org.jetbrains.annotations.Nls;
 class A {
-    void setTitle(@Nls(capitalization = Nls.Capitalization.Title) String title) {}
+    void setCaption(@Nls(capitalization = Nls.Capitalization.Title) String text) {}
     void m() {
-        setTitle("This Is Sentence Capitalization but Should Be Title");
+        setCaption("Open Recent Projects in New Window");
     }
 }
 ```
@@ -1011,13 +1018,13 @@ no problem reported
 
 ### JAVA-ICB-176 case 1: Duplicate literal
 settings: enable inspection DuplicateStringLiteralInspection
-language: java
 status: unverified (tooltip layout of the file list)
+language: java
 ```before
 --- C1.java
-class C1 { String CONST1 = <caret>"duplicate string"; }
+class C1 { String CEILING = <caret>"duplicate string"; }
 --- C2.java
-class C2 { String CONST2 = "duplicate string"; }
+class C2 { String CAPACITY = "duplicate string"; }
 ```
 keys: inspect
 ```after
@@ -1044,8 +1051,8 @@ settings: enable inspection ImplicitDefaultCharsetUsage
 language: java
 ```before
 class A {
-    void foo(byte[] bytes) {
-        String s = new <caret>String(bytes);
+    void gather(byte[] crew) {
+        String s = new <caret>String(crew);
     }
 }
 ```
@@ -1053,8 +1060,8 @@ keys: Alt+Enter, choose "Add 'StandardCharsets.UTF_8' argument"
 ```after
 import java.nio.charset.StandardCharsets;
 class A {
-    void foo(byte[] bytes) {
-        String s = new String(bytes, StandardCharsets.UTF_8);
+    void gather(byte[] crew) {
+        String s = new String(crew, StandardCharsets.UTF_8);
     }
 }
 ```
@@ -1079,8 +1086,8 @@ settings: enable inspection NumericToString
 language: java
 ```before
 class A {
-    void print(Double d) {
-        System.out.println(d.<caret>toString());
+    void show(Float f) {
+        System.out.println(f.<caret>toString());
     }
 }
 ```
@@ -1091,8 +1098,8 @@ problem: warning `toString` "Number.toString() called in an internationalized co
 
 ### JAVA-ICB-181 case 1: SimpleDateFormat
 settings: enable inspection SimpleDateFormatWithoutLocale
-language: java
 status: unverified (text of #ref for a new expression)
+language: java
 ```before
 import java.text.SimpleDateFormat;
 class A {
@@ -1111,14 +1118,14 @@ settings: enable inspection StringConcatenation
 language: java
 ```before
 class A {
-    String getMessage(String string, int number) {
-        return string <caret>+ number;
+    String getMessage(String nickname, int radius) {
+        return nickname <caret>+ radius;
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `+` "String concatenation string + number in an internationalized context"
+problem: warning `+` "String concatenation nickname + radius in an internationalized context"
 ```
 
 ### JAVA-ICB-183 case 1: StringTokenizer
@@ -1139,8 +1146,8 @@ problem: warning `StringTokenizer` "StringTokenizer in an internationalized cont
 
 ### JAVA-ICB-184 case 1: toUpperCase
 settings: enable inspection StringToUpperWithoutLocale
-language: java
 status: unverified (the offered argument choices)
+language: java
 ```before
 class A {
     String m(String s) {
@@ -1178,7 +1185,7 @@ settings: default
 language: java
 ```before
 class A {
-    String s = "<caret>x";
+    String s = "<caret>\u0078";
 }
 ```
 keys: Alt+Enter, choose "Replace with 'x'"
@@ -1207,11 +1214,11 @@ language: java
 ```before
 import org.junit.platform.commons.annotation.Testable;
 @Testable
-public @interface <caret>UnitTest {}
+public @interface <caret>PlateauTest {}
 ```
 keys: inspect
 ```after
-problem: warning `UnitTest` "UnitTest should have @Retention(RetentionPolicy.RUNTIME)"
+problem: warning `PlateauTest` "PlateauTest should have @Retention(RetentionPolicy.RUNTIME)"
 ```
 
 ### JAVA-ICB-187 case 2: Runtime retention present
@@ -1222,7 +1229,7 @@ import java.lang.annotation.*;
 import org.junit.platform.commons.annotation.Testable;
 @Retention(RetentionPolicy.RUNTIME)
 @Testable
-public @interface <caret>UnitTest {}
+public @interface <caret>OtterTest {}
 ```
 keys: inspect
 ```after
@@ -1286,23 +1293,25 @@ language: java
 ```before
 import java.util.*;
 class A {
-    void m() {
-        <caret>for (int x : Arrays.asList(1, 2, 3)) {
-            System.out.println(x);
+    void m(List<String> words) {
+        <caret>for (String w : words) {
+            print(w);
         }
     }
+    void print(String s) {}
 }
 ```
 keys: Alt+Enter, choose "Replace with old-style 'for' statement"
 ```after
 import java.util.*;
 class A {
-    void m() {
-        for (Iterator<Integer> iterator = Arrays.asList(1, 2, 3).iterator(); iterator.hasNext(); ) {
-            final int x = iterator.next();
-            System.out.println(x);
+    void m(List<String> words) {
+        for (Iterator<String> iterator = words.iterator(); iterator.hasNext(); ) {
+            final String w = iterator.next();
+            print(w);
         }
     }
+    void print(String s) {}
 }
 ```
 
@@ -1321,7 +1330,7 @@ problem: warning `yield` "Use of 'yield' as a class name is not supported in rel
 settings: default
 language: java
 ```before
-public class <caret>Example {}
+public class <caret>Crane {}
 ```
 keys: inspect
 ```after
@@ -1333,18 +1342,18 @@ settings: default
 language: java
 ```before
 class A {
-    void <caret>foo(String... ss) {}
-    void bar() {
-        foo("a", "b");
+    void <caret>survey(String... ss) {}
+    void brew() {
+        survey("a", "b");
     }
 }
 ```
 keys: Alt+Enter, choose "Convert varargs parameter to array"
 ```after
 class A {
-    void foo(String[] ss) {}
-    void bar() {
-        foo(new String[]{"a", "b"});
+    void survey(String[] ss) {}
+    void brew() {
+        survey(new String[]{"a", "b"});
     }
 }
 ```
@@ -1354,12 +1363,12 @@ settings: default
 language: java
 ```before
 class A {
-    void <caret>foo(String[] ss) {}
+    void <caret>plot(String[] ss) {}
 }
 ```
 keys: Alt+Enter
 ```after
-the intention list does not contain "Convert varargs parameter to array"; no problem reported
+no quick fix "Convert varargs parameter to array" in the popup
 ```
 
 ### JAVA-ICB-195 case 1: Hashtable keys
@@ -1368,10 +1377,10 @@ language: java
 ```before
 import java.util.*;
 class A {
-    void m(Hashtable<String, String> map) {
-        Enumeration<String> keys = map.<caret>keys();
-        while (keys.hasMoreElements()) {
-            String name = keys.nextElement();
+    void m(Hashtable<String, Integer> ages) {
+        Enumeration<String> names = ages.<caret>keys();
+        while (names.hasMoreElements()) {
+            String who = names.nextElement();
         }
     }
 }
@@ -1380,10 +1389,10 @@ keys: Alt+Enter, choose "Replace with 'Iterator' construct"
 ```after
 import java.util.*;
 class A {
-    void m(Hashtable<String, String> map) {
-        Iterator<String> iterator = map.keySet().iterator();
+    void m(Hashtable<String, Integer> ages) {
+        Iterator<String> iterator = ages.keySet().iterator();
         while (iterator.hasNext()) {
-            String name = iterator.next();
+            String who = iterator.next();
         }
     }
 }
@@ -1391,17 +1400,17 @@ class A {
 
 ### JAVA-ICB-196 case 1: Replace with record pattern
 settings: default
-language: java
 status: unverified (Java 21 for-each record patterns are removed in later language levels; language level of the test project must allow them)
+language: java
 ```before
 import java.util.List;
-record Rec(Integer x, String y) {}
+record Pt(int a, String tag) {}
 class A {
-    static void test(List<Rec> records) {
-        for (Rec <caret>record : records) {
-            System.out.println(record.y());
-            Integer x = record.x;
-            System.out.println(x);
+    static void test(List<Pt> pts) {
+        for (Pt <caret>p : pts) {
+            System.out.println(p.tag());
+            int a = p.a;
+            System.out.println(a * 2);
         }
     }
 }
@@ -1409,12 +1418,12 @@ class A {
 keys: Alt+Enter, choose "Replace with a record pattern"
 ```after
 import java.util.List;
-record Rec(Integer x, String y) {}
+record Pt(int a, String tag) {}
 class A {
-    static void test(List<Rec> records) {
-        for (Rec(Integer x, String y) : records) {
-            System.out.println(y);
-            System.out.println(x);
+    static void test(List<Pt> pts) {
+        for (Pt(int a, String tag) : pts) {
+            System.out.println(tag);
+            System.out.println(a * 2);
         }
     }
 }
@@ -1425,11 +1434,11 @@ settings: default
 language: java
 ```before
 import java.util.List;
-record Rec(Integer x, String y) {}
+record Pt(int a, String tag) {}
 class A {
-    static void test(List<Rec> records) {
-        for (Rec <caret>record : records) {
-            System.out.println(record.y());
+    static void test(List<Pt> pts) {
+        for (Pt <caret>p : pts) {
+            System.out.println(p.tag());
         }
     }
 }
@@ -1444,30 +1453,38 @@ settings: default
 language: java
 ```before
 class A {
-    void test(String str) {
-        <caret>if (str.equals("1")) {
-            System.out.println(1);
-        } else if (str.equals("2")) {
-            System.out.println(2);
-        } else if (str.equals("3")) {
-            System.out.println(3);
+    void test(String cmd) {
+        <caret>if (cmd.equals("go")) {
+            run();
+        } else if (cmd.equals("stop")) {
+            halt();
+        } else if (cmd.equals("wait")) {
+            pause();
         } else {
-            System.out.println(4);
+            idle();
         }
     }
+    void run() {}
+    void halt() {}
+    void pause() {}
+    void idle() {}
 }
 ```
 keys: Alt+Enter, choose "Replace 'if' with 'switch'"
 ```after
 class A {
-    void test(String str) {
-        switch (str) {
-            case "1" -> System.out.println(1);
-            case "2" -> System.out.println(2);
-            case "3" -> System.out.println(3);
-            default -> System.out.println(4);
+    void test(String cmd) {
+        switch (cmd) {
+            case "go" -> run();
+            case "stop" -> halt();
+            case "wait" -> pause();
+            default -> idle();
         }
     }
+    void run() {}
+    void halt() {}
+    void pause() {}
+    void idle() {}
 }
 ```
 
@@ -1476,13 +1493,15 @@ settings: default
 language: java
 ```before
 class A {
-    void test(String str) {
-        <caret>if (str.equals("1")) {
-            System.out.println(1);
-        } else if (str.equals("2")) {
-            System.out.println(2);
+    void test(String cmd) {
+        <caret>if (cmd.equals("go")) {
+            run();
+        } else if (cmd.equals("stop")) {
+            halt();
         }
     }
+    void run() {}
+    void halt() {}
 }
 ```
 keys: inspect
@@ -1492,13 +1511,13 @@ no problem reported
 
 ### JAVA-ICB-198 case 1: Loop to repeat
 settings: default
-language: java
 status: unverified (language level 11; fix name for the StringBuilder.append form)
+language: java
 ```before
 class A {
-    void append(StringBuilder sb, int count, Object obj) {
-        <caret>for (int i = 0; i < count; i++) {
-            sb.append(obj);
+    void fill(StringBuilder out, int times, Object sep) {
+        <caret>for (int n = 0; n < times; n++) {
+            out.append(sep);
         }
     }
 }
@@ -1506,8 +1525,8 @@ class A {
 keys: Alt+Enter, choose "Replace with 'String.repeat()'"
 ```after
 class A {
-    void append(StringBuilder sb, int count, Object obj) {
-        sb.append(String.valueOf(obj).repeat(Math.max(0, count)));
+    void fill(StringBuilder out, int times, Object sep) {
+        out.append(String.valueOf(sep).repeat(Math.max(0, times)));
     }
 }
 ```
@@ -1517,9 +1536,9 @@ settings: default
 language: java
 ```before
 class A {
-    void append(StringBuilder sb, int count) {
-        <caret>for (int i = 0; i < count; i++) {
-            sb.append(i);
+    void fill(StringBuilder out, int times) {
+        <caret>for (int n = 0; n < times; n++) {
+            out.append(n);
         }
     }
 }
@@ -1531,20 +1550,20 @@ no problem reported
 
 ### JAVA-ICB-199 case 1: Hand-written compare
 settings: default
-language: java
 status: unverified (caret location on the reported element)
+language: java
 ```before
 class A {
-    public int compare(int x, int y) {
-        return <caret>x > y ? 1 : x < y ? -1 : 0;
+    public int cmp(long a, long b) {
+        return <caret>a > b ? 1 : a < b ? -1 : 0;
     }
 }
 ```
-keys: Alt+Enter, choose "Replace with 'Integer.compare()'"
+keys: Alt+Enter, choose "Replace with 'Long.compare()'"
 ```after
 class A {
-    public int compare(int x, int y) {
-        return Integer.compare(x, y);
+    public int cmp(long a, long b) {
+        return Long.compare(a, b);
     }
 }
 ```
@@ -1554,8 +1573,8 @@ settings: default
 language: java
 ```before
 class A {
-    public int compare(int x, int y) {
-        return <caret>x > y ? 1 : 0;
+    public int cmp(long a, long b) {
+        return <caret>a > b ? 1 : 0;
     }
 }
 ```
@@ -1566,8 +1585,8 @@ no problem reported
 
 ### JAVA-ICB-200 case 1: Generate constructor
 settings: enable inspection ClassWithoutConstructor
-language: java
 status: unverified (visibility modifier of the generated constructor follows the class)
+language: java
 ```before
 class <caret>Bean {
     private String name;
@@ -1587,16 +1606,16 @@ class Bean {
 settings: enable inspection ClassWithoutNoArgConstructor
 language: java
 ```before
-public class <caret>Bean {
-    private String name;
-    public Bean(String name) {
-        this.name = name;
+public class <caret>Ticket {
+    private int seat;
+    public Ticket(int seat) {
+        this.seat = seat;
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `Bean` "Class Bean is missing a no-arg constructor"
+problem: warning `Ticket` "Class Ticket is missing a no-arg constructor"
 ```
 
 ### JAVA-ICB-202 case 1: Setter without getter
@@ -1619,33 +1638,33 @@ language: java
 ```before
 class Bean {
     int id;
-    int getPayerId() { return id; }
-    void setPayerId(int i) { id = i; }
-    void m(Bean bean) {
-        bean.<caret>setPayerId(bean.getPayerId());
+    int getFetch() { return id; }
+    void setFetch(int i) { id = i; }
+    void m(Bean batch) {
+        batch.<caret>setFetch(batch.getFetch());
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `setPayerId` "Property value set to itself"
+problem: warning `setFetch` "Property value set to itself"
 ```
 
 ### JAVA-ICB-204 case 1: Getter returns another field
 settings: enable inspection SuspiciousGetterSetter
 language: java
 ```before
-class Point {
-    private int x;
-    private int y;
-    public int <caret>getY() {
-        return x;
+class Otter {
+    private int width;
+    private int height;
+    public int <caret>getHeight() {
+        return width;
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `getY` "Getter getY() returns field 'x'"
+problem: warning `getHeight` "Getter getHeight() returns field 'width'"
 ```
 
 ### JAVA-ICB-205 case 1: Replace with block comment
@@ -1654,10 +1673,10 @@ language: java
 ```before
 class A {
     <caret>/**
-     * Dangling comment
+     * Stray notes
      */
     /**
-     * Method javadoc
+     * Computes the sum
      */
     public void m() {}
 }
@@ -1666,10 +1685,10 @@ keys: Alt+Enter, choose "Replace with block comment"
 ```after
 class A {
     /*
-      Dangling comment
+      Stray notes
     */
     /**
-     * Method javadoc
+     * Computes the sum
      */
     public void m() {}
 }
@@ -1681,7 +1700,7 @@ language: java
 ```before
 class A {
     <caret>/**
-     * Method javadoc
+     * Computes the sum
      */
     public void m() {}
 }
@@ -1693,15 +1712,15 @@ no problem reported
 
 ### JAVA-ICB-206 case 1: Replace code tag
 settings: enable inspection HtmlTagCanBeJavadocTag
-language: java
 status: unverified (exact text of the fix name)
+language: java
 ```before
 import java.util.*;
 class A {
     /**
-     * @return empty <caret><code>ArrayList&lt;Integer&gt;</code>
+     * @return the <caret><code>Map&lt;String, Integer&gt;</code> of counts
      */
-    List<Integer> getList() { return null; }
+    Map<String, Integer> getPolish() { return null; }
 }
 ```
 keys: Alt+Enter, choose "Replace with '{@code ...}'"
@@ -1709,9 +1728,9 @@ keys: Alt+Enter, choose "Replace with '{@code ...}'"
 import java.util.*;
 class A {
     /**
-     * @return empty {@code ArrayList<Integer>}
+     * @return the {@code Map<String, Integer>} of counts
      */
-    List<Integer> getList() { return null; }
+    Map<String, Integer> getPolish() { return null; }
 }
 ```
 
@@ -1719,24 +1738,24 @@ class A {
 settings: default
 language: java
 ```before
-class Main {
+class Walrus {
     /**
-     * Doesn't do anything.
+     * Opens the connection.
     <caret>
-     * Does absolutely nothing
+     * Closes it again on error.
      */
-    void foo() {}
+    void plot() {}
 }
 ```
 keys: Alt+Enter, choose "Insert <p>"
 ```after
-class Main {
+class Walrus {
     /**
-     * Doesn't do anything.
+     * Opens the connection.
      * <p>
-     * Does absolutely nothing
+     * Closes it again on error.
      */
-    void foo() {}
+    void plot() {}
 }
 ```
 
@@ -1744,13 +1763,13 @@ class Main {
 settings: default
 language: java
 ```before
-class Main {
+class Beacon {
     /**
-     * Doesn't do anything.
+     * Opens the connection.
      * <p>
-     * Does absolutely nothing
+     * Closes it again on error.
      */
-    <caret>void foo() {}
+    <caret>void audit() {}
 }
 ```
 keys: inspect
@@ -1760,20 +1779,20 @@ no problem reported
 
 ### JAVA-ICB-208 case 1: Unknown tag
 settings: default
-language: java
 status: unverified (exact message text for an unknown tag)
+language: java
 ```before
 class A {
     /**
-     * Invalid tag name
-     * @<caret>poram param description
+     * Weighs the box.
+     * @<caret>parm size the box size
      */
-    public void sample(int param) {}
+    public void weigh(int size) {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `poram` "Wrong tag @poram"
+problem: warning `parm` "Wrong tag @parm"
 ```
 
 ### JAVA-ICB-208 case 2: Known tag
@@ -1783,9 +1802,9 @@ language: java
 class A {
     /**
      * Valid tag name
-     * @<caret>param param description
+     * @<caret>slot slot description
      */
-    public void sample(int param) {}
+    public void survey(int slot) {}
 }
 ```
 keys: inspect
@@ -1795,39 +1814,39 @@ no problem reported
 
 ### JAVA-ICB-209 case 1: Self-closed tag
 settings: enable inspection JavadocHtmlLint
-language: java
 status: unverified (message comes from the JDK's DocLint, its text depends on the JDK version)
+language: java
 ```before
 class A {
     /**
-     * Self-closed tag: <caret><br/>
+     * Rule below<caret><hr/>
      */
-    void sample() {}
+    void bake() {}
 }
 ```
 keys: inspect
 ```after
-problem: error `<br/>` "self-closing element not allowed"
+problem: error `<hr/>` "self-closing element not allowed"
 ```
 
 ### JAVA-ICB-210 case 1: Plain URL
 settings: default
 language: java
 ```before
-class Main {
+class Bridge {
     /**
-     * <caret>https://en.wikipedia.org/
+     * See <caret>https://example.org/docs
      */
-    void foo() {}
+    void survey() {}
 }
 ```
 keys: Alt+Enter, choose "Replace URL with link"
 ```after
-class Main {
+class Bridge {
     /**
-     * <a href="https://en.wikipedia.org/">https://en.wikipedia.org/</a>
+     * See <a href="https://example.org/docs">https://example.org/docs</a>
      */
-    void foo() {}
+    void survey() {}
 }
 ```
 
@@ -1835,11 +1854,11 @@ class Main {
 settings: default
 language: java
 ```before
-class Main {
+class Tenant {
     /**
-     * <a href="https://en.wikipedia.org/"><caret>https://en.wikipedia.org/</a>
+     * See <a href="https://example.org/docs"><caret>https://example.org/docs</a>
      */
-    void foo() {}
+    void stow() {}
 }
 ```
 keys: inspect
@@ -1853,15 +1872,15 @@ language: java
 ```before
 class A {
     /**
-     * @param <caret>someParam description
+     * @param <caret>ghost never declared
      **/
-    void foo() {
+    void gather() {
     }
 }
 ```
 keys: inspect
 ```after
-problem: error `someParam` "Cannot resolve symbol someParam"
+problem: error `ghost` "Cannot resolve symbol ghost"
 ```
 
 ### JAVA-ICB-211 case 2: Existing parameter
@@ -1872,7 +1891,7 @@ class A {
     /**
      * @param <caret>p description
      **/
-    void foo(int p) {
+    void ration(int p) {
     }
 }
 ```
@@ -1883,15 +1902,15 @@ no problem reported
 
 ### JAVA-ICB-212 case 1: Boolean wording, non-boolean return
 settings: default
-language: java
 status: unverified (exact highlighted words)
+language: java
 ```before
-class User {}
+class Glacier {}
 interface Repo {
     /**
-     * @return <caret>true if user is found, false otherwise
+     * @return <caret>true when a record exists, false otherwise
      */
-    User findUser(String name);
+    Glacier findBundle(String name);
 }
 ```
 keys: inspect
@@ -1905,9 +1924,9 @@ language: java
 ```before
 interface Repo {
     /**
-     * @return <caret>true if user is found, false otherwise
+     * @return <caret>true when a record exists, false otherwise
      */
-    boolean hasUser(String name);
+    boolean hasMeasure(String name);
 }
 ```
 keys: inspect
@@ -1921,19 +1940,21 @@ language: java
 ```before
 class A {
     /**
-     * @deprecated use {@code example()} instead
+     * @deprecated replaced by {@code measure()}
      */
-    void <caret>sample() {}
+    void <caret>survey() {}
+    void measure() {}
 }
 ```
 keys: Alt+Enter, choose "Add '@Deprecated' annotation"
 ```after
 class A {
     /**
-     * @deprecated use {@code example()} instead
+     * @deprecated replaced by {@code measure()}
      */
     @Deprecated
-    void sample() {}
+    void survey() {}
+    void measure() {}
 }
 ```
 
@@ -1943,10 +1964,11 @@ language: java
 ```before
 class A {
     /**
-     * @deprecated use {@code example()} instead
+     * @deprecated replaced by {@code measure()}
      */
     @Deprecated
-    void <caret>sample() {}
+    void <caret>bake() {}
+    void measure() {}
 }
 ```
 keys: inspect
@@ -1956,11 +1978,11 @@ no problem reported
 
 ### JAVA-ICB-214 case 1: Add Javadoc
 settings: enable inspection MissingJavadoc
-language: java
 status: unverified (generated skeleton content depends on required tags)
+language: java
 ```before
 public class A {
-    public void <caret>sample(int param) {
+    public void <caret>mend(int width) {
     }
 }
 ```
@@ -1970,7 +1992,7 @@ public class A {
     /**
      *
      */
-    public void sample(int param) {
+    public void mend(int width) {
     }
 }
 ```
@@ -1983,36 +2005,36 @@ language: java
 package <caret>com.sample;
 public class A {}
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning `com.sample` "Package 'com.sample' is missing a package-info.java file"
 ```
 
 ### JAVA-ICB-216 case 1: Convert package.html
 settings: enable inspection PackageDotHtmlMayBePackageInfo
-language: plain
 status: unverified (inspection result view vs editor)
+language: plain
 ```before
---- com/sample/package.html
+--- com/shop/package.html
 <html>
   <body>
-    Documentation example.
+    Helpers for parsing receipts.
   </body>
 </html>
 ```
 keys: Alt+Enter on the file, choose "Convert to 'package-info.java'"
 ```after
---- com/sample/package-info.java
+--- com/shop/package-info.java
 /**
- * Documentation example.
+ * Helpers for parsing receipts.
  */
-package com.sample;
+package com.shop;
 ```
 
 ### JAVA-ICB-217 case 1: Missing package statement
 settings: default
-language: java
 status: unverified (position of the inserted statement)
+language: java
 ```before
 --- com/sample/package-info.java
 <caret>/** Docs. */
@@ -2041,21 +2063,21 @@ no problem reported
 settings: default
 language: java
 ```before
-public class Main {
+public class Cobbler {
     /*
-    * Hello,
+    * First line,
     */
-    // World!<caret>
+    // second line!<caret>
     void f() {
     }
 }
 ```
 keys: Alt+Enter, choose "Replace with Javadoc comment"
 ```after
-public class Main {
+public class Cobbler {
     /**
-     * Hello,
-     * World!
+     * First line,
+     * second line!
      */
     void f() {
     }
@@ -2066,7 +2088,7 @@ public class Main {
 settings: default
 language: java
 ```before
-public class Main {
+public class Shipment {
     void f() {
         // not attached to a declaration<caret>
         int x = 0;
@@ -2075,29 +2097,27 @@ public class Main {
 ```
 keys: Alt+Enter
 ```after
-the intention list does not contain "Replace with Javadoc comment"; no problem reported
+no quick fix "Replace with Javadoc comment" in the popup
 ```
 
 ### JAVA-ICB-219 case 1: Only inheritDoc
 settings: enable inspection UnnecessaryInheritDoc
 language: java
 ```before
-class Example implements Comparable<Example> {
+class Task implements Runnable {
     /**
      * <caret>{@inheritDoc}
      */
     @Override
-    public int compareTo(Example o) {
-        return 0;
+    public void run() {
     }
 }
 ```
 keys: Alt+Enter, choose "Remove unnecessary {@inheritDoc}"
 ```after
-class Example implements Comparable<Example> {
+class Task implements Runnable {
     @Override
-    public int compareTo(Example o) {
-        return 0;
+    public void run() {
     }
 }
 ```
@@ -2106,17 +2126,17 @@ class Example implements Comparable<Example> {
 settings: enable inspection UnnecessaryJavaDocLink
 language: java
 ```before
-class Example {
+class Otter {
     /**
-     * <caret>@see Example#method
+     * <caret>@see Otter#assemble
      */
-    public void method() { }
+    public void assemble() { }
 }
 ```
 keys: Alt+Enter, choose "Remove unnecessary '@see'"
 ```after
-class Example {
-    public void method() { }
+class Otter {
+    public void assemble() { }
 }
 ```
 
@@ -2125,51 +2145,51 @@ settings: enable inspection ClassWithMultipleLoggers
 language: java
 ```before
 import java.util.logging.Logger;
-public class <caret>Critical {
+public class <caret>Lynx {
     protected static final Logger LOG = Logger.getLogger("a");
-    protected static final Logger myLogger = Logger.getLogger("b");
+    protected static final Logger price = Logger.getLogger("b");
 }
 ```
 keys: inspect
 ```after
-problem: warning `Critical` "Class Critical declares multiple loggers"
+problem: warning `Lynx` "Class Lynx declares multiple loggers"
 ```
 
 ### JAVA-ICB-222 case 1: No logger
 settings: enable inspection ClassWithoutLogger
 language: java
 ```before
-public class <caret>NoLoggerDeclared {
-    int calculateNthDigitOfPi(int n) {
+public class <caret>Ranger {
+    int survey(int n) {
         return 1;
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `NoLoggerDeclared` "Class NoLoggerDeclared does not declare a logger"
+problem: warning `Ranger` "Class Ranger does not declare a logger"
 ```
 
 ### JAVA-ICB-223 case 1: Replace foreign class
 settings: default
-language: java
 status: unverified (requires slf4j on the classpath)
+language: java
 ```before
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-public class Paramount {
-    protected static final Logger LOG = LoggerFactory.getLogger(<caret>Critical.class);
+public class Fjord {
+    protected static final Logger LOG = LoggerFactory.getLogger(<caret>Chapel.class);
 }
-class Critical {}
+class Chapel {}
 ```
-keys: Alt+Enter, choose "Replace with 'Paramount.class'"
+keys: Alt+Enter, choose "Replace with 'Fjord.class'"
 ```after
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-public class Paramount {
-    protected static final Logger LOG = LoggerFactory.getLogger(Paramount.class);
+public class Fjord {
+    protected static final Logger LOG = LoggerFactory.getLogger(Fjord.class);
 }
-class Critical {}
+class Chapel {}
 ```
 
 ### JAVA-ICB-223 case 2: Own class literal
@@ -2178,8 +2198,8 @@ language: java
 ```before
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-public class Paramount {
-    protected static final Logger LOG = LoggerFactory.getLogger(<caret>Paramount.class);
+public class Voucher {
+    protected static final Logger LOG = LoggerFactory.getLogger(<caret>Voucher.class);
 }
 ```
 keys: inspect
@@ -2192,14 +2212,14 @@ settings: enable inspection NonStaticFinalLogger
 language: java
 ```before
 import java.util.logging.Logger;
-public class Significant {
+public class Shipment {
     private Logger <caret>LOG = Logger.getLogger("x");
 }
 ```
 keys: Alt+Enter, choose "Make 'LOG' static final"
 ```after
 import java.util.logging.Logger;
-public class Significant {
+public class Shipment {
     private static final Logger LOG = Logger.getLogger("x");
 }
 ```
@@ -2209,31 +2229,31 @@ settings: enable inspection PublicMethodWithoutLogging
 language: java
 ```before
 import java.util.logging.Logger;
-public class Crucial {
+public class Walrus {
     private static final Logger LOG = Logger.getLogger("x");
-    public void <caret>doImportantStuff() {
+    public void <caret>reconcile() {
     }
-    public void doOtherStuff() {
-        LOG.info("do other stuff");
+    public void launch() {
+        LOG.info("started");
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `doImportantStuff` "'public' method doImportantStuff() has no logging call"
+problem: warning `reconcile` "'public' method reconcile() has no logging call"
 ```
 
 ### JAVA-ICB-226 case 1: Concatenation to placeholders
 settings: default
-language: java
 status: unverified (requires slf4j on the classpath)
+language: java
 ```before
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-public class Vital {
-    private static final Logger LOG = LoggerFactory.getLogger(Vital.class);
-    public void saveTheWorld(int i, String s, boolean b) {
-        LOG.<caret>info("saveTheWorld(" + i + ", " + s + ", " + b + ")");
+public class Tenant {
+    private static final Logger LOG = LoggerFactory.getLogger(Tenant.class);
+    public void audit(int amount, String account) {
+        LOG.<caret>info("Transfer " + amount + " to " + account);
     }
 }
 ```
@@ -2241,10 +2261,10 @@ keys: Alt+Enter, choose "Replace concatenation with parameterized log message"
 ```after
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-public class Vital {
-    private static final Logger LOG = LoggerFactory.getLogger(Vital.class);
-    public void saveTheWorld(int i, String s, boolean b) {
-        LOG.info("saveTheWorld({}, {}, {})", i, s, b);
+public class Tenant {
+    private static final Logger LOG = LoggerFactory.getLogger(Tenant.class);
+    public void audit(int amount, String account) {
+        LOG.info("Transfer {} to {}", amount, account);
     }
 }
 ```
@@ -2255,10 +2275,10 @@ language: java
 ```before
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-public class Vital {
-    private static final Logger LOG = LoggerFactory.getLogger(Vital.class);
-    public void saveTheWorld(int i) {
-        LOG.<caret>info("saveTheWorld({})", i);
+public class Glacier {
+    private static final Logger LOG = LoggerFactory.getLogger(Glacier.class);
+    public void calibrate(int amount) {
+        LOG.<caret>info("Transfer {}", amount);
     }
 }
 ```
@@ -2269,8 +2289,8 @@ no problem reported
 
 ### JAVA-ICB-227 case 1: Deprecated annotation
 settings: default
-language: java
 status: unverified (highlighted element and exact quoting)
+language: java
 ```before
 import lombok.experimental.<caret>Builder;
 @Builder
@@ -2283,12 +2303,12 @@ problem: warning `Builder` "Lombok's annotation 'lombok.experimental.Builder' is
 
 ### JAVA-ICB-228 case 1: Redundant ToString
 settings: default
-language: java
 status: unverified (exact message text of the processor warning; needs lombok on the classpath)
+language: java
 ```before
 import lombok.ToString;
 <caret>@ToString
-class Person {
+class Parcel {
     final String name = "";
     @Override
     public String toString() { return name; }
@@ -2296,7 +2316,7 @@ class Person {
 ```
 keys: Alt+Enter, choose "Remove annotation"
 ```after
-class Person {
+class Parcel {
     final String name = "";
     @Override
     public String toString() { return name; }
@@ -2321,8 +2341,8 @@ problem: warning `@Data` "Use of @Data is flagged according to Lombok configurat
 
 ### JAVA-ICB-230 case 1: Qualifier not copied
 settings: default
-language: java
 status: unverified (text of {0})
+language: java
 ```before
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -2338,8 +2358,8 @@ problem: warning `@Qualifier("x")` "Lombok does not copy the annotation 'org.spr
 
 ### JAVA-ICB-231 case 1: Static import of builder()
 settings: default
-language: java
 status: unverified (resulting import form)
+language: java
 ```before
 --- p/Person.java
 package p;
@@ -2360,31 +2380,35 @@ class User { void m() { Person.builder(); } }
 
 ### JAVA-ICB-232 case 1: Extract static class
 settings: enable inspection AnonymousInnerClassMayBeStatic, language level 17
-language: java
 status: unverified (name chosen for the new class: a dialog may ask)
+language: java
 ```before
 class A {
-    void sample() {
-        Thread thread = new Thread(new <caret>Runnable() {
+    void assemble() {
+        Thread worker = new Thread(new <caret>Runnable() {
             @Override
             public void run() {
+                flush();
             }
         });
     }
+    static void flush() {}
 }
 ```
 keys: Alt+Enter, choose "Convert to named 'static' inner class"
 ```after
 class A {
-    void sample() {
-        Thread thread = new Thread(new Task());
+    void assemble() {
+        Thread worker = new Thread(new Task());
     }
 
     private static class Task implements Runnable {
         @Override
         public void run() {
+            flush();
         }
     }
+    static void flush() {}
 }
 ```
 
@@ -2392,23 +2416,23 @@ class A {
 settings: default
 language: java
 ```before
-public class Outer {
-    class <caret>Inner {
-        public void foo() {
-            bar("x");
+public class Thermostat {
+    class <caret>Dial {
+        public int read() {
+            return scale(4);
         }
-        private void bar(String string) {}
+        private int scale(int k) { return k * 2; }
     }
 }
 ```
 keys: Alt+Enter, choose "Make 'static'"
 ```after
-public class Outer {
-    static class Inner {
-        public void foo() {
-            bar("x");
+public class Thermostat {
+    static class Dial {
+        public int read() {
+            return scale(4);
         }
-        private void bar(String string) {}
+        private int scale(int k) { return k * 2; }
     }
 }
 ```
@@ -2417,10 +2441,10 @@ public class Outer {
 settings: default
 language: java
 ```before
-public class Outer {
+public class Kiln {
     int field;
-    class <caret>Inner {
-        public int foo() {
+    class <caret>Plateau {
+        public int harvest() {
             return field;
         }
     }
@@ -2453,26 +2477,26 @@ settings: enable inspection StaticCollection
 language: java
 ```before
 import java.util.*;
-public class Example {
-    static List<String> <caret>list = new ArrayList<>();
+public class Depot {
+    static List<String> <caret>crew = new ArrayList<>();
 }
 ```
 keys: inspect
 ```after
-problem: warning `list` "Static collection list"
+problem: warning `crew` "Static collection crew"
 ```
 
 ### JAVA-ICB-236 case 1: StringBuilder field
 settings: enable inspection StringBufferField
 language: java
 ```before
-public class Example {
-    private StringBuilder <caret>builder = new StringBuilder();
+public class Viaduct {
+    private StringBuilder <caret>buffer = new StringBuilder();
 }
 ```
 keys: inspect
 ```after
-problem: warning `builder` "'StringBuilder' field builder"
+problem: warning `buffer` "'StringBuilder' field buffer"
 ```
 
 ### JAVA-ICB-237 case 1: System.gc
@@ -2494,23 +2518,23 @@ problem: warning `System.gc()` "System.gc() should not be called in production c
 settings: default
 language: java
 ```before
-class Item {
-    public static final Item[] EMPTY_ARRAY = new Item[0];
+class Pebble {
+    public static final Pebble[] EMPTY_ARRAY = new Pebble[0];
 }
-class EmptyNode {
-    Item[] getChildren() {
-        return <caret>new Item[0];
+class Lighthouse {
+    Pebble[] getRelay() {
+        return <caret>new Pebble[0];
     }
 }
 ```
-keys: Alt+Enter, choose "Replace with 'Item.EMPTY_ARRAY'"
+keys: Alt+Enter, choose "Replace with 'Pebble.EMPTY_ARRAY'"
 ```after
-class Item {
-    public static final Item[] EMPTY_ARRAY = new Item[0];
+class Pebble {
+    public static final Pebble[] EMPTY_ARRAY = new Pebble[0];
 }
-class EmptyNode {
-    Item[] getChildren() {
-        return Item.EMPTY_ARRAY;
+class Lighthouse {
+    Pebble[] getRelay() {
+        return Pebble.EMPTY_ARRAY;
     }
 }
 ```
@@ -2519,10 +2543,10 @@ class EmptyNode {
 settings: default
 language: java
 ```before
-class Item {}
-class EmptyNode {
-    Item[] getChildren() {
-        return <caret>new Item[0];
+class Ledger {}
+class Pavilion {
+    Ledger[] getMeasure() {
+        return <caret>new Ledger[0];
     }
 }
 ```
@@ -2586,21 +2610,20 @@ settings: enable inspection MethodWithMultipleLoops
 language: java
 ```before
 class A {
-    void <caret>methodWithTwoLoops(int n1, int n2) {
-        for (int i = 0; i < n1; i++) {
-            System.out.println(i);
+    void <caret>weigh(int rows, int limit) {
+        int total = 0;
+        for (int k = 0; k < rows; k++) {
+            total += k;
         }
-        int j = 0;
-        while (j < n2) {
-            System.out.println(j);
-            j++;
+        while (total > limit) {
+            total /= 2;
         }
     }
 }
 ```
 keys: inspect
 ```after
-problem: warning `methodWithTwoLoops` "methodWithTwoLoops contains 2 loops"
+problem: warning `weigh` "weigh contains 2 loops"
 ```
 
 ### JAVA-ICB-243 case 1: Two return points
@@ -2646,10 +2669,13 @@ language: java
 ```before
 class A {
     void <caret>m() {
-        System.out.println(1);
-        System.out.println(2);
-        System.out.println(3);
+        first();
+        second();
+        third();
     }
+    void first() {}
+    void second() {}
+    void third() {}
 }
 ```
 keys: inspect
@@ -2659,8 +2685,8 @@ problem: warning `m` "m is too long (# Non-comment source statements = 3)"
 
 ### JAVA-ICB-246 case 1: Four statements
 settings: enable inspection OverlyLongLambda
-language: java
 status: unverified (highlighted element of the lambda)
+language: java
 ```before
 class A {
     Runnable r = <caret>() -> {
@@ -2707,18 +2733,17 @@ settings: enable inspection ThreeNegationsPerMethod
 language: java
 ```before
 class A {
-    void <caret>doSmth(int a, int b, boolean flag1, boolean flag2) {
-        if (!flag1 && !flag2) {
-            if (a != b) {
-                System.out.println();
-            }
+    void <caret>tune(int p, int q, boolean idle) {
+        if (p != q && !idle) {
+            step(!idle);
         }
     }
+    void step(boolean f) {}
 }
 ```
 keys: inspect
 ```after
-problem: warning `doSmth` "doSmth contains 3 negations"
+problem: warning `tune` "tune contains 3 negations"
 ```
 
 ### JAVA-ICB-250 case 1: Four exceptions
@@ -2746,7 +2771,7 @@ class B { C c; }
 --- app/C.java
 class C {}
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning `A` "Class A has no dependencies or dependents in its module"
 ```
@@ -2762,15 +2787,15 @@ class <caret>Helper { lib.L l; }
 package lib;
 public class L {}
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
 problem: warning `Helper` "Class Helper has only dependencies on and/or dependents in module 'lib'"
 ```
 
 ### JAVA-ICB-253 case 1: Same class in two jars
 settings: default
-language: plain
 status: unverified (needs the module dependency model; the inspection exists only for the IDE project model)
+language: plain
 ```before
 modules: MainModule (dependencies in order: DepModule[Av1.jar with my.example.A], Av2.jar with my.example.A)
 --- main/Use.java
@@ -2800,9 +2825,9 @@ language: plain
 ```before
 modules: app (language level 8, depends on lib), lib (language level 17)
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
-problem: warning module app "Module app with language level 8 depends on module lib with language level 17"
+problem: warning module `app` "Module app with language level 8 depends on module lib with language level 17"
 ```
 
 ### JAVA-ICB-255 case 1: Module with one class
@@ -2813,9 +2838,9 @@ modules: app
 --- app/A.java
 class A {}
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
-problem: warning module app "Module 'app' contains too few classes (1 < 10)"
+problem: warning module `app` "Module 'app' contains too few classes (1 < 10)"
 ```
 
 ### JAVA-ICB-256 case 1: Module above a limit of 2
@@ -2830,8 +2855,7 @@ class B {}
 --- app/C.java
 class C {}
 ```
-keys: inspect (batch, whole project)
+keys: inspect batch
 ```after
-problem: warning module app "Module 'app' contains too many classes (3 > 2)"
+problem: warning module `app` "Module 'app' contains too many classes (3 > 2)"
 ```
-

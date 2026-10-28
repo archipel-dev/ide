@@ -632,9 +632,9 @@ impl NameMatcher {
             } else {
                 0
             }
-        } else if is_hump_start {
-            -1
-        } else if hump_start_upper && is_lower(pattern_char) && is_upper(name_char) {
+        } else if is_hump_start
+            || (hump_start_upper && is_lower(pattern_char) && is_upper(name_char))
+        {
             -1
         } else {
             0

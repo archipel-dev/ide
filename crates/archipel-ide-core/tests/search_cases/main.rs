@@ -15,14 +15,17 @@
 //! Regex flavor: the spec leaves Java regex versus Rust regex open. The runner uses the Rust
 //! `regex` crate; cases that fail because of the flavor are reported as `fail (regex)`.
 
+mod find;
+mod fip;
 mod matching;
+mod se;
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 /// Number of cases that must pass. Never lower it; raise it with every fix.
-const PASS_BASELINE: usize = 93;
+const PASS_BASELINE: usize = 253;
 
 // ---------------------------------------------------------------------------------------------
 // Parsing
@@ -38,6 +41,8 @@ pub struct Case {
     pub status: Option<String>,
     pub before: Option<String>,
     pub keys: String,
+    /// Other `key: value` lines outside the blocks (`setup:`, `focus:`, ...).
+    pub extra: Vec<String>,
     pub after: Option<String>,
 }
 
@@ -122,6 +127,8 @@ fn parse_file(path: &Path) -> Vec<Case> {
             case.status = Some(value.trim().to_owned());
         } else if let Some(value) = line.strip_prefix("keys:") {
             case.keys = value.trim().to_owned();
+        } else if !line.trim().is_empty() {
+            case.extra.push(line.to_owned());
         }
     }
     cases
@@ -174,6 +181,9 @@ pub fn compare_lines(expected: &[String], actual: &[String]) -> Result<(), Strin
 fn run_case(case: &Case) -> Outcome {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match case.file_no() {
         "07" => matching::run(case),
+        "01" => find::run(case),
+        "02" => fip::run(case),
+        "04" => se::run(case),
         "06" => Outcome::NotRunnable("structural search is LATER"),
         _ => Outcome::NotRunnable("no runner yet"),
     }));

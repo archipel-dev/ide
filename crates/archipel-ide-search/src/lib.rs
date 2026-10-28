@@ -145,8 +145,11 @@ impl Matcher {
                 Some(rest) => (true, rest.trim()),
                 None => (false, raw),
             };
-            let compiled =
-                globset::Glob::new(glob).map_err(|_| SearchError::InvalidMask(raw.to_owned()))?;
+            // Masks are case-insensitive and match the whole name (SRCH-FIP-020).
+            let compiled = globset::GlobBuilder::new(glob)
+                .case_insensitive(true)
+                .build()
+                .map_err(|_| SearchError::InvalidMask(raw.to_owned()))?;
             match (exclude, glob.contains('/')) {
                 (false, false) => include_names.push(compiled),
                 (false, true) => include_paths.push(compiled),

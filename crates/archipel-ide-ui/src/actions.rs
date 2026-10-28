@@ -76,6 +76,7 @@ impl AnAction for UiActionImpl {
             UiAction::Copy => data.flag(&command_enabled("editor.copy")),
             UiAction::Cut => data.flag(&command_enabled("editor.cut")),
             UiAction::FindInPath
+            | UiAction::ReplaceInPath
             | UiAction::SaveAll
             | UiAction::NewProject
             | UiAction::OpenProject
@@ -286,7 +287,7 @@ impl IdeApp {
     ) -> R {
         let ide = IdeDataProvider::new(&self.state, &self.commands);
         let ui = UiDataProvider {
-            find_query: &self.find.query,
+            find_query: self.find.query(),
             tree_selection: self.tree_selection.as_deref(),
         };
         let data = add(DataContext::new().with_provider(&ide).with_provider(&ui));

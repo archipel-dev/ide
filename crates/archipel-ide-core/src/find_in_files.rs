@@ -139,6 +139,22 @@ fn in_scope(path: &Path, scope: &Scope) -> bool {
     }
 }
 
+fn info_label(occurrences: usize, files: usize, loading: bool) -> String {
+    let plus = if loading { "+" } else { "" };
+    let plural = |n: usize, one: &str, many: &str| {
+        if n == 1 && !loading {
+            format!("{n} {one}")
+        } else {
+            format!("{n}{plus} {many}")
+        }
+    };
+    format!(
+        "{} in {}",
+        plural(occurrences, "match", "matches"),
+        plural(files, "file", "files")
+    )
+}
+
 /// The result of one run.
 #[derive(Debug, Clone, Default)]
 pub struct FindResults {
@@ -150,20 +166,37 @@ pub struct FindResults {
 }
 
 impl FindResults {
+    /// The results of a search that produced `rows` (the background search of the window).
+    pub fn from_rows(rows: Vec<TextMatch>) -> Self {
+        let occurrences = rows.iter().map(|row| row.highlights.len().max(1)).sum();
+        let mut files: Vec<&Path> = rows.iter().map(|row| row.path.as_path()).collect();
+        files.sort_unstable();
+        files.dedup();
+        let files = files.len();
+        Self {
+            rows,
+            occurrences,
+            files,
+        }
+    }
+
     /// The info label (SRCH-FIP-040).
     pub fn label(&self) -> String {
-        let plural = |n: usize, one: &str, many: &str| {
-            if n == 1 {
-                format!("{n} {one}")
-            } else {
-                format!("{n} {many}")
-            }
-        };
-        format!(
-            "{} in {}",
-            plural(self.occurrences, "match", "matches"),
-            plural(self.files, "file", "files")
-        )
+        self.label_while(false)
+    }
+
+    /// The info label; `loading` marks the counts as open (`N+ matches in M+ files`, SRCH-FIP-040).
+    pub fn label_while(&self, loading: bool) -> String {
+        info_label(self.occurrences, self.files, loading)
+    }
+
+    /// The info label of `rows` without copying them.
+    pub fn label_of(rows: &[TextMatch], loading: bool) -> String {
+        let occurrences = rows.iter().map(|row| row.highlights.len().max(1)).sum();
+        let mut files: Vec<&Path> = rows.iter().map(|row| row.path.as_path()).collect();
+        files.sort_unstable();
+        files.dedup();
+        info_label(occurrences, files.len(), loading)
     }
 }
 
@@ -319,6 +352,77 @@ pub fn replace_confirmation(
     ))
 }
 
+/// The regular expression of a request with Regex on (Words wraps it in `\b`).
+fn build_regex(
+    request: &FindRequest,
+    options: &SearchOptions,
+) -> Result<Option<regex::Regex>, SearchError> {
+    options
+        .regex
+        .then(|| {
+            RegexBuilder::new(&if options.whole_words {
+                format!(r"\b(?:{})\b", request.query)
+            } else {
+                request.query.clone()
+            })
+            .case_insensitive(!options.match_case)
+            .multi_line(true)
+            .build()
+        })
+        .transpose()
+        .map_err(|e| SearchError::InvalidRegex(e.to_string()))
+}
+
+/// Replace (selected), SRCH-FIP-070: the text of a file with the occurrence of one result row
+/// replaced. The row is at the 1-based `line` and `column` (in chars) and `length` chars long.
+/// Regex templates expand against that occurrence; Preserve case follows the found text.
+pub fn replace_row(
+    text: &str,
+    request: &FindRequest,
+    replacement: &str,
+    preserve: bool,
+    (line, column, length): (usize, usize, usize),
+) -> Result<String, String> {
+    let line_start: usize = text
+        .split_inclusive('\n')
+        .take(line.saturating_sub(1))
+        .map(str::len)
+        .sum();
+    let rest = &text[line_start..];
+    let start = line_start
+        + rest
+            .char_indices()
+            .nth(column.saturating_sub(1))
+            .map_or(rest.len(), |(at, _)| at);
+    let tail = &text[start..];
+    let end = start
+        + tail
+            .char_indices()
+            .nth(length)
+            .map_or(tail.len(), |(at, _)| at);
+    if start >= end {
+        return Err("The occurrence is not there any more".into());
+    }
+    let found = &text[start..end];
+    let mut replaced = match build_regex(request, &request.options).map_err(|e| e.to_string())? {
+        Some(regex) => {
+            let caps = regex
+                .captures_iter(text)
+                .find(|c| {
+                    c.get(0)
+                        .is_some_and(|m| m.start() == start && m.end() == end)
+                })
+                .ok_or_else(|| "The occurrence is not there any more".to_owned())?;
+            expand_template(replacement, &regex, &caps)?
+        }
+        None => replacement.to_owned(),
+    };
+    if preserve {
+        replaced = preserve_case(found, &replaced);
+    }
+    Ok(format!("{}{replaced}{}", &text[..start], &text[end..]))
+}
+
 /// The outcome of Replace All over the scope.
 #[derive(Debug, Clone, Default)]
 pub struct ReplaceOutcome {
@@ -347,20 +451,7 @@ pub fn replace_all(
         options.file_mask.clear();
     }
     let matcher = Matcher::new(&request.query, &options)?;
-    let regex = options
-        .regex
-        .then(|| {
-            RegexBuilder::new(&if options.whole_words {
-                format!(r"\b(?:{})\b", request.query)
-            } else {
-                request.query.clone()
-            })
-            .case_insensitive(!options.match_case)
-            .multi_line(true)
-            .build()
-        })
-        .transpose()
-        .map_err(|e| SearchError::InvalidRegex(e.to_string()))?;
+    let regex = build_regex(request, &options)?;
     let scope_label = match &request.scope {
         Scope::Project => "Project".to_owned(),
         Scope::Module { name, .. } => format!("Module '{name}'"),
@@ -514,6 +605,36 @@ mod tests {
         };
         let found = find(&files, &[], &request).unwrap();
         assert_eq!(found.label(), "3 matches in 2 files");
+        assert_eq!(found.label_while(true), "3+ matches in 2+ files");
+        let again = FindResults::from_rows(found.rows.clone());
+        assert_eq!(again.label(), "3 matches in 2 files");
+        assert_eq!(FindResults::label_of(&found.rows, false), again.label());
+        assert_eq!(FindResults::label_of(&[], false), "0 matches in 0 files");
+    }
+
+    #[test]
+    fn replace_row_replaces_one_occurrence() {
+        // SRCH-FIP-070
+        let text = "a needle\nneedle needle\n";
+        let request = FindRequest {
+            query: "needle".into(),
+            ..Default::default()
+        };
+        let new = replace_row(text, &request, "pin", false, (2, 1, 6)).unwrap();
+        assert_eq!(new, "a needle\npin needle\n");
+        let regex = FindRequest {
+            query: r"(\w+) (\w+)".into(),
+            options: SearchOptions {
+                regex: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let new = replace_row("a needle\n", &regex, "$2 $1", false, (1, 1, 8)).unwrap();
+        assert_eq!(new, "needle a\n");
+        let new = replace_row("Needle\n", &request, "pin", true, (1, 1, 6)).unwrap();
+        assert_eq!(new, "Pin\n");
+        assert!(replace_row("x\n", &request, "pin", false, (5, 1, 6)).is_err());
     }
 
     #[test]

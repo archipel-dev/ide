@@ -47,8 +47,8 @@ pub struct Control {
 
 /// Input applied during one frame; `done` is answered after its frame ran.
 pub(crate) struct InputFrame {
-    modifiers: egui::Modifiers,
-    events: Vec<egui::Event>,
+    pub(crate) modifiers: egui::Modifiers,
+    pub(crate) events: Vec<egui::Event>,
     done: Option<Pending>,
 }
 
@@ -428,6 +428,12 @@ impl IdeApp {
                 "bottom": tool_window(Anchor::Bottom),
             },
             "focus": focus,
+            "find": {
+                "open": self.find.is_open(),
+                "replace": self.find.is_replace(),
+                "query": self.find.query(),
+                "counter": self.find.counter(),
+            },
             "mode": self.state.workbench_mode().id(),
             "agents": {
                 "screen": format!("{:?}", self.state.agents_manager().screen()).to_lowercase(),
@@ -460,7 +466,7 @@ impl IdeApp {
                     archipel_ide_core::quick_nav::SwitcherEntry::ToolWindow(window) => window.title().to_owned(),
                 }),
                 "dialog": self.dialog.as_ref().map(|dialog| dialog.kind()),
-                "findBar": self.find.open,
+                "findBar": self.find.is_open(),
                 "completion": self.completion_visible(),
                 "intentions": self.state.code_actions().popup,
                 "rename": self.state.refactor().rename.is_some(),
@@ -599,7 +605,7 @@ pub(crate) fn key_frames(chord: &str) -> Result<Vec<InputFrame>, String> {
 /// Translates a chord into the modifiers and key events egui-winit would
 /// produce, including the text event for printable keys typed without
 /// Ctrl/⌘ (platforms emit Alt+digit text too, which shortcuts must swallow).
-fn key_events(chord: &str) -> Result<(egui::Modifiers, Vec<egui::Event>), String> {
+pub(crate) fn key_events(chord: &str) -> Result<(egui::Modifiers, Vec<egui::Event>), String> {
     let chord = Chord::parse(chord).map_err(|error| error.to_string())?;
     let key = egui::Key::from_name(&chord.key)
         .ok_or_else(|| format!("unknown key {:?} in chord", chord.key))?;

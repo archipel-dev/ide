@@ -575,6 +575,86 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
             },
         ))
         .expect("unique built-in id");
+    registry
+        .register(Command::new(
+            spec(
+                "editor.applyEdits",
+                "Apply Search Edits",
+                "Editor",
+                None,
+                r#"{"edits":"[{start,end,text}]?","selections":"[{anchor,head}]?","status":"string?"}"#,
+            ),
+            |state: &IdeState| state.active_document.is_some(),
+            |state: &mut IdeState, params| {
+                let edits = char_edits(&params)?;
+                let selections: Vec<Selection> = params
+                    .get("selections")
+                    .and_then(Value::as_array)
+                    .map(|list| {
+                        list.iter()
+                            .filter_map(|entry| {
+                                Some(Selection {
+                                    anchor: entry.get("anchor")?.as_u64()? as usize,
+                                    head: entry.get("head")?.as_u64()? as usize,
+                                })
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let count = edits.len();
+                state
+                    .edit_active(|d| {
+                        let before = d.selections.selections().to_vec();
+                        if !edits.is_empty() {
+                            d.text.begin_undo_step(UndoKind::Other, &before);
+                            d.text.edit_many(edits).map_err(text_error)?;
+                        }
+                        let len = d.text.len_chars();
+                        if !selections.is_empty() {
+                            d.selections.set_all(selections);
+                        }
+                        d.selections.clamp(len);
+                        if count > 0 {
+                            let after = d.selections.selections().to_vec();
+                            d.text.finish_undo_step(&after);
+                        }
+                        Ok(())
+                    })
+                    .map_err(CommandError::Failed)?;
+                if let Some(status) = params.get("status").and_then(Value::as_str) {
+                    state.status = status.to_owned();
+                }
+                Ok(json!({"edits": count}))
+            },
+        ))
+        .expect("unique built-in id");
+}
+
+/// The `edits` of `editor.applyEdits`: char ranges of the current text with their new text.
+fn char_edits(params: &Value) -> Result<Vec<archipel_ide_text::TextChange>, CommandError> {
+    let Some(list) = params.get("edits").and_then(Value::as_array) else {
+        return Ok(Vec::new());
+    };
+    list.iter()
+        .map(|entry| {
+            let number = |name: &str| {
+                entry
+                    .get(name)
+                    .and_then(Value::as_u64)
+                    .map(|n| n as usize)
+                    .ok_or_else(|| CommandError::InvalidParams(format!("edit.{name} is missing")))
+            };
+            Ok(archipel_ide_text::TextChange {
+                start_char: number("start")?,
+                end_char: number("end")?,
+                inserted: entry
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned(),
+            })
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -669,6 +749,54 @@ mod tests {
         for dir in ["src", "src/main", "src/main/java"] {
             assert!(state.expanded_dirs.contains(Path::new(dir)), "{dir}");
         }
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn apply_edits_replaces_ranges_and_sets_the_selections_in_one_undo_step() {
+        let (mut state, commands, root) = state_with("one two one\n", "apply.txt");
+        let result = commands
+            .execute(
+                "editor.applyEdits",
+                &mut state,
+                json!({
+                    "edits": [
+                        {"start": 0, "end": 3, "text": "1"},
+                        {"start": 8, "end": 11, "text": "uno"},
+                    ],
+                    // In the text after the edits.
+                    "selections": [{"anchor": 2, "head": 5}],
+                    "status": "2 occurrences replaced",
+                }),
+            )
+            .unwrap();
+        assert_eq!(result["edits"], 2);
+        assert_eq!(state.documents[0].text.text(), "1 two uno\n");
+        let primary = state.documents[0].selections.primary();
+        assert_eq!((primary.anchor, primary.head), (2, 5));
+        assert_eq!(state.status(), "2 occurrences replaced");
+        commands
+            .execute("editor.undo", &mut state, Value::Null)
+            .unwrap();
+        assert_eq!(state.documents[0].text.text(), "one two one\n");
+        // Selections alone move the caret; bad ranges are refused.
+        commands
+            .execute(
+                "editor.applyEdits",
+                &mut state,
+                json!({"selections": [{"anchor": 4, "head": 7}]}),
+            )
+            .unwrap();
+        assert_eq!(state.documents[0].selections.primary().end(), 7);
+        assert!(
+            commands
+                .execute(
+                    "editor.applyEdits",
+                    &mut state,
+                    json!({"edits": [{"start": 5, "end": 999, "text": "x"}]}),
+                )
+                .is_err()
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 

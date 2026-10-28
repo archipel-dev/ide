@@ -153,18 +153,14 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                     app.caret_screen_pos = None;
                     return;
                 }
-                if app.find.open {
+                if app.find.is_open() {
                     crate::findbar::show(app, ui);
                 }
                 let Some(index) = app.state.active_index() else {
                     return;
                 };
                 let problems = app.state.cached_active_problems();
-                let mut highlights = if app.find.open {
-                    app.find.matches(&app.state.documents()[index])
-                } else {
-                    Vec::new()
-                };
+                let mut highlights = app.find.matches();
                 // Snippet tab stops are boxed like search results while active.
                 if let Some(snippet) = &app.state.snippet() {
                     highlights.extend(snippet.ranges().filter(|(start, end)| start < end));
@@ -253,6 +249,7 @@ pub fn central(app: &mut IdeApp, ctx: &egui::Context) {
                         lenses: &lenses,
                         inlays: &inlays,
                         inline_values: &inline_values,
+                        reveal: app.find.take_reveal(),
                     },
                     navigable,
                     editor_scroll,
@@ -1284,6 +1281,8 @@ struct GutterData<'a> {
     inlays: &'a [archipel_ide_core::InlayLabel],
     /// End-of-line variable values while the debugger is suspended in this file.
     inline_values: &'a [archipel_ide_core::InlineValue],
+    /// Scroll to the caret even though the editor has no focus (the find bar moved the selection).
+    reveal: bool,
 }
 
 #[allow(clippy::too_many_arguments)] // paint inputs of one editor frame
@@ -1307,6 +1306,7 @@ fn editor_surface(
         lenses,
         inlays,
         inline_values,
+        reveal,
     } = gutter_data;
     let mut requests = Vec::new();
     let font = theme::editor_font(ui.style());
@@ -2135,8 +2135,7 @@ fn editor_surface(
                 .request_repaint_after(std::time::Duration::from_millis(500));
         }
         // Keep the primary caret visible after keyboard navigation.
-        if focused
-            && ui.input(|input| !input.events.is_empty())
+        if (reveal || focused && ui.input(|input| !input.events.is_empty()))
             && let Some(pos) = caret_pos
         {
             let caret_rect =

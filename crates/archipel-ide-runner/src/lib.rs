@@ -254,6 +254,10 @@ impl TaskService {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        // Its own process group: Stop ends the whole tree (a shell and the `sleep` it started),
+        // never only the direct child (EXE-CTX-025).
+        #[cfg(unix)]
+        std::os::unix::process::CommandExt::process_group(&mut command, 0);
         let mut child = command.spawn()?;
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
@@ -273,7 +277,7 @@ impl TaskService {
                 && let Err(error) = spawn_reader(reader, stream, sender.clone())
             {
                 if let Ok(mut process) = child.lock() {
-                    let _ = process.kill();
+                    terminate_tree(&mut process, Duration::ZERO);
                 }
                 return Err(error.into());
             }
@@ -379,7 +383,9 @@ impl TaskService {
         if let Some(active) = &self.active
             && self.state == TaskState::Running
         {
-            active.child.lock().map_err(|_| RunnerError::Lock)?.kill()?;
+            let mut child = active.child.lock().map_err(|_| RunnerError::Lock)?;
+            terminate_tree(&mut child, STOP_GRACE);
+            drop(child);
             let now = self.now();
             self.complete(now, false);
             self.state = TaskState::Cancelled;
@@ -430,6 +436,55 @@ impl Drop for TaskService {
     fn drop(&mut self) {
         let _ = self.cancel();
     }
+}
+
+/// How long a stopped process may take to end after the polite request before it is killed.
+const STOP_GRACE: Duration = Duration::from_millis(800);
+
+/// Ends `child` and everything it started: asks politely first (SIGTERM to the process group,
+/// `taskkill /T` on Windows), waits up to `grace`, then kills the whole group (EXE-CTX-025).
+fn terminate_tree(child: &mut Child, grace: Duration) {
+    #[cfg(unix)]
+    {
+        let group = child.id() as libc::pid_t;
+        if grace > Duration::ZERO {
+            // SAFETY: plain signal to a process group we created; errors (ESRCH) are fine.
+            unsafe { libc::kill(-group, libc::SIGTERM) };
+            let deadline = Instant::now() + grace;
+            while Instant::now() < deadline {
+                if group_gone(group) {
+                    break;
+                }
+                // Reap the direct child so it does not stay a zombie that keeps the group alive.
+                let _ = child.try_wait();
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
+        // Whatever still lives in the group (a child that ignores SIGTERM, a daemon).
+        // SAFETY: as above.
+        unsafe { libc::kill(-group, libc::SIGKILL) };
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    #[cfg(windows)]
+    {
+        let _ = grace;
+        let _ = Command::new("taskkill")
+            .args(["/T", "/F", "/PID", &child.id().to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+}
+
+/// Whether no process of group `group` exists any more.
+#[cfg(unix)]
+fn group_gone(group: libc::pid_t) -> bool {
+    // SAFETY: signal 0 only checks that the group exists.
+    let result = unsafe { libc::kill(-group, 0) };
+    result == -1 && std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH)
 }
 
 fn spawn_reader(
@@ -560,6 +615,49 @@ mod tests {
         service.start(shell("sleep 30")).unwrap();
         service.cancel().unwrap();
         assert_eq!(service.state(), &TaskState::Cancelled);
+    }
+
+    /// QA bug 26 of the TUI list: Stop ends the whole process tree, not only the shell.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn exe_ctx_025_stop_ends_the_children_of_the_process_too() {
+        let mut service = TaskService::default();
+        // The shell is not the last command's process: `sleep` is a child that outlives it.
+        service
+            .start(shell("sleep 100 & echo child=$!; wait; echo never"))
+            .unwrap();
+        let mut pid = None;
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while pid.is_none() && Instant::now() < deadline {
+            service.poll().unwrap();
+            pid = service
+                .console()
+                .lines()
+                .iter()
+                .find_map(|line| line.text.strip_prefix("child=")?.parse::<i32>().ok());
+            thread::sleep(Duration::from_millis(10));
+        }
+        let pid = pid.expect("the shell printed the pid of its child");
+        // A zombie nobody reaped (PID 1 of a container) is dead.
+        let alive = |pid: i32| {
+            std::fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|stat| {
+                !stat
+                    .rsplit(')')
+                    .next()
+                    .unwrap_or("")
+                    .trim_start()
+                    .starts_with('Z')
+            })
+        };
+        assert!(alive(pid));
+        service.cancel().unwrap();
+        assert_eq!(service.state(), &TaskState::Cancelled);
+        // The group is gone at once; allow the kernel a moment to reap the orphan.
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while alive(pid) && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert!(!alive(pid), "the child `sleep` kept running after Stop");
     }
 
     #[test]

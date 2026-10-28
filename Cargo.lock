@@ -282,7 +282,7 @@ dependencies = [
 [[package]]
 name = "archipel-icons"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
+source = "git+https://github.com/archipel-dev/kit?branch=main#f3531215823bdfe368dcdd15e252b1830dd9cbf6"
 dependencies = [
  "egui",
 ]
@@ -729,6 +729,7 @@ name = "archipel-ide-runner"
 version = "0.2.6"
 dependencies = [
  "archipel-ide-compat",
+ "libc",
  "quick-xml 0.37.5",
  "serde",
  "serde_json",
@@ -837,6 +838,7 @@ dependencies = [
  "archipel-kit",
  "archipel-kit-model",
  "archipel-kit-tui",
+ "libc",
  "serde_json",
  "unicode-width 0.2.2",
 ]
@@ -926,7 +928,7 @@ dependencies = [
 [[package]]
 name = "archipel-kit"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
+source = "git+https://github.com/archipel-dev/kit?branch=main#f3531215823bdfe368dcdd15e252b1830dd9cbf6"
 dependencies = [
  "archipel-icons",
  "archipel-kit-model",
@@ -942,7 +944,7 @@ dependencies = [
 [[package]]
 name = "archipel-kit-model"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
+source = "git+https://github.com/archipel-dev/kit?branch=main#f3531215823bdfe368dcdd15e252b1830dd9cbf6"
 dependencies = [
  "archipel-icons",
  "serde",
@@ -951,7 +953,7 @@ dependencies = [
 [[package]]
 name = "archipel-kit-tui"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#c31a18b605ed9efdc363a7b2d20dda5abd4f6042"
+source = "git+https://github.com/archipel-dev/kit?branch=main#f3531215823bdfe368dcdd15e252b1830dd9cbf6"
 dependencies = [
  "archipel-icons",
  "archipel-kit",

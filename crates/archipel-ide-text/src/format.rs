@@ -48,6 +48,15 @@ pub fn detect_line_separator(doc: &TextDocument) -> LineSeparator {
     }
 }
 
+/// [`detect_line_separator`] for a plain string.
+pub fn detect_line_separator_str(text: &str) -> LineSeparator {
+    match text.find(['\r', '\n']) {
+        Some(at) if text[at..].starts_with("\r\n") => LineSeparator::CrLf,
+        Some(at) if text[at..].starts_with('\r') => LineSeparator::Cr,
+        _ => LineSeparator::Lf,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Indent {
     Tabs,

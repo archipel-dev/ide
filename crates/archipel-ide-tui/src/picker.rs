@@ -35,6 +35,8 @@ pub enum Target {
     Action(String),
     /// Select and run a run configuration.
     Config(String),
+    /// Start a command of the core (a detected Run, Build or Test target).
+    Command(&'static str),
     /// A line of a file in a recent locations list.
     Nothing,
 }

@@ -8,6 +8,7 @@
 
 pub mod app;
 pub mod chrome;
+pub mod conflict;
 pub mod dialogs;
 pub mod draw;
 pub mod ide;
@@ -20,6 +21,7 @@ pub mod panels;
 pub mod picker;
 pub mod popups;
 pub mod shell;
+pub mod signals;
 pub mod terminal;
 pub mod theme;
 pub mod view;
@@ -36,6 +38,7 @@ use archipel_kit_tui::runtime::{self, RunOptions};
 ///
 /// When the terminal cannot be set up or fails.
 pub fn run(options: StartOptions) -> std::io::Result<()> {
+    signals::install();
     let mut app = TuiApp::new(options);
     let run_options = RunOptions {
         report_modifier_keys: true,

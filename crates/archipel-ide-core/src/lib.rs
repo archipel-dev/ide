@@ -128,12 +128,13 @@ pub use android_deploy::{DeployPhase, DeployState};
 pub use android_devices::DeviceHub;
 pub use android_logcat::LogcatState;
 pub use android_tools::{LayoutEditorState, LayoutMode};
-pub use disk_sync::{DiskConflict, Waker, content_hash};
+pub mod console_links;
+pub use disk_sync::{DiffLine, DiffTag, DiskConflict, Waker, content_hash};
 pub use services::Settings;
 mod vcs;
 pub use archipel_ide_runnables::RunnableKind;
 pub use archipel_ide_search::SearchOptions;
-pub use build_commands::{BuildSystems, DetectedBuild};
+pub use build_commands::{BuildSystems, DetectedBuild, DetectedTarget};
 pub use completion::CompletionSession;
 pub use gutter_commands::GutterMark;
 
@@ -253,6 +254,9 @@ pub struct Document {
     /// The Code Folding settings at the time the file was opened: they decide which regions the
     /// document has (the one-line method form) and which start collapsed (ED-FOLD-020).
     pub fold_defaults: folds::FoldDefaults,
+    /// The line separator style of the file when it was loaded; saving applies it to every
+    /// line (PLAT-VFS-030).
+    pub separator: archipel_ide_text::format::LineSeparator,
 }
 
 /// What a document is backed by (PLAT-SAVE-003).
@@ -297,6 +301,7 @@ impl Document {
             force_save: false,
             input: Default::default(),
             fold_defaults: Default::default(),
+            separator: archipel_ide_text::format::detect_line_separator_str(text),
         };
         // The analysis already reflects `text`.
         document.text.take_edits();

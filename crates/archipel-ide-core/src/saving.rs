@@ -694,6 +694,7 @@ fn write_document(
     let read_only = std::fs::metadata(project.root().join(&document.path))
         .is_ok_and(|metadata| metadata.permissions().readonly());
     if !context.as_is && !read_only {
+        unify_line_separators(document);
         clean_up(document, disk.as_deref(), context);
     }
     for listener in context.listeners {
@@ -782,7 +783,7 @@ fn clean_up(document: &mut Document, disk: Option<&str>, context: &WriteContext<
         let kept_on_caret =
             whitespace_only && caret_lines.contains(&last_line) && cleanup.keep_on_caret_line;
         if !ends_with_newline && (!whitespace_only || kept_on_caret) {
-            let separator = archipel_ide_text::format::detect_line_separator(&document.text);
+            let separator = document.separator;
             changes.push(TextChange {
                 start_char: len,
                 end_char: len,
@@ -791,6 +792,11 @@ fn clean_up(document: &mut Document, disk: Option<&str>, context: &WriteContext<
         }
     }
     document.kept_trailing = kept;
+    apply_keeping_carets(document, changes);
+}
+
+/// Applies `changes` as one edit and moves the carets along.
+fn apply_keeping_carets(document: &mut Document, changes: Vec<TextChange>) {
     if changes.is_empty() {
         return;
     }
@@ -803,6 +809,37 @@ fn clean_up(document: &mut Document, disk: Option<&str>, context: &WriteContext<
         document.selections.set_all(carets);
         document.selections.clamp(document.text.len_chars());
     }
+}
+
+/// PLAT-VFS-030: a document has one line separator style, the one of the file when it was
+/// loaded. Lines typed or pasted meanwhile carry a bare `\n`; they take the style on save
+/// (QA bug 11 of the TUI list).
+fn unify_line_separators(document: &mut Document) {
+    use archipel_ide_text::format::LineSeparator;
+    let separator = document.separator;
+    if separator == LineSeparator::Cr {
+        return;
+    }
+    let text = document.text.text();
+    let mut changes = Vec::new();
+    let mut previous = '\0';
+    for (index, c) in text.chars().enumerate() {
+        match (separator, c) {
+            (LineSeparator::CrLf, '\n') if previous != '\r' => changes.push(TextChange {
+                start_char: index,
+                end_char: index,
+                inserted: "\r".to_owned(),
+            }),
+            (LineSeparator::Lf, '\n') if previous == '\r' => changes.push(TextChange {
+                start_char: index - 1,
+                end_char: index,
+                inserted: String::new(),
+            }),
+            _ => {}
+        }
+        previous = c;
+    }
+    apply_keeping_carets(document, changes);
 }
 
 /// Where a character offset ends up after `changes` (offsets refer to the old text).

@@ -13,6 +13,7 @@
 
 pub mod actions;
 pub mod chrome;
+pub mod conflict;
 pub mod context_menu;
 pub mod dispatch;
 

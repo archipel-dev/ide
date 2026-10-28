@@ -1,7 +1,10 @@
 //! Links in console output: `https://` URLs and `path/File.ext:line[:column]`
-//! locations (IntelliJ's console filters).
+//! locations (IntelliJ's console filters), shared by the window and the terminal frontend, and
+//! the resolution of a printed location to a project file.
 
+use crate::IdeState;
 use std::ops::Range;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LinkTarget {
@@ -137,9 +140,95 @@ pub fn find(text: &str) -> Vec<Link> {
     links
 }
 
+impl IdeState {
+    /// The project-relative file a location printed by a tool means: absolute paths inside the
+    /// project, then relative to the task's working directory, then to the project root, then
+    /// the one project file whose path ends with it (tools print module-relative paths).
+    /// `None` when nothing in the project matches.
+    pub fn resolve_console_path(&self, cwd: &Path, printed: &str) -> Option<PathBuf> {
+        let project = self.project.as_ref()?;
+        let root = project.root();
+        let printed = Path::new(printed.trim_start_matches("./"));
+        let inside = |absolute: PathBuf| {
+            let relative = absolute.strip_prefix(root).ok()?.to_path_buf();
+            root.join(&relative).is_file().then_some(relative)
+        };
+        if printed.is_absolute() {
+            return inside(printed.to_path_buf());
+        }
+        let cwd = if cwd.is_absolute() {
+            cwd.to_path_buf()
+        } else {
+            root.join(cwd)
+        };
+        if let Some(found) = inside(cwd.join(printed)).or_else(|| inside(root.join(printed))) {
+            return Some(found);
+        }
+        let mut matches = self
+            .files
+            .iter()
+            .filter(|entry| !entry.is_dir && entry.relative_path.ends_with(printed));
+        let first = matches.next()?;
+        matches
+            .next()
+            .is_none()
+            .then(|| first.relative_path.clone())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn project(name: &str) -> (PathBuf, IdeState) {
+        let root =
+            std::env::temp_dir().join(format!("archipel-links-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::create_dir_all(root.join("mod/src")).unwrap();
+        std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(root.join("mod/src/App.java"), "class App {}\n").unwrap();
+        let mut state = IdeState::default();
+        state.open_project(&root).unwrap();
+        (root.canonicalize().unwrap(), state)
+    }
+
+    /// QA bug 7 of the TUI list: a relative location is found from the working directory, the project root
+    /// or by its unique tail.
+    #[test]
+    fn relative_locations_resolve_against_cwd_root_and_project_files() {
+        let (root, state) = project("resolve");
+        let rel = |cwd: &Path, p: &str| state.resolve_console_path(cwd, p);
+        assert_eq!(
+            rel(&root, "src/main.rs"),
+            Some(PathBuf::from("src/main.rs"))
+        );
+        assert_eq!(
+            rel(&root.join("mod"), "src/App.java"),
+            Some(PathBuf::from("mod/src/App.java"))
+        );
+        // Printed relative to the root while the task ran in a module.
+        assert_eq!(
+            rel(&root.join("mod"), "src/main.rs"),
+            Some(PathBuf::from("src/main.rs"))
+        );
+        assert_eq!(
+            rel(&root, "./src/main.rs"),
+            Some(PathBuf::from("src/main.rs"))
+        );
+        // Only the tail is printed.
+        assert_eq!(
+            rel(&root, "App.java"),
+            Some(PathBuf::from("mod/src/App.java"))
+        );
+        assert_eq!(
+            rel(&root, &root.join("src/main.rs").display().to_string()),
+            Some(PathBuf::from("src/main.rs"))
+        );
+        assert_eq!(rel(&root, "src/missing.rs"), None);
+        assert_eq!(rel(&root, "/etc/passwd"), None);
+        let _ = std::fs::remove_dir_all(root);
+    }
 
     #[test]
     fn urls_drop_trailing_punctuation() {

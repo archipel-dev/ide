@@ -700,3 +700,101 @@ fn every_editor_key_of_the_kit_keymap_is_an_action_of_the_core() {
         "editor keys without a core action: {missing:?}"
     );
 }
+
+/// QA bug 7 of the TUI list: Enter on a project-relative location in the Run output (`src/main.rs:3:26`, as
+/// rustc, javac and Maven print them) opens the file at that line and column.
+#[test]
+fn enter_on_a_relative_location_in_the_run_output_opens_the_file() {
+    let project = Project::new(
+        "run-link",
+        &[
+            ("README.md", "# run\n"),
+            (
+                "src/main.rs",
+                "fn main() {\n    let x = 1;\n    println!(\"{}\", y); // undefined\n}\n",
+            ),
+            (
+                ".archipel/runConfigurations/err.toml",
+                "name = \"err\"\ntype = \"shell\"\nprogram = \"sh\"\narguments = [\"-c\", \"echo ' --> src/main.rs:3:26'\"]\n",
+            ),
+        ],
+    );
+    let mut tui = Tui::open(&project.root, &["README.md"], 120, 30);
+    tui.advance(0.1);
+    tui.press_with(KeyCode::F(10), KeyModifiers::SHIFT);
+    tui.expect("the exit line", 20, |tui| {
+        tui.contains("Process finished with exit code 0")
+    });
+    tui.alt('4');
+    tui.advance(0.1);
+    tui.press(KeyCode::Home);
+    tui.press(KeyCode::Down);
+    tui.press(KeyCode::Enter);
+    tui.advance(0.2);
+    let state = tui.app.ide().state();
+    assert_eq!(
+        state.active_file().unwrap().to_str(),
+        Some("src/main.rs"),
+        "{}",
+        tui.text()
+    );
+    let caret = state.active_doc().unwrap().selections.primary().head;
+    assert_eq!(
+        state
+            .active_doc()
+            .unwrap()
+            .text
+            .char_to_line_column(caret)
+            .unwrap(),
+        (2, 25)
+    );
+}
+
+/// QA bug 8 of the TUI list: the Run Configurations chooser lists the targets the build system detected, and
+/// a Run that cannot start says why.
+#[test]
+fn the_run_chooser_lists_detected_targets_and_a_blocked_run_explains_itself() {
+    let project = Project::new(
+        "detected",
+        &[
+            (
+                "pom.xml",
+                "<project><modelVersion>4.0.0</modelVersion></project>\n",
+            ),
+            ("src/main/java/App.java", "class App {}\n"),
+        ],
+    );
+    let mut tui = Tui::open(&project.root, &["src/main/java/App.java"], 120, 30);
+    tui.advance(0.1);
+    tui.press_with(KeyCode::F(10), KeyModifiers::ALT | KeyModifiers::SHIFT);
+    tui.advance(0.2);
+    assert!(tui.contains("Maven Compile"), "{}", tui.text());
+    assert!(tui.contains("Maven Test"), "{}", tui.text());
+    assert!(!tui.contains("No matches"), "{}", tui.text());
+    tui.press(KeyCode::Esc);
+    tui.advance(0.1);
+    // Maven has no standard run goal: Shift+F10 says so instead of a bare "disabled".
+    tui.press_with(KeyCode::F(10), KeyModifiers::SHIFT);
+    tui.advance(0.2);
+    assert!(tui.contains("Run is not available"), "{}", tui.text());
+    assert!(tui.contains("no standard run goal"), "{}", tui.text());
+    assert!(!tui.contains("run.project"), "{}", tui.text());
+}
+
+/// QA bug 19 of the TUI list: typing at the end of a 5 000-character line scrolls the wrapped rows so that
+/// the caret and the typed text are visible.
+#[test]
+fn the_view_follows_the_caret_inside_a_very_long_wrapped_line() {
+    let long = format!("{} end\n", "x".repeat(5000));
+    let project = Project::new("long-line", &[("long.txt", long.as_str())]);
+    let mut tui = Tui::open(&project.root, &["long.txt"], 100, 30);
+    tui.advance(0.1);
+    tui.press(KeyCode::End);
+    tui.type_text("ZZZ");
+    tui.advance(0.2);
+    assert!(
+        tui.contains("ZZZ"),
+        "the typed text is visible\n{}",
+        tui.text()
+    );
+}

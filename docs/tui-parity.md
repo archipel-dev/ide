@@ -371,7 +371,7 @@ service of the platform kernel, not a field of `IdeState`.
 | M8 | Branches popup composition: repository actions, per-branch submenus, labels and enabled rules (`ui/branches_popup.rs`) | `branch_commands.rs` | no | E07 |
 | M9 | Run and build view model: message tree, durations (`format_duration`), run subject, project-relative paths, stdout and stderr classification, console options (`ui/build_window.rs`) | `build_window.rs` | yes: `tui/panels.rs` `refresh_run` (tone from text, link resolution) | D03, D04 |
 | M10 | Test results model: summary, visibility filters, suite short names, stack frame parsing and source lookup (`ui/test_view.rs` `summary`, `visible`, `short_suite`, `parse_frame`, `find_source`) | new `test_results.rs` (or `archipel-ide-runner`) | no | D05 |
-| M11 | Console links: URLs and `path:line:col` in output (`ui/console_links.rs` `find`, with tests) | new `console_links.rs` | no (TUI links only build messages) | D03 |
+| M11 | Console links: URLs and `path:line:col` in output (`core/console_links.rs` `find`, `IdeState::resolve_console_path`, with tests) | moved from `ui/console_links.rs` | yes: `tui/panels.rs` `refresh_run` opens relative locations | D03 |
 | M12 | Problems grouping: columns on a line, problems at a position, file groups, path eliding, tab and option filters (`ui/problems_ui.rs`) | `problems.rs` | yes: `tui/panels.rs` `refresh_problems_list` | D11 |
 | M13 | Structure: items with the stale-while-typing cache, flatten, item at caret, breadcrumbs, crumb labels, kind to icon key, File Structure filtering (`ui/structure_view.rs`, `ui/popups.rs`) | new `structure.rs` | no | C08, C09 |
 | M14 | Todo entries by grouping and collapsed set (`ui/todo_window.rs` `entries`) | `todo_commands.rs` | no | D10 |

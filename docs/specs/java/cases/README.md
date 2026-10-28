@@ -19,9 +19,14 @@ there. Java-specific conventions:
     `info` (no marker, intention only) and `text attributes`. The highlighted text is the exact range.
   * `after` = `no problem reported` means the inspection must produce no highlight and no fix on the
     caret element. `no quick fix "<name>" in the popup` means the named fix must not be offered.
+  * `keys: inspect batch` runs the global (whole-project) inspection as *Analyze | Inspect Code* does; only the
+    listed `problem:` lines appear, there is no editor highlight.
+  * In multi-file cases a separator `--- library: <path>` marks a file that belongs to a library (class files
+    root) instead of project sources.
   * `settings:` names inspection options by the label shown in *Settings | Editor | Inspections* and the project
-    setup: `library=junit3,junit4,junit5,hamcrest` puts those test libraries on the module classpath;
-    `language level=N` sets the module language level; `<option label>=on|off|<number>` sets an option of the
+    setup: `library=junit3,junit4,junit5,hamcrest,testng,jetbrains-annotations,checker-qual` puts those libraries on the module classpath;
+    `language level=N` sets the module language level; `JDK=N` the project JDK; `dependency rule=<text>` a dependency
+    rule of the Scopes settings; `<option label>=on|off|<number>` sets an option of the
     inspection under test. Unlisted options keep their defaults.
   * Only the inspection named by the requirement is enabled in the profile unless `settings:` says otherwise;
     inspections that are off by default are switched on for their cases.

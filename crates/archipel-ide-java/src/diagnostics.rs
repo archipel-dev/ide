@@ -22,6 +22,8 @@ use std::sync::Arc;
 use tree_sitter::{Node, Tree};
 
 pub const PASS_ID: PassId = PassId("java-resolve");
+/// Quiet time after an edit before the native Java pass runs.
+pub const JAVA_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(100);
 pub const TOOL: &str = "java-resolve";
 
 /// Settings of the native Java pass.
@@ -275,7 +277,11 @@ impl JavaService {
         });
         drop(s);
         let text = text();
-        index.update_source(&path, &text, module.as_ref().map(|(m, t)| (m.as_str(), *t)));
+        // The index sees the repaired text of a buffer that is being typed: a broken statement
+        // must not make the classes of the file vanish for the other files.
+        let repaired = crate::repair::prepare(&text, None).filter(|p| p.repaired());
+        let seen: &str = repaired.as_ref().map_or(&text, |p| p.text.as_str());
+        index.update_source(&path, seen, module.as_ref().map(|(m, t)| (m.as_str(), *t)));
     }
 
     /// Files changed on disk (watcher): sources are reindexed from disk, deleted ones forgotten.
@@ -445,6 +451,12 @@ pub fn collect_detailed(
     text: &str,
     tree: &Tree,
 ) -> Collected {
+    // Analyze the repaired text of a buffer that is being typed (see `repair`); everything below
+    // works in its coordinates and the results are mapped back at the end.
+    let Some(prep) = crate::repair::prepare(text, Some(tree)) else {
+        return Collected::default();
+    };
+    let (text, tree) = (prep.text.as_str(), &prep.tree);
     let Some((analysis, current, scope)) = project.analyze_tree(path, text, tree) else {
         return Collected::default();
     };
@@ -529,11 +541,21 @@ pub fn collect_detailed(
         out.push(info);
     }
     if settings.unused_imports && project.is_complete() {
-        let used = import_edit::unused_imports(text, &analysis.usage, &current.stub.package, &env);
-        let ranges: Vec<_> = used.iter().map(|n| n.range.clone()).collect();
+        let used = import_edit::unused_imports_in(
+            text,
+            tree,
+            &analysis.usage,
+            &current.stub.package,
+            &env,
+        );
+        let ranges: Vec<_> = used
+            .iter()
+            .map(|n| prep.original_offset(n.range.start)..prep.original_offset(n.range.end))
+            .collect();
         for n in &used {
             let mut info = HighlightInfo::new(
-                n.range.start as u32..n.range.end as u32,
+                prep.original_offset(n.range.start) as u32
+                    ..prep.original_offset(n.range.end) as u32,
                 Severity::WARNING,
                 HighlightKind::Unused,
                 ToolId::native("java-unused-import"),
@@ -545,6 +567,22 @@ pub fn collect_detailed(
                     ranges: ranges.clone(),
                 })));
             out.push(info);
+        }
+    }
+    if prep.repaired() {
+        out.retain(|i| !prep.touches_insert(&i.range) || i.kind == HighlightKind::Unused);
+        for i in &mut out {
+            if i.kind != HighlightKind::Unused {
+                i.range = prep.original_range(&i.range);
+            }
+        }
+        extra.static_fixes.retain(|(r, _)| !prep.touches_insert(r));
+        extra.class_fixes.retain(|(r, _)| !prep.touches_insert(r));
+        for (r, _) in &mut extra.static_fixes {
+            *r = prep.original_range(r);
+        }
+        for (r, _) in &mut extra.class_fixes {
+            *r = prep.original_range(r);
         }
     }
     extra.infos = out;
@@ -706,6 +744,11 @@ impl Pass for JavaResolvePass {
     }
     fn visible_range_first(&self) -> bool {
         false
+    }
+    /// Errors while typing (plan 2.6): the native resolve pass is cheap and incremental enough
+    /// to run 100 ms after the last keystroke.
+    fn debounce(&self) -> Option<std::time::Duration> {
+        Some(JAVA_DEBOUNCE)
     }
     fn collect(&self, cx: &PassCx<'_>) -> Result<PassOutput, Cancelled> {
         let empty = |infos| PassOutput {

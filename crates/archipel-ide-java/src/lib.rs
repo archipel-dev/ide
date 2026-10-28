@@ -13,6 +13,7 @@ pub mod import_fix;
 pub mod index;
 pub mod jimage;
 pub mod names;
+pub mod repair;
 pub mod scope;
 pub mod source;
 pub mod stub;

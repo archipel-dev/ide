@@ -755,6 +755,11 @@ impl LspManager {
 
     /// Diagnostics for `path`, or `None` when its server has not checked it
     /// yet (so callers can fall back to syntax errors).
+    /// The document version the published diagnostics of `path` were computed for.
+    pub fn published_diagnostics_version(&self, path: &Path) -> Option<i32> {
+        self.server_for(path)?.diagnostics_version(path)
+    }
+
     pub fn published_diagnostics(&self, path: &Path) -> Option<Vec<LspDiagnostic>> {
         let service = self.server_for(path)?;
         let canonical = path.canonicalize().unwrap_or_else(|_| path.to_owned());

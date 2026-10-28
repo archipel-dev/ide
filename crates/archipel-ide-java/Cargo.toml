@@ -27,3 +27,7 @@ archipel-ide-externalsystem = { path = "../archipel-ide-externalsystem" }
 [[bench]]
 name = "completion"
 harness = false
+
+[[bench]]
+name = "errors"
+harness = false

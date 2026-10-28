@@ -63,7 +63,7 @@ pub mod ids {
 }
 
 /// Version of the stub format and of every index; a change reindexes (JAVA-STUB-028).
-pub const STUB_VERSION: &str = "java-stubs-2";
+pub const STUB_VERSION: &str = "java-stubs-3";
 
 /// The index cannot answer yet (dumb mode).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]

@@ -99,6 +99,7 @@ impl LanguagePack for JavaPack {
         }
         let intelligence = Arc::new(JavaIntelligence {
             service: self.service.clone(),
+            announced: std::sync::atomic::AtomicBool::new(false),
         });
         cx.import_fix_provider(intelligence.clone());
         cx.completion_source(intelligence.clone());
@@ -113,6 +114,9 @@ impl LanguagePack for JavaPack {
 /// The import fix provider and the per-project activity over the Java service.
 struct JavaIntelligence {
     service: Arc<JavaService>,
+    /// The first poll tells the daemon that native Java results win over the language server's
+    /// for the same range (the default setting equals the wanted one, so no change reports it).
+    announced: std::sync::atomic::AtomicBool,
 }
 
 impl ImportFixProvider for JavaIntelligence {
@@ -302,6 +306,13 @@ impl LanguageActivity for JavaIntelligence {
             self.service.set_settings(wanted);
             outcome.native_wins = Some((ID, native));
             outcome.changed = true;
+            self.announced
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        } else if !self
+            .announced
+            .swap(true, std::sync::atomic::Ordering::Relaxed)
+        {
+            outcome.native_wins = Some((ID, native));
         }
         let Some(project) = cx.project else {
             return outcome;

@@ -42,6 +42,11 @@ pub trait Pass: Send + Sync {
     fn after(&self) -> &[PassId];
     fn dumb_aware(&self) -> bool;
     fn visible_range_first(&self) -> bool;
+    /// Quiet time after an edit before this pass runs; `None` is the daemon's default (300 ms).
+    /// Cheap native resolve passes ask for less so errors show while typing.
+    fn debounce(&self) -> Option<std::time::Duration> {
+        None
+    }
     /// Background, on a snapshot.
     fn collect(&self, cx: &PassCx<'_>) -> Result<PassOutput, Cancelled>;
 }

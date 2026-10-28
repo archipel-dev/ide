@@ -253,8 +253,8 @@ pub fn project_popup(cx: &ViewCx) -> Vec<MenuEntry> {
     out
 }
 
-/// The rows of the run configuration popup: `Current File`, each configuration, the
-/// `Run unavailable` line, `Edit Configurations…`.
+/// The rows of the run configuration popup: `Current File`, each configuration, the detected
+/// targets, the `Run unavailable` line, `Edit Configurations…`.
 pub fn run_config_popup(cx: &ViewCx) -> Vec<MenuEntry> {
     let state = cx.state;
     let execution = state.execution();
@@ -277,6 +277,26 @@ pub fn run_config_popup(cx: &ViewCx) -> Vec<MenuEntry> {
         );
         item.checked = Some(selected.as_deref() == Some(config.name.as_str()));
         out.push(MenuEntry::Item(item));
+    }
+    // What the build system detected (Cargo, Gradle, Maven, npm, Go): Build, Test and a Run that
+    // can start. A target that cannot start is greyed out with its reason; the Run one is
+    // explained by the `Run unavailable` line below.
+    for target in state.detected_targets() {
+        match target.unavailable {
+            None => out.push(MenuEntry::Item(MenuItem::new(
+                command_row(target.command, &serde_json::Value::Null),
+                target.label,
+            ))),
+            Some(reason) if target.command != "run.project" => {
+                let mut item = MenuItem::new(
+                    format!("detected.{}", target.command),
+                    format!("{}: {reason}", target.label),
+                );
+                item.enabled = false;
+                out.push(MenuEntry::Item(item));
+            }
+            Some(_) => {}
+        }
     }
     if let Some(build) = state.detected_build()
         && selected.is_none()

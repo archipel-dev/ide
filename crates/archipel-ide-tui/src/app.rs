@@ -316,6 +316,9 @@ impl TuiApp {
         if id.starts_with("editor.save") || id == "file.synchronize" {
             self.conflict_snoozed.clear();
         }
+        if id == "run.project" && self.explain_run_blocked() {
+            return;
+        }
         // Closing a tab saves it first (the GUI autosaves on close) and asks when it cannot.
         if id == "editor.close" && params["saved"].as_bool() != Some(true) {
             let index = params["index"]
@@ -415,6 +418,15 @@ impl TuiApp {
             .primary("OK")
             .on_exit(|code| vec![Msg::Dialog(DialogKind::Notice, code, Input::default())]);
         self.layers.push(rt, dialog);
+    }
+
+    /// A Run that cannot start says why, in words (QA bug 8 of the TUI list). Returns whether it was blocked.
+    fn explain_run_blocked(&mut self) -> bool {
+        let Some(reason) = self.ide.state().run_unavailable_reason() else {
+            return false;
+        };
+        self.notify(Status::Info, "Run is not available", &reason);
+        true
     }
 
     /// Everything that follows input: buffers, requests the core made, layout.
@@ -589,6 +601,9 @@ impl TuiApp {
     /// Starts action `id` as a key press would. Returns whether the IDE took the key.
     fn try_action(&mut self, rt: &mut Runtime, id: &str) -> bool {
         if self.clipboard_action(rt, id) || self.shell_action(id) {
+            return true;
+        }
+        if id == "Run" && self.explain_run_blocked() {
             return true;
         }
         if id == "ChooseRunConfiguration" {
@@ -855,6 +870,9 @@ impl TuiApp {
         if self.clipboard_action(rt, id) || self.shell_action(id) {
             return;
         }
+        if id == "Run" && self.explain_run_blocked() {
+            return;
+        }
         if id == "ChooseRunConfiguration" {
             self.open_chrome_popup(rt, Popup::RunConfig, None);
             return;
@@ -1066,6 +1084,7 @@ impl TuiApp {
                 self.command(rt, "runConfig.select", json!({ "name": name }));
                 self.command(rt, "runConfig.run", json!({ "name": name }));
             }
+            Target::Command(id) => self.command(rt, id, Value::Null),
             Target::Nothing => {}
         }
     }

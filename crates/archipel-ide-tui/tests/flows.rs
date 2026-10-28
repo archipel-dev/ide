@@ -749,3 +749,34 @@ fn enter_on_a_relative_location_in_the_run_output_opens_the_file() {
         (2, 25)
     );
 }
+
+/// QA bug 8 of the TUI list: the Run Configurations chooser lists the targets the build system detected, and
+/// a Run that cannot start says why.
+#[test]
+fn the_run_chooser_lists_detected_targets_and_a_blocked_run_explains_itself() {
+    let project = Project::new(
+        "detected",
+        &[
+            (
+                "pom.xml",
+                "<project><modelVersion>4.0.0</modelVersion></project>\n",
+            ),
+            ("src/main/java/App.java", "class App {}\n"),
+        ],
+    );
+    let mut tui = Tui::open(&project.root, &["src/main/java/App.java"], 120, 30);
+    tui.advance(0.1);
+    tui.press_with(KeyCode::F(10), KeyModifiers::ALT | KeyModifiers::SHIFT);
+    tui.advance(0.2);
+    assert!(tui.contains("Maven Compile"), "{}", tui.text());
+    assert!(tui.contains("Maven Test"), "{}", tui.text());
+    assert!(!tui.contains("No matches"), "{}", tui.text());
+    tui.press(KeyCode::Esc);
+    tui.advance(0.1);
+    // Maven has no standard run goal: Shift+F10 says so instead of a bare "disabled".
+    tui.press_with(KeyCode::F(10), KeyModifiers::SHIFT);
+    tui.advance(0.2);
+    assert!(tui.contains("Run is not available"), "{}", tui.text());
+    assert!(tui.contains("no standard run goal"), "{}", tui.text());
+    assert!(!tui.contains("run.project"), "{}", tui.text());
+}

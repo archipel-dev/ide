@@ -4,8 +4,15 @@
 window. It is the same binary and the same IDE core as the GUI (no separate package, no
 display, no GPU); only the frontend differs. The frontend is the crate
 `crates/archipel-ide-tui`, built on `archipel-kit-tui` (the terminal edition of the UI kit,
-ratatui 0.30). It looks like NvChad and behaves like the IDE: same commands, same actions,
-same default shortcuts.
+ratatui 0.30). **The TUI mirrors the GUI**: it looks and behaves exactly like the IntelliJ-like
+window frontend (`crates/archipel-ide-ui`), drawn with terminal cells: the same main toolbar and main
+menu, tool window stripes, tool window headers, editor tabs, gutter, status bar, popups and dialogs, the
+same Islands Dark theme, the same commands, actions and default shortcuts, all reachable with the mouse.
+Both frontends render one shared UI layer. The binding design is
+`docs/specs/tui/01-gui-faithful-terminal-ui.md` (what the terminal shows) and
+`docs/specs/tui/02-shared-component-layer.md` (how the two frontends share the UI); the work plan is
+Wave 0 of `docs/tui-parity.md`. Sections below that describe the earlier NvChad-style design (no menu, no
+toolbar, no stripes, `Ctrl+K` chords, a mode indicator) are marked "being replaced" until Wave 0 lands.
 
 ```bash
 archipel-ide --tui .                  # open the current folder
@@ -18,7 +25,11 @@ Nerd Font, the plain variant): all icons are Nerd Font characters. WezTerm, kitt
 iTerm2, Windows Terminal, Alacritty and GNOME Terminal work; a terminal with the kitty keyboard
 protocol also delivers the combinations a legacy terminal cannot send (see "Keys").
 
-## Layout
+## Layout (being replaced, see docs/specs/tui/01-gui-faithful-terminal-ui.md sections B to H)
+
+This describes the current build, not the target: the target has the GUI's toolbar on row 0, stripes,
+tool window headers, a tab strip with icons and close buttons, breadcrumbs and the GUI's status bar, and no
+mode indicator.
 
 ```
  Project                    Main.java ●  README.md                                  󰖨  󰅖
@@ -43,10 +54,45 @@ protocol also delivers the combinations a legacy terminal cannot send (see "Keys
   (or indexing and run progress), the problem counts of the file, the language server, the
   selected run configuration (click it to choose), the project and the caret position.
 
-There are no stripes and no toolbar. Everything else is a key, Find Action or a click: the mouse
-works everywhere (tabs, tree, lists, tool window titles, splitters, status line segments).
+(Being replaced: the new layout has a toolbar, a main menu and stripes; see the spec.) The mouse works
+everywhere (tabs, tree, lists, tool window titles, splitters, status line segments).
 
-## Keys
+## Screenshots
+
+Taken with `archipel-ide --tui` in xterm (JetBrainsMono Nerd Font Mono, 24-bit color).
+
+The editor with the Project tree: an error is a red underline on the range (no background),
+the selected text and its other occurrences have a subtle background.
+
+![The terminal editor](tui/img/tui-editor.png)
+
+The Problems window (Alt+6): problems that belong to no file, such as the build path and the
+compiler compliance, are grouped under the project's name; the others under their file.
+
+![The Problems window](tui/img/tui-problems.png)
+
+Search Everywhere (double Shift, or Ctrl+K then E):
+
+![Search Everywhere](tui/img/tui-search.png)
+
+## Terminal notes
+
+- **Diagnostics** are drawn as curly underlines (SGR `4:3`) in the severity color on kitty,
+  WezTerm, Ghostty, Alacritty, foot, iTerm2, Windows Terminal and VTE terminals (GNOME
+  Terminal); `ARCHIPEL_UNDERCURL=1` or `=0` forces it. Other terminals, xterm included, get a
+  plain underline in the severity color. Never a background: errors are red, warnings yellow,
+  weak warnings subtle.
+- **xterm**: Alt shortcuts (Alt+1, Alt+6, Alt+Enter) need `XTerm*metaSendsEscape: true` in
+  `~/.Xresources` (or `-xrm 'XTerm*metaSendsEscape: true'`); without it xterm types the
+  character with the eighth bit set, so Alt+6 inserts `¶`. Also use `XTerm*directColor: true`
+  and a UTF-8 locale (`LANG=C.UTF-8`) for the colors and the icons.
+
+## Keys (being replaced, see docs/specs/tui/01-gui-faithful-terminal-ui.md section L and appendix B)
+
+The shortcuts are the GUI keymap. The `Ctrl+K` and `Ctrl+W` fallback chords of the table below are
+superseded: every action will be reachable through the menu bar, toolbar and stripes first, keys a legacy
+terminal cannot send get alternatives behind the single leader `Ctrl+\` (none shadows a GUI shortcut), and
+the kitty keyboard protocol is detected with a one-time notice.
 
 The shortcuts are the active keymap of the IDE (Settings | Keymap in the GUI, the default
 `$default` keymap otherwise, user overrides included): the frontend resolves key presses with
@@ -89,7 +135,7 @@ the item and Tab replaces the identifier. In the Commit window Space checks a fi
 the commit dialog and `r` refreshes. In the Terminal window every key goes to the shell except
 the window and Find Action keys above.
 
-## What works
+## What works (current build)
 
 - **Project**: the folder opens through the same `project.open` command as the GUI, so the
   project model import (Gradle, Maven, Cargo, Bazel), the indexes, the language servers and the
@@ -139,7 +185,7 @@ The widget's find bar (Ctrl+F, Ctrl+R, F3) is the only part of it that still tak
 redo are the core's history, copy and cut go through `editor.copy` and `editor.cut` to the
 terminal clipboard (OSC 52).
 
-## Known limitations
+## Known limitations (current build)
 
 - **Not available yet** (the command says so in the status line): the debugger, Rename and the
   other refactoring dialogs, Generate, Settings, the diff viewer and Local History, plugin
@@ -156,8 +202,9 @@ terminal clipboard (OSC 52).
   types a symbol, so use Ctrl+W then the digit there.
 - On Windows the release binary is a GUI-subsystem program; `--tui` attaches to the console of
   the parent process, so start it from Windows Terminal or `cmd`, not by double click.
-- The look is the dark Nerd Font look; the tab line's sun button (or Find Action | Switch
-  Theme) cycles the kit's themes. Colors do not follow the GUI's theme setting yet.
+- Being replaced: the look is the dark Nerd Font NvChad look, the tab line's sun button (or Find Action |
+  Switch Theme) cycles the kit's themes, and colors do not follow the GUI's theme setting. The target is
+  the GUI's theme mapped to 24-bit color (spec section I).
 
 ## Tests
 

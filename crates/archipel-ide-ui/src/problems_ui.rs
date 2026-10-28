@@ -483,6 +483,11 @@ pub fn tool_window(app: &mut IdeApp, ui: &mut egui::Ui) {
         .project
         .as_ref()
         .map(|project| project.root().to_owned());
+    let project_name = app.project_name();
+    let names = GroupNames {
+        root: root.as_deref(),
+        project: &project_name,
+    };
     let mut jump = None;
     // Left toolbar: Preview, Quick Fix, Group by Severity.
     let options_id = egui::Id::new("problems_options");
@@ -588,7 +593,7 @@ pub fn tool_window(app: &mut IdeApp, ui: &mut egui::Ui) {
                         empty(ui, &format!("No problems in {}", IdeApp::file_name(path)));
                         return;
                     }
-                    file_group(ui, root.as_deref(), path, &file_problems, &view, &mut jump);
+                    file_group(ui, &names, path, &file_problems, &view, &mut jump);
                 }
                 Tab::ProjectErrors => {
                     if project_errors.is_empty() {
@@ -596,7 +601,7 @@ pub fn tool_window(app: &mut IdeApp, ui: &mut egui::Ui) {
                         return;
                     }
                     for (path, errors) in &project_errors {
-                        file_group(ui, root.as_deref(), path, errors, &view, &mut jump);
+                        file_group(ui, &names, path, errors, &view, &mut jump);
                     }
                 }
             }
@@ -656,22 +661,44 @@ fn empty(ui: &mut egui::Ui, text: &str) {
     });
 }
 
+/// Where the group headers get their names: the project root and the project's name.
+struct GroupNames<'a> {
+    root: Option<&'a Path>,
+    project: &'a str,
+}
+
+impl GroupNames<'_> {
+    /// The header name and location of the group of `path` (project-relative). Problems
+    /// that belong to no file (the build configuration, the JRE) have an empty path and are
+    /// grouped under the project's name, located at the project directory.
+    fn label(&self, path: &Path) -> (String, Option<String>) {
+        if path.as_os_str().is_empty() {
+            let location = self
+                .root
+                .map(|root| elide_path(&root.display().to_string(), 48));
+            return (self.project.to_owned(), location);
+        }
+        let directory = self
+            .root
+            .map(|root| root.join(path))
+            .unwrap_or_else(|| path.to_owned());
+        let location = directory
+            .parent()
+            .map(|parent| elide_path(&parent.display().to_string(), 48));
+        (IdeApp::file_name(path), location)
+    }
+}
+
 /// `App.java  /abs/dir  2 problems` followed by one row per problem.
 fn file_group(
     ui: &mut egui::Ui,
-    root: Option<&Path>,
+    names: &GroupNames<'_>,
     path: &Path,
     problems: &[Problem],
     view: &GroupView<'_>,
     jump: &mut Option<(PathBuf, usize, usize)>,
 ) {
-    let name = IdeApp::file_name(path);
-    let directory = root
-        .map(|root| root.join(path))
-        .unwrap_or_else(|| path.to_owned());
-    let location = directory
-        .parent()
-        .map(|parent| elide_path(&parent.display().to_string(), 48));
+    let (name, location) = names.label(path);
     let count = widgets::pluralize(problems.len(), "problem", "problems");
     let secondary = match &location {
         Some(location) => format!("{location}  {count}"),
@@ -680,7 +707,14 @@ fn file_group(
     widgets::tree_row(
         ui,
         widgets::TreeRow {
-            icon: Some((Icon::for_file(&name), *icons::ICON)),
+            icon: Some((
+                if path.as_os_str().is_empty() {
+                    Icon::Project
+                } else {
+                    Icon::for_file(&name)
+                },
+                *icons::ICON,
+            )),
             color: *theme::TEXT_BRIGHT,
             secondary: Some((&secondary, *theme::TEXT_INFO)),
             ..widgets::TreeRow::new(&name)
@@ -771,6 +805,21 @@ mod tests {
             unnecessary: false,
             deprecated: false,
         }
+    }
+
+    #[test]
+    fn project_level_problems_are_grouped_under_the_project_name() {
+        let root = Path::new("/work/demo");
+        let names = GroupNames {
+            root: Some(root),
+            project: "demo",
+        };
+        let (name, location) = names.label(Path::new(""));
+        assert_eq!(name, "demo");
+        assert_eq!(location.as_deref(), Some("/work/demo"));
+        let (name, location) = names.label(Path::new("src/App.java"));
+        assert_eq!(name, "App.java");
+        assert_eq!(location.as_deref(), Some("/work/demo/src"));
     }
 
     #[test]

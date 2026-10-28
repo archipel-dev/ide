@@ -569,6 +569,9 @@ fn open_lookup(state: &mut IdeState, file: &str) {
         resolved: Default::default(),
         indexing: None,
         requery_when_ready: false,
+        native: None,
+        note: None,
+        invocation: 1,
     });
 }
 

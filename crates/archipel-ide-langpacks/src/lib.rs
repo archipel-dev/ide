@@ -212,6 +212,20 @@ impl PackContext<'_> {
         self.extension(IMPORT_FIX_PROVIDER, id, LoadingOrder::Anywhere, provider);
     }
 
+    /// The native completion source of the pack (class names with import on insert).
+    pub fn completion_source(
+        &mut self,
+        source: Arc<dyn archipel_ide_analysis::langext::CompletionSource>,
+    ) {
+        let id = source.id();
+        self.extension(
+            archipel_ide_analysis::langext::COMPLETION_SOURCE,
+            id,
+            LoadingOrder::Anywhere,
+            source,
+        );
+    }
+
     /// The per-project activity of the pack.
     pub fn activity(&mut self, activity: Arc<dyn LanguageActivity>) {
         let id = activity.id();

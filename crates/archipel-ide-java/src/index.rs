@@ -16,10 +16,12 @@
 //! | `Java:Annotation` | annotation short name | `ClassRef` |
 //! | `Java:SuperClass` | short name of every extends/implements type, `Enum`, `Annotation` | `ClassRef` |
 //! | `Java:Package` | package and every parent package | `u8` (1: has classes) |
+//! | `Java:Names` | package of every named class | [`NameRecord`] (FQN, kind, flags, deprecated, targets) |
 //!
 //! Queries take a [`ResolveScope`] (JAVA-STUB-017) and return [`NotReady`] while the
 //! indexes are not complete (dumb mode, JAVA-STUB-026).
 
+use crate::names::{NameEntry, NameMatcher, NameRecord, parse_targets};
 use crate::scope::ResolveScope;
 use crate::source;
 use crate::stub::*;
@@ -46,7 +48,8 @@ pub mod ids {
     pub const ANNOTATION: IndexId = IndexId("Java:Annotation");
     pub const SUPER_CLASS: IndexId = IndexId("Java:SuperClass");
     pub const PACKAGE: IndexId = IndexId("Java:Package");
-    pub const ALL: [IndexId; 8] = [
+    pub const NAMES: IndexId = IndexId("Java:Names");
+    pub const ALL: [IndexId; 9] = [
         STUB,
         CLASS,
         SHORT_NAME,
@@ -55,11 +58,12 @@ pub mod ids {
         ANNOTATION,
         SUPER_CLASS,
         PACKAGE,
+        NAMES,
     ];
 }
 
 /// Version of the stub format and of every index; a change reindexes (JAVA-STUB-028).
-pub const STUB_VERSION: &str = "java-stubs-1";
+pub const STUB_VERSION: &str = "java-stubs-2";
 
 /// The index cannot answer yet (dumb mode).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -167,8 +171,9 @@ impl MemberHit {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum UnitKind {
+    #[default]
     Source,
     Jar,
     ClassDir,
@@ -210,6 +215,11 @@ pub struct Inner {
     /// Bumped by every commit (a cache key for resolve results).
     epoch: AtomicU64,
     cache: Mutex<HashMap<(u32, String), Arc<StubRecord>>>,
+    /// In-memory mirror of `Java:Names` per unit (the hot path of class-name completion).
+    names: RwLock<NameTable>,
+    /// Directory of the library cache shared by projects (stubs of a jar by content hash).
+    shared: RwLock<Option<PathBuf>>,
+    shared_hits: AtomicU64,
     persistent: bool,
     pub log: Mutex<Vec<String>>,
 }
@@ -218,6 +228,13 @@ pub struct Inner {
 #[derive(Clone)]
 pub struct JavaIndex {
     pub(crate) inner: Arc<Inner>,
+}
+
+#[derive(Default)]
+pub(crate) struct NameTable {
+    by_unit: HashMap<u32, Vec<NameEntry>>,
+    /// Units whose names were loaded or written (an empty unit is probed once).
+    probed: std::collections::HashSet<u32>,
 }
 
 const S_ABSENT: u8 = 0;
@@ -263,6 +280,33 @@ fn dec_list(bytes: &[u8]) -> Vec<Vec<u8>> {
     postcard::from_bytes(bytes).unwrap_or_default()
 }
 
+fn name_record(c: &ClassStub) -> NameRecord {
+    NameRecord {
+        fqn: c.qname.clone(),
+        kind: c.kind,
+        flags: c.flags,
+        deprecated: c.deprecated,
+        targets: if c.kind == ClassKind::Annotation {
+            parse_targets(&c.annotations)
+        } else {
+            None
+        },
+    }
+}
+
+/// The in-memory name entries of the classes of one unit.
+fn name_entries(unit: u32, files: &[FileStub]) -> Vec<NameEntry> {
+    let mut out = Vec::new();
+    for f in files {
+        for top in &f.classes {
+            top.walk(&mut Vec::new(), &mut |_, c| {
+                out.push(NameEntry::new(unit, &f.package, name_record(c)));
+            });
+        }
+    }
+    out
+}
+
 /// All index entries one compilation unit contributes (JAVA-STUB-011, 012, 013).
 pub fn entries_for(files: &[FileStub]) -> Entries {
     let mut out = Grouped::new();
@@ -290,6 +334,7 @@ pub fn entries_for(files: &[FileStub]) -> Entries {
                     path: p[1..].iter().map(|s| s.to_string()).collect(),
                 };
                 let bytes = enc(&cref);
+                add(&mut out, ids::NAMES, &f.package, enc(&name_record(c)));
                 add(&mut out, ids::CLASS, &c.qname, bytes.clone());
                 add(&mut out, ids::SHORT_NAME, &c.name, bytes.clone());
                 for (i, m) in c.methods.iter().enumerate() {
@@ -379,6 +424,9 @@ impl JavaIndex {
             generation: AtomicU64::new(0),
             epoch: AtomicU64::new(1),
             cache: Mutex::new(HashMap::new()),
+            names: RwLock::new(NameTable::default()),
+            shared: RwLock::new(None),
+            shared_hits: AtomicU64::new(0),
             persistent,
             log: Mutex::new(note.into_iter().collect()),
         };
@@ -564,7 +612,14 @@ impl JavaIndex {
             let list = sdks.entry(sdk.name.clone()).or_default();
             for root in &sdk.classes {
                 if root.is_file() {
-                    let id = push(self, root.clone(), UnitKind::Jdk, 21);
+                    // `lib/modules` is the runtime image of JDK 9+; a JDK 8 has `rt.jar`
+                    // (JAVA-RES-036).
+                    let kind = if root.file_name().is_some_and(|n| n == "modules") {
+                        UnitKind::Jdk
+                    } else {
+                        UnitKind::Jar
+                    };
+                    let id = push(self, root.clone(), kind, 21);
                     if !list.contains(&id) {
                         list.push(id);
                     }
@@ -710,6 +765,9 @@ impl JavaIndex {
                 store.remove_file(index, FileId(*id));
                 store.set_indexed_hash(index, FileId(*id), None);
             }
+            let mut names = self.inner.names.write();
+            names.by_unit.remove(id);
+            names.probed.remove(id);
         }
         {
             let mut cat = self.inner.catalog.write();
@@ -731,8 +789,50 @@ impl JavaIndex {
             store.set_complete(index, true);
         }
         self.inner.cache.lock().clear();
+        self.load_names();
         self.inner.epoch.fetch_add(1, Ordering::AcqRel);
         self.inner.state.store(S_READY, Ordering::Release);
+    }
+
+    /// Loads the name records of units that were not written in this session (warm start).
+    fn load_names(&self) {
+        let missing: std::collections::HashSet<u32> = {
+            let cat = self.inner.catalog.read();
+            let names = self.inner.names.read();
+            cat.units
+                .keys()
+                .filter(|u| !names.probed.contains(u))
+                .copied()
+                .collect()
+        };
+        if missing.is_empty() {
+            return;
+        }
+        let store = &self.inner.store;
+        let mut loaded: HashMap<u32, Vec<NameEntry>> = HashMap::new();
+        for key in store.keys(ids::NAMES) {
+            let package = String::from_utf8_lossy(&key).into_owned();
+            for (file, bytes) in store.get(ids::NAMES, &key) {
+                if !missing.contains(&file.0) {
+                    continue;
+                }
+                for one in dec_list(&bytes) {
+                    if let Ok(record) = postcard::from_bytes::<NameRecord>(&one) {
+                        loaded
+                            .entry(file.0)
+                            .or_default()
+                            .push(NameEntry::new(file.0, &package, record));
+                    }
+                }
+            }
+        }
+        let mut names = self.inner.names.write();
+        for unit in missing {
+            names
+                .by_unit
+                .insert(unit, loaded.remove(&unit).unwrap_or_default());
+            names.probed.insert(unit);
+        }
     }
 
     /// Reads and indexes one unit; returns its content hash.
@@ -754,7 +854,9 @@ impl JavaIndex {
                 )
             }
             UnitKind::Jar => {
-                let u = unit::read_jar(&w.path, w.release)?;
+                let u = self.cached_unit(&w.path, w.release, false, || {
+                    unit::read_jar(&w.path, w.release)
+                })?;
                 let hash = Self::signature(&w.path, &w.kind).1.unwrap_or(len);
                 (u, hash)
             }
@@ -763,7 +865,8 @@ impl JavaIndex {
                 (u, Self::signature(&w.path, &w.kind).1.unwrap_or(0))
             }
             UnitKind::Jdk => {
-                let u = unit::read_jdk_image(&w.path)?;
+                let u =
+                    self.cached_unit(&w.path, w.release, true, || unit::read_jdk_image(&w.path))?;
                 (u, Self::signature(&w.path, &w.kind).1.unwrap_or(len))
             }
         };
@@ -778,8 +881,75 @@ impl JavaIndex {
         Ok(hash)
     }
 
+    /// Uses the library cache shared by projects (PLAT-IDX-034): the stubs of a jar are keyed by
+    /// its content hash (the JDK image by size and time), so a second project that uses the
+    /// same jar reads the cached stubs instead of the class files.
+    fn cached_unit(
+        &self,
+        path: &Path,
+        release: u32,
+        image: bool,
+        read: impl FnOnce() -> Result<UnitStubs, String>,
+    ) -> Result<UnitStubs, String> {
+        let Some(dir) = self.inner.shared.read().clone() else {
+            return read();
+        };
+        let key = if image {
+            let md = std::fs::metadata(path).map_err(|e| e.to_string())?;
+            format!(
+                "jdk-{:x}-{:x}",
+                md.len(),
+                FileRecord::mtime(md.modified().ok()).unwrap_or(0)
+            )
+        } else {
+            let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+            format!("{:016x}", content_hash(&bytes))
+        };
+        let file = dir.join(format!("{STUB_VERSION}-{key}-r{release}.bin"));
+        if let Ok(bytes) = std::fs::read(&file)
+            && let Ok(cached) = postcard::from_bytes::<SharedUnit>(&bytes)
+        {
+            self.inner.shared_hits.fetch_add(1, Ordering::Relaxed);
+            return Ok(UnitStubs {
+                files: cached.files,
+                skipped: cached.skipped as usize,
+            });
+        }
+        let mut unit = read()?;
+        unit.files
+            .iter_mut()
+            .flat_map(|f| f.classes.iter_mut())
+            .for_each(prune_compiled);
+        let shared = SharedUnit {
+            files: unit.files.clone(),
+            skipped: unit.skipped as u64,
+        };
+        if std::fs::create_dir_all(&dir).is_ok() {
+            let tmp = dir.join(format!("{key}.{}.tmp", std::process::id()));
+            if std::fs::write(&tmp, enc(&shared)).is_ok() && std::fs::rename(&tmp, &file).is_err() {
+                let _ = std::fs::remove_file(&tmp);
+            }
+        }
+        Ok(unit)
+    }
+
+    /// Sets the directory of the library cache shared by projects.
+    pub fn set_shared_cache(&self, dir: Option<PathBuf>) {
+        *self.inner.shared.write() = dir;
+    }
+
+    /// How many units were served from the shared library cache (tests, status).
+    pub fn shared_cache_hits(&self) -> u64 {
+        self.inner.shared_hits.load(Ordering::Relaxed)
+    }
+
     fn write_unit(&self, id: u32, files: &[FileStub], hash: u64) {
         let entries = entries_for(files);
+        {
+            let mut names = self.inner.names.write();
+            names.by_unit.insert(id, name_entries(id, files));
+            names.probed.insert(id);
+        }
         for index in ids::ALL {
             let list = entries.get(index.0).cloned().unwrap_or_default();
             self.inner.store.put(index, FileId(id), list);
@@ -832,6 +1002,11 @@ impl JavaIndex {
             self.inner.store.remove_file(index, FileId(id));
             self.inner.store.set_indexed_hash(index, FileId(id), None);
             self.inner.store.commit(index);
+        }
+        {
+            let mut names = self.inner.names.write();
+            names.by_unit.remove(&id);
+            names.probed.remove(&id);
         }
         let mut cat = self.inner.catalog.write();
         cat.units.remove(&id);
@@ -1033,6 +1208,196 @@ impl JavaIndex {
         Ok(!self.hits(ids::PACKAGE, package, scope).is_empty())
     }
 
+    /// Classes whose short name matches `pattern` (prefix, camel-hump, substring), found in
+    /// `scope` and accepted by `accept`, best match first, one hit per FQN (the unit earliest
+    /// on the classpath wins), at most `limit` (0: no limit). JAVA-STUB-011, 017, JAVA-CMP-018.
+    pub fn names_matching(
+        &self,
+        scope: &ResolveScope,
+        pattern: &str,
+        accept: &(dyn Fn(&NameEntry) -> bool + Sync),
+        limit: usize,
+    ) -> Result<Vec<NameHit>, NotReady> {
+        self.ready()?;
+        self.load_names();
+        let matcher = NameMatcher::new(pattern);
+        let names = self.inner.names.read();
+        // Cheap integer keys (match class, name length, classpath rank, then unit and position
+        // for a deterministic order) select the candidates; only those are sorted in full.
+        let units: Vec<(u32, u32)> = scope.iter().collect();
+        let total: usize = units
+            .iter()
+            .map(|(u, _)| names.by_unit.get(u).map_or(0, Vec::len))
+            .sum();
+        let scan = |chunk: &[(u32, u32)]| -> Vec<(u64, u32, u32)> {
+            let mut keys = Vec::new();
+            for (unit, rank) in chunk {
+                let Some(entries) = names.by_unit.get(unit) else {
+                    continue;
+                };
+                for (i, e) in entries.iter().enumerate() {
+                    if let Some(class) = matcher.classify(e.name())
+                        && accept(e)
+                    {
+                        let key = (class as u64) << 48
+                            | (e.name().len().min(0xffff) as u64) << 32
+                            | u64::from(*rank);
+                        keys.push((key, *unit, i as u32));
+                    }
+                }
+            }
+            keys
+        };
+        // A big table is scanned by several threads, the units split evenly.
+        let workers = if total > 50_000 {
+            std::thread::available_parallelism().map_or(1, |n| n.get().min(8))
+        } else {
+            1
+        };
+        let mut keys: Vec<(u64, u32, u32)> = if workers > 1 {
+            let size = units.len().div_ceil(workers).max(1);
+            std::thread::scope(|s| {
+                let handles: Vec<_> = units
+                    .chunks(size)
+                    .map(|chunk| s.spawn(|| scan(chunk)))
+                    .collect();
+                handles
+                    .into_iter()
+                    .flat_map(|h| h.join().unwrap_or_default())
+                    .collect()
+            })
+        } else {
+            scan(&units)
+        };
+        // A few more than `limit` survive for the duplicate FQNs of several units.
+        if limit > 0 && keys.len() > limit * 4 {
+            keys.select_nth_unstable(limit * 4);
+            keys.truncate(limit * 4);
+        }
+        const CLASSES: [crate::names::MatchClass; 5] = [
+            crate::names::MatchClass::Exact,
+            crate::names::MatchClass::Prefix,
+            crate::names::MatchClass::PrefixIgnoreCase,
+            crate::names::MatchClass::Hump,
+            crate::names::MatchClass::Middle,
+        ];
+        let mut hits: Vec<(crate::names::MatchClass, u32, &NameEntry)> = keys
+            .iter()
+            .map(|(key, unit, i)| {
+                (
+                    CLASSES[(key >> 48) as usize],
+                    (key & 0xffff_ffff) as u32,
+                    &names.by_unit[unit][*i as usize],
+                )
+            })
+            .collect();
+        hits.sort_by(|a, b| {
+            a.0.cmp(&b.0)
+                .then_with(|| a.2.name().len().cmp(&b.2.name().len()))
+                .then_with(|| a.1.cmp(&b.1))
+                .then_with(|| a.2.fqn.cmp(&b.2.fqn))
+        });
+        let mut seen = std::collections::HashSet::new();
+        let mut out = Vec::new();
+        for (class, unit_rank, e) in hits {
+            if limit > 0 && out.len() >= limit {
+                break;
+            }
+            if seen.insert(&e.fqn) {
+                out.push(NameHit {
+                    entry: e.clone(),
+                    unit_rank,
+                    class,
+                });
+            }
+        }
+        Ok(out)
+    }
+
+    /// The named classes declared in `package` (not its subpackages) visible in `scope`.
+    pub fn classes_in_package(
+        &self,
+        package: &str,
+        scope: &ResolveScope,
+    ) -> Result<Vec<NameEntry>, NotReady> {
+        self.ready()?;
+        let mut out: Vec<NameEntry> = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        let mut rows: Vec<(u32, u32, Vec<u8>)> = self.hits(ids::NAMES, package, scope);
+        rows.sort_by_key(|(u, r, _)| (*r, *u));
+        for (unit, _, one) in rows {
+            if let Ok(record) = postcard::from_bytes::<NameRecord>(&one)
+                && seen.insert(record.fqn.clone())
+            {
+                out.push(NameEntry::new(unit, package, record));
+            }
+        }
+        out.sort_by(|a, b| a.fqn.cmp(&b.fqn));
+        Ok(out)
+    }
+
+    /// The direct child packages of `package` that hold classes (at any depth) in `scope`.
+    pub fn subpackages(
+        &self,
+        package: &str,
+        scope: &ResolveScope,
+    ) -> Result<Vec<String>, NotReady> {
+        self.ready()?;
+        let mut out = std::collections::BTreeSet::new();
+        for key in self.inner.store.keys(ids::PACKAGE) {
+            let Ok(key) = String::from_utf8(key) else {
+                continue;
+            };
+            let rest = if package.is_empty() {
+                key.as_str()
+            } else if let Some(rest) = key.strip_prefix(package).and_then(|r| r.strip_prefix('.')) {
+                rest
+            } else {
+                continue;
+            };
+            if rest.is_empty() || rest.contains('.') {
+                continue;
+            }
+            if !self.hits(ids::PACKAGE, &key, scope).is_empty() {
+                out.insert(rest.to_string());
+            }
+        }
+        Ok(out.into_iter().collect())
+    }
+
+    /// FQNs of the classes that (transitively, by short name) extend or implement
+    /// `short` in `scope`: a candidate set, to be confirmed by the hierarchy walk.
+    pub fn inheritor_closure(
+        &self,
+        short: &str,
+        scope: &ResolveScope,
+    ) -> Result<std::collections::HashSet<String>, NotReady> {
+        self.ready()?;
+        let mut out = std::collections::HashSet::new();
+        let mut queue = vec![short.to_string()];
+        let mut visited = std::collections::HashSet::new();
+        while let Some(name) = queue.pop() {
+            if !visited.insert(name.clone()) {
+                continue;
+            }
+            for (_, _, v) in self.hits(ids::SUPER_CLASS, &name, scope) {
+                if let Ok(cref) = postcard::from_bytes::<ClassRef>(&v) {
+                    let mut fqn = cref.top.clone();
+                    for p in &cref.path {
+                        fqn.push('.');
+                        fqn.push_str(p);
+                    }
+                    let short = cref.path.last().unwrap_or(&cref.top);
+                    let short = short.rsplit('.').next().unwrap_or(short).to_string();
+                    if out.insert(fqn) {
+                        queue.push(short);
+                    }
+                }
+            }
+        }
+        Ok(out)
+    }
+
     /// Every key of a class-name index (all short names), for completion (06).
     pub fn all_short_names(&self) -> Result<Vec<String>, NotReady> {
         self.ready()?;
@@ -1044,6 +1409,22 @@ impl JavaIndex {
             .filter_map(|k| String::from_utf8(k).ok())
             .collect())
     }
+}
+
+/// The stubs of one library unit in the shared library cache.
+#[derive(Serialize, Deserialize)]
+struct SharedUnit {
+    files: Vec<FileStub>,
+    skipped: u64,
+}
+
+/// A class found by [`JavaIndex::names_matching`].
+#[derive(Debug, Clone)]
+pub struct NameHit {
+    pub entry: NameEntry,
+    /// Classpath position of the unit that declares it (lower first).
+    pub unit_rank: u32,
+    pub class: crate::names::MatchClass,
 }
 
 struct Work {

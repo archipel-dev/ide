@@ -29,8 +29,9 @@ ProjectModel (archipel-ide-externalsystem)        buffers, watcher
         |  entries_for                      persistent: RedbStore of archipel-ide-index
         v
   Java:Stub  Java:Class  Java:ShortName  Java:Method  Java:Field  Java:Annotation
-  Java:SuperClass  Java:Package          (all keyed by unresolved short text)
-        |  ResolveScope::for_file (module + dependencies + libraries + SDK, tests only for test code)
+  Java:SuperClass  Java:Package  Java:Names   (all keyed by unresolved short text; Names: per package,
+        |                                      with kind, flags, deprecated and annotation targets)
+        |  ClasspathSnapshot (module + scope: units in classpath order, completeness) -> ResolveScope
         v
   env.rs (class lookup, hierarchy, file-level name walk, accessibility)
         v
@@ -67,16 +68,56 @@ not for private methods and fields of libraries.
 
 **JDK choice:** the JDK is read from its runtime image `lib/modules` (`jimage.rs`, the container format
 of JDK 9+) and only packages that their module exports without qualification are indexed. `ct.sym` is
-not used (it only matters for `--release` filtering, JAVA-RES-040 `LATER`); `rt.jar` (JDK 8) is not
-supported yet. Compressed jimage resources are skipped and counted.
+not used (it only matters for `--release` filtering, JAVA-RES-040 `LATER`). A JDK 8 keeps its classes in
+`jre/lib/rt.jar` (`Sdk::jdk_at` adds it, the index reads it as a jar, JAVA-RES-036); there the internal
+`sun.*` packages sit next to the API, which is why completion filters them (JAVA-CMP-025). Compressed
+jimage resources are skipped and counted. The stubs of a jar (and of the JDK image) are also kept in a
+library cache shared by projects, keyed by the content hash of the jar (`<cache>/index/java-libs/`,
+PLAT-IDX-034): a second project with the same JUnit jar reads the cached stubs instead of the class files.
 
-### Scope (JAVA-RES-029/030, PLAT-SCOPE-054/062/064)
+### Names and packages (JAVA-STUB-011/017, JAVA-RES-027)
 
-`ResolveScope` is a value: unit id to classpath rank. A production file sees its module's production
+`Java:Names` stores one `NameRecord` (FQN, kind, flags, deprecated, `@Target` mask) per named class under
+its package. The records of every unit are mirrored in memory per unit id (`names.rs`, loaded from the store
+after a warm start) and `JavaIndex::names_matching(scope, pattern, accept, limit)` walks the units of a
+resolve scope with the `NameMatcher` (prefix, case-insensitive prefix, camel-hump `ArLi`, later humps), one
+hit per FQN, nearest classpath entry wins. `classes_in_package`, `subpackages` and `inheritor_closure`
+(transitive inheritors by short name, the candidate set of `throws`/`catch`) need no stub load either.
+
+### Classpath snapshot and the ad-hoc module (JAVA-RES-029/030, PLAT-SCOPE-054/062/064)
+
+`ClasspathSnapshot` (`classpath.rs`) is the classpath of one module for production or test code: the units in
+classpath order with their roles (own sources, module dependencies, library, SDK), the language level and a
+`Completeness`: `Importing`, `ImportFailed(notes)` (the notes of the last import, for example Maven's
+"dependencies were not resolved"), `MissingLibraries` (jars not on disk) or `NoLibraries` (a module imported
+from a build tool without any library). The status bar shows "Java: classpath incomplete" with the reason on
+hover (`LanguageActivity::notice`), the control socket shows it under `languages.java.notice`. A file outside
+every module, and a folder without an imported model, get the **ad-hoc module** (`ad_hoc_model`: one module
+over the folder and the detected JDK), so completion and errors work with the JDK and the folder's sources.
+
+`ResolveScope` is a view over the snapshot: a value, unit id to classpath rank. A production file sees its module's production
 sources, the production sources of the modules on its compile classpath, the libraries with a compile
 scope and the SDK; a test file also sees its own module's test sources and the test-scope libraries. A
 file under content but outside every source root resolves only to itself. Library *sources* are not
 indexed and never part of a scope (resolution uses class files, PLAT-SCOPE-064).
+
+## Completion: class names (M3 slice, JAVA-CMP-009/018..021/025)
+
+`complete/classify.rs` classifies the caret from the *tokens before it* (a small lexer with a brace and
+parenthesis frame stack, so a half-typed `@Te` in a broken tree still classifies): annotation position (with
+the element it annotates, from the text after it), after `new`, the type positions of `extends`,
+`implements`, `throws`, `catch`, `instanceof`, type arguments and bounds, and the declaration and statement
+positions where classes join other variants. `complete/class_names.rs` queries `names_matching` in the
+resolve scope of the file and filters by position (annotation types whose `@Target` fits, instantiable
+classes, interfaces only, `Throwable` subtypes), accessibility and the exclusion list; `sun.*`, `com.sun.*` and
+`jdk.internal.*` appear on the third press only, `java.awt.List` and `org.omg.*` last. Choosing a row
+(`complete::insertion`) writes the simple name and the import through `import_edit::add_class_import`, the
+fully qualified name when the simple name belongs to another class, nothing for classes the file already
+sees, as one undo step. The native source is registered on `COMPLETION_SOURCE`
+(`archipel-ide-analysis/src/langext.rs`); the completion session (`archipel-ide-core/src/completion_native.rs`)
+asks it before the language server, answers alone at class-name-only positions and merges ahead of the
+server's items elsewhere (the server's rows with the same class name are dropped). Setting
+`java.native.completion` (Settings | Editor | Inspections) turns it off.
 
 ## Errors, fixes and how they coexist with jdtls
 
@@ -102,6 +143,9 @@ Left out on purpose; each is a `SHOULD` or `LATER` in the spec unless stated:
 - `JAVA-STUB-009/019` lambda, method-reference and local/anonymous class stubs: bodies are skipped
   entirely; local and anonymous classes are built on demand from the syntax tree of the current file.
 - `JAVA-STUB-014/015/016` static-member name/type, parameter-type, record-component and module indexes.
+- Completion is native for class names only (annotation, `new`, type positions, declaration and statement
+  starts); reference variants, member access, keywords, locals, static members on the second press, smart
+  completion and javadoc stay with the language server (plan M3 rest, M5).
 - `JAVA-RES-009` pattern-variable flow scoping (bindings anywhere in the enclosing member count as in
   scope), `JAVA-RES-008` static-context errors (018), `JAVA-RES-024/031/032` module imports,
   multi-release version selection by language level (selected by `META-INF/versions/N <= language level`

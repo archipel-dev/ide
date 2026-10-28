@@ -5,6 +5,7 @@
 //! only re-filters locally unless the server marked its list `isIncomplete`.
 
 use crate::IdeState;
+use crate::completion_native::{NativeSession, merge_items};
 use archipel_ide_lsp::{
     CompletionResult, CompletionTrigger,
     completion::{self as ranking, RankedItem, is_identifier_char},
@@ -48,6 +49,12 @@ pub struct CompletionSession {
     pub indexing: Option<String>,
     /// Ask again once the server has finished `indexing`.
     pub requery_when_ready: bool,
+    /// The native source of the language answered too (class names with import on insert).
+    pub native: Option<NativeSession>,
+    /// Why the native answer may be incomplete (indexing, a classpath that failed to import).
+    pub note: Option<String>,
+    /// Consecutive explicit invocations on this prefix (1: first press, CI-CMP-100).
+    pub invocation: u32,
 }
 
 impl CompletionSession {
@@ -114,29 +121,46 @@ impl IdeState {
             .slice(anchor, caret)
             .map_err(|error| error.to_string())?;
         let absolute = root.join(&path);
-        let (id, indexing) = match self
-            .lsp
-            .request_completion(&absolute, line, character, trigger)
-        {
-            Ok(id) => (Some(id), self.lsp.indexing_status(&absolute)),
-            // The server is still starting: say so, and ask once it is ready.
-            Err(archipel_ide_lsp::LspError::Starting { server, detail }) => (
-                None,
-                Some(detail.unwrap_or_else(|| format!("{server}: starting"))),
-            ),
-            // No language server for this file: live templates still apply.
-            Err(error) => {
-                // Ctrl+Space on nothing explains the missing server; a typed
-                // abbreviation still expands.
-                if self.template_completion_items(anchor).is_empty()
-                    || (explicit && anchor == caret)
-                {
-                    return Err(error.to_string());
+        let invocation = self
+            .completion
+            .as_ref()
+            .filter(|session| explicit && session.path == path && session.anchor == anchor)
+            .map_or(1, |session| session.invocation + 1);
+        // The language's own source first (class names from the indexes): at a position where
+        // only class names are legal the server is not asked at all.
+        let source = self.completion_source_for_active();
+        let answer = source
+            .as_ref()
+            .and_then(|source| self.native_answer(source.as_ref(), invocation));
+        let exclusive = answer.as_ref().is_some_and(|answer| answer.exclusive);
+        let (id, indexing) = if exclusive {
+            (None, None)
+        } else {
+            match self
+                .lsp
+                .request_completion(&absolute, line, character, trigger)
+            {
+                Ok(id) => (Some(id), self.lsp.indexing_status(&absolute)),
+                // The server is still starting: say so, and ask once it is ready.
+                Err(archipel_ide_lsp::LspError::Starting { server, detail }) => (
+                    None,
+                    Some(detail.unwrap_or_else(|| format!("{server}: starting"))),
+                ),
+                // No language server for this file: native rows and live templates still apply.
+                Err(error) => {
+                    // Ctrl+Space on nothing explains the missing server; a typed
+                    // abbreviation still expands.
+                    if answer.is_none()
+                        && (self.template_completion_items(anchor).is_empty()
+                            || (explicit && anchor == caret))
+                    {
+                        return Err(error.to_string());
+                    }
+                    if explicit && answer.is_none() {
+                        self.status = error.to_string();
+                    }
+                    (None, None)
                 }
-                if explicit {
-                    self.status = error.to_string();
-                }
-                (None, None)
             }
         };
         let offline = id.is_none() && indexing.is_none();
@@ -145,18 +169,52 @@ impl IdeState {
             .completion
             .take()
             .filter(|session| session.path == path && session.anchor == anchor);
+        let native = source
+            .as_ref()
+            .zip(answer.as_ref())
+            .map(|(source, answer)| {
+                let rows = Self::native_rows(answer);
+                NativeSession {
+                    source: source.id(),
+                    exclusive: answer.exclusive,
+                    server_items: previous
+                        .as_ref()
+                        .map(|session| match &session.native {
+                            Some(native) => native.server_items.clone(),
+                            None => session.items.clone(),
+                        })
+                        .unwrap_or_default(),
+                    rows,
+                    computed_for: (
+                        caret,
+                        self.documents
+                            .get(index)
+                            .map_or(0, |document| document.text.len_chars()),
+                        prefix.clone(),
+                    ),
+                }
+            });
+        let items = match &native {
+            Some(native) => merge_items(&native.rows, &native.server_items),
+            None => previous
+                .as_ref()
+                .map(|session| session.items.clone())
+                .unwrap_or_default(),
+        };
+        let note = answer.as_ref().and_then(|answer| answer.note.clone());
         self.completion = Some(CompletionSession {
             path,
             anchor,
             request_caret: caret,
-            items: previous
-                .as_ref()
-                .map(|session| session.items.clone())
-                .unwrap_or_default(),
-            ranked: previous
-                .as_ref()
-                .map(|session| session.ranked.clone())
-                .unwrap_or_default(),
+            items,
+            ranked: if native.is_some() {
+                Vec::new()
+            } else {
+                previous
+                    .as_ref()
+                    .map(|session| session.ranked.clone())
+                    .unwrap_or_default()
+            },
             selected: 0,
             prefix,
             incomplete: false,
@@ -165,7 +223,17 @@ impl IdeState {
             resolved: HashSet::new(),
             requery_when_ready: id.is_none() && !offline,
             indexing,
+            native,
+            note,
+            invocation,
         });
+        if self
+            .completion
+            .as_ref()
+            .is_some_and(|session| session.native.is_some() && !offline)
+        {
+            self.refresh_completion();
+        }
         if offline {
             self.receive_completion(CompletionResult::default());
         }
@@ -228,15 +296,24 @@ impl IdeState {
 
     /// Installs a server response into the open session and filters it.
     pub fn receive_completion(&mut self, result: CompletionResult) {
+        // Where the native list is complete the server's notices and the templates do not apply.
+        let exclusive = self
+            .completion
+            .as_ref()
+            .and_then(|session| session.native.as_ref())
+            .is_some_and(|native| native.exclusive);
         let indexing = self.completion.as_ref().and_then(|session| {
             let root = self.project.as_ref()?.root();
-            self.lsp.indexing_status(&root.join(&session.path))
+            self.lsp
+                .indexing_status(&root.join(&session.path))
+                .filter(|_| !exclusive)
         });
         // Live templates and postfix completion join the server's items; a
         // server snippet with the same label (`sout`) yields to ours.
         let templates = self
             .completion
             .as_ref()
+            .filter(|_| !exclusive)
             .map(|session| self.template_completion_items(session.anchor))
             .unwrap_or_default();
         let server_empty = result.items.is_empty();
@@ -249,7 +326,13 @@ impl IdeState {
         });
         result.items.extend(templates);
         if let Some(session) = self.completion.as_mut() {
-            session.items = result.items;
+            session.items = match session.native.as_mut() {
+                Some(native) => {
+                    native.server_items = result.items;
+                    merge_items(&native.rows, &native.server_items)
+                }
+                None => result.items,
+            };
             session.incomplete = result.incomplete;
             session.waiting = false;
             session.selected = 0;
@@ -283,6 +366,7 @@ impl IdeState {
     /// Re-filters after the document or caret changed; closes the session
     /// when the caret left the identifier being completed.
     pub fn refresh_completion(&mut self) {
+        self.refresh_native_items();
         let Some(session) = self.completion.as_ref() else {
             return;
         };
@@ -449,6 +533,11 @@ impl IdeState {
         if self.caret_in_comment_or_string(caret) {
             return;
         }
+        // The language opens the popup by itself after `@` and after `new ` (CI-CMP-030).
+        if self.native_auto_popup(caret) {
+            let _ = self.start_completion(CompletionTrigger::Invoked, false);
+            return;
+        }
         let trigger = self.trigger_before_caret(caret);
         if let Some(trigger) = trigger {
             let _ = self.start_completion(CompletionTrigger::Character(trigger), false);
@@ -561,6 +650,9 @@ impl IdeState {
             self.completion_stats.record(language, &item);
         }
         let index = self.active_document.ok_or("no active document")?;
+        // A native row: the import and the text (or the qualified name on a clash) are
+        // computed now, against the text as it is.
+        let native_insertion = self.native_insertion(&session, &item);
         let document = self
             .documents
             .get_mut(index)
@@ -586,6 +678,10 @@ impl IdeState {
                 edit.new_text.clone(),
             ),
             None => (session.anchor, ranking::insert_text(&item).to_owned()),
+        };
+        let new_text = match &native_insertion {
+            Some((text, _)) => text.clone(),
+            None => new_text,
         };
         let start = start.min(caret);
         let file_name = document
@@ -644,6 +740,15 @@ impl IdeState {
                 changes.push(change);
             }
         }
+        for change in native_insertion.iter().flat_map(|(_, changes)| changes) {
+            if change.end_char <= start {
+                shift += change.inserted.chars().count() as isize
+                    - (change.end_char - change.start_char) as isize;
+                changes.push(change.clone());
+            } else if change.start_char >= end {
+                changes.push(change.clone());
+            }
+        }
         if document.text.edit_many(changes.clone()).is_err() {
             // Overlapping auxiliary edits: apply the completion itself.
             shift = 0;
@@ -665,7 +770,7 @@ impl IdeState {
             // Completing inside a template variable keeps the template.
             None => self.snippet_after_change(),
         }
-        if !resolved && item.additional_text_edits.is_none() {
+        if !resolved && item.additional_text_edits.is_none() && native_insertion.is_none() {
             self.resolve_accepted(item, inserted_at);
         }
         // Completing a call leaves the caret inside `(`: show parameter info,
@@ -900,6 +1005,9 @@ mod tests {
             resolved: Default::default(),
             indexing: None,
             requery_when_ready: false,
+            native: None,
+            note: None,
+            invocation: 1,
         });
     }
 

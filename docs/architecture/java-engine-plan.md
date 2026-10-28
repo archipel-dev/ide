@@ -1,6 +1,7 @@
 # Native Java engine: plan to parity and jdtls removal
 
-Status: plan (no code in this change). Successor of the first slice described in
+Status: plan. M0 (harness), M1 (classpath and index queries) and the class-name slice of M3 are
+implemented, see section 6; the rest is open. Successor of the first slice described in
 [`java-intelligence.md`](java-intelligence.md); builds on [`language-packs.md`](language-packs.md),
 [`project-model.md`](project-model.md), [`platform-kernel.md`](platform-kernel.md) and Phase 4 of
 [`platform-refactor-plan.md`](platform-refactor-plan.md). Specs: `docs/specs/java/01..09`,
@@ -730,3 +731,33 @@ increment after M1.
     default for diagnostics and completion is native, i.e. whether the intermediate `both` mode with
     jdtls fed from our model (2.10) is the accepted transition, or jdtls is switched off per feature as soon
     as that feature is native.
+
+## 6. Implementation status: M0, M1 and the class-name slice of M3
+
+What exists (details in [`java-intelligence.md`](java-intelligence.md); numbers in
+[`../perf/java-engine.md`](../perf/java-engine.md), case results in
+[`../parity/java-cases.md`](../parity/java-cases.md)):
+
+- **M0.** The engine-layer case runner `crates/archipel-ide-java/tests/java_cases.rs` runs
+  `docs/specs/java/cases/*.cases.md` (`cargo xtask java-cases`, `JAVA_CASES_ONLY`, `JAVA_CASES_VERBOSE`,
+  `PASS_BASELINE`, report `docs/parity/java-cases.md`); `06-completion.cases.md` holds the owner's cases and
+  their neighbours (every case restates an existing requirement ID). Hermetic fixture jars are built by
+  `tools/java-fixtures/build.sh` from our own sources in `crates/archipel-ide-java/tests/fixtures/` (no network;
+  JUnit-, Hamcrest- and annotations-like shapes, a JDK 8 style `rt.jar`); `tests/common::fixture_jar` caches
+  them by source hash under the target directory. `benches/completion.rs` measures the budgets of 3.5.
+  Not done: coverage telemetry and "Why no errors here?", the LSP trace of the completion request, the pinned
+  real-jar fetch script, removal of the `~/.m2` lookup of the older tests (they still skip silently).
+- **M1.** `ClasspathSnapshot` with `Completeness` (status bar notice and control socket), the ad-hoc module, the
+  `Java:Names` index with kind, flags, deprecated and `@Target` masks, prefix and camel-hump queries, package
+  listing and child packages, the inheritor closure, the JDK 8 `rt.jar`, the shared library cache. Not done:
+  static-member and parameter-type indexes (JAVA-STUB-014/015), the single shared `NameMatcher` (the matcher of
+  `names.rs` is a third one next to the two named in 2.3; unifying them changes the ranking of other languages and
+  needs the owner decision of risk 8), the synchronous stub overlay, Gradle source sets and per-module JDK, the
+  retry action for a failed Maven import, `java.lookup` on the control socket.
+- **M3, class-name slice.** The position classifier, the class-name contributor with import on insertion
+  (JAVA-CMP-009, 018..021, 025, 029 for annotation targets), the weigher basics, and the native
+  `CompletionSource` wired into the completion session with de-duplication against the server's rows and the
+  auto-popup after `@` and after `new `. Deviations from 2.7: the source is registered on a new extension point
+  `COMPLETION_SOURCE` (the `CompletionContributor` contract needs a snapshot and a syntax tree the session does not
+  have yet), and the setting is the switch `java.native.completion` instead of `java.completion.source`
+  (`native | both | jdtls`).

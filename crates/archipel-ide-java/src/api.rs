@@ -2,6 +2,7 @@
 //! one file against a project model and the Java indexes.
 
 use crate::analyze::{Analysis, analyze};
+use crate::classpath::{ClasspathSnapshot, Completeness, completeness_of};
 use crate::env::{CurrentFile, Env};
 use crate::index::JavaIndex;
 use crate::scope::{ResolveScope, ScopeKind};
@@ -18,6 +19,9 @@ pub struct JavaProject {
     pub files: Arc<ProjectFileIndex>,
     /// The model is still being (re)imported: unresolved references are pending (JAVA-ERR-003).
     pub model_loading: bool,
+    /// Warnings and errors of the last import (unresolved dependencies, failed resolvers):
+    /// the reason the classpath may be incomplete.
+    pub import_notes: Arc<Vec<String>>,
 }
 
 impl JavaProject {
@@ -28,17 +32,58 @@ impl JavaProject {
             model,
             files,
             model_loading,
+            import_notes: Arc::default(),
         }
     }
 
-    /// Whether native Java analysis applies to `path`: the file is Java code of some module.
+    /// The notes of the last import (JAVA-ERR-003: why the classpath may be incomplete).
+    pub fn with_import_notes(mut self, notes: Vec<String>) -> Self {
+        self.import_notes = Arc::new(notes);
+        self
+    }
+
+    /// Whether native Java analysis applies to `path`: Java code of some module, or of the
+    /// ad-hoc module (a file outside every module, JDK classes only) once a JDK is known.
     pub fn applies_to(&self, path: &Path) -> bool {
         path.extension().and_then(|e| e.to_str()) == Some("java")
-            && self.files.module_for_file(path).is_some()
+            && (self.files.module_for_file(path).is_some() || !self.model.sdks.is_empty())
     }
 
     pub fn scope_for(&self, path: &Path) -> ResolveScope {
-        ResolveScope::for_file(&self.index, &self.model, &self.files, path)
+        self.classpath_for(path).scope()
+    }
+
+    /// The classpath snapshot of the module `path` belongs to, with its completeness.
+    pub fn classpath_for(&self, path: &Path) -> ClasspathSnapshot {
+        ResolveScope::snapshot_for_file(
+            &self.index,
+            &self.model,
+            &self.files,
+            path,
+            |model, module| completeness_of(model, module, self.model_loading, &self.import_notes),
+        )
+    }
+
+    /// The worst completeness over the modules of the project (status bar, control socket).
+    pub fn completeness(&self) -> Completeness {
+        let mut worst = Completeness::Complete;
+        for module in &self.model.modules {
+            let c = completeness_of(&self.model, module, self.model_loading, &self.import_notes);
+            let rank = |c: &Completeness| match c {
+                Completeness::Complete => 0,
+                Completeness::NoLibraries => 1,
+                Completeness::MissingLibraries(_) => 2,
+                Completeness::Importing => 3,
+                Completeness::ImportFailed(_) => 4,
+            };
+            if rank(&c) > rank(&worst) {
+                worst = c;
+            }
+        }
+        if worst.is_complete() && self.model_loading {
+            return Completeness::Importing;
+        }
+        worst
     }
 
     /// Whether answers are complete (JAVA-STUB-026, JAVA-ERR-003).
@@ -56,10 +101,7 @@ impl JavaProject {
         let Some(tree) = source::parse(text) else {
             return Analysis::default();
         };
-        let incomplete = !self.is_complete() || scope.kind == ScopeKind::Everything;
-        if scope.kind == ScopeKind::Everything {
-            return Analysis::default();
-        }
+        let incomplete = !self.is_complete();
         analyze(&env, text, &tree, &current, incomplete)
     }
 }
@@ -73,7 +115,7 @@ impl JavaProject {
         tree: &tree_sitter::Tree,
     ) -> Option<(Analysis, CurrentFile, ResolveScope)> {
         let scope = self.scope_for(path);
-        if scope.kind == ScopeKind::Everything {
+        if scope.kind == ScopeKind::AdHoc && scope.is_empty() {
             return None;
         }
         let stub = source::build_from_tree(tree, text);

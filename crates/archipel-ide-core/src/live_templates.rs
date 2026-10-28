@@ -264,6 +264,9 @@ impl IdeState {
             resolved: Default::default(),
             indexing: None,
             requery_when_ready: false,
+            native: None,
+            note: None,
+            invocation: 1,
         });
         self.refresh_completion();
     }
@@ -415,6 +418,9 @@ impl IdeState {
             resolved: HashSet::new(),
             indexing: None,
             requery_when_ready: false,
+            native: None,
+            note: None,
+            invocation: 1,
         });
         self.accept_completion(false)?;
         Ok(true)

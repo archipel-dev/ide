@@ -168,8 +168,9 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) -> Option<Rect> {
             return None;
         }
     }
-    let indexing = session.indexing.clone();
-    if indexing.is_some() {
+    // The server's activity, else why the native answer may be incomplete.
+    let indexing = session.indexing.clone().or_else(|| session.note.clone());
+    if session.indexing.is_some() {
         // Re-query and refresh the notice when the server finishes.
         ctx.request_repaint_after(std::time::Duration::from_millis(200));
     }

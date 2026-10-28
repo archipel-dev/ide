@@ -150,6 +150,15 @@ impl IdeState {
             .collect()
     }
 
+    /// `(pack id, warning)` of every installed pack that has one (a classpath that failed to
+    /// import, jars missing on disk), for the status bar.
+    pub fn language_notices(&self) -> Vec<(&'static str, String)> {
+        self.language_activities()
+            .iter()
+            .filter_map(|activity| Some((activity.id(), activity.notice()?)))
+            .collect()
+    }
+
     /// Adds the settings of the installed packs to the inspections page.
     fn ensure_pack_settings(&mut self) {
         let activities = self.language_activities();
@@ -202,12 +211,20 @@ impl IdeState {
         }
         let project = self.project.as_ref().map(|project| {
             let root = project.root().to_path_buf();
-            let (model, model_loading) = match self.project_model() {
+            let (model, model_loading, import_notes) = match self.project_model() {
                 Some(service) => {
                     let state = service.read();
-                    (state.model.clone(), state.is_busy())
+                    (
+                        state.model.clone(),
+                        state.is_busy(),
+                        state
+                            .diagnostics
+                            .iter()
+                            .map(|d| d.message.clone())
+                            .collect(),
+                    )
                 }
-                None => (None, false),
+                None => (None, false, Vec::new()),
             };
             let index_cache_dir = self.analysis.index_cache_dir.clone().map(|dir| {
                 dir.join("index").join(format!(
@@ -219,6 +236,7 @@ impl IdeState {
                 root,
                 model,
                 model_loading,
+                import_notes,
                 index_cache_dir,
             }
         });

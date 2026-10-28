@@ -413,11 +413,18 @@ impl IdeApp {
         });
         let index_status = self.state.index_status();
         let chooser = self.state.import_chooser().map(|(_, chooser)| chooser);
+        let notices = self.state.language_notices();
         let languages: serde_json::Map<String, Value> = self
             .state
             .language_status()
             .into_iter()
-            .map(|(id, state)| (id.to_owned(), json!({"state": state})))
+            .map(|(id, state)| {
+                let notice = notices
+                    .iter()
+                    .find(|(language, _)| *language == id)
+                    .map(|(_, notice)| notice.clone());
+                (id.to_owned(), json!({"state": state, "notice": notice}))
+            })
             .collect();
         json!({
             "project": root,

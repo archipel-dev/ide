@@ -1,4 +1,4 @@
-//! TUI-BUG-015: pasting and undoing a large text takes time linear in its size, not quadratic.
+//! QA bug 15 of the TUI list: pasting and undoing a large text takes time linear in its size, not quadratic.
 
 use archipel_ide_core::{IdeState, built_in_commands};
 use serde_json::json;

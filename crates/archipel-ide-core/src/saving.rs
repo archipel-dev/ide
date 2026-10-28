@@ -813,7 +813,7 @@ fn apply_keeping_carets(document: &mut Document, changes: Vec<TextChange>) {
 
 /// PLAT-VFS-030: a document has one line separator style, the one of the file when it was
 /// loaded. Lines typed or pasted meanwhile carry a bare `\n`; they take the style on save
-/// (TUI-BUG-011).
+/// (QA bug 11 of the TUI list).
 fn unify_line_separators(document: &mut Document) {
     use archipel_ide_text::format::LineSeparator;
     let separator = document.separator;

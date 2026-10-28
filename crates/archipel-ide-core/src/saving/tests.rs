@@ -980,7 +980,7 @@ fn plat_save_113_save_points_do_not_rely_on_autosave() {
     cleanup(root);
 }
 
-/// PLAT-VFS-030, TUI-BUG-011: lines typed or pasted into a CRLF document are saved with the
+/// PLAT-VFS-030, QA bug 11 of the TUI list: lines typed or pasted into a CRLF document are saved with the
 /// document's separator (no mixed endings), and an LF file stays LF.
 #[test]
 fn plat_vfs_030_typed_and_pasted_newlines_take_the_document_separator() {

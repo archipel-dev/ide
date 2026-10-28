@@ -252,6 +252,15 @@ impl IdeState {
         self.documents.iter().position(|d| d.conflict.is_some())
     }
 
+    /// Every document with an unresolved outside change: (index, path, kind).
+    pub fn conflicts(&self) -> Vec<(usize, std::path::PathBuf, DiskConflict)> {
+        self.documents
+            .iter()
+            .enumerate()
+            .filter_map(|(index, d)| Some((index, d.path.clone(), d.conflict?)))
+            .collect()
+    }
+
     /// "Show Difference" of the conflict dialog: the disk text against the memory text as
     /// unified-diff lines with two lines of context, capped at `limit` lines.
     pub fn conflict_diff(&self, index: usize, limit: usize) -> Result<Vec<DiffLine>, String> {

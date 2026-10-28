@@ -144,7 +144,7 @@ fn a_disabled_action_does_nothing_and_shows_no_toast() {
     assert!(!tui.contains("Command failed"));
 }
 
-/// PLAT-VFS-101 (TUI-BUG-027): a file that changed on disk while its document has edits asks
+/// PLAT-VFS-101 (QA bug 27 of the TUI list): a file that changed on disk while its document has edits asks
 /// what to do; "Load File System Changes" replaces the text, "Keep Memory Changes" makes the
 /// next save overwrite, "Show Difference" lists both sides.
 fn conflict(name: &str) -> (Project, Tui) {

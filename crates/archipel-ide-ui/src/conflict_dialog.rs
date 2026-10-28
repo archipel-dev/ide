@@ -23,15 +23,17 @@ pub struct State {
 /// The document the dialog asks about now.
 pub fn active(app: &IdeApp) -> Option<usize> {
     app.state
-        .documents
-        .iter()
-        .position(|d| d.conflict.is_some() && !app.conflict_ui.snoozed.contains(&d.path))
+        .conflicts()
+        .into_iter()
+        .find(|(_, path, _)| !app.conflict_ui.snoozed.contains(path))
+        .map(|(index, _, _)| index)
 }
 
 /// Escape: postpones the question.
 pub fn snooze(app: &mut IdeApp) {
-    if let Some(index) = active(app) {
-        let path = app.state.documents[index].path.clone();
+    if let Some(index) = active(app)
+        && let Some((_, path, _)) = app.state.conflicts().into_iter().find(|c| c.0 == index)
+    {
         app.conflict_ui.snoozed.push(path);
         app.conflict_ui.diff = None;
     }
@@ -57,23 +59,18 @@ pub fn answer(app: &mut IdeApp, index: usize, choice: Choice) {
 
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     // A resolved conflict is forgotten.
-    let open: Vec<PathBuf> = app
-        .state
-        .documents
-        .iter()
-        .filter(|d| d.conflict.is_some())
-        .map(|d| d.path.clone())
-        .collect();
-    app.conflict_ui.snoozed.retain(|path| open.contains(path));
-    let Some(index) = active(app) else {
+    let conflicts = app.state.conflicts();
+    app.conflict_ui
+        .snoozed
+        .retain(|path| conflicts.iter().any(|(_, open, _)| open == path));
+    let Some((index, path, conflict)) = conflicts
+        .into_iter()
+        .find(|(_, path, _)| !app.conflict_ui.snoozed.contains(path))
+    else {
         app.conflict_ui.diff = None;
         return;
     };
-    let document = &app.state.documents[index];
-    let Some(conflict) = document.conflict else {
-        return;
-    };
-    let name = IdeApp::file_name(&document.path);
+    let name = IdeApp::file_name(&path);
     let prompt = prompt(&name, conflict);
     let mut chosen = None;
     popups::popup_frame(ctx, "dialog_file_cache_conflict", 520.0, |ui| {

@@ -136,7 +136,15 @@ Without `COLORTERM=truecolor` the colors are quantized to the 256-color cube.
 - **Run**: the run configurations of the project (`.archipel/runConfigurations`, detected
   Cargo, Gradle, Maven, npm and Go targets). Run, Stop and Rerun go through the core, the
   console, the build output and test output appear in the Run window, and a line with a
-  source location opens the file (Enter or double click).
+  source location opens the file (Enter or double click; a relative path is resolved against
+  the working directory, the project root and the project's files, like the GUI: the links are
+  `archipel_ide_core::console_links`). The chooser (Alt+Shift+F10) lists the configurations and
+  the detected targets; a Run that cannot start says why. Stop ends the whole process tree
+  (SIGTERM to the process group, then SIGKILL). SIGTERM, SIGINT and SIGHUP quit like Quit does:
+  documents are saved and the terminal is restored.
+- **Conflicts**: a file that changed on disk while its document has unsaved edits opens the File
+  Cache Conflict dialog (Load File System Changes, Keep Memory Changes, Show Difference), as in
+  the GUI; Escape postpones it and Save or Reload All from Disk ask again.
 - **Git**: the branch and change counts in the status line, the Commit window with changed and
   unversioned files, and Commit with a message for the checked files.
 - **Terminal**: a pseudo-terminal session (the core's `terminal.*` commands) drawn in the window.
@@ -179,8 +187,7 @@ terminal clipboard (OSC 52).
   other refactoring dialogs, Generate, Settings, the diff viewer and Local History, plugin
   views (plugin commands work), Android tooling, the AI assistant and Agents mode, the Git log,
   branches and push. Use the GUI for these.
-- Editor splits are shown as one tab list. Long lines wrap (the widget cannot follow a caret
-  horizontally). Documents with CRLF line endings are drawn as LF and keep CRLF in the core.
+- Editor splits are shown as one tab list. Long lines wrap; the view follows the caret by row. Documents with CRLF line endings are drawn as LF and keep CRLF in the core.
   Shift+arrows in column selection mode do not extend the block yet (the mode toggles).
 - Keys a terminal cannot send have chords behind `Ctrl+\` (see "Keys"); Ctrl+7 comments (Ctrl+/) and
   Ctrl+H deletes a word in a legacy terminal.

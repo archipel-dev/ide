@@ -1474,6 +1474,15 @@ impl App for TuiApp {
 
     fn tick(&mut self, rt: &mut Runtime) {
         self.now = rt.now;
+        if crate::signals::stop_requested() && !self.quit {
+            // SIGTERM, SIGINT or SIGHUP: save what can be saved and leave like Quit does, so
+            // the terminal is given back (QA bug 21 of the TUI list).
+            self.sync_views();
+            self.ide.shutdown();
+            self.quit = true;
+            rt.quit = true;
+            return;
+        }
         let messages = self.layers.tick(rt);
         for message in messages {
             self.apply(rt, message);

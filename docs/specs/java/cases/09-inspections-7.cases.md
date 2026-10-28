@@ -927,9 +927,9 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING the pattern literal (unmatched brace)
+problem: WARNING {0 "Unmatched brace in message format pattern '{0'"
 ```
-status: unverified (message text not in the available source)
+status: unverified (range and which brace message applies)
 
 ### JAVA-ICC-037 case 2: argument not used
 settings: default
@@ -942,9 +942,9 @@ class A {
 ```
 keys: inspect
 ```after
-problem: WARNING the argument 2 (the argument with index '1' is not used in the pattern)
+problem: WARNING 2 "Argument with index '1' is not used in the pattern"
 ```
-status: unverified (message text not in the available source)
+status: unverified (highlighted range)
 
 ### JAVA-ICC-039 case 1: rationalize
 settings: inspection InnerClassReferencedViaSubclass enabled

@@ -282,7 +282,7 @@ dependencies = [
 [[package]]
 name = "archipel-icons"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components#50630b3d499adc495c592f71c4e9b9d44a64c87a"
+source = "git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components#c8db1a44946ff1c4b263db5dc758b8ffee94dadf"
 dependencies = [
  "egui",
 ]
@@ -932,7 +932,7 @@ dependencies = [
 [[package]]
 name = "archipel-kit"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components#50630b3d499adc495c592f71c4e9b9d44a64c87a"
+source = "git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components#c8db1a44946ff1c4b263db5dc758b8ffee94dadf"
 dependencies = [
  "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components)",
  "archipel-kit-model",
@@ -963,7 +963,7 @@ dependencies = [
 [[package]]
 name = "archipel-kit-model"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components#50630b3d499adc495c592f71c4e9b9d44a64c87a"
+source = "git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components#c8db1a44946ff1c4b263db5dc758b8ffee94dadf"
 dependencies = [
  "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components)",
  "serde",
@@ -972,7 +972,7 @@ dependencies = [
 [[package]]
 name = "archipel-kit-tui"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components#50630b3d499adc495c592f71c4e9b9d44a64c87a"
+source = "git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components#c8db1a44946ff1c4b263db5dc758b8ffee94dadf"
 dependencies = [
  "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components)",
  "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Fshared-chrome-components)",
@@ -1697,7 +1697,7 @@ checksum = "fe6d2e5af09e8c8ad56c969f2157a3d4238cebc7c55f0a517728c38f7b200f81"
 dependencies = [
  "serde",
  "termcolor",
- "unicode-width 0.1.14",
+ "unicode-width 0.2.2",
 ]
 
 [[package]]

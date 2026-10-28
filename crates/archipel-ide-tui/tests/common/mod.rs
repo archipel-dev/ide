@@ -116,8 +116,13 @@ impl Tui {
     }
 
     pub fn with_app(app: TuiApp, width: u16, height: u16) -> Self {
-        let keymap = app.keymap(Os::Linux);
-        let rt = Runtime::with(Look::dark(), keymap, Caps::kitty());
+        Self::with_caps(app, width, height, Caps::kitty())
+    }
+
+    /// Like [`Tui::with_app`] on a terminal with `caps`.
+    pub fn with_caps(app: TuiApp, width: u16, height: u16, caps: Caps) -> Self {
+        let keymap = app.keymap(caps.os);
+        let rt = Runtime::with(Look::gui(archipel_kit::Theme::dark()), keymap, caps);
         let terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
         let mut tui = Self { app, rt, terminal };
         tui.draw();
@@ -233,6 +238,17 @@ impl Tui {
     /// The foreground color of the cell at (`x`, `y`).
     pub fn fg_at(&self, x: u16, y: u16) -> archipel_kit_tui::ratatui::style::Color {
         self.terminal.backend().buffer()[(x, y)].fg
+    }
+
+    /// The screen buffer of the last frame.
+    pub fn buffer(&self) -> &archipel_kit_tui::ratatui::buffer::Buffer {
+        self.terminal.backend().buffer()
+    }
+
+    /// The outlines of the chrome drawn in the last frame next to those of its props.
+    pub fn parity(&self) -> Vec<archipel_ide_tui::chrome::Pair> {
+        self.app
+            .chrome_parity(&self.rt, self.terminal.backend().buffer())
     }
 
     /// The cell at (`x`, `y`).

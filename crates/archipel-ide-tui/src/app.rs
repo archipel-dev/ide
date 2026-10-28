@@ -171,6 +171,22 @@ impl TuiApp {
         &self.ide
     }
 
+    /// The outlines of the chrome drawn in the last frame next to the ones of its props, for
+    /// the parity tests (TUI-GUI-191).
+    pub fn chrome_parity(&self, rt: &Runtime, buf: &Buffer) -> Vec<crate::chrome::Pair> {
+        self.chrome.parity(buf, ChromeUi::notation(rt))
+    }
+
+    /// The main menu control, for tests that open its menus.
+    pub fn menu_control(&mut self) -> &mut archipel_kit_tui::menubar::MenuBarControl {
+        &mut self.chrome.menu
+    }
+
+    /// The menu bar the last frame built.
+    pub fn built_menu(&self) -> Option<&archipel_kit_model::MenuBar> {
+        self.chrome.built.as_ref().map(|c| &c.menu)
+    }
+
     /// The window geometry state, mutably.
     pub fn shell_mut(&mut self) -> &mut Shell {
         &mut self.shell

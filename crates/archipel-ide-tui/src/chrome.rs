@@ -310,3 +310,64 @@ pub fn choice_effects(cx: &archipel_ide_view::ViewCx, kind: &Popup, id: &str) ->
 pub fn editor_target() -> Target {
     Target::Editor
 }
+
+/// What one control drew and what the props describe, for the parity tests.
+pub struct Pair {
+    /// The surface.
+    pub name: String,
+    /// The outline read back from the screen.
+    pub got: archipel_kit_model::outline::Outline,
+    /// The outline computed from the props.
+    pub want: archipel_kit_model::outline::Outline,
+}
+
+impl ChromeUi {
+    /// The outlines of the surfaces drawn in the last frame next to the ones of their props
+    /// (TUI-GUI-191).
+    pub fn parity(&self, buf: &Buffer, notation: Notation) -> Vec<Pair> {
+        use archipel_kit_model::outline;
+        let Some(built) = &self.built else {
+            return Vec::new();
+        };
+        let mut pairs = vec![
+            Pair {
+                name: "toolbar".into(),
+                got: self.toolbar.outline(buf),
+                want: outline::toolbar(&built.toolbar, notation),
+            },
+            Pair {
+                name: "left stripe".into(),
+                got: self.left.outline(buf),
+                want: outline::stripe(&built.left, notation),
+            },
+            Pair {
+                name: "right stripe".into(),
+                got: self.right.outline(buf),
+                want: outline::stripe(&built.right, notation),
+            },
+            Pair {
+                name: "tabs".into(),
+                got: self.tabs.outline(buf),
+                want: outline::tab_bar(&built.tabs, notation),
+            },
+        ];
+        for (window, header) in &built.headers {
+            let control = match window.anchor() {
+                Anchor::Left => &self.header_left,
+                Anchor::Right => &self.header_right,
+                Anchor::Bottom => &self.header_bottom,
+            };
+            pairs.push(Pair {
+                name: format!("header {}", window.id()),
+                got: control.outline(buf),
+                want: outline::panel_header(header, notation),
+            });
+        }
+        pairs.push(Pair {
+            name: "status bar".into(),
+            got: self.status.outline(buf),
+            want: outline::status_bar(&built.status, notation),
+        });
+        pairs
+    }
+}

@@ -1,4 +1,5 @@
 //! The tool window stripes: which buttons, in which order, with which badges (TUI-GUI-055..060).
+//! Spec: TUI-GUI-055, TUI-GUI-056, TUI-GUI-059, TUI-GUI-060 (stripes).
 
 use crate::cx::ViewCx;
 use crate::icons::{activation_action, tool_window_icon};

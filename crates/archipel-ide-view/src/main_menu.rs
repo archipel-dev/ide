@@ -2,6 +2,7 @@
 //! the reference hides at runtime, with the File menu limited to what Archipel IDE implements,
 //! the commands that have no reference action appended to the matching menu, and plugin menu
 //! items (TUI-GUI-035..042). Enabled state comes from the action registry.
+//! Spec: TUI-GUI-035, TUI-GUI-041, TUI-GUI-042, TUI-GUI-045 (main menu).
 
 use crate::actions::is_implemented;
 use crate::cx::ViewCx;
@@ -184,6 +185,16 @@ pub fn mnemonic_index(raw: &str) -> Option<usize> {
     None
 }
 
+/// The mnemonics of the twelve titles (TUI-GUI-036): the first letter, except Run (`u`).
+fn title_mnemonic(label: &str) -> Option<usize> {
+    match label {
+        "Run" => Some(1),
+        "File" | "Edit" | "View" | "Navigate" | "Code" | "Refactor" | "Build" | "Tools" | "Git"
+        | "Window" | "Help" => Some(0),
+        _ => None,
+    }
+}
+
 /// The mnemonic of the reference action or group `id`.
 pub fn mnemonic_of(id: &str) -> Option<usize> {
     let raw = Catalog::shared().get(id)?.text.clone()?;
@@ -342,7 +353,9 @@ pub fn main_menu(cx: &ViewCx) -> MenuBar {
             }
         }
         let mut header = MenuHeader::new(id.clone(), label.clone()).entries(entries);
-        header.mnemonic = mnemonic_of(id).filter(|at| *at < label.chars().count());
+        header.mnemonic = mnemonic_of(id)
+            .or_else(|| title_mnemonic(label))
+            .filter(|at| *at < label.chars().count());
         headers.push(header);
     }
     MenuBar::new(headers)

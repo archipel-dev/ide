@@ -4,6 +4,7 @@
 //!
 //! This file has no menu list, label, shortcut text or enabled rule: those are the view
 //! crate's. It only places the controls and forwards events.
+//! Spec: TUI-GUI-020, TUI-GUI-021, TUI-GUI-022 (placing the controls).
 
 use archipel_ide_core::{Anchor, ToolWindow};
 use archipel_ide_view::context_menu::{Target, context_action, context_menu};
@@ -42,6 +43,15 @@ pub struct ActivePopup {
     pub kind: Popup,
 }
 
+/// A menu to open as soon as the bar has been built and drawn (F10, Alt+letter, the chord).
+#[derive(Debug, Clone, Copy)]
+pub enum Pending {
+    /// The menu at this index.
+    Index(usize),
+    /// The menu with this mnemonic letter.
+    Mnemonic(char),
+}
+
 /// The controls of the chrome.
 pub struct ChromeUi {
     /// Row 0.
@@ -66,6 +76,8 @@ pub struct ChromeUi {
     pub built: Option<Chrome>,
     /// The open popup menu.
     pub popup: Option<ActivePopup>,
+    /// A menu to open after the next frame placed the titles.
+    pub pending: Option<(Pending, bool)>,
 }
 
 impl Default for ChromeUi {
@@ -82,6 +94,7 @@ impl Default for ChromeUi {
             status: StatusItemsControl::new(Id::new("tui.statusbar")),
             built: None,
             popup: None,
+            pending: None,
         }
     }
 }
@@ -130,6 +143,34 @@ impl ChromeUi {
             self.menu.draw(rt, menu, row, 4, buf);
         } else {
             self.toolbar.draw(rt, bar, row, buf);
+        }
+    }
+
+    /// Expands the bar and opens a menu once the titles are placed (the model of a collapsed
+    /// bar has no menus: they are built when the bar is shown).
+    pub fn request_menu(&mut self, what: Pending) {
+        let was_expanded = self.menu.is_expanded();
+        self.menu.expand();
+        self.pending = Some((what, was_expanded));
+    }
+
+    /// Opens the requested menu; a mnemonic that no title has leaves the bar as it was.
+    pub fn apply_pending(&mut self, rt: &Runtime, menu: &archipel_kit_model::MenuBar) {
+        if menu.headers.is_empty() {
+            return;
+        }
+        let Some((what, was_expanded)) = self.pending.take() else {
+            return;
+        };
+        let opened = match what {
+            Pending::Index(index) => {
+                self.menu.open_menu(rt, menu, index, true);
+                true
+            }
+            Pending::Mnemonic(letter) => self.menu.open_by_mnemonic(rt, menu, letter),
+        };
+        if !opened && !was_expanded {
+            self.menu.collapse();
         }
     }
 

@@ -1,5 +1,6 @@
 //! TUI-GUI-155, 159, 45: a terminal without the kitty keyboard protocol sees the keyboard
 //! notice once; Help > Terminal Keyboard Setup… shows it again; a kitty terminal is not told.
+//! Spec: TUI-GUI-045, TUI-GUI-155, TUI-GUI-159 (tests).
 
 mod common;
 

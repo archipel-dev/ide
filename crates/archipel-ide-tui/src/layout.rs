@@ -226,6 +226,9 @@ impl TuiApp {
         // Row 0 and the stripes.
         self.chrome
             .draw_toolbar(rt, &built.toolbar, &built.menu, geo.toolbar, buf);
+        if self.chrome.pending.is_some() {
+            self.chrome.apply_pending(rt, &built.menu);
+        }
         self.chrome.left.draw(rt, &built.left, geo.left_stripe, buf);
         self.chrome
             .right

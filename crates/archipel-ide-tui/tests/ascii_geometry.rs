@@ -1,5 +1,6 @@
 //! TUI-GUI-131, 132 and 195: the ASCII glyph mode replaces each Nerd Font glyph by its ASCII
 //! fallback and keeps every layout width; glyphs take exactly one cell.
+//! Spec: TUI-GUI-131, TUI-GUI-132, TUI-GUI-195 (tests).
 
 mod common;
 
@@ -65,11 +66,13 @@ fn ascii_mode_has_no_private_use_glyphs_and_the_same_geometry() {
                         a.width() <= 1,
                         "{size:?} ({x},{y}): {a:?} is wider than a cell"
                     );
-                } else if a != n
+                } else if y + 1 < nerd.len()
+                    && a != n
                     && !(n.chars().all(char::is_alphanumeric)
                         && a.chars().all(char::is_alphanumeric))
                 {
-                    // (The two fixtures have project folders that differ in one character.)
+                    // (The two fixtures have project folders that differ in one character; the
+                    // last row has the indexing progress, which is not deterministic.)
                     // Text, boxes and blanks do not move: only the animated spinner and
                     // the glyph substitutes differ.
                     assert!(

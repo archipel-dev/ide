@@ -1,5 +1,6 @@
 //! The status bar (TUI-GUI-094, 105..109): breadcrumbs at the left, the widgets at the right in
 //! the GUI's order, each with its tone, tooltip, priority and menu.
+//! Spec: TUI-GUI-094, TUI-GUI-105, TUI-GUI-106, TUI-GUI-107 (status bar).
 
 use crate::cx::ViewCx;
 use crate::toolbar::command_row;

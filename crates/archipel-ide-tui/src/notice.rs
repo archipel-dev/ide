@@ -1,5 +1,6 @@
 //! The one-time notice for terminals without the kitty keyboard protocol: the GUI's
 //! Ctrl+Shift shortcuts cannot be sent there, so the notice names the leader chords.
+//! Spec: TUI-GUI-155, TUI-GUI-159 (the keyboard notice).
 
 use std::path::PathBuf;
 

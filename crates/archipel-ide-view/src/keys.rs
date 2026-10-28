@@ -4,6 +4,7 @@
 //! overrides). A legacy terminal cannot send everything (spec appendix B): there an action
 //! whose first shortcut cannot arrive shows the first one that can, else the GUI's, and is
 //! reachable by `LEADER` followed by its key from [`CHORDS`].
+//! Spec: TUI-GUI-156, TUI-GUI-157, TUI-GUI-165, TUI-GUI-170 (chords of the single leader).
 
 use crate::cx::Caps;
 use archipel_ide_keymap::{KeyStroke, Keymap, Shortcut};
@@ -61,7 +62,9 @@ pub const CHORDS: &[(&str, &str)] = &[
     ("EditorUnSelectWord", "shift W"),
     ("EditorToggleCase", "U"),
     ("EditorJoinLines", "shift J"),
-    ("EditorMatchBrace", "M"),
+    ("EditorMatchBrace", "shift M"),
+    // The main menu (spec L: `Ctrl+\\ M`).
+    ("MainMenu", "M"),
     ("GotoTest", "shift T"),
     ("GotoTypeDeclaration", "shift B"),
     ("FindPrevious", "shift F"),

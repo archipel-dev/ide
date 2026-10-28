@@ -1,5 +1,6 @@
 //! The theme of the terminal: the Settings theme (the same setting as the GUI, default
 //! Islands Dark) resolved to a kit `Theme`, as `look` in 24-bit colors (TUI-GUI-006, 120).
+//! Spec: TUI-GUI-006, TUI-GUI-120 (the theme).
 
 use archipel_ide_core::IdeState;
 use archipel_kit_tui::{Look, Theme};

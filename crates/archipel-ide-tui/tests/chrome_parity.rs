@@ -4,6 +4,7 @@
 //! same order with the same labels, enabled and checked state, shortcut texts and tooltips.
 //! Items that do not fit a narrow screen are dropped by priority, never reordered or altered.
 //! The main menu is compared at full depth.
+//! Spec: TUI-GUI-001, TUI-GUI-002, TUI-GUI-035, TUI-GUI-041, TUI-GUI-042, TUI-GUI-055, TUI-GUI-056, TUI-GUI-094, TUI-GUI-190, TUI-GUI-191 (tests).
 
 mod common;
 

@@ -1,5 +1,6 @@
 //! TUI-GUI-120, 121 and 195: the colors of the chrome are the tokens of `Theme::colors`,
 //! blended over the surface they are drawn on, and the Settings theme re-themes live.
+//! Spec: TUI-GUI-006, TUI-GUI-120, TUI-GUI-121, TUI-GUI-123, TUI-GUI-195 (tests).
 
 mod common;
 

@@ -1,4 +1,5 @@
 //! The chrome for fixture states: composition, order, enabled state, purity.
+//! Spec: TUI-GUI-002, TUI-CMP-006, TUI-GUI-190 (tests).
 
 mod common;
 

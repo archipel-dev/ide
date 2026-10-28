@@ -27,7 +27,7 @@ use archipel_kit_tui::collections::{JBTree, TreeNode};
 use archipel_kit_tui::dialog::Dialog;
 use archipel_kit_tui::editor::EditorComponent;
 use archipel_kit_tui::hit::Id;
-use archipel_kit_tui::input::{Event, KeyCode, KeyEventKind};
+use archipel_kit_tui::input::{Event, KeyCode, KeyEventKind, KeyModifiers};
 use archipel_kit_tui::overlay::{Handled, Layers, Overlay};
 use archipel_kit_tui::popup::Placement;
 use archipel_kit_tui::ratatui::buffer::Buffer;
@@ -226,7 +226,8 @@ impl TuiApp {
     pub fn is_shell_action(id: &str) -> bool {
         matches!(
             id,
-            "HideActiveWindow"
+            "MainMenu"
+                | "HideActiveWindow"
                 | "JumpToLastWindow"
                 | "MaximizeToolWindow"
                 | "ResizeToolWindowLeft"
@@ -535,6 +536,7 @@ impl TuiApp {
     fn shell_action(&mut self, id: &str) -> bool {
         let focused = self.shell.focused_tool();
         match id {
+            "MainMenu" => self.chrome.request_menu(crate::chrome::Pending::Index(0)),
             "HideActiveWindow" => {
                 let Some(window) = focused else { return false };
                 self.ide.state_mut().tool_windows_mut().hide(window);
@@ -1412,6 +1414,18 @@ impl App for TuiApp {
                         return;
                     }
                 }
+            }
+            // Alt+letter opens the menu with that mnemonic when no action has the key.
+            if key.modifiers == KeyModifiers::ALT
+                && let KeyCode::Char(letter) = key.code
+                && letter.is_ascii_alphabetic()
+                && self.layers.is_empty()
+                && !self.terminal_focused()
+            {
+                self.chrome
+                    .request_menu(crate::chrome::Pending::Mnemonic(letter));
+                self.after_input(rt);
+                return;
             }
             if self.editor_focused() && self.type_key(rt, key) {
                 self.after_input(rt);

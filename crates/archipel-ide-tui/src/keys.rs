@@ -66,6 +66,10 @@ pub fn build_keymap(os: Os, ide: &IdeKeymap, knows: impl Fn(&str) -> bool) -> Ke
             }
         }
     }
+    // F10 shows the menu bar and opens File (TUI-GUI-037).
+    if let Some(parsed) = Shortcut::parse("F10") {
+        keymap.add_shortcut("MainMenu", parsed);
+    }
     let leader = archipel_ide_view::keys::leader_for(ide);
     // Single strokes a legacy terminal sends as other keys: Ctrl+/ arrives as Ctrl+7 and
     // Ctrl+Backspace as Ctrl+H.
@@ -75,7 +79,7 @@ pub fn build_keymap(os: Os, ide: &IdeKeymap, knows: impl Fn(&str) -> bool) -> Ke
         }
     }
     for (action, keys) in archipel_ide_view::keys::CHORDS {
-        if !knows(action) && !action.starts_with('$') {
+        if !knows(action) && !action.starts_with('$') && *action != "MainMenu" {
             continue;
         }
         if let Some(parsed) = Shortcut::parse(&format!("{leader} > {keys}")) {

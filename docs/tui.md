@@ -97,6 +97,7 @@ one-time notice; Help | Terminal Keyboard Setup… shows it again. The table is
 | Extend / Shrink Selection | Ctrl+W, Ctrl+Shift+W | Ctrl+W works; Ctrl+\ then shift W |
 | Context actions and quick fixes | Alt+Enter | Ctrl+\ then Enter |
 | Quit (saves everything first) | Exit in the File menu | Ctrl+\ then Q |
+| Main menu | hamburger, F10, Alt+F / Alt+E ... (the mnemonic of each title) | Ctrl+\ then M |
 
 A chord shows a which-key list after its first stroke. In the popups: Up/Down move, Enter chooses, Esc
 closes, Tab switches the tabs of Search Everywhere. In the Terminal window every key goes to the shell

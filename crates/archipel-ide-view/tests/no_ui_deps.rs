@@ -1,5 +1,6 @@
 //! The view crate must not depend on a UI toolkit (TUI-CMP-002): `cargo tree -p
 //! archipel-ide-view` lists neither egui nor ratatui.
+//! Spec: TUI-CMP-002 (tests).
 
 #[test]
 fn the_dependency_tree_has_no_toolkit() {

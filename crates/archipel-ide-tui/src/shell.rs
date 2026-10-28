@@ -6,6 +6,7 @@
 //! Which windows are visible, their anchors and order are the core's (`ToolWindowLayout`,
 //! shared with the GUI); the sizes of resizable areas are cells and live here (`tui.*`),
 //! so a drag in the terminal never changes the window's sizes.
+//! Spec: TUI-GUI-010, TUI-GUI-011, TUI-GUI-012, TUI-GUI-013 (the screen geometry).
 
 use archipel_ide_core::{Anchor, ToolWindow};
 use archipel_kit_tui::hit::Id;

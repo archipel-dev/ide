@@ -543,3 +543,31 @@ are in `docs/tui-parity.md` section 5 and file 02 section 4.
 | Spinner, PropertyGrid, ScrollView, `Button::selectable` | missing | as TUI-CMP-011 |
 | Editor widget | gutter, change markers, stripe hover exist | reserved lanes, breakpoint column glyph shapes, line tints, end-of-line text, horizontal scroll (parity doc P4) |
 | Pin | git branch `main` at `577ce54` | every kit change is a commit in `archipel-dev/kit` and a pin bump here |
+
+## P. Open questions and deviations found while building Wave 0 (phases 0.1 and 0.2)
+
+The spec said `Ctrl+\` is bound in no keymap, `Ctrl+W` stays free of a leader role and a handful of
+actions have chords. Building it showed these points; each is the closest faithful behavior chosen,
+recorded here so the spec can be corrected.
+
+| # | Spec statement | What was found | Decision |
+|---|---|---|---|
+| P1 | TUI-GUI-170: `Ctrl+\` is free in every shipped keymap | NetBeans 6.5, VSCode, Visual Studio 2022 and macOS System Shortcuts bind it (`archipel-ide-view` test `keys_collisions`) | `leader_for(keymap)` picks `Ctrl+\`, else `Ctrl+]`, else `Ctrl+^`; the notice names the leader in use |
+| P2 | Appendix B lists chords for CopyPaths, QuickImplementations, ExpressionTypeInfo, MethodHierarchy, TextSearchAction, CopyReference, ShowProjectStructureSettings, ActivateDebugToolWindow, EditorContextInfo, SelectIn, ShowNavBar, ImplementMethods, ViewSource, SmartTypeCompletion, ReplaceInPath, PasteMultiple | the IDE has no such action yet | `CHORDS` lists implemented actions only (test `keys_table`); a chord is added with its action. Appendix B also gained chords the table missed for actions whose only GUI stroke a legacy terminal cannot send (Complete Statement, Split Line, Start New Line Before, Collapse Selection, Show Usages, Push) |
+| P3 | TUI-GUI-016: 100x30 is the minimum; below 100 columns the right then the left window collapse | the shell clamps the panes and shows the "terminal too small" message below 60x16; no automatic collapse | open: automatic collapse by width (phase 0.4 with the tool window bodies) |
+| P4 | TUI-GUI-015: sizes are stored in cells under `tui.*` keys | not persisted yet; the shell keeps them for the session | open: persist with the user settings |
+| P5 | TUI-GUI-159: the notice is remembered in the settings key `tui.notice.keyboard` | a marker file `$XDG_CONFIG_HOME/archipel-ide/tui-keyboard-notice` is used | open: move it to the user settings once the settings page has a TUI section |
+| P6 | TUI-GUI-131: `tui.glyphs` setting | the environment variable `ARCHIPEL_TUI_GLYPHS=ascii` selects ASCII | open: setting |
+| P7 | TUI-GUI-122: truecolor from `COLORTERM` or a DA/XTGETTCAP answer | only `COLORTERM` (and the quantizer for its absence) | open: terminal queries |
+| P8 | TUI-GUI-058: a visible but unfocused window has the neutral gray fill | the GUI itself fills every visible window's button with the accent (`chrome.rs`, unchanged) | the terminal follows the spec (neutral gray when unfocused); the GUI should follow the measured reference in a later change |
+| P9 | TUI-GUI-109 and TUI-CMP-041: nothing drops on a wide screen | on a busy project the status bar at 160 columns cannot show the breadcrumbs, the message and every widget (the Gradle import message alone is 54 cells) | widgets drop by priority and the message elides (test `chrome_parity` allows it for the status bar only) |
+| P10 | TUI-GUI-141: dialogs are the GUI's | the kit `Dialog` now draws the Islands popup (surface, border, bold title) but its buttons keep the older markers | phase 0.5 |
+| P11 | TUI-GUI-202: the GUI's Welcome screen | a list of Open, New Project and the recent projects on the editor area | phase 0.5 with the Welcome model |
+| P12 | TUI-GUI-171: which-key groups the alternatives by menu name | the kit's flat which-key list is shown | open |
+| P13 | TUI-GUI-014 splitters of editor splits and the bottom window height in `tui.*` | the three tool window splitters drag; editor split dividers are not drawn (the core's split groups show as one strip) | Wave 1 |
+
+The GUI side of 0.2.1 to 0.2.8 is done for the main menu, the context menus, the action rules, both
+stripes and the Settings gear (`archipel-ide-ui` renders the view crate's models); the toolbar widgets
+(project, VCS, run widget), tool window headers, editor tabs and status bar widgets still compose
+their data in `archipel-ide-ui` and are the remaining GUI work of phase 0.2.
+

@@ -1,6 +1,9 @@
 //! The composition rules of the main menu (TUI-GUI-035..042), moved from the GUI's
 //! `main_menu.rs`: the reference structure, what is hidden or limited, the appended commands
 //! and the shortcuts.
+//! Spec: TUI-GUI-035, TUI-GUI-041, TUI-GUI-042 (tests).
+
+mod common;
 
 use archipel_ide_actions::MenuItem as RefItem;
 use archipel_ide_view::actions::is_implemented;
@@ -170,4 +173,20 @@ fn implemented_menu_shortcuts_are_unique_on_the_primary_keymaps() {
                 .any(|s| matches!(seen.get(s), Some(a) if a == "SaveAll"))
         );
     }
+}
+
+/// TUI-GUI-036: the mnemonic of each title is unique and the documented one.
+#[test]
+fn the_titles_have_the_documented_unique_mnemonics() {
+    let fixture = common::Fixture::empty();
+    let cx = fixture.cx(archipel_ide_view::Caps::kitty());
+    let bar = archipel_ide_view::main_menu::main_menu(&cx);
+    let letters: String = bar
+        .headers
+        .iter()
+        .map(|h| h.mnemonic_char().expect("every title has a mnemonic"))
+        .collect();
+    assert_eq!(letters, "fevncrbutgwh");
+    let unique: std::collections::BTreeSet<char> = letters.chars().collect();
+    assert_eq!(unique.len(), letters.len());
 }

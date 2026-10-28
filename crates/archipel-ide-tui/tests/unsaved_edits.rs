@@ -1,6 +1,6 @@
-//! Closing a tab or quitting never loses edits silently (TUI-BUG-014, TUI-BUG-005), and a
+//! Closing a tab or quitting never loses edits silently (QA bugs 14 and 5 of the TUI list), and a
 //! disabled action does nothing instead of raising a toast with an internal id
-//! (TUI-BUG-003, TUI-BUG-004).
+//! (QA bugs 3 and 4 of the TUI list).
 
 mod common;
 

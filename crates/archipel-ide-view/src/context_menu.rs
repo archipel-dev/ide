@@ -1,6 +1,7 @@
 //! Context menus built from the reference popup groups (`ProjectViewPopupMenu`,
 //! `EditorPopupMenu`, `EditorTabPopupMenu`): only the actions available for the target, in
 //! reference order and grouping (TUI-GUI-043).
+//! Spec: TUI-GUI-043 (context menus).
 
 use crate::actions::{CONTEXT, ContextFacts, ContextKind, is_implemented, is_target_action};
 use crate::cx::ViewCx;

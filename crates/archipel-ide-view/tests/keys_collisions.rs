@@ -1,4 +1,5 @@
 //! TUI-GUI-170: the terminal's chord alternatives never collide with a keymap or each other.
+//! Spec: TUI-GUI-156, TUI-GUI-157, TUI-GUI-165, TUI-GUI-170 (tests).
 
 use archipel_ide_keymap::{KeymapSet, Overrides};
 use archipel_ide_view::keys::{CHORDS, LEADER, leader_for, leader_is_bound};

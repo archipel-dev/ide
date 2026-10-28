@@ -1,5 +1,6 @@
 //! TUI-GUI-043: the context menus of the project tree, the editor and the tabs are the
 //! GUI's (`archipel-ide-view::context_menu`), opened by a right click.
+//! Spec: TUI-GUI-043 (tests).
 
 mod common;
 

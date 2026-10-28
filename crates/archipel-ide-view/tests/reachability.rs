@@ -1,6 +1,7 @@
 //! TUI-GUI-193: every action of the keymap that this IDE implements can be started by clicks
 //! from the toolbar, the main menu, a stripe, a header, a context menu or Search Everywhere;
 //! the list of unreachable actions is empty.
+//! Spec: TUI-GUI-003, TUI-GUI-193 (tests).
 
 mod common;
 

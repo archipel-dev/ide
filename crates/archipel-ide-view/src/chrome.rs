@@ -1,5 +1,6 @@
 //! The whole chrome for a state, built in one call (TUI-CMP-022), and the paths that reach an
 //! action through visible UI (TUI-GUI-003).
+//! Spec: TUI-GUI-001, TUI-GUI-002, TUI-GUI-190, TUI-CMP-002, TUI-CMP-006 (the shared chrome model).
 
 use crate::context_menu::{Target, context_menu};
 use crate::cx::ViewCx;

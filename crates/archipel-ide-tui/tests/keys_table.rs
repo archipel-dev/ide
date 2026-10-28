@@ -1,6 +1,7 @@
 //! TUI-GUI-194: the key table (appendix B). In kitty caps the GUI shortcut performs the
 //! action; in legacy caps the chord of the single leader performs it, and `sendable` says
 //! which GUI shortcuts a legacy terminal cannot send.
+//! Spec: TUI-GUI-156, TUI-GUI-165, TUI-GUI-194 (tests).
 
 mod common;
 

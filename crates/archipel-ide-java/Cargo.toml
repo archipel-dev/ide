@@ -23,3 +23,7 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 tempfile = "3"
 archipel-ide-project = { path = "../archipel-ide-project" }
 archipel-ide-externalsystem = { path = "../archipel-ide-externalsystem" }
+
+[[bench]]
+name = "completion"
+harness = false

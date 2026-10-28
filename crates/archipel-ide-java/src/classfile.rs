@@ -298,7 +298,30 @@ fn skip_annotation(c: &mut Cur<'_>) -> Res<()> {
     Ok(())
 }
 
-/// Annotation types of a `Runtime(In)VisibleAnnotations` attribute.
+/// Enum constant names of an element value (`@Target({METHOD, TYPE})`).
+fn element_enum_names(c: &mut Cur<'_>, pool: &Pool, out: &mut Vec<String>) -> Res<()> {
+    match c.u1()? {
+        b'e' => {
+            c.u2()?;
+            let name = c.u2()?;
+            out.push(pool.utf8(name).to_string());
+        }
+        b'[' => {
+            for _ in 0..c.u2()? {
+                element_enum_names(c, pool, out)?;
+            }
+        }
+        b'@' => skip_annotation(c)?,
+        _ => {
+            c.u2()?;
+        }
+    }
+    Ok(())
+}
+
+/// Annotation types of a `Runtime(In)VisibleAnnotations` attribute. `@Target` keeps its
+/// `ElementType` constants (`@java.lang.annotation.Target(METHOD, TYPE)`) so that the name
+/// index can offer annotation types applicable to the annotated element.
 fn annotations(data: &[u8], pool: &Pool, names: &Names<'_>) -> Vec<String> {
     let mut c = Cur { b: data, at: 0 };
     let mut out = Vec::new();
@@ -311,15 +334,28 @@ fn annotations(data: &[u8], pool: &Pool, names: &Names<'_>) -> Vec<String> {
             at: 0,
             names,
         };
-        out.push(format!("@{}", p.ty()));
-        // rewind to skip the pairs
+        let ty = p.ty();
         let Ok(pairs) = c.u2() else { break };
+        let is_target = ty == "java.lang.annotation.Target";
+        let mut constants = Vec::new();
         let mut ok = true;
         for _ in 0..pairs {
-            if c.u2().is_err() || skip_element_value(&mut c).is_err() {
+            let read = c.u2().and_then(|_| {
+                if is_target {
+                    element_enum_names(&mut c, pool, &mut constants)
+                } else {
+                    skip_element_value(&mut c)
+                }
+            });
+            if read.is_err() {
                 ok = false;
                 break;
             }
+        }
+        if is_target {
+            out.push(format!("@{ty}({})", constants.join(", ")));
+        } else {
+            out.push(format!("@{ty}"));
         }
         if !ok {
             break;

@@ -30,6 +30,8 @@ pub struct JavaSettings {
     /// Run the native resolve errors, import fixes and unused-import inspection.
     pub native: bool,
     pub unused_imports: bool,
+    /// Offer class names from the native indexes in completion (JAVA-CMP-018).
+    pub completion: bool,
     pub imports: ImportSettings,
 }
 
@@ -38,6 +40,7 @@ impl Default for JavaSettings {
         Self {
             native: true,
             unused_imports: true,
+            completion: true,
             imports: ImportSettings::default(),
         }
     }
@@ -50,6 +53,9 @@ struct State {
     settings: JavaSettings,
     index: Option<JavaIndex>,
     model: Option<Arc<ProjectModel>>,
+    /// The synthetic model of a folder without an imported project (ad-hoc module).
+    adhoc: Option<Arc<ProjectModel>>,
+    notes: Vec<String>,
     loading: bool,
     cache_dir: Option<PathBuf>,
     docs: std::collections::HashMap<PathBuf, DocState>,
@@ -76,6 +82,8 @@ pub struct JavaStatus {
     pub state: JavaIndexState,
     pub model_loading: bool,
     pub native: bool,
+    /// Whether the classpath is the complete truth (import failed, jars missing, no libraries).
+    pub classpath: crate::classpath::Completeness,
 }
 
 /// Quiet time after the last edit before an open buffer is reindexed.
@@ -123,6 +131,7 @@ impl JavaService {
         root: &Path,
         model: Option<Arc<ProjectModel>>,
         loading: bool,
+        notes: Vec<String>,
         cache_dir: Option<PathBuf>,
     ) -> bool {
         let mut s = self.state.write();
@@ -131,14 +140,34 @@ impl JavaService {
             s.root = root.to_path_buf();
             s.index = None;
             s.model = None;
+            s.adhoc = None;
             s.docs.clear();
         }
+        // No imported model (no build file, import not finished or failed): the ad-hoc module,
+        // so completion and errors work in any folder with the JDK and the folder's sources.
+        let model = match model {
+            Some(m) => Some(m),
+            None => {
+                if s.adhoc.is_none() {
+                    s.adhoc = crate::classpath::ad_hoc_model(root).map(Arc::new);
+                }
+                s.adhoc.clone()
+            }
+        };
         if s.index.is_none() {
             let dir = cache_dir.as_ref().map(|d| d.join("java"));
             if let Some(d) = &dir {
                 let _ = std::fs::create_dir_all(d);
             }
-            s.index = Some(JavaIndex::open(dir.as_deref()));
+            let index = JavaIndex::open(dir.as_deref());
+            // Stubs of a library are shared by every project that uses the same jar.
+            index.set_shared_cache(
+                cache_dir
+                    .as_ref()
+                    .and_then(|d| d.parent())
+                    .map(|p| p.join("java-libs")),
+            );
+            s.index = Some(index);
             s.cache_dir = cache_dir;
         }
         let index = s.index.clone().expect("created above");
@@ -153,12 +182,13 @@ impl JavaService {
                 index.sync(m.clone());
             }
         }
-        if model_changed || s.loading != loading || s.project.is_none() {
+        if model_changed || s.loading != loading || s.notes != notes || s.project.is_none() {
             s.loading = loading;
+            s.notes = notes.clone();
             s.project = s
                 .model
                 .clone()
-                .map(|m| JavaProject::new(index.clone(), m, loading));
+                .map(|m| JavaProject::new(index.clone(), m, loading).with_import_notes(notes));
         }
         let complete = s.project.as_ref().is_some_and(JavaProject::is_complete);
         let flipped = complete != s.complete || model_changed;
@@ -175,6 +205,11 @@ impl JavaService {
                 .map_or(JavaIndexState::Absent, JavaIndex::state),
             model_loading: s.loading,
             native: s.settings.native,
+            classpath: s
+                .project
+                .as_ref()
+                .map(JavaProject::completeness)
+                .unwrap_or_default(),
         }
     }
 

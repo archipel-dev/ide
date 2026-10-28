@@ -2,8 +2,9 @@
 //! module with its dependencies, libraries and SDK, tests included only for test sources.
 //! A scope is a value: unit id to classpath rank.
 
-use crate::index::JavaIndex;
-use archipel_ide_projectmodel::{ClasspathKind, ProjectFileIndex, ProjectModel};
+use crate::classpath::{ClasspathSnapshot, ClasspathUnit, Completeness, UnitRole};
+use crate::index::{JavaIndex, UnitKind};
+use archipel_ide_projectmodel::{Module, ProjectFileIndex, ProjectModel};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -25,8 +26,9 @@ pub enum ScopeKind {
     Module,
     /// A file under content but outside every source root: only itself (JAVA-RES-030).
     FileOnly,
-    /// A file outside every module (scratch): everything indexed.
-    Everything,
+    /// A file outside every module (scratch file, folder without a build file): the ad-hoc
+    /// module with the SDK and the file itself.
+    AdHoc,
 }
 
 impl ResolveScope {
@@ -37,6 +39,11 @@ impl ResolveScope {
     /// Classpath position of a unit (lower is better).
     pub fn rank(&self, unit: u32) -> Option<u32> {
         self.ranks.get(&unit).copied()
+    }
+
+    /// `(unit, classpath rank)` of every unit in the scope.
+    pub fn iter(&self) -> impl Iterator<Item = (u32, u32)> + '_ {
+        self.ranks.iter().map(|(u, r)| (*u, *r))
     }
 
     pub fn len(&self) -> usize {
@@ -63,78 +70,48 @@ impl ResolveScope {
         files: &ProjectFileIndex,
         path: &Path,
     ) -> Self {
-        let cat = index.inner.catalog.read();
+        Self::snapshot_for_file(index, model, files, path, |_, _| Completeness::Complete).scope()
+    }
+
+    /// The classpath snapshot behind [`Self::for_file`]; `completeness` says how complete the
+    /// classpath of the file's module is.
+    pub fn snapshot_for_file(
+        index: &JavaIndex,
+        model: &ProjectModel,
+        files: &ProjectFileIndex,
+        path: &Path,
+        completeness: impl FnOnce(&ProjectModel, &Module) -> Completeness,
+    ) -> ClasspathSnapshot {
         let Some(module) = files.module_for_file(path) else {
-            // Outside every module: everything that is indexed, plus the file itself.
-            let mut s = Self {
-                kind: ScopeKind::Everything,
-                ..Self::default()
-            };
-            for (i, id) in cat.units.keys().enumerate() {
-                s.ranks.insert(*id, i as u32);
-            }
-            return s;
+            // Outside every module: the ad-hoc module (JDK and the file itself).
+            return ClasspathSnapshot::ad_hoc(index, model, path);
         };
         if !files.is_in_source_content(path) {
-            let mut s = Self {
-                module: Some(module.name.clone()),
-                kind: ScopeKind::FileOnly,
-                ..Self::default()
-            };
+            // Under content but outside every source root: only itself (JAVA-RES-030).
+            let cat = index.inner.catalog.read();
+            let mut units = Vec::new();
             if let Some(id) = cat.by_path.get(path) {
-                s.ranks.insert(*id, 0);
+                units.push(ClasspathUnit {
+                    id: *id,
+                    role: UnitRole::Source {
+                        module: module.name.clone(),
+                        test: false,
+                    },
+                    kind: UnitKind::Source,
+                    path: path.to_path_buf(),
+                });
             }
-            return s;
+            return ClasspathSnapshot {
+                module: Some(module.name.clone()),
+                test: false,
+                kind: ScopeKind::FileOnly,
+                language_level: module.language_level.clone(),
+                units,
+                completeness: Completeness::Complete,
+            };
         }
         let test = files.is_in_test_source_content(path);
-        let kind = if test {
-            ClasspathKind::TestCompile
-        } else {
-            ClasspathKind::ProductionCompile
-        };
-        let mut s = Self {
-            module: Some(module.name.clone()),
-            test,
-            ..Self::default()
-        };
-        let mut rank = 0u32;
-        let mut put = |s: &mut Self, unit: u32| {
-            s.ranks.entry(unit).or_insert_with(|| {
-                rank += 1;
-                rank
-            });
-        };
-        for (i, m) in model
-            .modules_with_dependencies(module, kind)
-            .into_iter()
-            .enumerate()
-        {
-            if let Some((prod, tests)) = cat.modules.get(&m.name) {
-                // Own tests only for test code; a dependency's tests are never on our classpath.
-                for u in prod {
-                    put(&mut s, *u);
-                }
-                if i == 0 && test {
-                    for u in tests {
-                        put(&mut s, *u);
-                    }
-                }
-            }
-        }
-        for lib in model.libraries_for(module, kind) {
-            if let Some(units) = cat.libraries.get(&lib.name) {
-                for u in units {
-                    put(&mut s, *u);
-                }
-            }
-        }
-        if let Some(sdk) = model.module_sdk(module)
-            && let Some(units) = cat.sdks.get(&sdk.name)
-        {
-            for u in units {
-                put(&mut s, *u);
-            }
-        }
-        s
+        let completeness = completeness(model, module);
+        ClasspathSnapshot::for_module(index, model, module, test, completeness)
     }
 }

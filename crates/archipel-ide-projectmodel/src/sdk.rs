@@ -63,6 +63,17 @@ impl Sdk {
         let modules = home.join("lib").join("modules");
         if modules.exists() {
             sdk.classes.push(modules);
+        } else {
+            // A JDK 8 keeps its runtime classes in `rt.jar` (JAVA-RES-036).
+            for rt in [
+                home.join("jre").join("lib").join("rt.jar"),
+                home.join("lib").join("rt.jar"),
+            ] {
+                if rt.exists() {
+                    sdk.classes.push(rt);
+                    break;
+                }
+            }
         }
         for source in [home.join("lib").join("src.zip"), home.join("src.zip")] {
             if source.exists() {

@@ -9,6 +9,7 @@
 //! * an `ImportFixProvider` for the `Method to Import` / `Class to Import` chooser;
 //! * a `LanguageActivity` that keeps the indexes in line with the project model and the open
 //!   buffers and adds the Java settings (PLAT-LANG-012);
+//! * a native `CompletionSource` (class names from the indexes with import on insertion, JAVA-CMP-018..021);
 //! * the jdtls language server (`LANGUAGE_SERVER_PROVIDER`);
 //! * the JDK/jdtls/java-debug toolchain requirement.
 
@@ -19,9 +20,11 @@ use crate::{
 use archipel_ide_analysis::ChoiceRow;
 use archipel_ide_analysis::ModCommand;
 use archipel_ide_analysis::langext::{
-    ChooserPopup, HIGHLIGHTING_PASS, INSPECTION_SUPPRESSOR, ImportFixProvider,
+    ChooserPopup, CompletionSource, HIGHLIGHTING_PASS, INSPECTION_SUPPRESSOR, ImportFixProvider,
+    SourceCompletion, SourceInsertion, SourceItem, SourceItemKind, SourceRequest,
 };
 use archipel_ide_daemon::inspection::tier_a::native_suppressors;
+use archipel_ide_java::complete::{self, CompletionInput};
 use archipel_ide_java::diagnostics::{JavaResolvePass, JavaService, JavaSettings};
 use archipel_ide_java::import_edit::ImportSettings;
 use archipel_ide_language::{LanguageId, Order, Registration};
@@ -35,6 +38,7 @@ pub const LANGUAGE: LanguageId = LanguageId("java");
 /// Settings of the native Java pass (Settings | Editor | Inspections).
 pub const SETTING_NATIVE: &str = "java.native.analysis";
 pub const SETTING_UNUSED_IMPORT: &str = "java.native.unusedImport";
+pub const SETTING_COMPLETION: &str = "java.native.completion";
 pub const SETTING_EXCLUDE: &str = "java.autoImport.exclude";
 
 /// The Java pack. The [`JavaService`] (indexes, chooser state) lives as long as the pack.
@@ -97,6 +101,7 @@ impl LanguagePack for JavaPack {
             service: self.service.clone(),
         });
         cx.import_fix_provider(intelligence.clone());
+        cx.completion_source(intelligence.clone());
         cx.activity(intelligence);
         if let Some(provider) = archipel_ide_lsp::builtin_provider("jdtls") {
             cx.language_server(provider);
@@ -139,6 +144,98 @@ impl ImportFixProvider for JavaIntelligence {
     }
 }
 
+impl CompletionSource for JavaIntelligence {
+    fn id(&self) -> &'static str {
+        ID
+    }
+
+    fn languages(&self) -> &'static [&'static str] {
+        &["java"]
+    }
+
+    fn complete(&self, request: &SourceRequest<'_>) -> Option<SourceCompletion> {
+        let settings = self.service.settings();
+        if !settings.completion {
+            return None;
+        }
+        let project = self.service.project()?;
+        let input = CompletionInput {
+            project: &project,
+            settings: &settings.imports,
+            path: request.path,
+            text: request.text,
+            offset: request.offset,
+            count: request.count,
+        };
+        match complete::complete(&input) {
+            Ok(Some(c)) => Some(SourceCompletion {
+                replace_start: c.prefix_start,
+                exclusive: c.exclusive,
+                note: c.note,
+                items: c
+                    .items
+                    .iter()
+                    .map(|i| SourceItem {
+                        label: i.name.clone(),
+                        filter_text: i.name.clone(),
+                        detail: (!i.tail.is_empty()).then(|| i.tail.clone()),
+                        kind: match i.kind {
+                            archipel_ide_java::stub::ClassKind::Class => SourceItemKind::Class,
+                            archipel_ide_java::stub::ClassKind::Interface => {
+                                SourceItemKind::Interface
+                            }
+                            archipel_ide_java::stub::ClassKind::Enum => SourceItemKind::Enum,
+                            archipel_ide_java::stub::ClassKind::Annotation => {
+                                SourceItemKind::Annotation
+                            }
+                            archipel_ide_java::stub::ClassKind::Record => SourceItemKind::Record,
+                        },
+                        deprecated: i.deprecated,
+                        key: i.fqn.clone(),
+                        sort_text: i.sort.clone(),
+                    })
+                    .collect(),
+            }),
+            Ok(None) => None,
+            // The indexes are still building: say so; the server answers meanwhile.
+            Err(_) => {
+                let c =
+                    archipel_ide_java::complete::classify::classify(request.text, request.offset);
+                (c.position != archipel_ide_java::complete::classify::Position::None).then(|| {
+                    SourceCompletion {
+                        replace_start: c.prefix_start,
+                        items: Vec::new(),
+                        exclusive: false,
+                        note: Some("Indexing...".into()),
+                    }
+                })
+            }
+        }
+    }
+
+    fn insertion(&self, request: &SourceRequest<'_>, key: &str) -> Option<SourceInsertion> {
+        let settings = self.service.settings();
+        let project = self.service.project()?;
+        let input = CompletionInput {
+            project: &project,
+            settings: &settings.imports,
+            path: request.path,
+            text: request.text,
+            offset: request.offset,
+            count: request.count,
+        };
+        let ins = complete::insertion(&input, key).ok()??;
+        Some(SourceInsertion {
+            text: ins.text,
+            edits: ins.edits,
+        })
+    }
+
+    fn auto_popup(&self, text_before_caret: &str) -> bool {
+        self.service.settings().completion && complete::auto_popup_after(text_before_caret)
+    }
+}
+
 impl LanguageActivity for JavaIntelligence {
     fn id(&self) -> &'static str {
         ID
@@ -163,6 +260,15 @@ impl LanguageActivity for JavaIntelligence {
                 default: PackSettingDefault::Bool(true),
             },
             PackSetting {
+                key: SETTING_COMPLETION,
+                title: "Native class-name completion",
+                group: "Java",
+                description: Some(
+                    "Annotation types, classes after new and type positions from the built-in Java indexes, with the import added on insertion; the language server's duplicates are hidden",
+                ),
+                default: PackSettingDefault::Bool(true),
+            },
+            PackSetting {
                 key: SETTING_EXCLUDE,
                 title: "Exclude from auto-import",
                 group: "Java",
@@ -178,9 +284,11 @@ impl LanguageActivity for JavaIntelligence {
         let native = cx.settings.bool(SETTING_NATIVE).unwrap_or(true);
         let unused = cx.settings.bool(SETTING_UNUSED_IMPORT).unwrap_or(true);
         let exclude = cx.settings.text(SETTING_EXCLUDE).unwrap_or_default();
+        let completion = cx.settings.bool(SETTING_COMPLETION).unwrap_or(true);
         let mut wanted = JavaSettings {
             native,
             unused_imports: unused,
+            completion,
             imports: ImportSettings::default(),
         };
         wanted.imports.exclude = exclude
@@ -202,6 +310,7 @@ impl LanguageActivity for JavaIntelligence {
             &project.root,
             project.model.clone(),
             project.model_loading,
+            project.import_notes.clone(),
             project.index_cache_dir.clone(),
         );
         if native {
@@ -218,7 +327,23 @@ impl LanguageActivity for JavaIntelligence {
         self.service.paths_changed(paths);
     }
 
+    fn notice(&self) -> Option<String> {
+        let status = self.service.status();
+        // An import in progress shows as busy elsewhere; a finished one with a problem stays.
+        if status.classpath == archipel_ide_java::classpath::Completeness::Importing {
+            return None;
+        }
+        status
+            .classpath
+            .describe()
+            .map(|note| format!("Classpath incomplete: {note}"))
+    }
+
     fn status(&self) -> Option<String> {
-        Some(format!("{:?}", self.service.status().state))
+        let status = self.service.status();
+        Some(match status.classpath.describe() {
+            Some(note) => format!("{:?}; classpath incomplete: {note}", status.state),
+            None => format!("{:?}", status.state),
+        })
     }
 }

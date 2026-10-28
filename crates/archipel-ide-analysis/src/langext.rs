@@ -485,6 +485,90 @@ pub const IMPORT_FIX_PROVIDER: ExtensionPointName<dyn ImportFixProvider> =
     ExtensionPointName::new("dev.archipel.language.importFixProvider");
 
 // ---------------------------------------------------------------------------------------------
+// Native completion sources (spec 06, CI-CMP-020, CI-CMP-100)
+
+/// What a [`CompletionSource`] is asked.
+pub struct SourceRequest<'a> {
+    /// Absolute path of the file.
+    pub path: &'a Path,
+    /// The live text of the buffer.
+    pub text: &'a str,
+    /// Caret as a byte offset into `text`.
+    pub offset: usize,
+    /// Consecutive invocations on the same prefix (CI-CMP-100): 1 for auto-popup and the first
+    /// press.
+    pub count: u32,
+}
+
+/// The kind of a class-name item (its icon and its sorting among kinds).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceItemKind {
+    Class,
+    Interface,
+    Enum,
+    Annotation,
+    Record,
+}
+
+/// One row of a native completion answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceItem {
+    /// The simple name shown in the popup.
+    pub label: String,
+    /// What the typed prefix is matched against.
+    pub filter_text: String,
+    /// The grey tail (the package).
+    pub detail: Option<String>,
+    pub kind: SourceItemKind,
+    pub deprecated: bool,
+    /// Passed back to [`CompletionSource::insertion`] when the row is accepted.
+    pub key: String,
+    /// Orders rows of one match quality.
+    pub sort_text: String,
+}
+
+/// A native answer: rows that replace the text from `replace_start` to the caret.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceCompletion {
+    pub replace_start: usize,
+    pub items: Vec<SourceItem>,
+    /// Every legal item at the position is among `items`: the language server's answer adds
+    /// nothing and is not asked.
+    pub exclusive: bool,
+    /// Why the answer may be incomplete (indexing, a classpath that failed to import).
+    pub note: Option<String>,
+}
+
+/// What accepting a row writes: the text for the prefix range and further edits (an import)
+/// against the same text, applied as one undo step.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceInsertion {
+    pub text: String,
+    pub edits: Vec<crate::modcommand::TextEdit>,
+}
+
+/// A language's own completion answer, computed synchronously from its indexes and the live
+/// buffer (no process, no network). The completion session merges it ahead of the language
+/// server's items, or alone when the position is [`SourceCompletion::exclusive`].
+pub trait CompletionSource: Send + Sync {
+    /// Stable id.
+    fn id(&self) -> &'static str;
+    /// Language ids this source serves.
+    fn languages(&self) -> &'static [&'static str];
+    /// `None`: nothing native here (the language server answers alone). The answer is cheap
+    /// enough to be recomputed on every keystroke.
+    fn complete(&self, request: &SourceRequest<'_>) -> Option<SourceCompletion>;
+    /// The insertion of the row `key`, computed against the current text (so the import is
+    /// right even when the file changed since the list was built).
+    fn insertion(&self, request: &SourceRequest<'_>, key: &str) -> Option<SourceInsertion>;
+    /// Whether the text just typed opens the popup by itself (after `@`, after `new `: CI-CMP-030).
+    fn auto_popup(&self, text_before_caret: &str) -> bool;
+}
+
+pub const COMPLETION_SOURCE: ExtensionPointName<dyn CompletionSource> =
+    ExtensionPointName::new("dev.archipel.language.completionSource");
+
+// ---------------------------------------------------------------------------------------------
 // Contributed references: the merge rule of PLAT-PSI-111
 
 /// References of one provider, with the provider's priority (default 0.0, higher +100, lower

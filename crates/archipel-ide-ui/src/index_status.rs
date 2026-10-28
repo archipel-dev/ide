@@ -72,6 +72,35 @@ pub fn status_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::FontId) {
     }
 }
 
+/// Status-bar warning of a language pack (a classpath that failed to import, jars missing):
+/// completion and errors work with what is known, and the hover says why more is not.
+pub fn language_notice_widget(app: &mut IdeApp, ui: &mut egui::Ui, font: egui::FontId) {
+    for (language, notice) in app.state.language_notices() {
+        let text = format!("{}: classpath incomplete", language_title(language));
+        let response = widgets::flat_widget(
+            ui,
+            Some((Icon::Warning, *theme::WARNING)),
+            &text,
+            font.clone(),
+            theme::TEXT_SECONDARY,
+            false,
+            22.0,
+        );
+        response.on_hover_ui(|ui| {
+            ui.set_max_width(360.0);
+            ui.label(notice.clone());
+        });
+    }
+}
+
+fn language_title(id: &str) -> String {
+    let mut chars = id.chars();
+    chars
+        .next()
+        .map(|c| c.to_uppercase().collect::<String>() + chars.as_str())
+        .unwrap_or_default()
+}
+
 /// A one-line banner "Indexing… results may be incomplete" with a spinner,
 /// or nothing when the state has no pending index.
 pub fn banner(ui: &mut egui::Ui, state: &IdeState) {

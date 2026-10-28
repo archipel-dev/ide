@@ -49,6 +49,9 @@ pub struct ProjectInputs {
     pub model: Option<Arc<ProjectModel>>,
     /// The model is still being (re)imported.
     pub model_loading: bool,
+    /// Warnings and errors of the last import (unresolved dependencies, failed resolvers): why
+    /// the classpath may be incomplete.
+    pub import_notes: Vec<String>,
     /// Directory language indexes may persist into (`None`: memory only), already specific
     /// to this project.
     pub index_cache_dir: Option<PathBuf>,
@@ -89,6 +92,11 @@ pub trait LanguageActivity: Send + Sync {
 
     /// A short state name for status displays (`"Ready"`), `None` if the pack has no state.
     fn status(&self) -> Option<String> {
+        None
+    }
+
+    /// A warning for the status bar (`"Classpath incomplete: ..."`), `None` when all is well.
+    fn notice(&self) -> Option<String> {
         None
     }
 }

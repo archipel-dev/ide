@@ -108,6 +108,16 @@ fn open(server: Option<PathBuf>, args: &[&str], name: &str) -> Fixture {
             "the server did not start"
         );
     }
+    // The native Java indexes (the ad-hoc module: the JDK and this folder) are ready, so that
+    // their completion is not mistaken for a restart of the analysis caused by a later save.
+    assert!(
+        wait(&mut fixture.state, |state| {
+            state.language_status().iter().any(|(id, status)| {
+                *id == "java" && status.as_deref().is_some_and(|s| s.starts_with("Ready"))
+            })
+        }),
+        "the Java indexes did not get ready"
+    );
     fixture
 }
 

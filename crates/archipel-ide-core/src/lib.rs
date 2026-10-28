@@ -57,6 +57,7 @@ mod build_window;
 mod code_actions;
 mod code_vision;
 mod completion;
+mod completion_native;
 mod completion_stats;
 mod debug_commands;
 mod diagnostic_commands;

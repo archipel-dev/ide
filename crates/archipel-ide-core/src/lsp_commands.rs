@@ -233,7 +233,9 @@ pub(crate) fn register(registry: &mut CommandRegistry<IdeState>) {
                 Some("⌃Space"),
                 "{}",
             ),
-            |state: &IdeState| state.active_has_language_server(),
+            |state: &IdeState| {
+                state.active_has_language_server() || state.active_has_completion_source()
+            },
             |state: &mut IdeState, _| {
                 let id = state
                     .start_completion(CompletionTrigger::Invoked, true)

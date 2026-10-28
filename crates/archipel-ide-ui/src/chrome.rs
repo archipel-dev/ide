@@ -919,6 +919,7 @@ pub fn status_bar(app: &mut IdeApp, ctx: &egui::Context) {
                     crate::agents_ui::status_widget(app, ui, font.clone());
                     crate::lsp_status::status_widget(app, ui, font.clone());
                     crate::index_status::status_widget(app, ui, font.clone());
+                    crate::index_status::language_notice_widget(app, ui, font.clone());
                     crate::toolchain_status::status_widget(app, ui, font.clone());
                     crate::external_status::status_widget(app, ui, font.clone());
                     let active = app.state.active_doc();

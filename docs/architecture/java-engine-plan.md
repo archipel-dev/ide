@@ -566,6 +566,22 @@ user-visible result for the owner's cases stated below.
   library-typed receiver (also through chains) are red within one debounce while typing, in a project with
   or without a build file; a classpath that failed to import produces a visible classpath note, not silence.
 
+**M2 status (slice delivered with `feat/java-engine-m2`).** Done: the resolver is split into
+`analyze/{mod,scope,refs,calls,types}.rs`; `Ty::Ref` carries resolved type arguments and member types are seen
+through the receiver (`List<String>.get(0)` is `String`, `StringBuilder.append(1).append("a")` is
+`StringBuilder`; supertype arguments are mapped, method type parameters and wildcards stay unknown, no
+inference); the `has_error` whole-call skip stays only for the call's own subtree and a buffer that is being
+typed is repaired first (`repair.rs`: `;`, `)` and `()` are added where the next line cannot continue the
+statement, positions mapped back, nothing is ever reported on inserted text); the `lombok` text test is the
+rule "an annotation of the file that does not resolve, or that is a non-JDK annotation with `@Retention(SOURCE)`,
+makes member errors uncertain"; rows 007, 011, 012, 019 with the catalog texts; Java pass debounce 100 ms
+(`Pass::debounce`); native results win over jdtls for the same element and a language-server highlight goes
+as soon as an edit touches it (stale diagnostics of text the server saw before the edit, see
+`docs/perf/java-engine.md` for the numbers). Not done: `AUGMENT_PROVIDER` extension point, rows 013..016, 018,
+021, 023, 027, the narrowing of the pending rule, per-member incremental re-analysis (not needed for the
+budget), synchronous overlay of other open files (they are reindexed 400 ms after the last edit), the visible
+classpath note.
+
 ### M3: completion contributors, annotation/type positions, non-imported classes (L)
 
 - Tasks: position classifier (error tolerant) (2.7); contributors 4, 5, 8, 9, 10, 11 of spec 6.2 for

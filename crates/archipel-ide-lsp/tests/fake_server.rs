@@ -676,3 +676,27 @@ fn typed_requests_resolve_hover_and_signature_help() {
     assert!(!manager.is_pending(&resolve));
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn published_diagnostics_know_the_document_version_they_answer_for() {
+    let root = workspace("diag-version");
+    let file = root.join("src/App.fake");
+    let mut manager = LspManager::new(registry(&["--push-on-save-only"]));
+    manager.set_project(Some(&root));
+    manager.set_change_delay(Duration::ZERO);
+    manager.sync_document(&file, "a // @error\n", 4).unwrap();
+    assert!(wait_until(|| {
+        manager.poll();
+        manager.ready_server_for(&file).is_ok()
+    }));
+    manager.sync_document(&file, "a // @error x\n", 5).unwrap();
+    manager.save_document(&file).unwrap();
+    assert!(wait_until(|| {
+        manager.poll();
+        !manager.diagnostics_for(&file).is_empty()
+    }));
+    // The answer is for the text of version 5; a client that is at version 6 by now knows it is
+    // stale (the positions of version 5 do not fit its text).
+    assert_eq!(manager.published_diagnostics_version(&file), Some(5));
+    std::fs::remove_dir_all(root).unwrap();
+}

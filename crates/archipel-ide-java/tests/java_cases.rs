@@ -11,19 +11,23 @@
 //! `cargo run -p xtask -- java-cases`) writes `docs/parity/java-cases.md`.
 //!
 //! Supported keys: `complete [count N]` and `complete, choose "<row>"` (see the header of
-//! `06-completion.cases.md`). Inspection (`inspect`), quick fix (`Alt+Enter`) and multi-module
-//! cases are reported as not runnable until their engine exists.
+//! `06-completion.cases.md`), `inspect` for the error cases of the `02`, `04` and `05` spec files
+//! (the native resolve highlights of the file, compared with the `problem:` lines) and
+//! `Alt+Enter, choose "Import class"[, choose "<fqn>"]` (the native import fix). The catalog
+//! inspections of the `09` files and multi-module cases are reported as not runnable until
+//! their engine exists.
 
 mod common;
 
 use archipel_ide_java::complete::{self, CompletionInput};
+use archipel_ide_java::diagnostics::{JavaSettings, apply_command, collect_detailed};
 use archipel_ide_java::import_edit::ImportSettings;
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 /// Cases that must keep passing (never lower; raise when more pass).
-const PASS_BASELINE: usize = 18;
+const PASS_BASELINE: usize = 48;
 
 include!("support/case_format.rs");
 
@@ -81,11 +85,25 @@ fn library_fixture(name: &str) -> Option<(&'static str, bool)> {
     }
 }
 
+/// Spec files whose `inspect` and `Alt+Enter` cases the native engine answers (the error catalog,
+/// resolve and import rules); the `09` inspection catalog is another engine.
+fn engine_covers(case: &Case) -> bool {
+    case.id.starts_with("JAVA-ERR")
+        || case.id.starts_with("JAVA-RES")
+        || case.id.starts_with("JAVA-IMP")
+}
+
 fn run_case(case: &Case) -> Outcome {
     if case.language != "java" {
         return Outcome::NotRunnable("not a Java case");
     }
     let keys = case.keys.trim();
+    if keys.starts_with("inspect") && engine_covers(case) {
+        return run_inspect(case);
+    }
+    if keys.starts_with("Alt+Enter") && engine_covers(case) {
+        return run_alt_enter(case);
+    }
     if !keys.starts_with("complete") {
         return if keys.starts_with("inspect") {
             Outcome::NotRunnable("inspections (no native catalog yet)")
@@ -241,6 +259,227 @@ fn run_case(case: &Case) -> Outcome {
         return Outcome::Pass;
     }
     judge_list(expected, &rows)
+}
+
+struct Setup {
+    proj: common::Proj,
+    files: Vec<CaseFile>,
+}
+
+/// The project of a case: its files and the fixture libraries of `settings: library=...`.
+fn setup(case: &Case) -> Result<Setup, Outcome> {
+    let Some(before) = &case.before else {
+        return Err(Outcome::Fail("no before block".into()));
+    };
+    if before.starts_with("modules:") {
+        return Err(Outcome::NotRunnable("multi-module cases"));
+    }
+    let mut libs: Vec<(
+        String,
+        std::path::PathBuf,
+        archipel_ide_projectmodel::DependencyScope,
+    )> = Vec::new();
+    for (key, value) in &case.settings {
+        if key == "library" {
+            for name in value.split(',').map(str::trim) {
+                let Some((set, test)) = library_fixture(name) else {
+                    return Err(Outcome::NotRunnable("library without a fixture jar"));
+                };
+                libs.push((
+                    name.to_string(),
+                    common::fixture_jar(set),
+                    if test {
+                        archipel_ide_projectmodel::DependencyScope::Test
+                    } else {
+                        archipel_ide_projectmodel::DependencyScope::Compile
+                    },
+                ));
+            }
+        }
+    }
+    let files: Vec<CaseFile> = case_files(before)
+        .iter()
+        .map(|(path, text)| CaseFile {
+            path: path.clone(),
+            marked: parse_marked(text),
+        })
+        .collect();
+    if files.is_empty() {
+        return Err(Outcome::Fail("empty before block".into()));
+    }
+    let refs: Vec<(&str, &str)> = files
+        .iter()
+        .map(|f| (f.path.as_str(), f.marked.text.as_str()))
+        .collect();
+    let libs_ref: Vec<(
+        &str,
+        std::path::PathBuf,
+        archipel_ide_projectmodel::DependencyScope,
+    )> = libs
+        .iter()
+        .map(|(n, p, s)| (n.as_str(), p.clone(), *s))
+        .collect();
+    let proj = common::project(&refs, &libs_ref);
+    Ok(Setup { proj, files })
+}
+
+fn level_name(s: archipel_ide_analysis::Severity) -> &'static str {
+    if s >= archipel_ide_analysis::Severity::ERROR {
+        "error"
+    } else if s >= archipel_ide_analysis::Severity::WARNING {
+        "warning"
+    } else {
+        "weak warning"
+    }
+}
+
+/// `keys: inspect`: the highlights of the caret file (the first one without a caret), as the
+/// daemon produces them for the unsaved text, against the `problem:` lines of `after`.
+fn run_inspect(case: &Case) -> Outcome {
+    let Some(expected) = &case.after else {
+        return Outcome::Fail("no after block".into());
+    };
+    let wanted: Vec<&str> = expected
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect();
+    let runnable = wanted.iter().all(|l| {
+        *l == "no problem reported"
+            || (l.starts_with("problem: error ") && l.contains("\"Cannot resolve"))
+    });
+    if !runnable {
+        return Outcome::NotRunnable("inspections other than the resolve errors");
+    }
+    let setup = match setup(case) {
+        Ok(s) => s,
+        Err(o) => return o,
+    };
+    let file = setup
+        .files
+        .iter()
+        .find(|f| !f.marked.selections.is_empty())
+        .unwrap_or(&setup.files[0]);
+    let text = &file.marked.text;
+    let tree = archipel_ide_java::source::parse(text).expect("parse");
+    let collected = collect_detailed(
+        &setup.proj.project,
+        &JavaSettings::default(),
+        &setup.proj.path(&file.path),
+        text,
+        &tree,
+    );
+    let mut infos = collected.infos;
+    infos.sort_by_key(|i| (i.range.start, i.range.end));
+    let actual: Vec<String> = infos
+        .iter()
+        .map(|i| {
+            format!(
+                "problem: {} `{}` \"{}\"",
+                level_name(i.severity),
+                &text[i.range.start as usize..i.range.end as usize],
+                i.message.as_deref().unwrap_or("")
+            )
+        })
+        .collect();
+    let want: Vec<String> = wanted
+        .iter()
+        .filter(|l| **l != "no problem reported")
+        .map(|l| (*l).to_string())
+        .collect();
+    if actual == want {
+        Outcome::Pass
+    } else {
+        Outcome::Fail(format!("expected {want:?}\nactual   {actual:?}"))
+    }
+}
+
+/// `Alt+Enter, choose "Import class"[, choose "<fqn>"]`.
+fn run_alt_enter(case: &Case) -> Outcome {
+    let Some(expected) = &case.after else {
+        return Outcome::Fail("no after block".into());
+    };
+    let choices: Vec<String> = case
+        .keys
+        .split("choose ")
+        .skip(1)
+        .map(|r| unescape(r.trim().trim_end_matches(',').trim()))
+        .collect();
+    let negative = expected.trim().starts_with("no quick fix");
+    if !negative && choices.first().map(String::as_str) != Some("Import class") {
+        return Outcome::NotRunnable("quick fixes other than Import class");
+    }
+    let setup = match setup(case) {
+        Ok(s) => s,
+        Err(o) => return o,
+    };
+    let Some(file) = setup.files.iter().find(|f| !f.marked.selections.is_empty()) else {
+        return Outcome::Fail("no <caret> in the before block".into());
+    };
+    let text = &file.marked.text;
+    let caret_char = file.marked.selections[0].0;
+    let offset = text
+        .char_indices()
+        .nth(caret_char)
+        .map_or(text.len(), |(b, _)| b) as u32;
+    let tree = archipel_ide_java::source::parse(text).expect("parse");
+    let collected = collect_detailed(
+        &setup.proj.project,
+        &JavaSettings::default(),
+        &setup.proj.path(&file.path),
+        text,
+        &tree,
+    );
+    let fix = collected
+        .class_fixes
+        .iter()
+        .find(|(r, _)| r.start <= offset && offset <= r.end)
+        .map(|(_, f)| f.clone());
+    if negative {
+        return match fix {
+            None => Outcome::Pass,
+            Some(f) => Outcome::Fail(format!(
+                "`Import class` is offered: {:?}",
+                f.candidates
+                    .iter()
+                    .map(|c| c.fqn().to_string())
+                    .collect::<Vec<_>>()
+            )),
+        };
+    }
+    let Some(fix) = fix else {
+        return Outcome::Fail("no `Import class` at the caret".into());
+    };
+    let index = match choices.get(1) {
+        Some(fqn) => match fix.candidates.iter().position(|c| c.fqn() == fqn) {
+            Some(i) => i,
+            None => {
+                return Outcome::Fail(format!(
+                    "no row `{fqn}` in {:?}",
+                    fix.candidates
+                        .iter()
+                        .map(|c| c.fqn().to_string())
+                        .collect::<Vec<_>>()
+                ));
+            }
+        },
+        None => 0,
+    };
+    let command = fix.apply(
+        archipel_ide_analysis::FileId(1),
+        archipel_ide_analysis::FileRev(1),
+        text,
+        index,
+    );
+    let Some(out) = apply_command(&command, archipel_ide_analysis::FileId(1), text) else {
+        return Outcome::Fail("the fix changes nothing".into());
+    };
+    let want = parse_marked(expected).text;
+    if out.trim_end() == want.trim_end() {
+        Outcome::Pass
+    } else {
+        Outcome::Fail(format!("expected:\n{want}\nactual:\n{out}"))
+    }
 }
 
 fn judge_list(expected: &str, rows: &[String]) -> Outcome {

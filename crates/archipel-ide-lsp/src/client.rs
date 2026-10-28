@@ -219,6 +219,9 @@ pub struct LspService {
     /// What the file shows: the pulled and the pushed diagnostics merged.
     diagnostics: HashMap<PathBuf, Vec<LspDiagnostic>>,
     pushed: HashMap<PathBuf, Vec<LspDiagnostic>>,
+    /// The document version the latest diagnostics of a file were computed for (the version
+    /// the server announced, else the last one sent to it).
+    diag_versions: HashMap<PathBuf, i32>,
     pulled: HashMap<PathBuf, Vec<LspDiagnostic>>,
     pulls: HashMap<PathBuf, PullState>,
     pull_requests: HashMap<u64, PathBuf>,
@@ -315,6 +318,7 @@ impl LspService {
             open_documents: HashMap::new(),
             diagnostics: HashMap::new(),
             pushed: HashMap::new(),
+            diag_versions: HashMap::new(),
             pulled: HashMap::new(),
             pulls: HashMap::new(),
             pull_requests: HashMap::new(),
@@ -365,6 +369,15 @@ impl LspService {
     }
     pub fn diagnostics(&self) -> &HashMap<PathBuf, Vec<LspDiagnostic>> {
         &self.diagnostics
+    }
+
+    /// The document version `path`'s diagnostics were computed for, when known. A server that
+    /// has not seen the latest edit yet answers for an older text: its positions do not fit.
+    pub fn diagnostics_version(&self, path: &Path) -> Option<i32> {
+        self.diag_versions
+            .get(path)
+            .or_else(|| self.diag_versions.get(&canonical(path)))
+            .copied()
     }
     /// Work-done progress currently running on the server, by token.
     /// Changes whenever the server publishes diagnostics; unique across services.
@@ -609,6 +622,9 @@ impl LspService {
             || self.pending_changes.contains_key(&path);
         match result {
             Ok(report) if !stale => {
+                if let Some(version) = sent_version {
+                    self.diag_versions.insert(canonical(&path), version);
+                }
                 self.apply_pull_report(&path, &report);
             }
             Ok(_) => {}
@@ -1011,6 +1027,19 @@ impl LspService {
                     .flatten()
                     .filter_map(parse_diagnostic)
                     .collect::<Vec<_>>();
+                let version = params
+                    .get("version")
+                    .and_then(Value::as_i64)
+                    .and_then(|v| i32::try_from(v).ok())
+                    .or_else(|| self.open_documents.get(&path).copied());
+                match version {
+                    Some(version) => {
+                        self.diag_versions.insert(path.clone(), version);
+                    }
+                    None => {
+                        self.diag_versions.remove(&path);
+                    }
+                }
                 self.pushed.insert(path.clone(), diagnostics);
                 self.merge_diagnostics(&path);
             }

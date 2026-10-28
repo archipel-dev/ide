@@ -74,6 +74,8 @@ pub struct ExternalDiagnostics {
     feed: Mutex<Feed>,
     /// What the publisher looked at last (it skips a sync when nothing moved).
     sync_key: Mutex<Option<u64>>,
+    /// The diagnostics generation of the providers at the last sync.
+    generation: Mutex<Option<u64>>,
 }
 
 impl ExternalDiagnostics {
@@ -82,6 +84,14 @@ impl ExternalDiagnostics {
         let mut last = self.sync_key.lock();
         let changed = *last != Some(key);
         *last = Some(key);
+        changed
+    }
+
+    /// Records the providers' diagnostics generation; true when it is not the one seen last.
+    pub fn generation_changed_since_last_sync(&self, generation: u64) -> bool {
+        let mut last = self.generation.lock();
+        let changed = *last != Some(generation);
+        *last = Some(generation);
         changed
     }
 

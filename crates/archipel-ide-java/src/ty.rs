@@ -163,10 +163,12 @@ pub enum Ty {
     Unknown,
     Null,
     Prim(String),
-    /// A class type: FQN of the erasure (when resolved) and the presentable text.
+    /// A class type: FQN of the erasure (when resolved), the presentable text and the resolved
+    /// type arguments (empty for a raw or non-generic type, `Unknown` for a wildcard).
     Ref {
         fqn: Option<String>,
         display: String,
+        args: Vec<Ty>,
     },
     Array(Box<Ty>),
     /// A type variable in scope.
@@ -186,9 +188,59 @@ impl Ty {
     }
 
     pub fn string() -> Ty {
+        Ty::class("java.lang.String", "String")
+    }
+
+    /// A non-generic class type.
+    pub fn class(fqn: &str, display: &str) -> Ty {
         Ty::Ref {
-            fqn: Some("java.lang.String".into()),
-            display: "String".into(),
+            fqn: Some(fqn.into()),
+            display: display.into(),
+            args: Vec::new(),
+        }
+    }
+
+    /// Replaces type variables by `map` (a variable not in it, or any variable left after
+    /// `strict`, becomes `Unknown`: no inference is attempted).
+    pub fn subst(&self, map: &std::collections::HashMap<String, Ty>) -> Ty {
+        match self {
+            Ty::Var(v) => map.get(v).cloned().unwrap_or(Ty::Unknown),
+            Ty::Array(e) => match e.subst(map) {
+                Ty::Unknown => Ty::Unknown,
+                e => Ty::Array(Box::new(e)),
+            },
+            Ty::Ref { fqn, display, args } if !args.is_empty() => {
+                let args: Vec<Ty> = args.iter().map(|a| a.subst(map)).collect();
+                let shown = match display.find('<') {
+                    Some(i) => {
+                        let list: Vec<String> = args
+                            .iter()
+                            .map(|a| match a {
+                                Ty::Unknown => "?".to_string(),
+                                a => a.display(),
+                            })
+                            .collect();
+                        format!("{}<{}>", &display[..i], list.join(", "))
+                    }
+                    None => display.clone(),
+                };
+                Ty::Ref {
+                    fqn: fqn.clone(),
+                    display: shown,
+                    args,
+                }
+            }
+            other => other.clone(),
+        }
+    }
+
+    /// Whether a type variable is left anywhere in the type.
+    pub fn has_var(&self) -> bool {
+        match self {
+            Ty::Var(_) => true,
+            Ty::Array(e) => e.has_var(),
+            Ty::Ref { args, .. } => args.iter().any(Ty::has_var),
+            _ => false,
         }
     }
 }

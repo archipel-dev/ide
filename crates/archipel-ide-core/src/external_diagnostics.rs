@@ -76,6 +76,9 @@ impl IdeState {
             self.lsp.diagnostics_generation().hash(&mut hasher);
             for document in &self.documents {
                 document.path.hash(&mut hasher);
+                // A document that moved on may now match (or no longer match) the version the
+                // server answered for.
+                document.text.revision().hash(&mut hasher);
             }
             hasher.finish()
         };
@@ -89,6 +92,8 @@ impl IdeState {
         };
         let root = project.root().to_owned();
         let canonical = root.canonicalize().unwrap_or_else(|_| root.clone());
+        let generation_changed =
+            feed.generation_changed_since_last_sync(self.lsp.diagnostics_generation());
         let mut keep: HashSet<PathBuf> = HashSet::new();
         let mut changed: Vec<PathBuf> = Vec::new();
         for document in &self.documents {
@@ -99,6 +104,24 @@ impl IdeState {
                 self.lsp.published_diagnostics(&absolute)
             };
             let server = self.lsp.server_id_for(&absolute);
+            // The server answered for text older than the editor's: its positions do not fit
+            // this revision. Keep what is shown (the daemon moves it through the edits and
+            // drops what an edit touched); the answer for the current text replaces it.
+            let revision = document.text.revision().min(i32::MAX as u64) as i64;
+            let version = self.lsp.published_diagnostics_version(&absolute);
+            // A server that does not say which text it answered for: the positions are taken as
+            // of the answer and only re-read when the server publishes again.
+            let unversioned_and_unchanged =
+                version.is_none() && !generation_changed && feed.is_published(&document.path);
+            if published.is_some()
+                && (unversioned_and_unchanged
+                    || version.is_some_and(|version| i64::from(version) < revision))
+            {
+                if feed.is_published(&document.path) {
+                    keep.insert(document.path.clone());
+                }
+                continue;
+            }
             let (Some(diagnostics), Some(server)) = (published, server) else {
                 continue;
             };

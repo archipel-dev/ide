@@ -94,15 +94,25 @@ impl JavaProject {
     /// Runs the reference analysis for the live `text` of `path`.
     pub fn analyze_text(&self, path: &Path, text: &str) -> Analysis {
         let scope = self.scope_for(path);
-        let stub = source::build_file_stub(text);
+        let Some(prep) = crate::repair::prepare(text, None) else {
+            return Analysis::default();
+        };
+        let stub = source::build_from_tree(&prep.tree, &prep.text);
         let unit = self.index.unit_for_path(path);
         let current = CurrentFile::new(unit, stub);
         let env = Env::new(&self.index, &scope, Some(&current));
-        let Some(tree) = source::parse(text) else {
-            return Analysis::default();
-        };
         let incomplete = !self.is_complete();
-        analyze(&env, text, &tree, &current, incomplete)
+        let mut analysis = analyze(&env, &prep.text, &prep.tree, &current, incomplete);
+        if prep.repaired() {
+            analysis.problems.retain(|p| !prep.touches_insert(&p.range));
+            for p in &mut analysis.problems {
+                p.range = prep.original_range(&p.range);
+                if let crate::analyze::ProblemKind::Method { call, .. } = &mut p.kind {
+                    *call = prep.original_range(call);
+                }
+            }
+        }
+        analysis
     }
 }
 

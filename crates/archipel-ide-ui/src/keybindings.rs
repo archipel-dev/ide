@@ -24,6 +24,7 @@ pub enum UiAction {
     FindNext,
     FindPrevious,
     FindInPath,
+    ReplaceInPath,
     SaveAll,
     NewProject,
     OpenProject,
@@ -48,6 +49,7 @@ pub fn ui_action(action: &str) -> Option<UiAction> {
         "FindNext" => UiAction::FindNext,
         "FindPrevious" => UiAction::FindPrevious,
         "FindInPath" | "FindSelectionInPath" => UiAction::FindInPath,
+        "ReplaceInPath" => UiAction::ReplaceInPath,
         "SaveAll" => UiAction::SaveAll,
         "NewProject" | "WelcomeScreen.DefaultNewProjectAction" => UiAction::NewProject,
         "OpenFile" => UiAction::OpenProject,
@@ -67,7 +69,7 @@ pub fn ui_action(action: &str) -> Option<UiAction> {
 
 /// Every reference action id the window implements itself, with its action.
 pub fn ui_action_ids() -> impl Iterator<Item = (&'static str, UiAction)> {
-    const IDS: [&str; 22] = [
+    const IDS: [&str; 23] = [
         "GotoLine",
         "FileStructurePopup",
         "Find",
@@ -76,6 +78,7 @@ pub fn ui_action_ids() -> impl Iterator<Item = (&'static str, UiAction)> {
         "FindPrevious",
         "FindInPath",
         "FindSelectionInPath",
+        "ReplaceInPath",
         "SaveAll",
         "NewProject",
         "WelcomeScreen.DefaultNewProjectAction",
@@ -229,21 +232,13 @@ impl IdeApp {
                 query: String::new(),
                 selected: None,
             }),
-            UiAction::Find | UiAction::Replace => {
-                let selection = self.primary_selection_text();
-                self.find.show(action == UiAction::Replace, selection);
-            }
+            UiAction::Find | UiAction::Replace => self.open_find_bar(action == UiAction::Replace),
             UiAction::FindNext | UiAction::FindPrevious => {
-                let id = if action == UiAction::FindNext {
-                    "editor.findNext"
-                } else {
-                    "editor.findPrevious"
-                };
-                self.dispatch(id, self.find.params());
+                self.find_step(action == UiAction::FindNext);
             }
-            UiAction::FindInPath => {
+            UiAction::FindInPath | UiAction::ReplaceInPath => {
                 let selection = self.primary_selection_text();
-                self.open_find_popup(selection);
+                self.open_find_popup(selection, action == UiAction::ReplaceInPath);
             }
             UiAction::SaveAll => self.autosave(),
             UiAction::NewProject => self.new_project_dialog(),

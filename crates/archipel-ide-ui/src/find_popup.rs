@@ -1,13 +1,19 @@
-//! Find in Files popup: query with option toggles, scope tabs, live results and a
-//! read-only preview of the selected match.
+//! Find in Files and Replace in Files popup: query with option toggles, scope tabs, live
+//! results and a read-only preview of the selected match.
 //!
-//! The search itself is the `search.project` command (with `background`, so the
-//! Find tool window stays closed); this file renders its results as they stream in.
+//! The search itself is the `search.project` command (with `background`, so the Find tool
+//! window stays closed); this file renders its results as they stream in. What the popup says
+//! comes from the core's model (`find_in_files`, spec `docs/specs/search/02-find-in-files.md`):
+//! the validation messages, the info label, the text of an empty result and the confirmation of
+//! Replace All; the replacement is the `search.replaceInFiles` command.
 
 use crate::icons;
 use crate::{IdeApp, theme, widgets};
 use archipel_ide_core::SearchScopeKind;
 use archipel_ide_core::TextMatch;
+use archipel_ide_core::find_in_files::{
+    FindRequest, FindResults, Scope, empty_text, replace_confirmation, validate,
+};
 use eframe::egui::{self, Rect, Sense, vec2};
 use serde_json::{Value, json};
 use std::path::PathBuf;
@@ -40,6 +46,16 @@ pub struct FindPopup {
     preview: Option<(PathBuf, Vec<String>)>,
     /// Name and mask being edited in the custom scope row.
     scope_edit: Option<(String, String)>,
+    /// Replace in Files (Ctrl+Shift+R): the replace field and Replace All are shown.
+    replace: bool,
+    replacement: String,
+    preserve_case: bool,
+    /// The check box *File mask*: the mask applies only while it is on (SRCH-FIP-021).
+    file_mask_on: bool,
+    /// The confirmation of Replace All over several files (SRCH-FIP-071): title and message.
+    confirm: Option<(String, String)>,
+    /// The error of the last replacement (`Replace Error`).
+    error: Option<String>,
 }
 
 impl FindPopup {
@@ -51,12 +67,21 @@ impl FindPopup {
     pub fn selected(&self) -> usize {
         self.selected
     }
+
+    /// The confirmation of Replace All is showing.
+    pub fn confirm_open(&self) -> bool {
+        self.open && self.confirm.is_some()
+    }
+
+    pub fn cancel_confirmation(&mut self) {
+        self.confirm = None;
+    }
 }
 
 impl IdeApp {
     /// Ctrl+Shift+F: opens the popup with the editor selection (or the previous
     /// query) fully selected, and searches right away.
-    pub(crate) fn open_find_popup(&mut self, selection: Option<String>) {
+    pub(crate) fn open_find_popup(&mut self, selection: Option<String>, replace: bool) {
         if !self.state.has_project() {
             return;
         }
@@ -68,19 +93,49 @@ impl IdeApp {
         }
         let popup = &mut self.find_popup;
         popup.open = true;
+        popup.replace = replace;
+        popup.confirm = None;
+        popup.error = None;
         popup.select_query = true;
         popup.selected = 0;
         popup.dirty_since = Some(Instant::now() - DEBOUNCE);
     }
 }
 
+/// What the popup asks the model to find: the query, the options and the scope.
+fn request(app: &IdeApp) -> FindRequest {
+    let scope = match (app.state.search_scope_kind(), app.state.search_directory()) {
+        (SearchScopeKind::Directory, Some(path)) => Scope::Directory {
+            path,
+            recursive: true,
+        },
+        _ => Scope::Project,
+    };
+    FindRequest {
+        query: app.search_input.clone(),
+        options: app.find_options.clone(),
+        file_mask_on: app.find_popup.file_mask_on,
+        scope,
+    }
+}
+
+/// Why the search cannot run (SRCH-FIP-030): the message of the model.
+fn invalid(app: &IdeApp) -> Option<String> {
+    validate(&request(app), |directory| {
+        app.state
+            .project()
+            .is_some_and(|project| project.root().join(directory).is_dir())
+    })
+    .err()
+}
+
 fn run_search(app: &mut IdeApp) {
     app.find_popup.dirty_since = None;
     app.find_popup.selected = 0;
-    if app.search_input.is_empty() {
+    if app.search_input.is_empty() || invalid(app).is_some() {
         return;
     }
-    let scope = app.state.project_view().search_scope.clone();
+    let scope = app.state.search_directory();
     let kind = app.state.search_scope_kind();
     let options = &app.find_options;
     let params = json!({
@@ -88,7 +143,7 @@ fn run_search(app: &mut IdeApp) {
         "matchCase": options.match_case,
         "wholeWords": options.whole_words,
         "regex": options.regex,
-        "fileMask": options.file_mask,
+        "fileMask": if app.find_popup.file_mask_on { options.file_mask.as_str() } else { "" },
         "scope": scope.map(|s| s.display().to_string()).unwrap_or_default(),
         "scopeKind": kind.id(),
         "scopeName": app.state.search_custom_scope(),
@@ -171,7 +226,13 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
         return;
     }
-    let results = app.state.search_results();
+    let message = invalid(app);
+    // Nothing is listed while the request cannot run (SRCH-FIP-030).
+    let results = if message.is_some() {
+        Vec::new()
+    } else {
+        app.state.search_results()
+    };
     if !results.is_empty() {
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)) {
             app.find_popup.selected = (app.find_popup.selected + 1) % results.len();
@@ -181,14 +242,62 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         }
     }
     app.find_popup.selected = app.find_popup.selected.min(results.len().saturating_sub(1));
+    // Alt+Shift+Enter is Replace All in replace mode; Alt+Shift+Backspace resets the filters.
+    let replace_all = app.find_popup.replace
+        && ctx.input_mut(|input| {
+            input.consume_key(
+                egui::Modifiers::ALT | egui::Modifiers::SHIFT,
+                egui::Key::Enter,
+            )
+        });
+    if ctx.input_mut(|input| {
+        input.consume_key(
+            egui::Modifiers::ALT | egui::Modifiers::SHIFT,
+            egui::Key::Backspace,
+        )
+    }) {
+        reset_filters(app);
+    }
+    // The mnemonics of the options (SRCH-FIP key table): Alt+C, Alt+W, Alt+X, Alt+E, Alt+K.
+    let mut toggled = false;
+    for (key, option) in [
+        (egui::Key::C, 0),
+        (egui::Key::W, 1),
+        (egui::Key::X, 2),
+        (egui::Key::E, 3),
+        (egui::Key::K, 4),
+    ] {
+        if ctx.input_mut(|input| input.consume_key(egui::Modifiers::ALT, key)) {
+            let popup = &mut app.find_popup;
+            match option {
+                0 => app.find_options.match_case = !app.find_options.match_case,
+                1 => app.find_options.whole_words = !app.find_options.whole_words,
+                2 => app.find_options.regex = !app.find_options.regex,
+                3 if popup.replace => popup.preserve_case = !popup.preserve_case,
+                4 => popup.file_mask_on = !popup.file_mask_on,
+                _ => continue,
+            }
+            toggled = true;
+        }
+    }
+    if toggled {
+        app.find_popup.dirty_since = Some(Instant::now());
+    }
     let enter = ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
     let to_window =
         ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::Enter));
     let screen = ctx.content_rect();
     let width = FIND_POPUP_WIDTH.min(screen.width() - 40.0);
     let height = (screen.height() * 0.7).max(360.0);
-    let mut chosen = enter.then_some(app.find_popup.selected);
-    let mut open_window = to_window;
+    let mut chosen = (enter && !app.find_popup.replace && app.find_popup.confirm.is_none())
+        .then_some(app.find_popup.selected);
+    let mut open_window = to_window && !app.find_popup.replace;
+    // Enter answers the confirmation of Replace All with its default button.
+    let mut confirmed = enter && app.find_popup.confirm.is_some();
+    let mut replace_clicked = replace_all;
+    // Enter replaces the selected result in replace mode (SRCH-FIP-070).
+    let replace_selected =
+        (enter && app.find_popup.replace && !confirmed).then_some(app.find_popup.selected);
     egui::Area::new(egui::Id::new("find_in_files_popup"))
         .order(egui::Order::Foreground)
         .fixed_pos(egui::pos2(
@@ -205,19 +314,14 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                     ui.spacing_mut().item_spacing.y = 6.0;
                     let mut changed = false;
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Find in Files").strong());
-                        let files: std::collections::BTreeSet<_> =
-                            results.iter().map(|found| &found.path).collect();
-                        let mut summary = format!(
-                            "{} in {}",
-                            widgets::pluralize(results.len(), "match", "matches"),
-                            widgets::pluralize(files.len(), "file", "files")
-                        );
-                        if app.state.search_running() {
-                            summary.push('…');
-                        }
-                        if !app.state.search_query().is_empty() {
-                            ui.label(egui::RichText::new(summary).color(theme::TEXT_SECONDARY));
+                        let title = if app.find_popup.replace {
+                            "Replace in Files"
+                        } else {
+                            "Find in Files"
+                        };
+                        ui.label(egui::RichText::new(title).strong());
+                        if let Some(info) = info_label(app, &results, message.as_deref()) {
+                            ui.label(egui::RichText::new(info).color(theme::TEXT_SECONDARY));
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             changed |= widgets::search_field(
@@ -228,9 +332,10 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                                 220.0,
                             )
                             .changed();
-                            ui.label(
-                                egui::RichText::new("File mask:").color(theme::TEXT_SECONDARY),
-                            );
+                            changed |= ui
+                                .checkbox(&mut app.find_popup.file_mask_on, "File mask")
+                                .on_hover_text("File mask (Alt+K)")
+                                .changed();
                         });
                     });
                     ui.horizontal(|ui| {
@@ -261,6 +366,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                                 [
                                     egui::Id::new("find_popup_mask"),
                                     egui::Id::new("find_popup_dir"),
+                                    egui::Id::new("find_popup_replacement"),
                                 ]
                                 .iter()
                                 .any(|field| memory.has_focus(*field) && focused == *field)
@@ -284,6 +390,29 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                             }
                         }
                     });
+                    if app.find_popup.replace {
+                        ui.horizontal(|ui| {
+                            widgets::search_field(
+                                ui,
+                                egui::Id::new("find_popup_replacement"),
+                                &mut app.find_popup.replacement,
+                                "Replace",
+                                width - 190.0,
+                            );
+                            let preserve = ui
+                                .selectable_label(
+                                    app.find_popup.preserve_case,
+                                    egui::RichText::new("AB").monospace(),
+                                )
+                                .on_hover_text("Preserve Case (Alt+E)");
+                            if preserve.clicked() {
+                                app.find_popup.preserve_case = !app.find_popup.preserve_case;
+                            }
+                        });
+                        if let Some(error) = &app.find_popup.error {
+                            ui.label(egui::RichText::new(error).color(theme::ERROR));
+                        }
+                    }
                     let scope_kind = app.state.search_scope_kind();
                     let custom_scope = app.state.search_custom_scope();
                     let custom_scopes = app.state.custom_scopes();
@@ -345,9 +474,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                             );
                             let mut text = app
                                 .state
-                                .project_view
-                                .search_scope
-                                .as_ref()
+                                .search_directory()
                                 .map(|dir| dir.display().to_string())
                                 .unwrap_or_default();
                             if widgets::search_field(
@@ -359,8 +486,9 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                             )
                             .changed()
                             {
-                                app.state.project_view_mut().search_scope =
-                                    (!text.is_empty()).then(|| PathBuf::from(text));
+                                app.state.set_search_directory(
+                                    (!text.is_empty()).then(|| PathBuf::from(text)),
+                                );
                                 changed = true;
                             }
                         });
@@ -370,17 +498,24 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                     }
                     ui.separator();
                     let list_height = (height - 190.0 - PREVIEW_LINES as f32 * 34.0).max(80.0);
+                    if let Some((title, text)) = app.find_popup.confirm.clone() {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(egui::RichText::new(title).strong());
+                            ui.label(text);
+                            if ui.button("Replace").clicked() {
+                                confirmed = true;
+                            }
+                            if ui.button("Cancel").clicked() {
+                                app.find_popup.confirm = None;
+                            }
+                        });
+                    }
                     if results.is_empty() {
                         ui.add_space(8.0);
                         ui.vertical_centered(|ui| {
-                            let text = if app.search_input.is_empty() {
-                                "Type to search the project"
-                            } else if app.state.search_running() {
-                                "Searching…"
-                            } else {
-                                "Nothing found"
-                            };
-                            ui.label(egui::RichText::new(text).color(theme::TEXT_SECONDARY));
+                            for line in empty_results_text(app, message.as_deref()).lines() {
+                                ui.label(egui::RichText::new(line).color(theme::TEXT_SECONDARY));
+                            }
                         });
                     }
                     egui::ScrollArea::vertical()
@@ -425,7 +560,18 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                                 .color(theme::TEXT_SECONDARY),
                         );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("Open in Find Window  Ctrl+Enter").clicked() {
+                            if app.find_popup.replace {
+                                if ui
+                                    .add_enabled(
+                                        !results.is_empty(),
+                                        egui::Button::new("Replace All"),
+                                    )
+                                    .on_hover_text("Replace All (Alt+Shift+Enter)")
+                                    .clicked()
+                                {
+                                    replace_clicked = true;
+                                }
+                            } else if ui.button("Open in Find Window  Ctrl+Enter").clicked() {
                                 open_window = true;
                             }
                         });
@@ -443,6 +589,15 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     }
     if ctx.input(|input| input.pointer.any_click()) && !ctx.is_pointer_over_area() {
         app.find_popup.open = false;
+    }
+    if replace_clicked && !results.is_empty() {
+        start_replace_all(app, &results);
+    }
+    if confirmed {
+        run_replace(app);
+    }
+    if let Some(found) = replace_selected.and_then(|index| results.get(index)) {
+        replace_row(app, found);
     }
     if open_window {
         if app.find_popup.dirty_since.is_some() {
@@ -466,6 +621,106 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
             }),
         );
         ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
+    }
+}
+
+/// The info label beside the title: `N matches in M files`, with `+` while the search runs
+/// (SRCH-FIP-040); none while the request is invalid or nothing was searched yet.
+fn info_label(app: &IdeApp, results: &[TextMatch], message: Option<&str>) -> Option<String> {
+    (message.is_none() && !app.state.search_query().is_empty())
+        .then(|| FindResults::label_of(results, app.state.search_running()))
+}
+
+/// What the results area says while it lists nothing (SRCH-FIP-030, 040, 046).
+fn empty_results_text(app: &IdeApp, message: Option<&str>) -> String {
+    if let Some(message) = message {
+        message.to_owned()
+    } else if app.state.search_running() {
+        "Searching…".to_owned()
+    } else if app.search_input.is_empty() {
+        "Type to search the project".to_owned()
+    } else {
+        empty_text(&request(app))
+    }
+}
+
+/// Alt+Shift+Backspace: file mask off, Match case, Words and Regex off (SRCH-FIP-022).
+fn reset_filters(app: &mut IdeApp) {
+    app.find_popup.file_mask_on = false;
+    app.find_options.match_case = false;
+    app.find_options.whole_words = false;
+    app.find_options.regex = false;
+    app.find_popup.dirty_since = Some(Instant::now());
+}
+
+/// Replace All (SRCH-FIP-071): over several files the popup asks first.
+fn start_replace_all(app: &mut IdeApp, results: &[TextMatch]) {
+    app.find_popup.error = None;
+    let found = FindResults::from_rows(results.to_vec());
+    match replace_confirmation(&found, &app.search_input, &app.find_popup.replacement) {
+        Some(confirmation) => app.find_popup.confirm = Some(confirmation),
+        None => run_replace(app),
+    }
+}
+
+/// Replace (selected): one occurrence of one result; the list is searched again.
+fn replace_row(app: &mut IdeApp, found: &TextMatch) {
+    app.find_popup.error = None;
+    let options = &app.find_options;
+    let params = json!({
+        "query": app.search_input,
+        "replacement": app.find_popup.replacement,
+        "matchCase": options.match_case,
+        "wholeWords": options.whole_words,
+        "regex": options.regex,
+        "preserveCase": app.find_popup.preserve_case,
+        "path": found.path,
+        "line": found.line,
+        "column": found.column,
+        "length": found.length,
+    });
+    match app
+        .commands
+        .execute("search.replaceRow", &mut app.state, params)
+    {
+        Ok(_) => app.find_popup.dirty_since = Some(Instant::now()),
+        Err(error) => app.find_popup.error = Some(format!("Replace Error: {error}")),
+    }
+}
+
+/// Runs `search.replaceInFiles` for the popup's request; the popup closes when it worked.
+fn run_replace(app: &mut IdeApp) {
+    app.find_popup.confirm = None;
+    let options = &app.find_options;
+    let params = json!({
+        "query": app.search_input,
+        "replacement": app.find_popup.replacement,
+        "matchCase": options.match_case,
+        "wholeWords": options.whole_words,
+        "regex": options.regex,
+        "preserveCase": app.find_popup.preserve_case,
+        "fileMask": if app.find_popup.file_mask_on { options.file_mask.as_str() } else { "" },
+        "scope": app
+            .state
+            .search_directory()
+            .filter(|_| app.state.search_scope_kind() == SearchScopeKind::Directory)
+            .map(|scope| scope.display().to_string())
+            .unwrap_or_default(),
+    });
+    match app
+        .commands
+        .execute("search.replaceInFiles", &mut app.state, params)
+    {
+        Ok(outcome) => match outcome.get("error").and_then(Value::as_str) {
+            Some(error) => app.find_popup.error = Some(format!("Replace Error: {error}")),
+            None => {
+                if let Some(notification) = outcome.get("notification").and_then(Value::as_str) {
+                    app.state.set_status(notification.to_owned());
+                }
+                app.find_popup.open = false;
+            }
+        },
+        Err(error) => app.find_popup.error = Some(error.to_string()),
     }
 }
 
@@ -607,12 +862,13 @@ fn result_row(app: &mut IdeApp, ui: &mut egui::Ui, found: &TextMatch, index: usi
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::{click, idle, press, type_text};
 
     #[test]
     fn reopening_keeps_the_previous_query_and_results_follow_it() {
         let (mut app, ctx) = crate::tests::headless_app("find-popup", "a.txt", "needle\n");
         app.search_input = "needle".into();
-        app.open_find_popup(None);
+        app.open_find_popup(None, false);
         assert!(app.find_popup.open && app.find_popup.select_query);
         for _ in 0..200 {
             let _ = ctx.run(egui::RawInput::default(), |ctx| app.frame(ctx));
@@ -630,7 +886,236 @@ mod tests {
             "live search leaves the Find tool window closed"
         );
         // The next open takes the editor selection over the old query.
-        app.open_find_popup(Some("other".into()));
+        app.open_find_popup(Some("other".into()), false);
         assert_eq!(app.search_input, "other");
+    }
+
+    /// A project with the given files and the first one open.
+    fn project(name: &str, files: &[(&str, &str)]) -> (IdeApp, egui::Context, PathBuf) {
+        let root = std::env::temp_dir().join(format!(
+            "archipel-ide-ui-test-{name}-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        for (path, text) in files {
+            std::fs::write(root.join(path), text).unwrap();
+        }
+        let app = IdeApp::new(Some(root.clone()), vec![root.join(files[0].0)]);
+        let ctx = egui::Context::default();
+        crate::install_theme(&ctx);
+        (app, ctx, root)
+    }
+
+    /// Runs frames until the background search of the popup has delivered its results.
+    fn wait_for_results(app: &mut IdeApp, ctx: &egui::Context, count: usize) {
+        for _ in 0..300 {
+            idle(app, ctx);
+            if app.state.search_result_count() >= count && !app.state.search_running() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        panic!("the search found {} rows", app.state.search_result_count());
+    }
+
+    fn results_of(app: &IdeApp) -> Vec<TextMatch> {
+        app.state.search_results()
+    }
+
+    #[test]
+    fn find_in_files_shows_the_model_label_and_the_validation_messages() {
+        let (mut app, ctx, root) = project(
+            "fip-label",
+            &[
+                ("A.txt", "needle needle\nother\n"),
+                ("B.txt", "a needle\n"),
+                ("C.txt", "nothing\n"),
+            ],
+        );
+        app.focus_editor(&ctx);
+        idle(&mut app, &ctx);
+        press(&mut app, &ctx, "Ctrl+Shift+F");
+        idle(&mut app, &ctx);
+        assert!(app.find_popup.open && !app.find_popup.replace);
+        // Nothing typed: the model asks for a query (SRCH-FIP-030).
+        let message = invalid(&app);
+        assert_eq!(
+            message.as_deref(),
+            Some("Type search query to find in files")
+        );
+        type_text(&mut app, &ctx, "needle");
+        wait_for_results(&mut app, &ctx, 2);
+        assert_eq!(invalid(&app), None);
+        let rows = results_of(&app);
+        assert_eq!(
+            info_label(&app, &rows, None).as_deref(),
+            Some("3 matches in 2 files"),
+            "occurrences, not rows (SRCH-FIP-040)"
+        );
+        // The rows are grouped by file, in path order, with the preview of the line.
+        assert_eq!(rows[0].path, PathBuf::from("A.txt"));
+        assert_eq!(rows[1].path, PathBuf::from("B.txt"));
+        assert_eq!(rows[0].preview, "needle needle");
+        // Regex with an invalid pattern: the message replaces the results.
+        press(&mut app, &ctx, "Alt+X");
+        type_text(&mut app, &ctx, "(");
+        let message = invalid(&app).expect("a bad pattern");
+        assert!(
+            message.starts_with("Bad pattern \"needle(\": "),
+            "{message}"
+        );
+        assert_eq!(empty_results_text(&app, Some(&message)), message);
+        // A regex that matches the empty string.
+        for _ in 0..7 {
+            press(&mut app, &ctx, "Backspace");
+        }
+        type_text(&mut app, &ctx, "a*");
+        assert_eq!(
+            invalid(&app).as_deref(),
+            Some("Regular expression matches empty string")
+        );
+        // A file mask with a semicolon (SRCH-FIP-021).
+        press(&mut app, &ctx, "Alt+X");
+        press(&mut app, &ctx, "Alt+K");
+        app.find_options.file_mask = "*.txt;*.md".into();
+        assert_eq!(
+            invalid(&app).as_deref(),
+            Some("File masks should be comma-separated")
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn an_empty_result_lists_the_options_that_narrowed_it() {
+        let (mut app, ctx, root) = project("fip-empty", &[("A.txt", "needle\n")]);
+        app.focus_editor(&ctx);
+        idle(&mut app, &ctx);
+        press(&mut app, &ctx, "Ctrl+Shift+F");
+        idle(&mut app, &ctx);
+        press(&mut app, &ctx, "Alt+C");
+        type_text(&mut app, &ctx, "NEEDLE");
+        // The search runs 120 ms after the last change and finds nothing.
+        for _ in 0..300 {
+            idle(&mut app, &ctx);
+            if !app.find_popup.pending() && !app.state.search_running() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(
+            empty_results_text(&app, None),
+            "Nothing found.\nSearch option used: Match case\nClear option Alt+Shift+Backspace"
+        );
+        // Alt+Shift+Backspace resets the filters (SRCH-FIP-022).
+        press(&mut app, &ctx, "Alt+Shift+Backspace");
+        assert!(!app.find_options.match_case);
+        wait_for_results(&mut app, &ctx, 1);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn replace_all_over_two_files_asks_first_and_replaces_with_the_status() {
+        let (mut app, ctx, root) = project(
+            "fip-replace-all",
+            &[
+                ("A.txt", "needle needle\nother\n"),
+                ("B.txt", "a needle\n"),
+                ("C.txt", "nothing\n"),
+            ],
+        );
+        app.focus_editor(&ctx);
+        idle(&mut app, &ctx);
+        press(&mut app, &ctx, "Ctrl+Shift+R");
+        idle(&mut app, &ctx);
+        assert!(app.find_popup.open && app.find_popup.replace);
+        type_text(&mut app, &ctx, "needle");
+        wait_for_results(&mut app, &ctx, 2);
+        // A click into the replace field, then the replacement.
+        let field = ctx
+            .read_response(egui::Id::new("find_popup_replacement"))
+            .expect("the replace field")
+            .rect;
+        click(&mut app, &ctx, field.center());
+        type_text(&mut app, &ctx, "pin");
+        assert_eq!(app.find_popup.replacement, "pin");
+        // Alt+Shift+Enter is Replace All; two files: the confirmation comes first.
+        press(&mut app, &ctx, "Alt+Shift+Enter");
+        let (title, message) = app.find_popup.confirm.clone().expect("a confirmation");
+        assert_eq!(title, "Replace All");
+        assert_eq!(
+            message,
+            "Replace 3 occurrences of 'needle' across 2 files with 'pin'?"
+        );
+        // Escape answers the confirmation, not the popup.
+        press(&mut app, &ctx, "Escape");
+        assert!(app.find_popup.confirm.is_none() && app.find_popup.open);
+        assert_eq!(
+            std::fs::read_to_string(root.join("B.txt")).unwrap(),
+            "a needle\n"
+        );
+        press(&mut app, &ctx, "Alt+Shift+Enter");
+        press(&mut app, &ctx, "Enter");
+        assert!(
+            !app.find_popup.open,
+            "the popup closes after the replacement"
+        );
+        assert_eq!(app.state.status(), "3 occurrences replaced");
+        // A.txt is open and clean: it follows the file; B.txt was written.
+        assert_eq!(
+            std::fs::read_to_string(root.join("A.txt")).unwrap(),
+            "pin pin\nother\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join("B.txt")).unwrap(),
+            "a pin\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join("C.txt")).unwrap(),
+            "nothing\n"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn enter_in_replace_mode_replaces_the_selected_result_only() {
+        let (mut app, ctx, root) = project(
+            "fip-replace-row",
+            &[("A.txt", "one needle\n"), ("B.txt", "two needle\n")],
+        );
+        app.focus_editor(&ctx);
+        idle(&mut app, &ctx);
+        press(&mut app, &ctx, "Ctrl+Shift+R");
+        idle(&mut app, &ctx);
+        type_text(&mut app, &ctx, "needle");
+        wait_for_results(&mut app, &ctx, 2);
+        let field = ctx
+            .read_response(egui::Id::new("find_popup_replacement"))
+            .expect("the replace field")
+            .rect;
+        click(&mut app, &ctx, field.center());
+        type_text(&mut app, &ctx, "pin");
+        // The first row is selected: Enter replaces it and keeps the popup open.
+        press(&mut app, &ctx, "Enter");
+        assert!(app.find_popup.open);
+        assert_eq!(
+            std::fs::read_to_string(root.join("A.txt")).unwrap(),
+            "one pin\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join("B.txt")).unwrap(),
+            "two needle\n"
+        );
+        // The list is searched again and now has the row of B.txt only.
+        wait_for_results(&mut app, &ctx, 1);
+        for _ in 0..100 {
+            idle(&mut app, &ctx);
+            if app.state.search_result_count() == 1 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(results_of(&app)[0].path, PathBuf::from("B.txt"));
+        let _ = std::fs::remove_dir_all(root);
     }
 }

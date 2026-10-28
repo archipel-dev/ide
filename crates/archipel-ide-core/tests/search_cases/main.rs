@@ -18,6 +18,7 @@
 mod find;
 mod fip;
 mod matching;
+mod nav;
 mod se;
 
 use std::collections::BTreeMap;
@@ -25,7 +26,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 /// Number of cases that must pass. Never lower it; raise it with every fix.
-const PASS_BASELINE: usize = 253;
+const PASS_BASELINE: usize = 308;
 
 // ---------------------------------------------------------------------------------------------
 // Parsing
@@ -184,6 +185,10 @@ fn run_case(case: &Case) -> Outcome {
         "01" => find::run(case),
         "02" => fip::run(case),
         "04" => se::run(case),
+        "05" => nav::run(case),
+        "03" => Outcome::NotRunnable(
+            "needs resolved Java references (usage types, modules, packages) from a language pack or server",
+        ),
         "06" => Outcome::NotRunnable("structural search is LATER"),
         _ => Outcome::NotRunnable("no runner yet"),
     }));

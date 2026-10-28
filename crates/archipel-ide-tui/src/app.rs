@@ -659,24 +659,19 @@ impl TuiApp {
 
     fn dialog_done(&mut self, rt: &mut Runtime, kind: DialogKind, input: Input) {
         match kind {
-            DialogKind::GotoLine => {
-                let mut parts = input.text.trim().splitn(2, ':');
-                let line = parts.next().and_then(|v| v.trim().parse::<usize>().ok());
-                let column = parts.next().and_then(|v| v.trim().parse::<usize>().ok());
-                match line {
-                    Some(line) => {
-                        let mut params = json!({ "line": line });
-                        if let Some(column) = column {
-                            params["column"] = json!(column);
-                        }
-                        self.command(rt, "editor.gotoLine", params);
-                    }
-                    None => self
-                        .ide
-                        .state_mut()
-                        .set_status("Enter a line number, like 12 or 12:5".to_owned()),
+            DialogKind::GotoLine => match self.ide.state().goto_line_target(&input.text) {
+                Some((line, column)) => {
+                    self.command(
+                        rt,
+                        "editor.gotoLine",
+                        json!({ "line": line, "column": column }),
+                    );
                 }
-            }
+                None => self
+                    .ide
+                    .state_mut()
+                    .set_status("Enter a line number, like 12 or 12:5".to_owned()),
+            },
             DialogKind::FindInFiles => {
                 if input.text.is_empty() {
                     self.ide

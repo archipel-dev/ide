@@ -316,10 +316,53 @@ pub struct ActionCandidate {
 /// One row of the popup.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Hit {
-    File { path: PathBuf, line: Option<usize> },
+    /// A file with the position typed after its name (`A.java:12:5`, SRCH-SE-051).
+    File {
+        path: PathBuf,
+        line: Option<usize>,
+        column: Option<usize>,
+    },
     Symbol(SymbolEntry),
     Action(ActionCandidate),
     Text(TextMatch),
+}
+
+impl Hit {
+    /// The typed commands that open this row (SRCH-SE-050, SRCH-SE-051): the window, the terminal
+    /// frontend and the tests dispatch these in order. Actions have none (they run through the
+    /// action registry).
+    pub fn open_commands(&self, right_split: bool) -> Vec<(&'static str, Value)> {
+        let (path, params) = match self {
+            Hit::File { path, line, column } => {
+                let mut params = json!({"path": path});
+                if let Some(line) = line {
+                    params["line"] = json!(line);
+                    params["column"] = json!(column.unwrap_or(1));
+                }
+                (path, params)
+            }
+            Hit::Symbol(symbol) => (
+                &symbol.path,
+                json!({"path": symbol.path, "line": symbol.line + 1}),
+            ),
+            Hit::Text(found) => (
+                &found.path,
+                json!({
+                    "path": found.path,
+                    "line": found.line,
+                    "column": found.column,
+                    "length": found.length,
+                }),
+            ),
+            Hit::Action(_) => return Vec::new(),
+        };
+        let mut commands = Vec::new();
+        if right_split {
+            commands.push(("editor.openInRightSplit", json!({"path": path})));
+        }
+        commands.push(("editor.openFile", params));
+        commands
+    }
 }
 
 /// What the providers draw from.
@@ -520,6 +563,7 @@ fn recent_hits(query: &str, sources: &SearchSources, limit: usize) -> Vec<Ranked
                 item: Hit::File {
                     path: path.clone(),
                     line: position.line,
+                    column: position.column.filter(|_| position.line.is_some()),
                 },
                 positions: positions_of(&fragments),
                 weight,
@@ -549,6 +593,7 @@ fn files(query: &str, sources: &SearchSources, limit: usize) -> Vec<Ranked<Hit>>
             item: Hit::File {
                 path: entries[hit.index].relative_path.clone(),
                 line: position.line,
+                column: position.column.filter(|_| position.line.is_some()),
             },
             positions: positions_of(&hit.fragments),
             weight: hit.weight,
@@ -602,6 +647,69 @@ fn symbols(query: &str, sources: &SearchSources, limit: usize, classes: bool) ->
             item: Hit::Symbol(candidates[hit.index].clone()),
             positions: positions_of(&hit.fragments),
             weight: hit.weight,
+        })
+        .collect()
+}
+
+/// The weight of a file typed as a full path (SRCH-SE-031).
+pub const EXACT_PATH_WEIGHT: i32 = 15_000;
+
+/// A typed absolute path (or one relative to the project directory) that names an existing file
+/// gives that file with the exact weight, first in the list (SRCH-SE-031, SRCH-SE-016). Paths
+/// outside the project need `outside_allowed` (`search.everywhere.absolute.path.outside.project`).
+pub fn absolute_path_hit(
+    typed: &str,
+    root: &Path,
+    outside_allowed: bool,
+    exists: impl Fn(&Path) -> bool,
+) -> Option<Ranked<Hit>> {
+    let typed = split_position(typed);
+    let path = Path::new(typed.name.trim());
+    let (candidate, display): (PathBuf, PathBuf) = if path.is_absolute() {
+        match path.strip_prefix(root) {
+            Ok(relative) => (path.to_owned(), relative.to_owned()),
+            Err(_) if outside_allowed => (path.to_owned(), path.to_owned()),
+            Err(_) => return None,
+        }
+    } else if path.components().count() > 1 && exists(&root.join(path)) {
+        (root.join(path), path.to_owned())
+    } else {
+        return None;
+    };
+    if !exists(&candidate) {
+        return None;
+    }
+    let name_len = file_name(&display).chars().count();
+    Some(Ranked {
+        item: Hit::File {
+            path: display,
+            line: typed.line,
+            column: typed.column.filter(|_| typed.line.is_some()),
+        },
+        positions: (0..name_len).collect(),
+        weight: EXACT_PATH_WEIGHT,
+    })
+}
+
+/// Actions whose abbreviation equals the typed text (ignoring case) come first, with the weight
+/// of the abbreviation match (SRCH-SE-040, SRCH-SE-043). `abbreviations` are
+/// `(abbreviation, action id)` pairs.
+pub fn abbreviation_hits(
+    typed: &str,
+    abbreviations: &[(String, String)],
+    actions: &[ActionCandidate],
+) -> Vec<Ranked<Hit>> {
+    let typed = typed.trim();
+    abbreviations
+        .iter()
+        .filter(|(abbreviation, _)| abbreviation.eq_ignore_ascii_case(typed))
+        .filter_map(|(abbreviation, id)| {
+            let action = actions.iter().find(|a| &a.id == id)?;
+            Some(Ranked {
+                item: Hit::Action(action.clone()),
+                positions: Vec::new(),
+                weight: action_weight(typed, abbreviation).unwrap_or(0),
+            })
         })
         .collect()
 }
@@ -837,7 +945,8 @@ pub struct RecentLocation {
     pub preview: String,
 }
 
-const MAX_LOCATIONS: usize = 50;
+/// Entries of Recent Locations (`recentLocationsLimit`, SRCH-REC-010).
+const MAX_LOCATIONS: usize = 25;
 /// Caret moves within this many lines of the newest location update it.
 const SAME_PLACE_LINES: usize = 5;
 
@@ -1380,14 +1489,16 @@ mod tests {
             search(SearchTab::Files, "mainact:30", &sources)[0].item,
             Hit::File {
                 path: "src/MainActivity.java".into(),
-                line: Some(30)
+                line: Some(30),
+                column: Some(1)
             }
         );
         assert_eq!(
             search(SearchTab::Files, "", &sources)[0].item,
             Hit::File {
                 path: "README.md".into(),
-                line: None
+                line: None,
+                column: None
             }
         );
         assert!(matches!(

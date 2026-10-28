@@ -213,25 +213,6 @@ fn highlighted_text(
     x + width
 }
 
-/// Moves the caret to a symbol or `file:line` and focuses the editor.
-fn open_location(
-    app: &mut IdeApp,
-    ctx: &egui::Context,
-    path: &std::path::Path,
-    line: Option<usize>,
-    right_split: bool,
-) {
-    let mut params = json!({"path": path});
-    if let Some(line) = line {
-        params["line"] = json!(line);
-    }
-    if right_split {
-        app.dispatch("editor.openInRightSplit", json!({"path": path}));
-    }
-    app.dispatch("editor.openFile", params);
-    ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
-}
-
 /// One result row. Returns the index when the row was clicked.
 fn row(
     app: &mut IdeApp,
@@ -272,7 +253,7 @@ fn row(
                 *theme::TEXT_DISABLED
             },
         ),
-        Hit::File { path, line } => (
+        Hit::File { path, line, .. } => (
             file_name(path),
             path.parent()
                 .map(|p| p.display().to_string())
@@ -614,28 +595,11 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                     app.run_action(id, ActionPlace::FindAction, ctx);
                 }
             }
-            Hit::File { path, line } => {
+            hit => {
                 app.palette.open = false;
-                open_location(app, ctx, path, *line, right_split);
-            }
-            Hit::Symbol(symbol) => {
-                app.palette.open = false;
-                open_location(app, ctx, &symbol.path, Some(symbol.line + 1), right_split);
-            }
-            Hit::Text(found) => {
-                app.palette.open = false;
-                if right_split {
-                    app.dispatch("editor.openInRightSplit", json!({"path": found.path}));
+                for (command, params) in hit.open_commands(right_split) {
+                    app.dispatch(command, params);
                 }
-                app.dispatch(
-                    "editor.openFile",
-                    json!({
-                        "path": found.path,
-                        "line": found.line,
-                        "column": found.column,
-                        "length": found.length,
-                    }),
-                );
                 ctx.memory_mut(|memory| memory.request_focus(crate::editor::editor_id()));
             }
         }

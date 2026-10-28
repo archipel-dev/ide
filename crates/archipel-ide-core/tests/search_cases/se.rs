@@ -864,8 +864,162 @@ pub fn run(case: &Case) -> Outcome {
                 fail("complete")
             }
         }
+        ("SRCH-SE-021", 2) => {
+            let files = [entry("mapper.txt"), entry("map.txt")];
+            let rows = search(
+                SearchTab::Files,
+                "map.txt",
+                &sources(&files, &[], &[], &[], false),
+            );
+            match rows.first().map(|r| &r.item) {
+                Some(Hit::File { path, .. }) if path.ends_with("map.txt") => Outcome::Pass,
+                other => fail(format!("{other:?}")),
+            }
+        }
+        ("SRCH-SE-042", 2) => {
+            let want = [
+                "Recent Files",
+                "Recent Locations",
+                "Refactor This\u{2026}",
+                "Reformat Code",
+                "Reformat Code with Dependencies",
+                "Reformat File\u{2026}",
+                "Reload All from Disk",
+                "Rename\u{2026}",
+                "Rename File\u{2026}",
+                "Replace\u{2026}",
+                "Replace in Files\u{2026}",
+            ];
+            let acts: Vec<ActionCandidate> = want.iter().rev().map(|l| action(l, true)).collect();
+            let rows = search(
+                SearchTab::Actions,
+                "re",
+                &sources(&[], &[], &[], &acts, false),
+            );
+            let got: Vec<&str> = rows
+                .iter()
+                .map(|r| match &r.item {
+                    Hit::Action(a) => a.label.as_str(),
+                    _ => "",
+                })
+                .collect();
+            if got == want {
+                Outcome::Pass
+            } else {
+                fail(format!("{got:?}"))
+            }
+        }
+        ("SRCH-SE-040", 2) | ("SRCH-SE-043", 1) => {
+            let acts = [
+                action("Find in Files\u{2026}", true),
+                action("Find Next", true),
+            ];
+            let abbreviations = [("ff".to_owned(), "Find in Files\u{2026}".to_owned())];
+            let mut rows =
+                archipel_ide_core::quick_nav::abbreviation_hits("ff", &abbreviations, &acts);
+            rows.extend(search(
+                SearchTab::Actions,
+                "ff",
+                &sources(&[], &[], &[], &acts, false),
+            ));
+            match rows.first().map(|r| &r.item) {
+                Some(Hit::Action(a)) if a.label.starts_with("Find in Files") => Outcome::Pass,
+                other => fail(format!("{other:?}")),
+            }
+        }
+        ("SRCH-SE-031", 1) | ("SRCH-SE-016", 2) => {
+            let dir = tempfile::tempdir().unwrap();
+            let outside = tempfile::tempdir().unwrap();
+            std::fs::create_dir_all(dir.path().join("src")).unwrap();
+            std::fs::write(dir.path().join("src/A.java"), "x").unwrap();
+            std::fs::write(outside.path().join("notes.txt"), "x").unwrap();
+            let (typed, allowed) = if n == 1 {
+                (dir.path().join("src/A.java"), false)
+            } else {
+                (outside.path().join("notes.txt"), true)
+            };
+            let hit = archipel_ide_core::quick_nav::absolute_path_hit(
+                &typed.to_string_lossy(),
+                dir.path(),
+                allowed,
+                |p| p.exists(),
+            );
+            match hit {
+                Some(h) if h.weight == 15000 => Outcome::Pass,
+                other => fail(format!("{:?}", other.map(|h| h.weight))),
+            }
+        }
+        ("SRCH-SE-050", 2 | 3) | ("SRCH-SE-051", 1..=2) => navigate(case),
         _ => Outcome::NotRunnable(
             "Search Everywhere case that needs the window, a project with a language model or settings options",
         ),
+    }
+}
+
+/// Enter on a row: the rows' `open_commands` run against a real project (SRCH-SE-050, 051, 061).
+fn navigate(case: &Case) -> Outcome {
+    use archipel_ide_core::{IdeState, built_in_commands};
+    use serde_json::json;
+    let dir = tempfile::tempdir().unwrap();
+    let body: String = (1..=20)
+        .map(|i| format!("line {i} with needle\n"))
+        .collect();
+    for name in ["A.java", "B.java"] {
+        std::fs::write(dir.path().join(name), &body).unwrap();
+    }
+    let commands = built_in_commands();
+    let mut state = IdeState::default();
+    commands
+        .execute("project.open", &mut state, json!({"path": dir.path()}))
+        .unwrap();
+    let files = [entry("A.java"), entry("B.java")];
+    let typed = case.keys.split('\'').nth(1).unwrap_or("").to_owned();
+    let shift = case.keys.contains("Shift+Enter") && !case.keys.contains("Shift+Down");
+    let rows = search(
+        SearchTab::Files,
+        &typed,
+        &sources(&files, &[], &[], &[], false),
+    );
+    let take = if case.keys.contains("Shift+Down") {
+        2
+    } else {
+        1
+    };
+    let mut ran = 0;
+    for row in rows.iter().take(take) {
+        for (command, params) in row.item.open_commands(shift) {
+            if commands.execute(command, &mut state, params).is_ok() {
+                ran += 1;
+            }
+        }
+    }
+    if ran == 0 {
+        return fail("nothing opened");
+    }
+    let caret = state.caret_line_column();
+    match (case.id.as_str(), case.number) {
+        ("SRCH-SE-050", 2) => Outcome::Pass,
+        ("SRCH-SE-050", 3) => {
+            if state.documents().len() == 2 {
+                Outcome::Pass
+            } else {
+                fail("not both opened")
+            }
+        }
+        ("SRCH-SE-051", 1) => {
+            if caret == Some((12, 1)) {
+                Outcome::Pass
+            } else {
+                fail(format!("{caret:?}"))
+            }
+        }
+        ("SRCH-SE-051", 2) => {
+            if caret == Some((12, 5)) {
+                Outcome::Pass
+            } else {
+                fail(format!("{caret:?}"))
+            }
+        }
+        _ => Outcome::NotRunnable("needs the class model of a language"),
     }
 }

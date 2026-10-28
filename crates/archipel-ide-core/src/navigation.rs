@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// History entries kept per direction.
-const HISTORY_LIMIT: usize = 100;
+const HISTORY_LIMIT: usize = 150;
 /// Usages listed at most (the reference IDE also stops and warns).
 const USAGE_LIMIT: usize = 2_000;
 /// Files larger than this are not read to show a usage's line.
@@ -190,11 +190,17 @@ impl IdeState {
         let Some(place) = self.current_place() else {
             return;
         };
+        // Consecutive changes in the same place merge; other places stay (SRCH-HIS-003).
+        let line = self.place_line(&place);
+        let same_place = self
+            .navigation
+            .changes
+            .last()
+            .is_some_and(|last| last.path == place.path && self.place_line(last) == line);
         let changes = &mut self.navigation.changes;
-        if changes.last().is_some_and(|last| last.path == place.path) {
+        if same_place {
             changes.pop();
         }
-        changes.retain(|existing| existing.path != place.path);
         changes.push(place);
         if changes.len() > HISTORY_LIMIT {
             changes.remove(0);

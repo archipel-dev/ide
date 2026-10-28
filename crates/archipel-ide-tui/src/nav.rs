@@ -283,7 +283,7 @@ fn row_of(ranked: &Ranked<Hit>) -> PickerRow {
             row.footer = action.id.clone();
             row
         }
-        Hit::File { path, line } => {
+        Hit::File { path, line, .. } => {
             let mut row = PickerRow::new(
                 file_name(path),
                 Target::File {

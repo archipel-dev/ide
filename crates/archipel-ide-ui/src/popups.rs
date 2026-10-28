@@ -94,17 +94,6 @@ fn input_id() -> egui::Id {
     egui::Id::new("dialog_input")
 }
 
-/// Parses "line[:column]" (1-based) as typed into Go to Line.
-pub fn parse_line_column(input: &str) -> Option<(usize, Option<usize>)> {
-    let mut parts = input.trim().splitn(2, [':', ',']);
-    let line = parts.next()?.trim().parse::<usize>().ok()?;
-    let column = match parts.next() {
-        Some(column) if !column.trim().is_empty() => Some(column.trim().parse::<usize>().ok()?),
-        _ => None,
-    };
-    Some((line, column))
-}
-
 /// A modal dialog box near the top of the window, on the kit's dialog surface
 /// (`Surface::Dialog`: island radius, popup fill and border, dialog padding).
 pub(crate) fn popup_frame(
@@ -569,9 +558,8 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
             let mut submit = false;
             let caret = app
                 .state
-                .active_doc()
-                .and_then(|d| d.text.char_to_line_column(d.selections.primary().head).ok())
-                .map(|(l, c)| format!("{}:{}", l + 1, c + 1))
+                .caret_line_column()
+                .map(|(l, c)| archipel_ide_core::goto_line::prefill(l, c))
                 .unwrap_or_default();
             popup_frame(ctx, "dialog_goto", 300.0, |ui| {
                 title(ui, "Go to Line:Column");
@@ -581,12 +569,9 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                 );
             });
             if submit {
-                match parse_line_column(input) {
+                match app.state.goto_line_target(input) {
                     Some((line, column)) => {
-                        let mut params = json!({"line": line});
-                        if let Some(column) = column {
-                            params["column"] = json!(column);
-                        }
+                        let params = json!({"line": line, "column": column});
                         app.dispatch("editor.gotoLine", params);
                         ctx.memory_mut(|m| m.request_focus(crate::editor::editor_id()));
                         keep = false;
@@ -916,14 +901,5 @@ mod tests {
             });
         });
         assert!(submitted);
-    }
-
-    #[test]
-    fn parses_line_and_column() {
-        assert_eq!(parse_line_column("12"), Some((12, None)));
-        assert_eq!(parse_line_column(" 12:5 "), Some((12, Some(5))));
-        assert_eq!(parse_line_column("3,"), Some((3, None)));
-        assert_eq!(parse_line_column("x"), None);
-        assert_eq!(parse_line_column("4:y"), None);
     }
 }

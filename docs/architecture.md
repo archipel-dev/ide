@@ -114,7 +114,13 @@ show the old product name.
   server registry behind the `LanguageServerProvider` trait with PATH/`lsp.toml` discovery
   (`registry`), and `LspManager`, which starts servers lazily per workspace root and
   restarts crashed ones (`manager`). Uses `lsp-types`; no UI code. Popups live in
-  `archipel-ide-ui`. `archipel-fake-lsp` is a scriptable test server.
+  `archipel-ide-ui`. `archipel-fake-lsp` is a scriptable test server (`--pull-diagnostics`,
+  `--push-on-save-only`, `--log`). Diagnostics follow the unsaved text (PLAT-SAVE-110): an edit
+  is sent as a full-text `didChange` after a 100 ms quiet time (anything that talks to the
+  server, a save or a close sends it first), and a server that declares `diagnosticProvider` is
+  pulled with `textDocument/diagnostic` after it (and again on `workspace/diagnostic/refresh`);
+  pulled and pushed diagnostics of a file are merged. rust-analyzer serves its native
+  diagnostics only to a pulling client (its `cargo check` results are pushed after a save).
 - `archipel-ide-toolchains`: toolchain provisioning (language servers, JDKs/SDKs, build tools,
   debuggers, formatters). Component model and `ComponentProvider` catalog trait, version
   requests, resumable SHA-256-verified downloads through `HTTPS_PROXY`/`NO_PROXY`, safe

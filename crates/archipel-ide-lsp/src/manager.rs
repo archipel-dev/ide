@@ -257,6 +257,8 @@ pub struct LspManager {
     /// `ServiceReady` epochs of the live servers at the last poll.
     ready_seen: Vec<u64>,
     resolver: Option<Arc<dyn ProgramResolver>>,
+    /// How long an edit waits before the server gets it ([`crate::DEFAULT_CHANGE_DELAY`]).
+    change_delay: Duration,
 }
 
 /// Why completion was requested (LSP `CompletionTriggerKind`).
@@ -300,6 +302,19 @@ impl LspManager {
             diagnostics_generation: 0,
             ready_seen: Vec::new(),
             resolver: None,
+            change_delay: crate::DEFAULT_CHANGE_DELAY,
+        }
+    }
+
+    /// Sets how long an edit waits before it is sent to the servers as `didChange` (a burst
+    /// of typing is one change; a request, a save or a close sends it at once). Zero sends
+    /// every edit immediately. Applies to running servers too.
+    pub fn set_change_delay(&mut self, delay: Duration) {
+        self.change_delay = delay;
+        for server in &mut self.servers {
+            if let Some(service) = server.service.as_mut() {
+                service.set_change_delay(delay);
+            }
         }
     }
 
@@ -507,7 +522,9 @@ impl LspManager {
             settings: self.settings.servers.get(&key.server),
             resolver: self.resolver.as_deref(),
         })?;
-        LspService::launch(&config, &key.root)
+        let mut service = LspService::launch(&config, &key.root)?;
+        service.set_change_delay(self.change_delay);
+        Ok(service)
     }
 
     /// Pumps every server, restarts crashed ones and collects completion
@@ -839,7 +856,9 @@ impl LspManager {
     pub fn is_busy(&self) -> bool {
         self.servers.iter().any(|server| match &server.service {
             Some(service) => {
-                service.state() == ServerState::Starting || !service.progress().is_empty()
+                service.state() == ServerState::Starting
+                    || !service.progress().is_empty()
+                    || service.has_pending_work()
             }
             None => server.restart_at.is_some(),
         }) || self.completion.is_some()

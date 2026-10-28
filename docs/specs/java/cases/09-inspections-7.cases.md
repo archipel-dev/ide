@@ -1,0 +1,3152 @@
+# Cases for 09-inspections-catalog-7 (JAVA-ICC)
+
+Format: see `docs/specs/editor/cases/README.md`. Keys `inspect` mean: open the file with the inspection enabled (default profile
+plus the named inspection when it is off by default) and read the highlights. In `after` blocks, `problem: <level> <range text> "<message>"`
+lists a highlight; "no problem reported" means the inspection produces no highlight in the file. IDs in `{{...}}` are replaced
+by the requirement ID of the same short name.
+
+### JAVA-ICC-001 case 1: == on arrays becomes Arrays.equals
+settings: inspection ArrayEquality enabled
+language: java
+```before
+class A {
+  boolean f(int[] x, int[] y) { return x <caret>== y; }
+}
+```
+keys: Alt+Enter, choose "Replace with 'Arrays.equals()'"
+```after
+class A {
+  boolean f(int[] x, int[] y) { return java.util.Arrays.equals(x, y); }
+}
+```
+
+### JAVA-ICC-001 case 2: comparison with null is not reported
+settings: inspection ArrayEquality enabled
+language: java
+```before
+class A {
+  boolean f(int[] x) { return x <caret>== null; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-003 case 1: array passed to Objects.hash
+settings: default
+language: java
+```before
+import java.util.Objects;
+class A {
+  int f(String s, int[] a) { return Objects.hash(s, <caret>a); }
+}
+```
+keys: Alt+Enter, choose "Wrap with 'Arrays.hashCode()'"
+```after
+import java.util.Arrays;
+import java.util.Objects;
+class A {
+  int f(String s, int[] a) { return Objects.hash(s, Arrays.hashCode(a)); }
+}
+```
+
+### JAVA-ICC-003 case 2: hashCode on a list is fine
+settings: default
+language: java
+```before
+class A {
+  int f(java.util.List<String> l) { return l.<caret>hashCode(); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-004 case 1: Objects.equals on arrays
+settings: default
+language: java
+```before
+import java.util.Objects;
+class A {
+  boolean f(int[] a, int[] b) { return Objects.<caret>equals(a, b); }
+}
+```
+keys: Alt+Enter, choose "Replace with 'Arrays.equals()'"
+```after
+import java.util.Arrays;
+import java.util.Objects;
+class A {
+  boolean f(int[] a, int[] b) { return Arrays.equals(a, b); }
+}
+```
+
+### JAVA-ICC-004 case 2: Arrays.equals on one-dimensional array is fine
+settings: default
+language: java
+```before
+class A {
+  boolean f(int[] a, int[] b) { return java.util.Arrays.<caret>equals(a, b); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-005 case 1: increment inside assert
+settings: default
+language: java
+```before
+class A {
+  void f(int i) { assert <caret>i++ < 10; }
+}
+```
+keys: inspect
+```after
+problem: WARNING i++ "i++ has side effects: ..." (the text after the colon names the change)
+```
+
+### JAVA-ICC-005 case 2: pure condition
+settings: default
+language: java
+```before
+class A {
+  void f(int i) { assert <caret>i < 10; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-006 case 1: lambda captures this
+settings: language level 11
+language: java
+```before
+import java.lang.ref.Cleaner;
+class A {
+  int fd;
+  void f(Cleaner c) { c.<caret>register(this, () -> { fd = 0; }); }
+}
+```
+keys: inspect
+```after
+problem: WARNING the lambda "Runnable passed to Cleaner.register() captures 'this' reference"
+```
+
+### JAVA-ICC-006 case 2: static nested action
+settings: language level 11
+language: java
+```before
+import java.lang.ref.Cleaner;
+class A {
+  static class Act implements Runnable { public void run() {} }
+  void f(Cleaner c) { c.<caret>register(this, new Act()); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-007 case 1: cast to type unrelated to instanceof
+settings: inspection CastConflictsWithInstanceof enabled
+language: java
+```before
+class A {
+  int f(Object o) {
+    if (o instanceof CharSequence) { return ((<caret>Number) o).toString().length(); }
+    return 0;
+  }
+}
+```
+keys: Alt+Enter, choose "Replace 'Number' with 'CharSequence' in cast"
+```after
+class A {
+  int f(Object o) {
+    if (o instanceof CharSequence) { return ((CharSequence) o).toString().length(); }
+    return 0;
+  }
+}
+```
+
+### JAVA-ICC-007 case 2: cast to a subtype of the checked type
+settings: inspection CastConflictsWithInstanceof enabled
+language: java
+```before
+class A {
+  String f(Object o) {
+    if (o instanceof CharSequence) { return ((<caret>CharSequence) o).toString(); }
+    return "";
+  }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-008 case 1: cast of a final class to an unrelated interface
+settings: inspection CastToIncompatibleInterface enabled
+language: java
+```before
+final class C {}
+interface Z {}
+class A {
+  Object f(C c) { return (<caret>Z) c; }
+}
+```
+keys: inspect
+```after
+problem: WARNING Z "Cast of expression with type 'C' to incompatible interface Z"
+```
+
+### JAVA-ICC-008 case 2: cast of a non-final class to an interface
+settings: inspection CastToIncompatibleInterface enabled
+language: java
+```before
+class C {}
+interface Z {}
+class A {
+  Object f(C c) { return (<caret>Z) c; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+(a subclass of `C` could implement `Z`)
+
+### JAVA-ICC-009 case 1: getClass on a Class instance, remove the call
+settings: default
+language: java
+```before
+class A {
+  String f(Class<?> clazz) { return clazz.<caret>getClass().getName(); }
+}
+```
+keys: Alt+Enter, choose "Remove 'getClass()' call"
+```after
+class A {
+  String f(Class<?> clazz) { return clazz.getName(); }
+}
+```
+
+### JAVA-ICC-009 case 2: getClass on an object
+settings: default
+language: java
+```before
+class A {
+  String f(Object o) { return o.<caret>getClass().getName(); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-010 case 1: Class.newInstance
+settings: inspection ClassNewInstance enabled
+language: java
+```before
+class A {
+  Object f(Class<?> c) throws Exception { return c.<caret>newInstance(); }
+}
+```
+keys: Alt+Enter, choose "Replace with 'getConstructor().newInstance()'"
+```after
+class A {
+  Object f(Class<?> c) throws Exception { return c.getConstructor().newInstance(); }
+}
+```
+
+### JAVA-ICC-010 case 2: Constructor.newInstance
+settings: inspection ClassNewInstance enabled
+language: java
+```before
+class A {
+  Object f(java.lang.reflect.Constructor<?> c) throws Exception { return c.<caret>newInstance(); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-011 case 1: list.add(list)
+settings: default
+language: java
+```before
+import java.util.*;
+class A {
+  void f() { List list = new ArrayList(); list.<caret>add(list); }
+}
+```
+keys: inspect
+```after
+problem: WARNING list "'add()' called on collection list with itself as argument"
+```
+
+### JAVA-ICC-011 case 2: two different lists
+settings: default
+language: java
+```before
+import java.util.*;
+class A {
+  void f(List<Object> a, List<Object> b) { a.<caret>add(b); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-012 case 1: add the Javadoc note
+settings: inspection ComparableImplementedButEqualsNotOverridden enabled
+language: java
+```before
+class <caret>Length implements Comparable<Length> {
+  int cm;
+  public int compareTo(Length o) { return Integer.compare(cm, o.cm); }
+}
+```
+keys: Alt+Enter, choose "Add 'ordering inconsistent with equals' JavaDoc note"
+```after
+/**
+ * Note: this class has a natural ordering that is inconsistent with equals.
+ */
+class Length implements Comparable<Length> {
+  int cm;
+  public int compareTo(Length o) { return Integer.compare(cm, o.cm); }
+}
+```
+status: unverified (exact note wording and comment shape not in the bundle excerpt)
+
+### JAVA-ICC-012 case 2: equals is overridden
+settings: inspection ComparableImplementedButEqualsNotOverridden enabled
+language: java
+```before
+class <caret>Length implements Comparable<Length> {
+  int cm;
+  public int compareTo(Length o) { return Integer.compare(cm, o.cm); }
+  public boolean equals(Object o) { return o instanceof Length l && l.cm == cm; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-013 case 1: parameter never used
+settings: default
+language: java
+```before
+import java.util.Comparator;
+class A {
+  Comparator<String> c = new Comparator<>() {
+    public int compare(String a, String <caret>b) { return a.length() - a.length(); }
+  };
+}
+```
+keys: inspect
+```after
+problem: WARNING b "'compare()' parameter b is not used"
+```
+
+### JAVA-ICC-013 case 2: both parameters used
+settings: default
+language: java
+```before
+import java.util.Comparator;
+class A {
+  Comparator<String> c = new Comparator<>() {
+    public int <caret>compare(String a, String b) { return a.compareTo(b); }
+  };
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-014 case 1: compareTo() == 1
+settings: default
+language: java
+```before
+class A {
+  boolean f(String s1, String s2) { return s1.compareTo(s2) <caret>== 1; }
+}
+```
+keys: Alt+Enter, choose "Replace with '>'"
+```after
+class A {
+  boolean f(String s1, String s2) { return s1.compareTo(s2) > 0; }
+}
+```
+status: unverified (fix text is the `Replace with ''{0}''` template; `{0}` assumed to be the new operator form)
+
+### JAVA-ICC-014 case 2: comparison with zero
+settings: default
+language: java
+```before
+class A {
+  boolean f(String s1, String s2) { return s1.compareTo(s2) <caret>== 0; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-015 case 1: non-final field in compareTo, make it final
+settings: inspection CompareToUsesNonFinalVariable enabled
+language: java
+```before
+class Foo implements Comparable<Foo> {
+  private int index;
+  Foo(int i) { index = i; }
+  public int compareTo(Foo o) { return Integer.compare(this.<caret>index, o.index); }
+}
+```
+keys: Alt+Enter, choose "Make 'index' final"
+```after
+class Foo implements Comparable<Foo> {
+  private final int index;
+  Foo(int i) { index = i; }
+  public int compareTo(Foo o) { return Integer.compare(this.index, o.index); }
+}
+```
+
+### JAVA-ICC-015 case 2: final field
+settings: inspection CompareToUsesNonFinalVariable enabled
+language: java
+```before
+class Foo implements Comparable<Foo> {
+  private final int index = 1;
+  public int compareTo(Foo o) { return Integer.compare(this.<caret>index, o.index); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-016 case 1: instance main with array parameter (language level 17)
+settings: language level 17
+language: java
+```before
+class Main {
+  void <caret>main(String[] args) {}
+}
+```
+keys: inspect
+```after
+problem: WARNING main "Method main() does not have signature 'public static void main(String[])'"
+```
+
+### JAVA-ICC-016 case 2: correct signature
+settings: language level 17
+language: java
+```before
+class Main {
+  public static void <caret>main(String[] args) {}
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-017 case 1: assert true
+settings: inspection ConstantAssertCondition enabled
+language: java
+```before
+class A {
+  void f() { assert <caret>true; }
+}
+```
+keys: inspect
+```after
+problem: WARNING true "Assert condition true is constant"
+```
+
+### JAVA-ICC-017 case 2: variable condition
+settings: inspection ConstantAssertCondition enabled
+language: java
+```before
+class A {
+  void f(boolean b) { assert <caret>b; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-019 case 1: clause arity mismatch
+settings: default
+language: java
+```before
+import org.jetbrains.annotations.Contract;
+class A {
+  @Contract(<caret>"_ -> fail")
+  void x() { throw new AssertionError(); }
+}
+```
+keys: inspect
+```after
+problem: WARNING "_ -> fail" "Method takes 0 parameters, while contract clause '_ -> fail' expects 1"
+```
+
+### JAVA-ICC-019 case 2: matching contract
+settings: default
+language: java
+```before
+import org.jetbrains.annotations.Contract;
+class A {
+  @Contract(<caret>"_ -> fail")
+  void x(int a) { throw new AssertionError(); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-020 case 1: field not copied
+settings: default
+language: java
+```before
+class Point {
+  private int x; private int y;
+  Point(int x, int y) { this.x = x; this.y = y; }
+  <caret>Point(Point other) { this.x = other.x; }
+}
+```
+keys: inspect
+```after
+problem: WARNING Point "Copy constructor does not copy field 'y'"
+```
+
+### JAVA-ICC-020 case 2: transient and final-initialized fields are skipped
+settings: default
+language: java
+```before
+class Point {
+  private int x; private transient int cache; private final int k = 1;
+  <caret>Point(Point other) { this.x = other.x; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-021 case 1: equals(Foo)
+settings: inspection CovariantEquals enabled
+language: java
+```before
+class Foo {
+  public boolean <caret>equals(Foo foo) { return false; }
+}
+```
+keys: inspect
+```after
+problem: WARNING equals "equals() should take 'Object' as its argument"
+```
+
+### JAVA-ICC-021 case 2: an equals(Object) overload exists
+settings: inspection CovariantEquals enabled
+language: java
+```before
+class Bar {
+  public boolean <caret>equals(Bar bar) { return false; }
+  @Override public boolean equals(Object o) { return false; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-024 case 1: collect on an infinite stream
+settings: default
+language: java
+```before
+import java.util.stream.*;
+class A {
+  Object f() { return Stream.iterate(0, i -> i + 1).<caret>collect(Collectors.toList()); }
+}
+```
+keys: inspect
+```after
+problem: WARNING collect "Non-short-circuit operation consumes infinite stream"
+```
+
+### JAVA-ICC-024 case 2: limit before the terminal operation
+settings: default
+language: java
+```before
+import java.util.stream.*;
+class A {
+  Object f() { return Stream.iterate(0, i -> i + 1).limit(5).<caret>collect(Collectors.toList()); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-025 case 1: only hashCode overridden, generate equals
+settings: inspection EqualsAndHashcode enabled
+language: java
+```before
+class <caret>StringHolder {
+  String s;
+  @Override public int hashCode() { return s != null ? s.hashCode() : 0; }
+}
+```
+keys: Alt+Enter, choose "Generate 'equals()'", Enter (accept the dialog defaults)
+```after
+class StringHolder {
+  String s;
+  @Override public int hashCode() { return s != null ? s.hashCode() : 0; }
+  @Override public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    StringHolder that = (StringHolder) o;
+    return java.util.Objects.equals(s, that.s);
+  }
+}
+```
+status: unverified (the generated body depends on the generation dialog defaults)
+
+### JAVA-ICC-025 case 2: both overridden
+settings: inspection EqualsAndHashcode enabled
+language: java
+```before
+class <caret>P {
+  public boolean equals(Object o) { return o == this; }
+  public int hashCode() { return 1; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-027 case 1: StringBuilder.equals
+settings: default
+language: java
+```before
+class A {
+  boolean f(StringBuilder a, StringBuilder b) { return a.<caret>equals(b); }
+}
+```
+keys: Alt+Enter, choose "Replace with a comparison of 'toString()' call results"
+```after
+class A {
+  boolean f(StringBuilder a, StringBuilder b) { return a.toString().equals(b.toString()); }
+}
+```
+
+### JAVA-ICC-027 case 2: String.equals
+settings: default
+language: java
+```before
+class A {
+  boolean f(String a, String b) { return a.<caret>equals(b); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-028 case 1: non-final field in equals
+settings: inspection EqualsUsesNonFinalVariable enabled
+language: java
+```before
+class P {
+  private String name;
+  P(String n) { name = n; }
+  @Override public boolean equals(Object o) { return o instanceof P p && <caret>name.equals(p.name); }
+}
+```
+keys: inspect
+```after
+problem: WARNING name "Non-final field name accessed in 'equals()'"
+```
+
+### JAVA-ICC-028 case 2: final field
+settings: inspection EqualsUsesNonFinalVariable enabled
+language: java
+```before
+class P {
+  private final String name;
+  P(String n) { name = n; }
+  @Override public boolean equals(Object o) { return o instanceof P p && <caret>name.equals(p.name); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-029 case 1: cast without class check
+settings: default
+language: java
+```before
+class MyClass {
+  int x;
+  @Override public boolean <caret>equals(Object obj) { return ((MyClass) obj).x == x; }
+}
+```
+keys: inspect
+```after
+problem: WARNING equals "equals() should check the class of its parameter"
+```
+
+### JAVA-ICC-029 case 2: instanceof check
+settings: default
+language: java
+```before
+class MyClass {
+  int x;
+  @Override public boolean <caret>equals(Object obj) { return obj instanceof MyClass m && m.x == x; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-030 case 1: x.equals(x)
+settings: default
+language: java
+```before
+class A {
+  boolean f(Object o) { return o.<caret>equals(o); }
+}
+```
+keys: inspect
+```after
+problem: WARNING equals "equals() called on itself"
+```
+
+### JAVA-ICC-030 case 2: two different objects
+settings: default
+language: java
+```before
+class A {
+  boolean f(Object o, Object p) { return o.<caret>equals(p); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-031 case 1: a.length() == a.length()
+settings: default
+language: java
+```before
+class A {
+  boolean f(String left) { return left.length() <caret>== left.length(); }
+}
+```
+keys: inspect
+```after
+problem: WARNING == "Expression is compared to itself"
+```
+
+### JAVA-ICC-031 case 2: different operands
+settings: default
+language: java
+```before
+class A {
+  boolean f(String l, String r) { return l.length() <caret>== r.length(); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-032 case 1: non-final field in hashCode
+settings: inspection HashCodeUsesNonFinalVariable enabled
+language: java
+```before
+class Drink {
+  String name;
+  @Override public int hashCode() { return java.util.Objects.hash(<caret>name); }
+}
+```
+keys: Alt+Enter, choose "Make 'name' final"
+```after
+class Drink {
+  final String name;
+  @Override public int hashCode() { return java.util.Objects.hash(name); }
+}
+```
+(offered only while no other writes to the field exist; here the field has no writes)
+
+### JAVA-ICC-032 case 2: field is final
+settings: inspection HashCodeUsesNonFinalVariable enabled
+language: java
+```before
+class Drink {
+  final String name = "a";
+  @Override public int hashCode() { return <caret>name.hashCode(); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-034 case 1: println of an array
+settings: default
+language: java
+```before
+class A {
+  void print(Object[] objects) { System.out.println(<caret>objects); }
+}
+```
+keys: Alt+Enter, choose "Wrap with 'Arrays.toString()' expression"
+```after
+import java.util.Arrays;
+class A {
+  void print(Object[] objects) { System.out.println(Arrays.toString(objects)); }
+}
+```
+
+### JAVA-ICC-034 case 2: char array passed to println
+settings: default
+language: java
+```before
+class A {
+  void print(char[] cs) { System.out.println(<caret>cs); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+(`println(char[])` prints the characters)
+
+### JAVA-ICC-035 case 1: mixed tabs and spaces
+settings: default
+language: java
+```before
+class A {
+  String s = <caret>"""
+    red
+\t\tgreen
+    blue""";
+}
+```
+keys: Alt+Enter, choose "Indent text block with spaces only"
+```after
+class A {
+  String s = """
+    red
+    green
+    blue""";
+}
+```
+status: unverified (whitespace width conversion depends on the tab size)
+
+### JAVA-ICC-035 case 2: consistent indentation
+settings: default
+language: java
+```before
+class A {
+  String s = <caret>"""
+    red
+    green""";
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-036 case 1: illegal pattern letter
+settings: default
+language: java
+```before
+import java.time.format.DateTimeFormatter;
+class A {
+  Object f() { return DateTimeFormatter.ofPattern("<caret>TT"); }
+}
+```
+keys: inspect
+```after
+problem: WARNING T "Illegal pattern letter 'T'"
+```
+
+### JAVA-ICC-036 case 2: valid pattern
+settings: default
+language: java
+```before
+import java.time.format.DateTimeFormatter;
+class A {
+  Object f() { return DateTimeFormatter.ofPattern("<caret>yyyy-MM-dd"); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-036 case 3: too many letters
+settings: default
+language: java
+```before
+import java.time.format.DateTimeFormatter;
+class A {
+  Object f() { return DateTimeFormatter.ofPattern("<caret>MMMMMM"); }
+}
+```
+keys: inspect
+```after
+problem: WARNING MMMMMM "Too many consecutive pattern letters 'M'; maximum: 5; specified: 6"
+```
+
+### JAVA-ICC-037 case 1: unmatched brace
+settings: default
+language: java
+```before
+import java.text.MessageFormat;
+class A {
+  String f() { return MessageFormat.format("<caret>{0", 1); }
+}
+```
+keys: inspect
+```after
+problem: WARNING the pattern literal (unmatched brace)
+```
+status: unverified (message text not in the available source)
+
+### JAVA-ICC-037 case 2: argument not used
+settings: default
+language: java
+```before
+import java.text.MessageFormat;
+class A {
+  String f() { return MessageFormat.format("<caret>{0}", 1, 2); }
+}
+```
+keys: inspect
+```after
+problem: WARNING the argument 2 (the argument with index '1' is not used in the pattern)
+```
+status: unverified (message text not in the available source)
+
+### JAVA-ICC-039 case 1: rationalize
+settings: inspection InnerClassReferencedViaSubclass enabled
+language: java
+```before
+class Super { static class Inner {} }
+class Sub extends Super {
+  void test() { Sub.<caret>Inner s = new Sub.Inner(); }
+}
+```
+keys: Alt+Enter, choose "Rationalize inner class access"
+```after
+class Super { static class Inner {} }
+class Sub extends Super {
+  void test() { Super.Inner s = new Sub.Inner(); }
+}
+```
+(the fix acts on the reference under the caret; the second reference gets its own highlight)
+
+### JAVA-ICC-039 case 2: reference via declaring class
+settings: inspection InnerClassReferencedViaSubclass enabled
+language: java
+```before
+class Super { static class Inner {} }
+class Sub extends Super {
+  void test() { Super.<caret>Inner s = new Super.Inner(); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-040 case 1: final class vs unrelated interface
+settings: inspection InstanceofIncompatibleInterface enabled
+language: java
+```before
+final class Foo {}
+interface Bar {}
+class A {
+  boolean f(Foo f) { return f instanceof <caret>Bar; }
+}
+```
+keys: inspect
+```after
+problem: WARNING Bar "'instanceof' of expression with type 'Foo' with incompatible interface Bar"
+```
+
+### JAVA-ICC-040 case 2: non-final class
+settings: inspection InstanceofIncompatibleInterface enabled
+language: java
+```before
+class Foo {}
+interface Bar {}
+class A {
+  boolean f(Foo f) { return f instanceof <caret>Bar; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-041 case 1: new on utility class
+settings: default
+language: java
+```before
+class MyUtils { static double cube(double x) { return x * x * x; } }
+class A {
+  Object f() { return new <caret>MyUtils(); }
+}
+```
+keys: inspect
+```after
+problem: WARNING MyUtils "Instantiation of utility class MyUtils"
+```
+
+### JAVA-ICC-041 case 2: class with an instance method
+settings: default
+language: java
+```before
+class Helper { double cube(double x) { return x * x * x; } }
+class A {
+  Object f() { return new <caret>Helper(); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-042 case 1: Math::min as comparator
+settings: default
+language: java
+```before
+import java.util.*;
+class A {
+  void f(ArrayList<Integer> ints) { ints.sort(<caret>Math::min); }
+}
+```
+keys: Alt+Enter, choose "Replace with 'Comparator.reverseOrder()'"
+```after
+import java.util.*;
+class A {
+  void f(ArrayList<Integer> ints) { ints.sort(Comparator.reverseOrder()); }
+}
+```
+
+### JAVA-ICC-042 case 2: Integer::compare
+settings: default
+language: java
+```before
+import java.util.*;
+class A {
+  void f(ArrayList<Integer> ints) { ints.sort(<caret>Integer::compare); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-043 case 1: list passed to varargs
+settings: default
+language: java
+```before
+import java.util.*;
+class A {
+  <T> boolean contains(T needle, T... haystack) { return false; }
+  boolean f(List<String> l) { return contains("item", <caret>l); }
+}
+```
+keys: Alt+Enter, choose "Call 'toArray()'"
+```after
+import java.util.*;
+class A {
+  <T> boolean contains(T needle, T... haystack) { return false; }
+  boolean f(List<String> l) { return contains("item", l.toArray()); }
+}
+```
+status: unverified (exact toArray overload inserted)
+
+### JAVA-ICC-043 case 2: array passed
+settings: default
+language: java
+```before
+class A {
+  <T> boolean contains(T needle, T... haystack) { return false; }
+  boolean f(String[] a) { return contains("item", <caret>a); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-044 case 1: hasNext calls next
+settings: default
+language: java
+```before
+import java.util.Iterator;
+class MyIterator implements Iterator<Integer> {
+  public boolean hasNext() { return <caret>next() != null; }
+  public Integer next() { return 1; }
+}
+```
+keys: inspect
+```after
+problem: WARNING next "Iterator.hasNext() contains call to 'next()'"
+```
+
+### JAVA-ICC-044 case 2: hasNext without next
+settings: default
+language: java
+```before
+import java.util.Iterator;
+class MyIterator implements Iterator<Integer> {
+  int i;
+  public boolean hasNext() { return <caret>i < 3; }
+  public Integer next() { return i++; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-045 case 1: next returns null at end
+settings: inspection IteratorNextDoesNotThrowNoSuchElementException enabled
+language: java
+```before
+import java.util.Iterator;
+class Numbers implements Iterator<Integer> {
+  public boolean hasNext() { return false; }
+  public Integer <caret>next() { if (hasNext()) { return 1; } else { return null; } }
+}
+```
+keys: inspect
+```after
+problem: WARNING next "Iterator.next() which can't throw 'NoSuchElementException'"
+```
+
+### JAVA-ICC-045 case 2: throws
+settings: inspection IteratorNextDoesNotThrowNoSuchElementException enabled
+language: java
+```before
+import java.util.*;
+class Numbers implements Iterator<Integer> {
+  public boolean hasNext() { return false; }
+  public Integer <caret>next() { throw new NoSuchElementException(); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-048 case 1: cast before multiplication
+settings: default
+language: java
+```before
+class A {
+  int r = (int) Math.<caret>random() * 10;
+}
+```
+keys: Alt+Enter, choose "Add parentheses to perform multiplication before cast"
+```after
+class A {
+  int r = (int) (Math.random() * 10);
+}
+```
+
+### JAVA-ICC-048 case 2: multiplication first
+settings: default
+language: java
+```before
+class A {
+  int r = (int) (Math.<caret>random() * 10);
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-049 case 1: floor of int
+settings: default
+language: java
+```before
+class A {
+  double f(int i) { return Math.<caret>floor(i); }
+}
+```
+keys: Alt+Enter, choose "Simplify 'floor()' call"
+```after
+class A {
+  double f(int i) { return i; }
+}
+```
+
+### JAVA-ICC-049 case 2: floor of double
+settings: default
+language: java
+```before
+class A {
+  double f(double d) { return Math.<caret>floor(d); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-050 case 1: METHOD-only annotation with explicit accessor
+settings: language level 17
+language: java
+```before
+import java.lang.annotation.*;
+@Target(ElementType.METHOD) @interface A {}
+record R(@<caret>A int x) { public int x() { return x; } }
+```
+keys: inspect
+```after
+problem: WARNING A "Annotation has no effect: its target is METHOD but the corresponding accessor is explicitly declared"
+```
+
+### JAVA-ICC-050 case 2: accessor not declared
+settings: language level 17
+language: java
+```before
+import java.lang.annotation.*;
+@Target(ElementType.METHOD) @interface A {}
+record R(@<caret>A int x) {}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-051 case 1: written, never read
+settings: default
+language: java
+```before
+class A {
+  void f() { final int[] <caret>bar = new int[3]; bar[2] = 3; }
+}
+```
+keys: inspect
+```after
+problem: WARNING bar "Contents of array bar are written to, but never read"
+```
+
+### JAVA-ICC-051 case 2: written and read
+settings: default
+language: java
+```before
+class A {
+  int f() { final int[] <caret>bar = new int[3]; bar[2] = 3; return bar[2]; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-052 case 1: updated, never queried
+settings: default
+language: java
+```before
+import java.util.*;
+class A {
+  void f() { List<String> <caret>list = new ArrayList<>(); list.add("a"); }
+}
+```
+keys: inspect
+```after
+problem: WARNING list "Contents of collection list are updated, but never queried"
+```
+
+### JAVA-ICC-052 case 2: collection escapes
+settings: default
+language: java
+```before
+import java.util.*;
+class A {
+  List<String> f() { List<String> <caret>list = new ArrayList<>(); list.add("a"); return list; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-053 case 1: appended, never read
+settings: default
+language: java
+```before
+class A {
+  public void m1() { StringBuilder <caret>sb = new StringBuilder(); sb.append("a"); }
+}
+```
+keys: inspect
+```after
+problem: WARNING sb "Contents of StringBuilder sb are updated, but never queried"
+```
+
+### JAVA-ICC-053 case 2: read
+settings: default
+language: java
+```before
+class A {
+  public String m1() { StringBuilder <caret>sb = new StringBuilder(); sb.append("a"); return sb.toString(); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-054 case 1: lowercased then compared with uppercase
+settings: default
+language: java
+```before
+class A {
+  boolean f(String columnName) { return columnName.toLowerCase().<caret>equals("ID"); }
+}
+```
+keys: inspect
+```after
+problem: WARNING equals "Method 'equals()' always returns false: the argument contains an uppercase symbol while the qualifier doesn't contain uppercase symbols"
+```
+
+### JAVA-ICC-054 case 2: matching case
+settings: default
+language: java
+```before
+class A {
+  boolean f(String columnName) { return columnName.toLowerCase().<caret>equals("id"); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-055 case 1: equal() renamed
+settings: inspection MisspelledEquals enabled
+language: java
+```before
+class Main {
+  public boolean <caret>equal(Object obj) { return true; }
+}
+```
+keys: Alt+Enter, choose "Rename to 'equals'"
+```after
+class Main {
+  public boolean equals(Object obj) { return true; }
+}
+```
+
+### JAVA-ICC-055 case 2: no parameter
+settings: inspection MisspelledEquals enabled
+language: java
+```before
+class Main {
+  public boolean <caret>equal() { return true; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-056 case 1: new Object() == obj
+settings: default
+language: java
+```before
+class A {
+  boolean f(Object obj) { return new Object() <caret>== obj; }
+}
+```
+keys: Alt+Enter, choose "Replace '==' with 'equals()'"
+```after
+class A {
+  boolean f(Object obj) { return new Object().equals(obj); }
+}
+```
+status: unverified (fix is offered by the shared equality fix; name from its bundle template)
+
+### JAVA-ICC-056 case 2: comparison of two variables
+settings: default
+language: java
+```before
+class A {
+  boolean f(Object a, Object b) { return a <caret>== b; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+(the Object-comparison inspection is separate and has no marker by default)
+
+### JAVA-ICC-057 case 1: char argument
+settings: default
+language: java
+```before
+class A {
+  Object f() { return new <caret>StringBuilder('(').append("1"); }
+}
+```
+keys: Alt+Enter, choose "Replace char argument with String literal"
+```after
+class A {
+  Object f() { return new StringBuilder("(").append("1"); }
+}
+```
+
+### JAVA-ICC-057 case 2: int capacity
+settings: default
+language: java
+```before
+class A {
+  Object f() { return new <caret>StringBuilder(16); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-058 case 1: | on booleans
+settings: inspection NonShortCircuitBoolean enabled
+language: java
+```before
+class A {
+  boolean f(boolean x, boolean y) { return x <caret>| y; }
+}
+```
+keys: Alt+Enter, choose "Replace with short circuit expression"
+```after
+class A {
+  boolean f(boolean x, boolean y) { return x || y; }
+}
+```
+
+### JAVA-ICC-058 case 2: | on ints
+settings: inspection NonShortCircuitBoolean enabled
+language: java
+```before
+class A {
+  int f(int x, int y) { return x <caret>| y; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-060 case 1: Integer == Integer, safe fix
+settings: default
+language: java
+```before
+class A {
+  boolean f(Integer a, Integer b) { return a <caret>== b; }
+}
+```
+keys: Alt+Enter, choose "Replace '==' with null-safe 'equals()'"
+```after
+class A {
+  boolean f(Integer a, Integer b) { return java.util.Objects.equals(a, b); }
+}
+```
+status: unverified (exact replacement text of the null-safe fix)
+
+### JAVA-ICC-062 case 1: default toString
+settings: inspection ObjectToString enabled
+language: java
+```before
+class Bar {
+  String foo1(Bar bar) { return bar.<caret>toString(); }
+}
+```
+keys: inspect
+```after
+problem: WARNING bar "Call to default 'toString()' on bar"
+```
+
+### JAVA-ICC-062 case 2: receiver of type Object
+settings: inspection ObjectToString enabled
+language: java
+```before
+class Bar {
+  String foo2(Object obj) { return obj.<caret>toString(); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-064 case 1: ofNullable(null)
+settings: default
+language: java
+```before
+import java.util.Optional;
+class A {
+  Optional<String> f() { return Optional.<caret>ofNullable(null); }
+}
+```
+keys: Alt+Enter, choose "Replace with 'Optional.empty()'"
+```after
+import java.util.Optional;
+class A {
+  Optional<String> f() { return Optional.empty(); }
+}
+```
+status: unverified (fix name template)
+
+### JAVA-ICC-064 case 2: nullable parameter
+settings: default
+language: java
+```before
+import java.util.Optional;
+class A {
+  Optional<String> f(String s) { return Optional.<caret>ofNullable(s); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-065 case 1: wrong direction
+settings: default
+language: java
+```before
+class A {
+  void foo(int s) { for (int i = s; i > 12; <caret>i++) { System.out.println(i); } }
+}
+```
+keys: inspect
+```after
+problem: WARNING the loop header "Loop executes zero or billions of times"
+```
+
+### JAVA-ICC-065 case 2: correct direction
+settings: default
+language: java
+```before
+class A {
+  void foo(int s) { for (int i = s; i > 12; <caret>i--) { System.out.println(i); } }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-066 case 1: duplicate map key
+settings: default
+language: java
+```before
+import java.util.*;
+class A {
+  void f(Map<String, Integer> map) {
+    map.put("A", 1);
+    map.put("B", 2);
+    map.put(<caret>"A", 5);
+  }
+}
+```
+keys: inspect
+```after
+problem: WARNING "A" "Duplicate Map key"
+```
+
+### JAVA-ICC-066 case 2: different keys
+settings: default
+language: java
+```before
+import java.util.*;
+class A {
+  void f(Map<String, Integer> map) {
+    map.put("A", 1);
+    map.put(<caret>"B", 2);
+  }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-067 case 1: int[] to String.format
+settings: default
+language: java
+```before
+class A {
+  String f() { return String.format("%s", <caret>new int[]{1, 2, 3}); }
+}
+```
+keys: Alt+Enter, choose "Cast to 'Object'"
+```after
+class A {
+  String f() { return String.format("%s", (Object) new int[]{1, 2, 3}); }
+}
+```
+
+### JAVA-ICC-067 case 2: Integer[]
+settings: default
+language: java
+```before
+class A {
+  String f() { return String.format("%s", <caret>new Integer[]{1, 2, 3}); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+(that case is reported by the separate non-primitive varargs inspection; this one only handles primitive arrays)
+
+### JAVA-ICC-068 case 1: iterating an always-empty list
+settings: default
+language: java
+```before
+import java.util.*;
+class A {
+  void f() {
+    List<String> list = new ArrayList<>();
+    for (String s : <caret>list) { System.out.println(s); }
+  }
+}
+```
+keys: Alt+Enter, choose "Remove loop"
+```after
+import java.util.*;
+class A {
+  void f() {
+    List<String> list = new ArrayList<>();
+  }
+}
+```
+
+### JAVA-ICC-068 case 2: list filled first
+settings: default
+language: java
+```before
+import java.util.*;
+class A {
+  void f() {
+    List<String> list = new ArrayList<>();
+    list.add("a");
+    for (String s : <caret>list) { System.out.println(s); }
+  }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-069 case 1: SOURCE retention
+settings: default
+language: java
+```before
+import java.lang.annotation.*;
+@Retention(RetentionPolicy.SOURCE) @interface SourceAnnotation {}
+class A {
+  boolean f() { return getClass().isAnnotationPresent(<caret>SourceAnnotation.class); }
+}
+```
+keys: inspect
+```after
+problem: WARNING SourceAnnotation.class "Annotation 'SourceAnnotation' is not retained for reflective access"
+```
+status: unverified (exact highlighted range: class literal or its type element)
+
+### JAVA-ICC-069 case 2: RUNTIME retention
+settings: default
+language: java
+```before
+import java.lang.annotation.*;
+@Retention(RetentionPolicy.RUNTIME) @interface RtAnnotation {}
+class A {
+  boolean f() { return getClass().isAnnotationPresent(<caret>RtAnnotation.class); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-070 case 1: replaceAll(".")
+settings: default
+language: java
+```before
+class A {
+  String f(String s) { return s.replaceAll(<caret>".", "-"); }
+}
+```
+keys: Alt+Enter, choose "Escape regex meta character"
+```after
+class A {
+  String f(String s) { return s.replaceAll("\\.", "-"); }
+}
+```
+
+### JAVA-ICC-070 case 2: escaped dot
+settings: default
+language: java
+```before
+class A {
+  String f(String s) { return s.replaceAll(<caret>"\\.", "-"); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-071 case 1: new as statement
+settings: inspection ResultOfObjectAllocationIgnored enabled
+language: java
+```before
+class A {
+  void f() { new <caret>Object(); }
+}
+```
+keys: inspect
+```after
+problem: WARNING Object "Result of new Object() is ignored"
+```
+
+### JAVA-ICC-071 case 2: assigned
+settings: inspection ResultOfObjectAllocationIgnored enabled
+language: java
+```before
+class A {
+  void f() { Object o = new <caret>Object(); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-072 case 1: getString(0)
+settings: inspection ResultSetIndexZero enabled
+language: java
+```before
+import java.sql.*;
+class A {
+  String f(ResultSet rs) throws SQLException { return rs.getString(<caret>0); }
+}
+```
+keys: inspect
+```after
+problem: WARNING 0 "Use of index '0' in JDBC ResultSet"
+```
+
+### JAVA-ICC-072 case 2: getString(1)
+settings: inspection ResultSetIndexZero enabled
+language: java
+```before
+import java.sql.*;
+class A {
+  String f(ResultSet rs) throws SQLException { return rs.getString(<caret>1); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-073 case 1: reassigning the varargs parameter
+settings: default
+language: java
+```before
+class A {
+  @SafeVarargs public final <T> void test(T[] tt, T... t) { <caret>t = tt; }
+}
+```
+keys: inspect
+```after
+problem: WARNING t "@SafeVarargs do not suppress potentially unsafe operations"
+```
+
+### JAVA-ICC-073 case 2: only reading the parameter
+settings: default
+language: java
+```before
+class A {
+  @SafeVarargs public final <T> void test(T... t) { System.out.println(<caret>t[0]); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-074 case 1: constructor with 0
+settings: default
+language: java
+```before
+import java.util.concurrent.*;
+class A {
+  Object f() { return new ScheduledThreadPoolExecutor(<caret>0); }
+}
+```
+keys: inspect
+```after
+problem: WARNING 0 "'ScheduledThreadPoolExecutor' should not have zero core threads"
+```
+
+### JAVA-ICC-074 case 2: positive pool size
+settings: default
+language: java
+```before
+import java.util.concurrent.*;
+class A {
+  Object f() { return new ScheduledThreadPoolExecutor(<caret>2); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-075 case 1: TreeSet of non-comparable
+settings: default
+language: java
+```before
+import java.util.*;
+class Foo {}
+class A {
+  Object f() { return <caret>new TreeSet<Foo>(); }
+}
+```
+keys: inspect
+```after
+problem: WARNING new TreeSet<Foo>() "Construction of sorted collection with non-comparable elements"
+```
+
+### JAVA-ICC-075 case 2: with a comparator
+settings: default
+language: java
+```before
+import java.util.*;
+class Foo {}
+class A {
+  Object f() { return <caret>new TreeSet<Foo>((a, b) -> 0); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-076 case 1: rationalize
+settings: inspection StaticCallOnSubclass enabled
+language: java
+```before
+class Parent { public static void print(String s) {} }
+class Child extends Parent {}
+class A {
+  void f() { Child.<caret>print("Hello"); }
+}
+```
+keys: Alt+Enter, choose "Rationalize static method call"
+```after
+class Parent { public static void print(String s) {} }
+class Child extends Parent {}
+class A {
+  void f() { Parent.print("Hello"); }
+}
+```
+
+### JAVA-ICC-076 case 2: via declaring class
+settings: inspection StaticCallOnSubclass enabled
+language: java
+```before
+class Parent { public static void print(String s) {} }
+class A {
+  void f() { Parent.<caret>print("Hello"); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-077 case 1: rationalize
+settings: inspection StaticFieldReferenceOnSubclass enabled
+language: java
+```before
+class Parent { static int foo = 0; }
+class Child extends Parent {}
+class A {
+  int f() { return Child.<caret>foo; }
+}
+```
+keys: Alt+Enter, choose "Rationalize static field access"
+```after
+class Parent { static int foo = 0; }
+class Child extends Parent {}
+class A {
+  int f() { return Parent.foo; }
+}
+```
+
+### JAVA-ICC-077 case 2: via declaring class
+settings: inspection StaticFieldReferenceOnSubclass enabled
+language: java
+```before
+class Parent { static int foo = 0; }
+class A {
+  int f() { return Parent.<caret>foo; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-078 case 1: non-constant concatenation
+settings: default
+language: java
+```before
+class A {
+  static String f(String userName) { return String.<caret>format("Hello, " + userName); }
+}
+```
+keys: inspect
+```after
+problem: WEAK WARNING format "'format()' call has a String concatenation argument"
+```
+
+### JAVA-ICC-078 case 2: constant concatenation
+settings: default
+language: java
+```before
+class A {
+  static String f(String userName) { return String.<caret>format("Hello, " + "%s", userName); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-079 case 1: concatenation as pattern
+settings: default
+language: java
+```before
+import java.text.MessageFormat;
+class A {
+  String f(String userName, int balance) { return MessageFormat.format(<caret>"Hello, " + userName + "! Balance {0}.", balance); }
+}
+```
+keys: Alt+Enter, choose "Replace concatenation with separate argument"
+```after
+import java.text.MessageFormat;
+class A {
+  String f(String userName, int balance) { return MessageFormat.format("Hello, {0}! Balance {1}.", userName, balance); }
+}
+```
+status: unverified (placeholder renumbering of existing arguments as in the description example)
+
+### JAVA-ICC-079 case 2: constant pattern
+settings: default
+language: java
+```before
+import java.text.MessageFormat;
+class A {
+  String f(int balance) { return MessageFormat.format(<caret>"Balance {0}.", balance); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-080 case 1: literals touching
+settings: inspection StringConcatenationMissingWhitespace enabled
+language: java
+```before
+class A {
+  String sql = "SELECT column" <caret>+ "FROM table";
+}
+```
+keys: inspect
+```after
+problem: WARNING + "Whitespace may be missing in string concatenation"
+```
+
+### JAVA-ICC-080 case 2: space present
+settings: inspection StringConcatenationMissingWhitespace enabled
+language: java
+```before
+class A {
+  String sql = "SELECT column " <caret>+ "FROM table";
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-082 case 1: String.equals(CharSequence)
+settings: default
+language: java
+```before
+class A {
+  boolean f(String s, CharSequence ch) { return s.<caret>equals(ch); }
+}
+```
+keys: Alt+Enter, choose "Replace with 'contentEquals()'"
+```after
+class A {
+  boolean f(String s, CharSequence ch) { return s.contentEquals(ch); }
+}
+```
+
+### JAVA-ICC-082 case 2: String argument
+settings: default
+language: java
+```before
+class A {
+  boolean f(String s, String t) { return s.<caret>equals(t); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-083 case 1: duplicated delimiter
+settings: default
+language: java
+```before
+import java.util.StringTokenizer;
+class A {
+  Object f(String text) { return new StringTokenizer(text, <caret>"\n\n"); }
+}
+```
+keys: Alt+Enter, choose "Remove duplication from 'delimiters' argument"
+```after
+import java.util.StringTokenizer;
+class A {
+  Object f(String text) { return new StringTokenizer(text, "\n"); }
+}
+```
+
+### JAVA-ICC-083 case 2: unique delimiters
+settings: default
+language: java
+```before
+import java.util.StringTokenizer;
+class A {
+  Object f(String text) { return new StringTokenizer(text, <caret>"\n\t"); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-084 case 1: int subtraction
+settings: inspection SubtractionInCompareTo enabled
+language: java
+```before
+class P implements Comparable<P> {
+  int v;
+  public int compareTo(P o) { return v <caret>- o.v; }
+}
+```
+keys: inspect
+```after
+problem: WARNING v - o.v "Subtraction v - o.v in 'compareTo()' may result in overflow or precision loss"
+```
+
+### JAVA-ICC-084 case 2: Integer.compare
+settings: inspection SubtractionInCompareTo enabled
+language: java
+```before
+class P implements Comparable<P> {
+  int v;
+  public int compareTo(P o) { return <caret>Integer.compare(v, o.v); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-085 case 1: Number[] to Long[]
+settings: inspection SuspiciousArrayCast enabled
+language: java
+```before
+class A {
+  Long[] f(Number[] numbers) { return (<caret>Long[]) numbers; }
+}
+```
+keys: inspect
+```after
+problem: WARNING Long[] "Suspicious cast to Long[]"
+```
+
+### JAVA-ICC-085 case 2: widening
+settings: inspection SuspiciousArrayCast enabled
+language: java
+```before
+class A {
+  Number[] f(Long[] longs) { return (<caret>Number[]) longs; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-086 case 1: wrong element type
+settings: default
+language: java
+```before
+import java.util.Arrays;
+class A {
+  int foo(String[] strings) { return Arrays.binarySearch(strings, <caret>1); }
+}
+```
+keys: inspect
+```after
+problem: WARNING 1 "Element type is not compatible with array type"
+```
+
+### JAVA-ICC-086 case 2: matching element type
+settings: default
+language: java
+```before
+import java.util.Arrays;
+class A {
+  int foo(String[] strings) { return Arrays.binarySearch(strings, <caret>"a"); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-087 case 1: YYYY
+settings: default
+language: java
+```before
+import java.text.SimpleDateFormat;
+class A {
+  Object f() { return new SimpleDateFormat("<caret>YYYY-MM-dd"); }
+}
+```
+keys: Alt+Enter, choose "Replace 'Y' with 'y'"
+```after
+import java.text.SimpleDateFormat;
+class A {
+  Object f() { return new SimpleDateFormat("yyyy-MM-dd"); }
+}
+```
+status: unverified (fix text is the `Replace ''{0}'' with ''{1}''` template; the replaced token may be `YYYY`)
+
+### JAVA-ICC-087 case 2: yyyy
+settings: default
+language: java
+```before
+import java.text.SimpleDateFormat;
+class A {
+  Object f() { return new SimpleDateFormat("<caret>yyyy-MM-dd"); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-088 case 1: indented follow-up statement
+settings: default
+language: java
+```before
+class Bar {
+  void foo(int i) {
+    if (i == 42)
+      System.out.println("answer");
+      <caret>System.out.println("question");
+  }
+}
+```
+keys: inspect
+```after
+problem: WARNING System.out.println("question") "Suspicious indentation after 'if' statement"
+```
+status: unverified (exact highlighted range)
+
+### JAVA-ICC-088 case 2: aligned with the if
+settings: default
+language: java
+```before
+class Bar {
+  void foo(int i) {
+    if (i == 42)
+      System.out.println("answer");
+    <caret>System.out.println("question");
+  }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-089 case 1: x *= 3/2
+settings: default
+language: java
+```before
+class A {
+  void f() { int x = 18; x *= <caret>3/2; }
+}
+```
+keys: Alt+Enter, choose "Cast to double"
+```after
+class A {
+  void f() { int x = 18; x *= 3.0/2; }
+}
+```
+status: unverified (the fix may produce `(double) 3 / 2`)
+
+### JAVA-ICC-089 case 2: floating point already
+settings: default
+language: java
+```before
+class A {
+  void f() { int x = 18; x *= <caret>3.0/2; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-090 case 1: handler ignores method
+settings: default
+language: java
+```before
+import java.lang.reflect.*;
+class A {
+  InvocationHandler h = <caret>(proxy, method, params) -> { System.out.println("Hello"); return null; };
+}
+```
+keys: inspect
+```after
+problem: WARNING the lambda "Method is never used in 'invoke()': it's unlikely that 'hashCode()', 'equals()' and 'toString()' are implemented correctly"
+```
+status: unverified (exact range)
+
+### JAVA-ICC-090 case 2: handler dispatches on method
+settings: default
+language: java
+```before
+import java.lang.reflect.*;
+class A {
+  InvocationHandler h = <caret>(proxy, method, params) -> method.invoke(this, params);
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-091 case 1: remove(i) in ascending loop
+settings: default
+language: java
+```before
+import java.util.*;
+class A {
+  static void process(List<String> list) {
+    for (int i = 0; i < list.size(); i++) {
+      if (list.get(i).equals("|")) { list.<caret>remove(i); continue; }
+    }
+  }
+}
+```
+keys: inspect
+```after
+problem: WARNING remove "Suspicious 'List.remove()' in loop"
+```
+
+### JAVA-ICC-091 case 2: remove then break
+settings: default
+language: java
+```before
+import java.util.*;
+class A {
+  static void process(List<String> list) {
+    for (int i = 0; i < list.size(); i++) {
+      if (list.get(i).equals("|")) { list.<caret>remove(i); break; }
+    }
+  }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-093 case 1: x used as y
+settings: default
+language: java
+```before
+class A {
+  void f() { int x = 0; int y = <caret>x; }
+}
+```
+keys: inspect
+```after
+problem: WARNING x "Suspicious variable/parameter name combination" (the message names the groups of 'y' and 'x')
+```
+status: unverified (message text built from the group names)
+
+### JAVA-ICC-093 case 2: same group
+settings: default
+language: java
+```before
+class A {
+  void f() { int x = 0; int left = <caret>x; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-094 case 1: return of a byte
+settings: default
+language: java
+```before
+import java.io.InputStream;
+class MyInputStream extends InputStream {
+  int pos; byte[] data = new byte[1];
+  @Override public int read() {
+    if (pos == data.length) { return -1; }
+    return <caret>data[pos++];
+  }
+}
+```
+keys: Alt+Enter, choose "Convert to an unsigned byte"
+```after
+import java.io.InputStream;
+class MyInputStream extends InputStream {
+  int pos; byte[] data = new byte[1];
+  @Override public int read() {
+    if (pos == data.length) { return -1; }
+    return data[pos++] & 0xFF;
+  }
+}
+```
+
+### JAVA-ICC-094 case 2: masked
+settings: default
+language: java
+```before
+import java.io.InputStream;
+class MyInputStream extends InputStream {
+  int pos; byte[] data = new byte[1];
+  @Override public int read() { return <caret>data[pos++] & 0xFF; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-095 case 1: intersecting ranges in same array
+settings: default
+language: java
+```before
+class A {
+  void foo() { int[] src = new int[] { 1, 2, 3, 4 }; System.arraycopy(src, 0, <caret>src, 1, 2); }
+}
+```
+keys: inspect
+```after
+problem: WARNING src "Copying to the same array with intersecting ranges"
+```
+status: unverified (highlighted argument)
+
+### JAVA-ICC-095 case 2: non-array argument
+settings: default
+language: java
+```before
+class A {
+  void foo(String s, int[] d) { System.arraycopy(<caret>s, 0, d, 0, 1); }
+}
+```
+keys: inspect
+```after
+problem: WARNING s "s is not of an array type"
+```
+
+### JAVA-ICC-096 case 1: mixed branches
+settings: default
+language: java
+```before
+class A {
+  static void bar(boolean flag) {
+    Object[] a = {1, 2}; Object b = "hello";
+    foo(<caret>flag ? a : b);
+  }
+  static void foo(Object... obj) {}
+}
+```
+keys: Alt+Enter, choose "Wrap in array initializer"
+```after
+class A {
+  static void bar(boolean flag) {
+    Object[] a = {1, 2}; Object b = "hello";
+    foo(flag ? a : new Object[]{b});
+  }
+  static void foo(Object... obj) {}
+}
+```
+
+### JAVA-ICC-096 case 2: both array branches
+settings: default
+language: java
+```before
+class A {
+  static void bar(boolean flag) {
+    Object[] a = {1, 2}; Object[] b = {3};
+    foo(<caret>flag ? a : b);
+  }
+  static void foo(Object... obj) {}
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-097 case 1: wrong array type
+settings: default
+language: java
+```before
+import java.util.*;
+class A {
+  Number[] m2(List<Number> list) { return list.toArray(<caret>new String[0]); }
+}
+```
+keys: inspect
+```after
+problem: WARNING new String[0] "Array of type 'Number[]' expected, 'String[]' found"
+```
+
+### JAVA-ICC-097 case 2: matching type
+settings: default
+language: java
+```before
+import java.util.*;
+class A {
+  Number[] m2(List<Number> list) { return list.toArray(<caret>new Number[0]); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-098 case 1: typo label
+settings: default
+language: java
+```before
+class A {
+  void f(int x) {
+    switch (x) {
+      case 1:
+      <caret>case2:
+      case 3: break;
+    }
+  }
+}
+```
+keys: inspect
+```after
+problem: WARNING case2 "Text label case2: in 'switch' statement"
+```
+
+### JAVA-ICC-098 case 2: proper case
+settings: default
+language: java
+```before
+class A {
+  void f(int x) {
+    switch (x) {
+      case 1:
+      <caret>case 2:
+      case 3: break;
+    }
+  }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-100 case 1: statement after System.exit
+settings: inspection UnreachableCode enabled
+language: java
+```before
+class A {
+  void finishApplication() {
+    System.exit(0);
+    <caret>System.out.println("Application is terminated");
+  }
+}
+```
+keys: inspect
+```after
+problem: WARNING System.out.println("Application is terminated"); (unreachable text style) 
+```
+status: unverified (System.exit contract inference)
+
+### JAVA-ICC-100 case 2: reachable statement
+settings: inspection UnreachableCode enabled
+language: java
+```before
+class A {
+  void finish(boolean b) {
+    if (b) System.exit(0);
+    <caret>System.out.println("maybe");
+  }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-101 case 1: returns -1 where @Range(from = 0, to = 10)
+settings: default
+language: java
+```before
+import org.jetbrains.annotations.Range;
+class A {
+  @Range(from = 0, to = 10) int f() { return <caret>-1; }
+}
+```
+keys: inspect
+```after
+problem: WARNING -1 "Return value '-1' is outside of declared range '0..10'"
+```
+status: unverified (range text format)
+
+### JAVA-ICC-101 case 2: inside range
+settings: default
+language: java
+```before
+import org.jetbrains.annotations.Range;
+class A {
+  @Range(from = 0, to = 10) int f() { return <caret>5; }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-102 case 1: LocalTime.get(YEAR)
+settings: default
+language: java
+```before
+import java.time.*; import java.time.temporal.ChronoField;
+class A {
+  int f(LocalTime t) { return t.get(ChronoField.<caret>YEAR); }
+}
+```
+keys: inspect
+```after
+problem: WARNING YEAR "Unsupported argument value: YEAR"
+```
+status: unverified (exact range: constant or qualified reference)
+
+### JAVA-ICC-102 case 2: supported field
+settings: default
+language: java
+```before
+import java.time.*; import java.time.temporal.ChronoField;
+class A {
+  int f(LocalTime t) { return t.get(ChronoField.<caret>HOUR_OF_DAY); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-104 case 1: put on Properties
+settings: inspection UseOfPropertiesAsHashtable enabled
+language: java
+```before
+import java.util.Properties;
+class A {
+  void f(Properties props) { props.<caret>put("hello", "world"); }
+}
+```
+keys: Alt+Enter, choose "Replace with 'setProperty'"
+```after
+import java.util.Properties;
+class A {
+  void f(Properties props) { props.setProperty("hello", "world"); }
+}
+```
+status: unverified (fix name is the `Replace with ''{0}''` template)
+
+### JAVA-ICC-104 case 2: setProperty
+settings: inspection UseOfPropertiesAsHashtable enabled
+language: java
+```before
+import java.util.Properties;
+class A {
+  void f(Properties props) { props.<caret>setProperty("hello", "world"); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-105 case 1: checked but unused
+settings: inspection VariableNotUsedInsideIf enabled
+language: java
+```before
+class A {
+  void test(Integer i) { if (<caret>i != null) { System.out.println(); } }
+}
+```
+keys: inspect
+```after
+problem: WARNING i "i checked for 'null' is not used inside 'if'"
+```
+
+### JAVA-ICC-105 case 2: used
+settings: inspection VariableNotUsedInsideIf enabled
+language: java
+```before
+class A {
+  void test(Integer i) { if (<caret>i != null) { System.out.println(i); } }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-106 case 1: AtomicReference only set
+settings: default
+language: java
+```before
+import java.util.concurrent.atomic.AtomicReference;
+class A {
+  void f() { AtomicReference<String> <caret>ref = new AtomicReference<>(); ref.set("hello"); }
+}
+```
+keys: inspect
+```after
+problem: WARNING ref "Write-only object"
+```
+
+### JAVA-ICC-106 case 2: read back
+settings: default
+language: java
+```before
+import java.util.concurrent.atomic.AtomicReference;
+class A {
+  String f() { AtomicReference<String> <caret>ref = new AtomicReference<>(); ref.set("hello"); return ref.get(); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-108 case 1: key missing from the bundle
+settings: bundle `Messages.properties` contains `hello=Hello`
+language: java
+```before
+import org.jetbrains.annotations.PropertyKey;
+class A {
+  static String msg(@PropertyKey(resourceBundle = "Messages") String key) { return key; }
+  String f() { return msg("<caret>bye"); }
+}
+```
+keys: inspect
+```after
+problem: ERROR "bye" "String literal 'bye' doesn't appear to be valid property key"
+```
+
+### JAVA-ICC-108 case 2: existing key
+settings: bundle `Messages.properties` contains `hello=Hello`
+language: java
+```before
+import org.jetbrains.annotations.PropertyKey;
+class A {
+  static String msg(@PropertyKey(resourceBundle = "Messages") String key) { return key; }
+  String f() { return msg("<caret>hello"); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-109 case 1: character outside ISO-8859-1
+settings: file `a.properties` with encoding ISO-8859-1
+language: plain
+```before
+key=<caret>日本語
+```
+keys: inspect
+```after
+problem: WARNING 日本語 "Unsupported characters for the charset 'ISO-8859-1'"
+```
+status: unverified (range and file-type scope)
+
+### JAVA-ICC-109 case 2: ASCII only
+settings: file `a.properties` with encoding ISO-8859-1
+language: plain
+```before
+key=<caret>value
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-110 case 1: package not exported
+settings: language level 9; module `app` requires `lib`; `lib` does not export `lib.internal`
+language: java
+```before
+class A {
+  Class<?> f() throws Exception { return Class.forName(<caret>"lib.internal.Impl"); }
+}
+```
+keys: inspect
+```after
+problem: WARNING "lib.internal.Impl" "The module 'lib' does not export the package 'lib.internal' to the module 'app'"
+```
+
+### JAVA-ICC-110 case 2: class in the same module
+settings: language level 9
+language: java
+```before
+class A {
+  Class<?> f() throws Exception { return Class.forName(<caret>"A"); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-111 case 1: findVirtual to a missing method
+settings: default
+language: java
+```before
+import java.lang.invoke.*;
+class MyClass { void foo(int i) {} }
+class A {
+  MethodHandle f() throws Exception {
+    return MethodHandles.lookup().findVirtual(MyClass.class, <caret>"bar", MethodType.methodType(void.class, int.class));
+  }
+}
+```
+keys: inspect
+```after
+problem: WARNING "bar" "Cannot resolve method 'bar'"
+```
+
+### JAVA-ICC-111 case 2: existing method
+settings: default
+language: java
+```before
+import java.lang.invoke.*;
+class MyClass { void foo(int i) {} }
+class A {
+  MethodHandle f() throws Exception {
+    return MethodHandles.lookup().findVirtual(MyClass.class, <caret>"foo", MethodType.methodType(void.class, int.class));
+  }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-112 case 1: wrong number of arguments
+settings: default
+language: java
+```before
+import java.lang.reflect.Method;
+class A {
+  void f(Object o) throws Exception {
+    Method m = o.getClass().getMethod("myMethod", int.class);
+    m.invoke(o<caret>);
+  }
+}
+```
+keys: inspect
+```after
+problem: WARNING the arguments of invoke "Reflectively called method requires one argument"
+```
+status: unverified (exact range)
+
+### JAVA-ICC-112 case 2: matching call
+settings: default
+language: java
+```before
+import java.lang.reflect.Method;
+class A {
+  void f(Object o) throws Exception {
+    Method m = o.getClass().getMethod("myMethod", int.class);
+    m.invoke(o, <caret>1);
+  }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-113 case 1: getField for a non-public field, use getDeclaredField
+settings: default
+language: java
+```before
+class A {
+  java.lang.reflect.Field f() throws NoSuchFieldException { return String.class.getField(<caret>"hash"); }
+}
+```
+keys: Alt+Enter, choose "Use 'getDeclaredField'"
+```after
+class A {
+  java.lang.reflect.Field f() throws NoSuchFieldException { return String.class.getDeclaredField("hash"); }
+}
+```
+
+### JAVA-ICC-113 case 2: public field
+settings: default
+language: java
+```before
+class A {
+  java.lang.reflect.Field f() throws NoSuchFieldException { return Integer.class.getField(<caret>"MAX_VALUE"); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-114 case 1: see JAVA-INS-056
+settings: default
+language: java
+```before
+import java.io.*;
+class A {
+  int f(File file) throws IOException { InputStream in = new <caret>FileInputStream(file); return in.read(); }
+}
+```
+keys: inspect
+```after
+problem: WARNING FileInputStream "'FileInputStream' used without 'try'-with-resources statement"
+```
+
+### JAVA-ICC-114 case 2: try-with-resources
+settings: default
+language: java
+```before
+import java.io.*;
+class A {
+  int f(File file) throws IOException { try (InputStream in = new <caret>FileInputStream(file)) { return in.read(); } }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-115 case 1: socket channel not closed
+settings: inspection ChannelResource enabled
+language: java
+```before
+import java.net.*; import java.io.*; import java.nio.*; import java.nio.channels.*;
+class A {
+  void send(Socket socket) throws IOException { SocketChannel channel = socket.<caret>getChannel(); channel.write(ByteBuffer.wrap(new byte[0])); }
+}
+```
+keys: inspect
+```after
+problem: WARNING getChannel "'SocketChannel' should be opened in front of a 'try' block and closed in the corresponding 'finally' block"
+```
+status: unverified (the {0} text; probably the expression text)
+
+### JAVA-ICC-115 case 2: closed in finally
+settings: inspection ChannelResource enabled
+language: java
+```before
+import java.net.*; import java.io.*; import java.nio.channels.*;
+class A {
+  void send(Socket socket) throws IOException {
+    SocketChannel channel = socket.<caret>getChannel();
+    try { channel.isOpen(); } finally { channel.close(); }
+  }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-116 case 1: getConnection
+settings: inspection DriverManagerGetConnection enabled
+language: java
+```before
+import java.sql.*;
+class A {
+  Connection f(String url) throws SQLException { return DriverManager.<caret>getConnection(url); }
+}
+```
+keys: inspect
+```after
+problem: WARNING getConnection "Call to DriverManager.getConnection()"
+```
+
+### JAVA-ICC-116 case 2: DataSource
+settings: inspection DriverManagerGetConnection enabled
+language: java
+```before
+import java.sql.*; import javax.sql.DataSource;
+class A {
+  Connection f(DataSource ds) throws SQLException { return ds.<caret>getConnection(); }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-117 case 1: session not closed
+settings: inspection HibernateResource enabled
+language: java
+```before
+import org.hibernate.*;
+class A {
+  void f(SessionFactory factory) { Session session = factory.<caret>openSession(); session.createQuery("x"); }
+}
+```
+keys: inspect
+```after
+problem: WARNING openSession "'Session' should be opened in front of a 'try' block and closed in the corresponding 'finally' block"
+```
+status: unverified (needs the Hibernate library on the classpath; {0} text)
+
+### JAVA-ICC-117 case 2: closed in finally
+settings: inspection HibernateResource enabled
+language: java
+```before
+import org.hibernate.*;
+class A {
+  void f(SessionFactory factory) {
+    Session session = factory.<caret>openSession();
+    try { session.createQuery("x"); } finally { session.close(); }
+  }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-118 case 1: FileWriter not closed
+settings: inspection IOResource enabled
+language: java
+```before
+import java.io.*;
+class A {
+  void save() throws IOException { FileWriter writer = new <caret>FileWriter("filename.txt"); writer.write("sample"); }
+}
+```
+keys: inspect
+```after
+problem: WARNING FileWriter "'FileWriter' should be opened in front of a 'try' block and closed in the corresponding 'finally' block"
+```
+status: unverified ({0} text)
+
+### JAVA-ICC-118 case 2: wrapped resource
+settings: inspection IOResource enabled
+language: java
+```before
+import java.io.*;
+class A {
+  void save() throws IOException {
+    try (BufferedWriter w = new BufferedWriter(new <caret>FileWriter("filename.txt"))) { w.write("sample"); }
+  }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-119 case 1: statement not closed
+settings: inspection JDBCResource enabled
+language: java
+```before
+import java.sql.*;
+class A {
+  void f(Connection c) throws SQLException { PreparedStatement st = c.<caret>prepareStatement("SELECT 1"); st.execute(); }
+}
+```
+keys: inspect
+```after
+problem: WARNING prepareStatement "'PreparedStatement' should be opened in front of a 'try' block and closed in the corresponding 'finally' block"
+```
+status: unverified ({0} text)
+
+### JAVA-ICC-119 case 2: try-with-resources
+settings: inspection JDBCResource enabled
+language: java
+```before
+import java.sql.*;
+class A {
+  void f(Connection c) throws SQLException { try (PreparedStatement st = c.<caret>prepareStatement("SELECT 1")) { st.execute(); } }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-120 case 1: InitialContext not closed
+settings: inspection JNDIResource enabled
+language: java
+```before
+import javax.naming.*; import java.util.Properties;
+class A {
+  Object f(Properties p, String name) throws NamingException { Context context = new <caret>InitialContext(p); return context.lookup(name); }
+}
+```
+keys: inspect
+```after
+problem: WARNING InitialContext "'InitialContext' should be opened in front of a 'try' block and closed in the corresponding 'finally' block"
+```
+status: unverified ({0} text)
+
+### JAVA-ICC-120 case 2: closed in finally
+settings: inspection JNDIResource enabled
+language: java
+```before
+import javax.naming.*; import java.util.Properties;
+class A {
+  Object f(Properties p, String name) throws NamingException {
+    Context context = new <caret>InitialContext(p);
+    try { return context.lookup(name); } finally { context.close(); }
+  }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-121 case 1: accepted socket not closed
+settings: inspection SocketResource enabled
+language: java
+```before
+import java.net.*; import java.io.*;
+class A {
+  byte[] f(ServerSocket s) throws IOException { Socket client = s.<caret>accept(); return client.getInputStream().readAllBytes(); }
+}
+```
+keys: inspect
+```after
+problem: WARNING accept "'Socket' should be opened in front of a 'try' block and closed in the corresponding 'finally' block"
+```
+status: unverified ({0} text)
+
+### JAVA-ICC-121 case 2: try-with-resources
+settings: inspection SocketResource enabled
+language: java
+```before
+import java.net.*; import java.io.*;
+class A {
+  byte[] f(ServerSocket s) throws IOException { try (Socket client = s.<caret>accept()) { return client.getInputStream().readAllBytes(); } }
+}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-107 case 1: package differs from directory
+settings: source root `src`; file `src/com/example/Foo.java`
+language: java
+```before
+--- src/com/example/Foo.java
+package com.<caret>other;
+class Foo {}
+```
+keys: Alt+Enter, choose "Set package name to 'com.example'"
+```after
+--- src/com/example/Foo.java
+package com.example;
+class Foo {}
+```
+
+### JAVA-ICC-107 case 2: matching package
+settings: source root `src`; file `src/com/example/Foo.java`
+language: java
+```before
+--- src/com/example/Foo.java
+package com.<caret>example;
+class Foo {}
+```
+keys: inspect
+```after
+no problem reported
+```
+
+### JAVA-ICC-107 case 3: missing package statement
+settings: source root `src`; file `src/com/example/Foo.java`
+language: java
+```before
+--- src/com/example/Foo.java
+class <caret>Foo {}
+```
+keys: inspect
+```after
+problem: ERROR Foo "Missing package statement: 'com.example'"
+```

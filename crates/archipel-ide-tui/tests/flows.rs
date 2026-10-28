@@ -57,7 +57,7 @@ fn typing_edits_the_core_document_and_save_writes_the_file() {
         "saved by Save All"
     );
     assert!(!tui.app.ide().state().documents()[0].text.is_dirty());
-    // Undo is the editor's; the core follows.
+    // Undo is the core's (`editor.undo`), like in the GUI.
     for _ in 0..3 {
         tui.ctrl('z');
     }
@@ -543,4 +543,155 @@ fn the_run_configuration_chooser_runs_the_pick_and_stop_ends_a_running_task() {
     tui.press_with(KeyCode::F(2), KeyModifiers::CONTROL);
     tui.expect("the stop", 20, |tui| tui.contains("Process stopped"));
     assert!(!tui.app.ide().state().execution().is_running());
+}
+
+fn doc_text(tui: &Tui) -> String {
+    tui.app.ide().state().documents()[0].text.text()
+}
+
+fn selections(tui: &Tui) -> Vec<(usize, usize)> {
+    tui.app.ide().state().documents()[0]
+        .selections
+        .selections()
+        .iter()
+        .map(|s| (s.anchor, s.head))
+        .collect()
+}
+
+#[test]
+fn keys_edit_through_the_core_input_layer_and_the_screen_shows_its_document() {
+    let project = Project::new("core-input", &[("A.java", "class A {\n}\n")]);
+    let mut tui = Tui::open(&project.root, &["A.java"], 100, 24);
+    tui.advance(0.1);
+    // End of the first line, then Enter in braces: the core indents and puts the caret in
+    // the middle (ED-TYPE-064), the screen shows what the core has.
+    tui.press(KeyCode::End);
+    tui.press(KeyCode::Enter);
+    assert_eq!(doc_text(&tui), "class A {\n    \n}\n");
+    assert_eq!(selections(&tui), vec![(14, 14)]);
+    // Typed `(` pairs, `)` overtypes (ED-TYPE-010, ED-TYPE-020).
+    tui.type_text("f(");
+    assert_eq!(doc_text(&tui), "class A {\n    f()\n}\n");
+    tui.type_text(")");
+    assert_eq!(doc_text(&tui), "class A {\n    f()\n}\n");
+    assert_eq!(selections(&tui), vec![(17, 17)]);
+    assert!(tui.contains("f()"), "{}", tui.text());
+    // Backspace over the typed pair, Ctrl+D duplicates the line (ED-LINE-001).
+    tui.press(KeyCode::Backspace);
+    assert_eq!(doc_text(&tui), "class A {\n    f(\n}\n");
+    tui.ctrl('d');
+    assert_eq!(doc_text(&tui), "class A {\n    f(\n    f(\n}\n");
+    // The editor model of the terminal is only a picture of the core document.
+    assert!(tui.contains("f("), "{}", tui.text());
+}
+
+#[test]
+fn several_carets_type_together_and_all_are_the_cores() {
+    let project = Project::new("carets", &[("a.txt", "ab\nab\nab\n")]);
+    let mut tui = Tui::open(&project.root, &["a.txt"], 80, 20);
+    tui.advance(0.1);
+    // Clone Caret Below twice (Alt+Shift+Down in the default keymap is Move Statement; the
+    // action is Find Action's), then type at three carets.
+    for _ in 0..2 {
+        tui.app.run_action(
+            &mut tui.rt,
+            "EditorCloneCaretBelow",
+            archipel_ide_actions::ActionPlace::MainMenu,
+        );
+    }
+    assert_eq!(selections(&tui).len(), 3);
+    tui.type_text("x");
+    assert_eq!(doc_text(&tui), "xab\nxab\nxab\n");
+    tui.press(KeyCode::Esc);
+    assert_eq!(selections(&tui).len(), 1, "Escape keeps one caret");
+}
+
+#[test]
+fn a_mouse_click_moves_the_core_caret_and_clipboard_keys_use_the_core() {
+    let project = Project::new("mouse", &[("a.txt", "hello world\nsecond\n")]);
+    let mut tui = Tui::open(&project.root, &["a.txt"], 80, 20);
+    tui.advance(0.1);
+    let (x, y) = tui.find("second").expect("the text is drawn");
+    tui.click(x + 3, y);
+    assert_eq!(
+        selections(&tui),
+        vec![(15, 15)],
+        "the click is a core caret"
+    );
+    // Copy without a selection copies the line (the core's rule), Paste puts it above.
+    tui.ctrl('c');
+    assert_eq!(tui.rt.clipboard.get(), "second\n");
+    assert!(tui.rt.clipboard.is_whole_line());
+    tui.ctrl('v');
+    assert_eq!(doc_text(&tui), "hello world\nsecond\nsecond\n");
+    // A bracketed paste of the terminal goes the same way.
+    tui.send(archipel_kit_tui::input::Event::Paste("abc".to_owned()));
+    assert!(doc_text(&tui).contains("abc"), "{}", doc_text(&tui));
+}
+
+#[test]
+fn the_page_keys_know_how_many_lines_the_screen_shows() {
+    let text: String = (1..=100).map(|n| format!("line {n}\n")).collect();
+    let project = Project::new("pages", &[("long.txt", text.as_str())]);
+    let mut tui = Tui::open(&project.root, &["long.txt"], 80, 20);
+    tui.advance(0.1);
+    tui.press(KeyCode::PageDown);
+    let (_, head) = selections(&tui)[0];
+    let line = tui.app.ide().state().documents()[0].text.char_to_line(head);
+    assert!(
+        (10..=19).contains(&line),
+        "a page of this screen, not of a default one: line {line}"
+    );
+    assert!(
+        tui.contains(&format!("line {}", line + 1)),
+        "{}",
+        tui.text()
+    );
+}
+
+#[test]
+fn the_caret_stays_on_screen_while_typing_below_the_last_visible_line() {
+    let text: String = (1..=60).map(|n| format!("row {n}\n")).collect();
+    let project = Project::new("follow", &[("long.txt", text.as_str())]);
+    let mut tui = Tui::open(&project.root, &["long.txt"], 80, 14);
+    tui.advance(0.1);
+    tui.press_with(KeyCode::End, KeyModifiers::CONTROL);
+    tui.type_text("tail");
+    assert!(tui.contains("tail"), "{}", tui.text());
+    tui.press_with(KeyCode::Home, KeyModifiers::CONTROL);
+    assert!(tui.contains("row 1"), "{}", tui.text());
+}
+
+#[test]
+fn every_editor_key_of_the_kit_keymap_is_an_action_of_the_core() {
+    let project = Project::new("keys", &[("a.txt", "x\n")]);
+    let tui = Tui::open(&project.root, &["a.txt"], 80, 20);
+    let keymap = tui.app.keymap(archipel_kit::action_system::Os::Linux);
+    // Keys the terminal editor no longer takes itself: the scroll actions have no terminal
+    // surface and the kit's own find actions are the widget's find bar.
+    let widget = [
+        "Find",
+        "Replace",
+        "FindNext",
+        "FindPrevious",
+        "FindWordAtCaret",
+    ];
+    let mut missing = Vec::new();
+    for id in keymap.action_ids() {
+        let editor = id.starts_with("Editor")
+            || matches!(
+                id.as_str(),
+                "$Undo" | "$Redo" | "$Copy" | "$Cut" | "$Paste" | "$SelectAll"
+            );
+        if editor && !widget.contains(&id.as_str()) && !tui.app.ide().knows_action(&id) {
+            missing.push(id);
+        }
+    }
+    missing.sort();
+    // Scrolling the view without the caret has no core command.
+    missing.retain(|id| !id.starts_with("EditorScroll"));
+    assert!(
+        missing.is_empty(),
+        "editor keys without a core action: {missing:?}"
+    );
 }

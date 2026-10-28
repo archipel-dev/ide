@@ -143,6 +143,14 @@ impl Tui {
         self
     }
 
+    /// Delivers `event` without drawing a frame after it (two strokes of a chord that arrive
+    /// within one frame).
+    pub fn send_undrawn(&mut self, event: Event) -> &mut Self {
+        self.rt.preprocess(&event);
+        self.app.event(&mut self.rt, &event);
+        self
+    }
+
     pub fn press(&mut self, code: KeyCode) -> &mut Self {
         self.send(input::key(code))
     }

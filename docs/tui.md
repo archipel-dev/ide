@@ -125,11 +125,19 @@ effects. Key presses resolve to action ids in the kit's runtime (the IDE keymap 
 the kit's terminal keymap) and run through `ActionRegistry::perform`; the frontend only handles
 the effects it has to render (dialogs, pickers).
 
-The kit editor edits its own model, so every open document has a `DocView` that mirrors it
-with the core document: an edit in the terminal becomes one minimal edit of the core document
-(analysis, language server and completion are told, as after a GUI edit); a change the core
-made (a quick fix, a reload, Go to Declaration) is pulled into the editor as one undoable edit.
-The core stays the source of truth for the caret and the text every command sees.
+Editing is the core's, exactly as in the GUI. A typed character is `editor.type` (pairs,
+overtype, surround, live templates, completion and parameter info follow), every other editor key
+is an action of the keymap (`EditorEnter`, `EditorBackSpace`, `EditorTab`, the caret keys, Duplicate
+Line, Move Line, folding, Undo, ...) that runs the same typed command the GUI runs
+(`editor.action`, `editor.enter`, `editor.duplicate`, ...), and a bracketed paste is `editor.paste`.
+The kit's editor widget (`archipel-kit-tui`) only draws: each open document has a `DocView` whose
+editor model is a picture of the core document, refreshed after every change: the text, every
+caret and selection (several carets work) and the fold regions come from the core. What the
+widget does itself goes back as core commands: a click or drag becomes `editor.setSelections`, a
+fold chevron `editor.toggleFold`, and the Replace of the widget's find bar `editor.replaceRange`.
+The widget's find bar (Ctrl+F, Ctrl+R, F3) is the only part of it that still takes keys. Undo and
+redo are the core's history, copy and cut go through `editor.copy` and `editor.cut` to the
+terminal clipboard (OSC 52).
 
 ## Known limitations
 
@@ -137,10 +145,12 @@ The core stays the source of truth for the caret and the text every command sees
   other refactoring dialogs, Generate, Settings, the diff viewer and Local History, plugin
   views (plugin commands work), Android tooling, the AI assistant and Agents mode, the Git log,
   branches and push. Use the GUI for these.
-- Editor splits are shown as one tab list; the editor's own folding is independent of the
-  core's fold state; only the primary caret is shared with the core, so commands that look at
-  the caret see the primary one. Documents with CRLF line endings are edited as LF and written
-  back with CRLF.
+- Editor splits are shown as one tab list. Long lines wrap (the widget cannot follow a caret
+  horizontally). Documents with CRLF line endings are drawn as LF and keep CRLF in the core.
+  Shift+arrows in column selection mode do not extend the block yet (the mode toggles).
+- Keys a terminal cannot send have fallbacks: Alt+Up / Alt+Down extend and shrink the selection
+  (Ctrl+W leads the window chords), Ctrl+7 comments (Ctrl+/), Ctrl+H deletes a word, and the
+  region, occurrence and caret actions of the editor are `Ctrl+K` chords (see the which-key list).
 - Quick Documentation, parameter info and inlay hints have no terminal surface yet.
 - Double Shift needs a terminal that reports modifier keys (kitty protocol); on macOS Option+digit
   types a symbol, so use Ctrl+W then the digit there.
@@ -160,5 +170,9 @@ configuration prints its output and Stop ends a running task, completion and Go 
 Declaration with Back and Forward against the scriptable fake language server
 (`archipel-fake-lsp`, built by `cargo test --workspace`; those tests are skipped when it is
 missing), the Commit window against a temporary Git repository, and the Terminal window
-against a real shell. Unit tests cover the editor/core mirror (offsets, CRLF, undo), the tree
-nesting, the keymap layering and the shell key bytes.
+against a real shell. `tests/editor_cases.rs` replays the editor spec cases
+(`docs/specs/editor/cases/`, the same files, parser and judgement as the core's runner) through the
+TUI's key events, typed characters and paste events and reads the result from the core document:
+it must pass exactly what the core's runner passes (341 cases). Unit tests cover the editor/core
+mirror (offsets, CRLF, carets, folds, find-bar replace), the tree nesting, the keymap layering and
+the shell key bytes.

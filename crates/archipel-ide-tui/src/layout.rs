@@ -312,15 +312,39 @@ impl TuiApp {
                     highlighter,
                     language,
                     highlights,
+                    follow,
                     ..
                 } = view;
-                let out = EditorComponent::new(EDITOR, editor)
+                let mut out = EditorComponent::new(EDITOR, editor)
                     .highlighter(highlighter)
                     .language(language)
                     .highlights(highlights)
+                    .bracket_folding(false)
+                    .wrap(true)
                     .show(rt, state, body, buf);
+                // The core moved the caret (typing, a caret key, undo): scroll it into view.
+                if *follow {
+                    *follow = false;
+                    if out.caret_cell.is_none() {
+                        let line = editor.document.line_number(editor.carets.primary().offset);
+                        state.scroll_to_line(line);
+                        out = EditorComponent::new(EDITOR, editor)
+                            .highlighter(highlighter)
+                            .language(language)
+                            .highlights(highlights)
+                            .bracket_folding(false)
+                            .wrap(true)
+                            .show(rt, state, body, buf);
+                    }
+                }
                 self.popups.caret_cell = out.caret_cell;
                 self.popups.editor_area = body;
+                // What Page Up/Down and the page-relative moves of the input layer need.
+                let (page, top) = (out.visible_lines.len().max(1), out.visible_lines.start);
+                if let Some(document) = self.ide.state_mut().document_mut(index) {
+                    document.input.page_lines = page;
+                    document.input.top_line = top;
+                }
                 self.draw_popups(rt, buf);
             }
         }
@@ -552,25 +576,18 @@ impl TuiApp {
             self.confirm_delete(rt);
         }
         self.route_panels(rt, event);
-        // The editor.
-        if let Some(index) = self.active_view() {
-            let view = &mut self.views[index];
-            let crate::view::DocView {
-                editor,
-                state,
-                highlighter,
-                language,
-                highlights,
-                ..
-            } = view;
-            let out = EditorComponent::new(EDITOR, editor)
-                .highlighter(highlighter)
-                .language(language)
-                .highlights(highlights)
-                .handle(rt, state, event);
-            if let Some(hint) = out.hint {
-                self.ide.state_mut().set_status(hint);
+        // The editor widget: the mouse, and the keys of its find bar. Editing keys went to the
+        // core before (see `TuiApp::event`).
+        let forward = match event {
+            Event::Key(key) => {
+                key.kind != archipel_kit_tui::input::KeyEventKind::Release
+                    && (self.find_open() || is_find_key(key))
             }
+            Event::Paste(_) => self.find_open(),
+            _ => true,
+        };
+        if forward {
+            self.forward_to_editor_widget(rt, event);
         }
     }
 
@@ -619,8 +636,26 @@ impl TuiApp {
         if let Some(index) = self.active_view() {
             let view = &mut self.views[index];
             let crate::view::DocView { editor, state, .. } = view;
-            let _ = EditorComponent::new(EDITOR, editor).tick(rt, state);
+            let _ = EditorComponent::new(EDITOR, editor)
+                .bracket_folding(false)
+                .wrap(true)
+                .tick(rt, state);
         }
+    }
+}
+
+/// The keys that open or drive the find bar of the editor widget (Find, Replace, Find Next,
+/// Find Previous): the core has no find bar, so the widget's is used.
+fn is_find_key(key: &archipel_kit_tui::input::KeyEvent) -> bool {
+    use archipel_kit_tui::input::{KeyCode, KeyModifiers};
+    match key.code {
+        KeyCode::F(3) => true,
+        KeyCode::Char(c) => {
+            key.modifiers.contains(KeyModifiers::CONTROL)
+                && !key.modifiers.contains(KeyModifiers::ALT)
+                && matches!(c.to_ascii_lowercase(), 'f' | 'r' | 'l')
+        }
+        _ => false,
     }
 }
 

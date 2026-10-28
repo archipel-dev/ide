@@ -128,3 +128,77 @@ fn kotlin_lsp_completes_kotlin_members() {
         "{labels:?}"
     );
 }
+
+/// Errors of the text in the editor show while it is unsaved: rust-analyzer serves its native
+/// diagnostics (syntax errors, unresolved names) only to a client that pulls them
+/// (`textDocument/diagnostic`), so the file on disk stays valid and untouched.
+#[test]
+#[ignore = "requires an installed rust-analyzer"]
+fn rust_analyzer_shows_errors_of_unsaved_text() {
+    if !installed("rust-analyzer") {
+        return;
+    }
+    let root =
+        std::env::temp_dir().join(format!("archipel-ide-lsp-unsaved-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname='archipel-ide-lsp-unsaved'\nversion='0.1.0'\nedition='2024'\n",
+    )
+    .unwrap();
+    let saved = "pub fn fine() -> u32 {\n    1\n}\n";
+    let file = root.join("src/lib.rs");
+    std::fs::write(&file, saved).unwrap();
+    let file = file.canonicalize().unwrap();
+    let mut manager = LspManager::default();
+    manager.set_project(Some(&root));
+    manager.sync_document(&file, saved, 1).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let wait_for = |manager: &mut LspManager, needle: &str| {
+        while Instant::now() < deadline {
+            manager.poll();
+            if manager
+                .diagnostics_for(&file)
+                .iter()
+                .any(|d| d.message.contains(needle))
+            {
+                return true;
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
+        false
+    };
+    // Typed, not saved: a syntax error and an unresolved name.
+    let typed = "pub fn fine() -> u32 {\n    let x = ;\n    missing_fn()\n}\n";
+    manager.sync_document(&file, typed, 2).unwrap();
+    assert!(
+        wait_for(&mut manager, "Syntax Error"),
+        "{:?}",
+        manager.diagnostics_for(&file)
+    );
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), saved);
+    // Fixing the text removes the error, again without a save.
+    manager.sync_document(&file, saved, 3).unwrap();
+    let until = Instant::now() + Duration::from_secs(30);
+    while Instant::now() < until {
+        manager.poll();
+        if !manager
+            .diagnostics_for(&file)
+            .iter()
+            .any(|d| d.message.contains("Syntax Error"))
+        {
+            break;
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+    assert!(
+        !manager
+            .diagnostics_for(&file)
+            .iter()
+            .any(|d| d.message.contains("Syntax Error")),
+        "{:?}",
+        manager.diagnostics_for(&file)
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}

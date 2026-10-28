@@ -19,8 +19,8 @@ pub mod transport;
 pub mod workspace_symbol;
 
 pub use client::{
-    ApplyEditRequest, ImportPhase, LaunchConfig, LspDiagnostic, LspResponse, LspService,
-    ResponseError, ServerMessage, ServerState, WorkProgress,
+    ApplyEditRequest, DEFAULT_CHANGE_DELAY, ImportPhase, LaunchConfig, LspDiagnostic, LspResponse,
+    LspService, ResponseError, ServerMessage, ServerState, WorkProgress,
 };
 pub use locations::{LspLocation, parse_locations};
 pub use lsp_types;

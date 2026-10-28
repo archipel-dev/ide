@@ -72,6 +72,13 @@ pub fn build_keymap(os: Os, ide: &IdeKeymap, knows: impl Fn(&str) -> bool) -> Ke
             }
         }
     }
+    // Single strokes of the terminal fallbacks: Ctrl+W (Extend Selection) is the window leader,
+    // Ctrl+/ arrives as Ctrl+7 and Ctrl+Backspace as Ctrl+H.
+    for (action, keys) in SINGLE_FALLBACKS {
+        if let Some(parsed) = Shortcut::parse(keys) {
+            keymap.add_shortcut(action, parsed);
+        }
+    }
     // Ctrl+K leads the terminal fallbacks; Commit, the GUI's Ctrl+K, is Ctrl+K then C.
     for (action, keys) in FALLBACKS {
         if let Some(parsed) = Shortcut::parse(&format!("ctrl K > {keys}")) {
@@ -80,6 +87,14 @@ pub fn build_keymap(os: Os, ide: &IdeKeymap, knows: impl Fn(&str) -> bool) -> Ke
     }
     keymap
 }
+
+/// Single strokes for editor actions whose GUI shortcut a legacy terminal cannot send.
+pub const SINGLE_FALLBACKS: [(&str, &str); 4] = [
+    ("EditorSelectWord", "alt Up"),
+    ("EditorUnSelectWord", "alt Down"),
+    ("CommentByLineComment", "ctrl 7"),
+    ("EditorDeleteToWordStart", "ctrl H"),
+];
 
 /// Chords for the actions whose GUI shortcut a legacy terminal cannot send (Ctrl+Shift+letter,
 /// Ctrl+Alt+arrow, Ctrl+Space on some terminals). They also work with the kitty protocol.

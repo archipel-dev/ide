@@ -39,6 +39,15 @@
 //! `@hint` and `@unused` marker in the text, or one warning at 0:0 when the
 //! text has no markers.
 //! - `--incomplete`: mark completion lists `isIncomplete`.
+//! - `--pull-diagnostics`: like rust-analyzer, declare `diagnosticProvider` and serve the
+//!   diagnostics of the text only through `textDocument/diagnostic` (nothing is pushed on
+//!   `didOpen`/`didChange`; after each of them the server asks the client to pull again with
+//!   `workspace/diagnostic/refresh`). `didSave` still pushes the "check" warning, like the
+//!   `cargo check` of rust-analyzer.
+//! - `--push-on-save-only`: like a server that analyzes on save: `didOpen` and `didChange`
+//!   publish nothing, `didSave` publishes the marker diagnostics and the "check" warning.
+//! - `--log <file>`: append every request and notification the server receives to `<file>`,
+//!   one line each (`textDocument/didChange v=3`), for tests that count them.
 //! - `--importing <n>`: like jdtls importing a Gradle project, report a
 //!   "Building" progress from `initialized` on, answer the first `n`
 //!   completion requests with an empty list, and end the progress 300 ms
@@ -82,6 +91,10 @@ fn main() {
     let java_debug_port: Option<u16> = value("--java-debug").and_then(|p| p.parse().ok());
     let prepare_rename = !flag("--no-prepare-rename");
     let java_commands = flag("--java-commands");
+    let pull_diagnostics = flag("--pull-diagnostics");
+    let push_on_save_only = flag("--push-on-save-only");
+    let log = value("--log");
+    let mut refresh_ids = 0u32;
     let mut importing: u32 = value("--importing")
         .and_then(|n| n.parse().ok())
         .unwrap_or(0);
@@ -101,6 +114,20 @@ fn main() {
         let method = message.get("method").and_then(Value::as_str).unwrap_or("");
         let id = message.get("id").cloned();
         let params = message.get("params").cloned().unwrap_or(Value::Null);
+        if let Some(file) = &log
+            && !method.is_empty()
+            && let Ok(mut log) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(file)
+        {
+            use std::io::Write as _;
+            let version = params["textDocument"]["version"].as_i64();
+            let _ = match version {
+                Some(version) => writeln!(log, "{method} v={version}"),
+                None => writeln!(log, "{method}"),
+            };
+        }
         match (method, id) {
             ("initialize", Some(id)) => {
                 root = params["rootUri"].as_str().unwrap_or_default().to_owned();
@@ -133,6 +160,11 @@ fn main() {
                     "implementationProvider": true,
                     "referencesProvider": true,
                     "inlayHintProvider": true,
+                    "diagnosticProvider": if pull_diagnostics {
+                        json!({"identifier":"fake","interFileDependencies":false,"workspaceDiagnostics":false})
+                    } else {
+                        Value::Null
+                    },
                     "codeActionProvider": {"resolveProvider": true},
                     "callHierarchyProvider": true,
                     "executeCommandProvider": {"commands": ["fake.apply"]}
@@ -177,23 +209,50 @@ fn main() {
                     .or_else(|| params["contentChanges"][0]["text"].as_str())
                     .unwrap_or_default();
                 documents.insert(uri.as_str().unwrap_or_default().to_owned(), text.to_owned());
-                let mut diagnostics = marker_diagnostics(text);
-                if diagnostics.is_empty() {
-                    diagnostics.push(json!({"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},
-                        "severity":2,"message":format!("fake diagnostic ({method})")}));
+                if pull_diagnostics {
+                    // The client pulls; the server asks it to, as rust-analyzer does.
+                    refresh_ids += 1;
+                    send(
+                        json!({"jsonrpc":"2.0","id":format!("refresh{refresh_ids}"),"method":"workspace/diagnostic/refresh","params":null}),
+                    );
+                } else if !push_on_save_only {
+                    let mut diagnostics = marker_diagnostics(text);
+                    if diagnostics.is_empty() {
+                        diagnostics.push(json!({"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},
+                            "severity":2,"message":format!("fake diagnostic ({method})")}));
+                    }
+                    send(
+                        json!({"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{
+                            "uri": uri, "diagnostics": diagnostics
+                        }}),
+                    );
+                }
+            }
+            ("textDocument/diagnostic", Some(id)) => {
+                let uri = params["textDocument"]["uri"].as_str().unwrap_or_default();
+                let text = documents.get(uri).map_or("", String::as_str);
+                let mut items = marker_diagnostics(text);
+                if items.is_empty() {
+                    items.push(json!({"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},
+                        "severity":2,"message":"fake diagnostic (pull)"}));
+                }
+                send(json!({"jsonrpc":"2.0","id":id,"result":{"kind":"full","items":items}}));
+            }
+            ("textDocument/didSave", None) => {
+                let uri = params["textDocument"]["uri"].clone();
+                let mut diagnostics = vec![
+                    json!({"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},
+                    "severity":2,"source":"check","message":"fake check warning"}),
+                ];
+                if push_on_save_only {
+                    let text = documents
+                        .get(uri.as_str().unwrap_or_default())
+                        .map_or("", String::as_str);
+                    diagnostics.extend(marker_diagnostics(text));
                 }
                 send(
                     json!({"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{
                         "uri": uri, "diagnostics": diagnostics
-                    }}),
-                );
-            }
-            ("textDocument/didSave", None) => {
-                let uri = params["textDocument"]["uri"].clone();
-                send(
-                    json!({"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{
-                        "uri": uri, "diagnostics": [{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},
-                        "severity":2,"source":"check","message":"fake check warning"}]
                     }}),
                 );
             }

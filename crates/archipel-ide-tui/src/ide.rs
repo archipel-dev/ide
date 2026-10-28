@@ -293,7 +293,7 @@ impl Ide {
         &self.state
     }
 
-    /// The state, for the sync layer that mirrors editor buffers.
+    /// The state, for what the frontend refreshes in place (lazy highlights, the viewport).
     pub fn state_mut(&mut self) -> &mut IdeState {
         &mut self.state
     }

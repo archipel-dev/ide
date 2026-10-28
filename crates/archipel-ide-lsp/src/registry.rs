@@ -572,9 +572,12 @@ pub fn builtin_specs() -> Vec<ServerSpec> {
             install_hint: "Install it with `rustup component add rust-analyzer` and make sure it is on PATH.",
             notify_missing: true,
             // Like the reference IDE: insert `name()` and put the caret inside,
-            // without argument placeholders.
+            // without argument placeholders. Native diagnostics (syntax errors, unresolved
+            // names) are on: they follow the edited text and reach the client through
+            // `textDocument/diagnostic`; `cargo check` results (checkOnSave) are the separate,
+            // pushed ones after a save.
             initialization_options: Some(
-                r#"{"completion":{"callable":{"snippets":"add_parentheses"}}}"#,
+                r#"{"completion":{"callable":{"snippets":"add_parentheses"}},"diagnostics":{"enable":true}}"#,
             ),
         },
         ServerSpec {

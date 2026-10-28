@@ -17,11 +17,15 @@ pub enum TuiAction {
     OpenProject,
     Exit,
     NextTheme,
+    Copy,
+    Cut,
+    Paste,
+    PasteSimple,
 }
 
 impl TuiAction {
     /// The reference action ids this frontend implements itself.
-    pub const IDS: [(&'static str, TuiAction); 9] = [
+    pub const IDS: [(&'static str, TuiAction); 13] = [
         ("GotoLine", TuiAction::GotoLine),
         ("FindInPath", TuiAction::FindInPath),
         ("FindSelectionInPath", TuiAction::FindInPath),
@@ -31,6 +35,10 @@ impl TuiAction {
         ("OpenFile", TuiAction::OpenProject),
         ("Exit", TuiAction::Exit),
         ("Archipel.NextTheme", TuiAction::NextTheme),
+        ("$Copy", TuiAction::Copy),
+        ("$Cut", TuiAction::Cut),
+        ("$Paste", TuiAction::Paste),
+        ("EditorPasteSimple", TuiAction::PasteSimple),
     ];
 }
 
@@ -47,6 +55,10 @@ impl AnAction for TuiActionImpl {
             TuiAction::SaveAll => project,
             TuiAction::FindInPath => project,
             TuiAction::OpenProject | TuiAction::Exit | TuiAction::NextTheme => true,
+            // The clipboard belongs to the terminal: the editor has to have the keys.
+            TuiAction::Copy | TuiAction::Cut | TuiAction::Paste | TuiAction::PasteSimple => {
+                document && data.flag(&data_keys::EDITOR_FOCUSED)
+            }
         })
     }
 

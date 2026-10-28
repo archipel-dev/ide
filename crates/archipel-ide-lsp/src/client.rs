@@ -6,16 +6,26 @@
 //! frame. Requests return an id immediately; their results are picked up
 //! later with [`LspService::take_response`] or cancelled with
 //! [`LspService::cancel`].
+//!
+//! Diagnostics come two ways and are merged per file: pushed
+//! (`textDocument/publishDiagnostics`) and pulled (`textDocument/diagnostic`, LSP 3.17). A
+//! server that declares `diagnosticProvider` (rust-analyzer, which then serves its native
+//! diagnostics only through the pull request, and asks for a new pull with
+//! `workspace/diagnostic/refresh`) is pulled after every document change that reached it, so
+//! errors show while typing, without saving. Changes are sent as full text after a short quiet
+//! time ([`DEFAULT_CHANGE_DELAY`]); anything that talks to the server first sends the pending
+//! change, so a request never sees stale text.
 
 use crate::{LspError, transport};
 use lsp_types::{
     ClientCapabilities, ClientInfo, CodeActionCapabilityResolveSupport,
     CodeActionClientCapabilities, CodeActionKindLiteralSupport, CodeActionLiteralSupport,
     CompletionClientCapabilities, CompletionItemCapability, CompletionItemCapabilityResolveSupport,
-    CompletionItemKind, CompletionItemKindCapability, DiagnosticTag, GeneralClientCapabilities,
-    HoverClientCapabilities, InitializeParams, InitializeResult, MarkupKind,
-    ParameterInformationSettings, PositionEncodingKind, PublishDiagnosticsClientCapabilities,
-    ServerCapabilities, SignatureHelpClientCapabilities, SignatureInformationSettings, TagSupport,
+    CompletionItemKind, CompletionItemKindCapability, DiagnosticClientCapabilities, DiagnosticTag,
+    DiagnosticWorkspaceClientCapabilities, GeneralClientCapabilities, HoverClientCapabilities,
+    InitializeParams, InitializeResult, MarkupKind, ParameterInformationSettings,
+    PositionEncodingKind, PublishDiagnosticsClientCapabilities, ServerCapabilities,
+    SignatureHelpClientCapabilities, SignatureInformationSettings, TagSupport,
     TextDocumentClientCapabilities, TextDocumentSyncCapability, TextDocumentSyncClientCapabilities,
     WindowClientCapabilities, WorkspaceClientCapabilities, WorkspaceEditClientCapabilities,
     WorkspaceFolder, request::Request,
@@ -171,6 +181,28 @@ const INITIALIZE_ID: u64 = 1;
 const STDERR_LINES: usize = 40;
 /// Responses nobody collected are dropped beyond this many.
 const MAX_UNCLAIMED_RESPONSES: usize = 256;
+/// The pull request for a document's diagnostics.
+const PULL_METHOD: &str = "textDocument/diagnostic";
+/// How long an edit waits before it is sent to the server as `didChange`, so a burst of typing is
+/// one change (the daemon's own restart delay, 300 ms, comes on top). A request, a save or a
+/// close sends it at once.
+pub const DEFAULT_CHANGE_DELAY: Duration = Duration::from_millis(100);
+
+/// A change of an open document not sent yet.
+struct PendingChange {
+    text: String,
+    version: i32,
+    /// When it is sent at the latest (the first edit of the burst plus the delay).
+    due: Instant,
+}
+
+/// The pull of one document: one request at a time, one more after a change that arrived while
+/// it was out.
+#[derive(Default)]
+struct PullState {
+    in_flight: Option<(u64, i32)>,
+    again: bool,
+}
 
 pub struct LspService {
     name: String,
@@ -184,7 +216,14 @@ pub struct LspService {
     capabilities: ServerCapabilities,
     queued_documents: BTreeMap<PathBuf, QueuedDocument>,
     open_documents: HashMap<PathBuf, i32>,
+    /// What the file shows: the pulled and the pushed diagnostics merged.
     diagnostics: HashMap<PathBuf, Vec<LspDiagnostic>>,
+    pushed: HashMap<PathBuf, Vec<LspDiagnostic>>,
+    pulled: HashMap<PathBuf, Vec<LspDiagnostic>>,
+    pulls: HashMap<PathBuf, PullState>,
+    pull_requests: HashMap<u64, PathBuf>,
+    pending_changes: BTreeMap<PathBuf, PendingChange>,
+    change_delay: Duration,
     diagnostics_revision: u64,
     progress: BTreeMap<String, WorkProgress>,
     status_message: Option<String>,
@@ -275,6 +314,12 @@ impl LspService {
             queued_documents: BTreeMap::new(),
             open_documents: HashMap::new(),
             diagnostics: HashMap::new(),
+            pushed: HashMap::new(),
+            pulled: HashMap::new(),
+            pulls: HashMap::new(),
+            pull_requests: HashMap::new(),
+            pending_changes: BTreeMap::new(),
+            change_delay: DEFAULT_CHANGE_DELAY,
             diagnostics_revision: 0,
             progress: BTreeMap::new(),
             status_message: None,
@@ -363,8 +408,9 @@ impl LspService {
         self.open_documents.contains_key(path) || self.queued_documents.contains_key(path)
     }
 
-    /// Reads all available messages. Never blocks.
+    /// Reads all available messages and sends the changes that are due. Never blocks.
     pub fn poll(&mut self) -> Result<(), LspError> {
+        self.flush_due_changes()?;
         while let Ok(message) = self.messages.try_recv() {
             match message {
                 Ok(message) => self.handle(message)?,
@@ -414,18 +460,237 @@ impl LspService {
             return Ok(());
         }
         match self.open_documents.get(path) {
-            Some(&open) if open == version => Ok(()),
+            Some(&open) if open == version && !self.pending_changes.contains_key(path) => Ok(()),
             Some(_) => {
-                self.open_documents.insert(path.to_owned(), version);
-                self.send(
-                    &json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
-                        "textDocument":{"uri":file_uri(path)?,"version":version},
-                        "contentChanges":[{"text":text}]
-                    }}),
-                )
+                if self
+                    .pending_changes
+                    .get(path)
+                    .is_some_and(|pending| pending.version == version)
+                {
+                    return Ok(());
+                }
+                let due = self
+                    .pending_changes
+                    .get(path)
+                    .map_or_else(|| Instant::now() + self.change_delay, |pending| pending.due);
+                self.pending_changes.insert(
+                    path.to_owned(),
+                    PendingChange {
+                        text: text.into(),
+                        version,
+                        due,
+                    },
+                );
+                if self.change_delay.is_zero() {
+                    self.flush_changes(Some(path))?;
+                }
+                Ok(())
             }
             None => self.send_open(path, language_id, text, version),
         }
+    }
+
+    /// How long an edit waits before it is sent (see [`DEFAULT_CHANGE_DELAY`]).
+    pub fn set_change_delay(&mut self, delay: Duration) {
+        self.change_delay = delay;
+    }
+
+    /// Whether the server answers `textDocument/diagnostic` (LSP 3.17 pull diagnostics).
+    pub fn supports_pull_diagnostics(&self) -> bool {
+        self.capabilities.diagnostic_provider.is_some()
+    }
+
+    /// Whether an edit waits to be sent or a diagnostics pull is out.
+    pub fn has_pending_work(&self) -> bool {
+        !self.pending_changes.is_empty()
+            || self
+                .pulls
+                .values()
+                .any(|pull| pull.in_flight.is_some() || pull.again)
+    }
+
+    /// Sends the pending changes whose time has come.
+    fn flush_due_changes(&mut self) -> Result<(), LspError> {
+        if self.pending_changes.is_empty() || self.state != ServerState::Ready {
+            return Ok(());
+        }
+        let now = Instant::now();
+        let due: Vec<PathBuf> = self
+            .pending_changes
+            .iter()
+            .filter(|(_, change)| change.due <= now)
+            .map(|(path, _)| path.clone())
+            .collect();
+        for path in due {
+            self.flush_changes(Some(&path))?;
+        }
+        Ok(())
+    }
+
+    /// Sends the pending change of `only` (every pending change for `None`) as `didChange`
+    /// with the full text, then asks a pull-capable server for the document's diagnostics.
+    fn flush_changes(&mut self, only: Option<&Path>) -> Result<(), LspError> {
+        let paths: Vec<PathBuf> = match only {
+            Some(path) => vec![path.to_owned()],
+            None => self.pending_changes.keys().cloned().collect(),
+        };
+        for path in paths {
+            let Some(change) = self.pending_changes.remove(&path) else {
+                continue;
+            };
+            self.open_documents.insert(path.clone(), change.version);
+            self.send(
+                &json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+                    "textDocument":{"uri":file_uri(&path)?,"version":change.version},
+                    "contentChanges":[{"text":change.text}]
+                }}),
+            )?;
+            self.request_pull(&path);
+        }
+        Ok(())
+    }
+
+    /// Asks for the diagnostics of the open document `path` when the server supports pulling
+    /// them. One request is out at a time; a change meanwhile asks again when it answered.
+    fn request_pull(&mut self, path: &Path) {
+        if !self.supports_pull_diagnostics()
+            || self.state != ServerState::Ready
+            || self.pending_changes.contains_key(path)
+        {
+            return;
+        }
+        let Some(&version) = self.open_documents.get(path) else {
+            return;
+        };
+        let pull = self.pulls.entry(path.to_owned()).or_default();
+        if pull.in_flight.is_some() {
+            pull.again = true;
+            return;
+        }
+        let Ok(uri) = file_uri(path) else {
+            return;
+        };
+        let id = self.next_id;
+        self.next_id += 1;
+        let sent = self.send(
+            &json!({"jsonrpc":"2.0","id":id,"method":PULL_METHOD,"params":{
+                "textDocument":{"uri":uri}
+            }}),
+        );
+        if sent.is_err() {
+            return;
+        }
+        self.pending.insert(
+            id,
+            PendingRequest {
+                method: PULL_METHOD.into(),
+                sent: Instant::now(),
+            },
+        );
+        self.pull_requests.insert(id, path.to_owned());
+        if let Some(pull) = self.pulls.get_mut(path) {
+            pull.in_flight = Some((id, version));
+        }
+    }
+
+    /// The answer to a pull: the full report replaces what was pulled for the file (and the
+    /// files of `relatedDocuments`); an answer for text that has changed since is dropped, the
+    /// pull that follows the change replaces it.
+    fn handle_pull_response(&mut self, id: u64, result: Result<Value, ResponseError>) {
+        let Some(path) = self.pull_requests.remove(&id) else {
+            return;
+        };
+        let sent_version = self
+            .pulls
+            .get_mut(&path)
+            .and_then(|pull| pull.in_flight.take())
+            .map(|(_, version)| version);
+        let stale = sent_version != self.open_documents.get(&path).copied()
+            || self.pending_changes.contains_key(&path);
+        match result {
+            Ok(report) if !stale => {
+                self.apply_pull_report(&path, &report);
+            }
+            Ok(_) => {}
+            // ServerCancelled and ContentModified: the result would not match the text.
+            Err(error) if matches!(error.code, -32802 | -32801) => {
+                if let Some(pull) = self.pulls.get_mut(&path) {
+                    pull.again = true;
+                }
+            }
+            Err(_) => {}
+        }
+        if self
+            .pulls
+            .get_mut(&path)
+            .is_some_and(|pull| std::mem::take(&mut pull.again))
+        {
+            self.request_pull(&path);
+        }
+    }
+
+    fn apply_pull_report(&mut self, path: &Path, report: &Value) {
+        let mut changed: Vec<(PathBuf, Vec<LspDiagnostic>)> = Vec::new();
+        let mut take = |path: &Path, report: &Value| {
+            if report.get("kind").and_then(Value::as_str) == Some("full") {
+                let items = report
+                    .get("items")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(parse_diagnostic)
+                    .collect::<Vec<_>>();
+                changed.push((canonical(path), items));
+            }
+        };
+        take(path, report);
+        if let Some(related) = report.get("relatedDocuments").and_then(Value::as_object) {
+            for (uri, report) in related {
+                if let Some(related_path) = Url::parse(uri).ok().and_then(|u| u.to_file_path().ok())
+                {
+                    take(&related_path, report);
+                }
+            }
+        }
+        for (path, items) in changed {
+            self.pulled.insert(path.clone(), items);
+            self.merge_diagnostics(&path);
+        }
+    }
+
+    /// `diagnostics` of `path`: what was pulled and what was pushed, without repeats. An empty
+    /// list is kept: it records that the file was checked.
+    fn merge_diagnostics(&mut self, path: &Path) {
+        let pulled = self.pulled.get(path);
+        let pushed = self.pushed.get(path);
+        if pulled.is_none() && pushed.is_none() {
+            self.diagnostics.remove(path);
+        } else {
+            let mut merged: Vec<LspDiagnostic> = Vec::new();
+            for diagnostic in pulled.into_iter().chain(pushed).flatten() {
+                let same = |other: &LspDiagnostic| {
+                    other.message == diagnostic.message
+                        && other.severity == diagnostic.severity
+                        && other.code == diagnostic.code
+                        && (
+                            other.start_line,
+                            other.start_character,
+                            other.end_line,
+                            other.end_character,
+                        ) == (
+                            diagnostic.start_line,
+                            diagnostic.start_character,
+                            diagnostic.end_line,
+                            diagnostic.end_character,
+                        )
+                };
+                if !merged.iter().any(same) {
+                    merged.push(diagnostic.clone());
+                }
+            }
+            self.diagnostics.insert(path.to_owned(), merged);
+        }
+        self.diagnostics_revision = next_revision();
     }
 
     /// Opens a Rust document (compatibility shim for single-language callers).
@@ -471,6 +736,8 @@ impl LspService {
         if !wants_save || !self.open_documents.contains_key(path) {
             return Ok(());
         }
+        // The server checks the text that was saved.
+        self.flush_changes(Some(path))?;
         self.send(
             &json!({"jsonrpc":"2.0","method":"textDocument/didSave","params":{
                 "textDocument":{"uri":file_uri(path)?}
@@ -480,6 +747,12 @@ impl LspService {
 
     pub fn close_document(&mut self, path: &Path) -> Result<(), LspError> {
         self.queued_documents.remove(path);
+        self.pending_changes.remove(path);
+        self.pulls.remove(path);
+        let pulled = canonical(path);
+        if self.pulled.remove(&pulled).is_some() {
+            self.merge_diagnostics(&pulled);
+        }
         if self.open_documents.remove(path).is_some() {
             self.send(
                 &json!({"jsonrpc":"2.0","method":"textDocument/didClose","params":{
@@ -496,6 +769,8 @@ impl LspService {
         if self.state != ServerState::Ready {
             return Err(LspError::NotReady(self.name.clone()));
         }
+        // The server answers for the text the user sees.
+        self.flush_changes(None)?;
         let id = self.next_id;
         self.next_id += 1;
         self.send(&json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))?;
@@ -618,6 +893,10 @@ impl LspService {
         if id == INITIALIZE_ID {
             return self.finish_initialize(result);
         }
+        if pending.method == PULL_METHOD {
+            self.handle_pull_response(id, result);
+            return Ok(());
+        }
         if self.responses.len() >= MAX_UNCLAIMED_RESPONSES {
             self.responses.clear();
         }
@@ -671,7 +950,6 @@ impl LspService {
             | "client/registerCapability"
             | "client/unregisterCapability"
             | "window/showMessageRequest"
-            | "workspace/diagnostic/refresh"
             | "workspace/semanticTokens/refresh"
             | "workspace/inlayHint/refresh"
             | "workspace/codeLens/refresh" => Value::Null,
@@ -688,6 +966,15 @@ impl LspService {
                     .collect(),
             ),
             "workspace/workspaceFolders" => json!([workspace_folder(&self.root)?]),
+            // The server's view changed (rust-analyzer after an edit or a check): pull again.
+            "workspace/diagnostic/refresh" => {
+                self.send(&json!({"jsonrpc":"2.0","id":id,"result":Value::Null}))?;
+                let open: Vec<PathBuf> = self.open_documents.keys().cloned().collect();
+                for path in open {
+                    self.request_pull(&path);
+                }
+                return Ok(());
+            }
             "workspace/applyEdit" => {
                 // Answered by the IDE once it applied the edit.
                 self.apply_edits.push(ApplyEditRequest {
@@ -724,9 +1011,8 @@ impl LspService {
                     .flatten()
                     .filter_map(parse_diagnostic)
                     .collect::<Vec<_>>();
-                // An empty list is kept: it records that the file was checked.
-                self.diagnostics.insert(path, diagnostics);
-                self.diagnostics_revision = next_revision();
+                self.pushed.insert(path.clone(), diagnostics);
+                self.merge_diagnostics(&path);
             }
             "$/progress" => self.handle_progress(params),
             "window/showMessage" => {
@@ -824,7 +1110,9 @@ impl LspService {
             &json!({"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{
                 "uri":file_uri(path)?,"languageId":language_id,"version":version,"text":text
             }}}),
-        )
+        )?;
+        self.request_pull(path);
+        Ok(())
     }
 
     fn send(&mut self, message: &Value) -> Result<(), LspError> {
@@ -870,6 +1158,9 @@ pub fn client_capabilities() -> ClientCapabilities {
             ..Default::default()
         }),
         workspace: Some(WorkspaceClientCapabilities {
+            diagnostic: Some(DiagnosticWorkspaceClientCapabilities {
+                refresh_support: Some(true),
+            }),
             apply_edit: Some(true),
             workspace_edit: Some(WorkspaceEditClientCapabilities {
                 document_changes: Some(true),
@@ -881,6 +1172,12 @@ pub fn client_capabilities() -> ClientCapabilities {
             synchronization: Some(TextDocumentSyncClientCapabilities {
                 did_save: Some(true),
                 ..Default::default()
+            }),
+            // Pull diagnostics: rust-analyzer serves its native diagnostics only to a client
+            // that declares it.
+            diagnostic: Some(DiagnosticClientCapabilities {
+                dynamic_registration: Some(false),
+                related_document_support: Some(true),
             }),
             publish_diagnostics: Some(PublishDiagnosticsClientCapabilities {
                 related_information: Some(true),
@@ -1004,6 +1301,11 @@ fn configuration_section(settings: Option<&Value>, section: Option<&str>) -> Val
 }
 
 /// Revisions come from one counter so a restarted server never repeats one.
+/// The path as the server's `file://` URIs name it (they come from [`file_uri`]).
+fn canonical(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_owned())
+}
+
 fn next_revision() -> u64 {
     static REVISION: AtomicU64 = AtomicU64::new(1);
     REVISION.fetch_add(1, Ordering::Relaxed)

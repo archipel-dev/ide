@@ -43,7 +43,7 @@ impl IdeApp {
     /// The facts only the window knows, for the view builders.
     pub(crate) fn view_data(&self) -> archipel_ide_view::UiData {
         archipel_ide_view::UiData {
-            find_query: self.find.query.clone(),
+            find_query: self.find.query().to_owned(),
             tree_selection: self.tree_selection.clone(),
             ..archipel_ide_view::UiData::default()
         }
@@ -191,7 +191,7 @@ impl IdeApp {
     ) -> R {
         let ide = IdeDataProvider::new(&self.state, &self.commands);
         let ui = UiDataProvider {
-            find_query: &self.find.query,
+            find_query: self.find.query(),
             tree_selection: self.tree_selection.as_deref(),
         };
         let data = add(DataContext::new().with_provider(&ide).with_provider(&ui));

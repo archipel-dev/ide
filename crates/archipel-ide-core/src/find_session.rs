@@ -11,6 +11,7 @@
 
 use crate::name_match::{MatchMode, NameMatcher};
 use regex::{Regex, RegexBuilder};
+use std::cell::RefCell;
 use std::collections::HashSet;
 
 /// Matches counted at most (SRCH-FIL-010).
@@ -28,7 +29,7 @@ pub enum QueryError {
 }
 
 /// The options of the bar.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct Flags {
     pub match_case: bool,
     pub whole_words: bool,
@@ -424,6 +425,19 @@ pub struct FindSession {
     history: Vec<String>,
     replace_history: Vec<String>,
     last_action: Option<String>,
+    /// Replacements made since the frontend last took them, in the coordinates of the text
+    /// before the replacement (non-overlapping).
+    pending_edits: Vec<(Range, String)>,
+    /// Changes whenever the text does; keys the match cache.
+    generation: u64,
+    cache: RefCell<Option<MatchCache>>,
+}
+
+/// The matches of one (text, query, options, scope) combination.
+#[derive(Debug, Clone)]
+struct MatchCache {
+    key: (u64, String, Flags, Option<Range>),
+    matches: Vec<Range>,
 }
 
 impl FindSession {
@@ -456,7 +470,70 @@ impl FindSession {
             history: Vec::new(),
             replace_history: Vec::new(),
             last_action: None,
+            pending_edits: Vec::new(),
+            generation: 0,
+            cache: RefCell::new(None),
         }
+    }
+
+    /// The editor's text changed: the session works on `text` from now on, keeping the query,
+    /// the options and the history. Undo steps and excluded matches refer to the old text and
+    /// are dropped. Costs a copy of the text: call it when the document changed, not per frame.
+    pub fn set_text(&mut self, text: &str) {
+        self.text = text.chars().collect();
+        self.generation += 1;
+        self.undo.clear();
+        self.excluded.clear();
+        self.pending_edits.clear();
+        self.wrapped = false;
+        let len = self.text.len();
+        if let Some((s, e)) = self.scope {
+            self.scope = Some((s.min(len), e.min(len)));
+        }
+        for (anchor, head) in &mut self.selections {
+            *anchor = (*anchor).min(len);
+            *head = (*head).min(len);
+        }
+    }
+
+    /// The editor's selections moved (`(anchor, head)` per caret, the primary last).
+    pub fn set_selections(&mut self, selections: &[Range]) {
+        let selections = if selections.is_empty() {
+            vec![(0, 0)]
+        } else {
+            selections.to_vec()
+        };
+        if self.selections != selections {
+            self.selections = selections;
+            self.wrapped = false;
+        }
+    }
+
+    /// The replacements made since the last call, to be applied to the editor's document in one
+    /// step. Offsets refer to the text before the replacements.
+    pub fn take_edits(&mut self) -> Vec<(Range, String)> {
+        std::mem::take(&mut self.pending_edits)
+    }
+
+    /// The text of the replace field.
+    pub fn replacement(&self) -> &str {
+        &self.replacement
+    }
+
+    /// The search field was edited to `query` (as typing does: the search runs again).
+    pub fn set_query(&mut self, query: &str) {
+        if self.query == query {
+            return;
+        }
+        self.query = query.to_owned();
+        self.field_selected = false;
+        self.on_query_changed();
+    }
+
+    /// The replace field was edited to `replacement`.
+    pub fn set_replacement(&mut self, replacement: &str) {
+        self.replacement = replacement.to_owned();
+        self.field_selected = false;
     }
 
     pub fn text(&self) -> String {
@@ -570,15 +647,26 @@ impl FindSession {
 
     /// The matches inside the scope of the search (SRCH-FIL-025).
     pub fn matches(&self) -> Vec<Range> {
+        let key = (self.generation, self.query.clone(), self.flags, self.scope);
+        if let Some(cache) = self.cache.borrow().as_ref()
+            && cache.key == key
+        {
+            return cache.matches.clone();
+        }
         let all = find_matches(&self.text, &self.query, self.flags).unwrap_or_default();
-        match (self.flags.in_selection, self.scope) {
+        let matches = match (self.flags.in_selection, self.scope) {
             (true, Some((s, e))) => all
                 .into_iter()
                 .filter(|(ms, me)| *ms >= s && *me <= e)
                 .collect(),
             (true, None) => Vec::new(),
             _ => all,
-        }
+        };
+        *self.cache.borrow_mut() = Some(MatchCache {
+            key,
+            matches: matches.clone(),
+        });
+        matches
     }
 
     fn current_index_range(&self) -> Option<Range> {
@@ -933,6 +1021,9 @@ impl FindSession {
     fn apply(&mut self, edits: &[(Range, String)]) {
         self.undo.push((self.text.clone(), self.selections.clone()));
         let mut edits: Vec<&(Range, String)> = edits.iter().collect();
+        self.pending_edits
+            .extend(edits.iter().map(|edit| (*edit).clone()));
+        self.generation += 1;
         edits.sort_by_key(|e| std::cmp::Reverse(e.0.0));
         for ((s, e), repl) in edits {
             let repl: Vec<char> = repl.chars().collect();
@@ -943,6 +1034,8 @@ impl FindSession {
     /// `Ctrl+Z`: undoes the last replacement.
     pub fn undo(&mut self) {
         if let Some((text, selections)) = self.undo.pop() {
+            self.generation += 1;
+            self.pending_edits.clear();
             self.text = text;
             self.selections = selections;
         }
@@ -1136,5 +1229,38 @@ mod tests {
         assert_eq!(expand_template("$12", &re, &caps).unwrap(), "a2");
         assert_eq!(expand_template("$3", &re, &caps).unwrap_err(), "No group 3");
         assert_eq!(preserve_case("Foo", "bar"), "Bar");
+    }
+
+    #[test]
+    fn a_frontend_hands_over_text_and_selections_and_takes_the_edits() {
+        let mut s = FindSession::new("one two one", vec![(0, 0)]);
+        s.open_bar(true);
+        s.set_query("one");
+        s.set_replacement("1");
+        assert_eq!(s.counter(), "1/2");
+        assert_eq!(s.replacement(), "1");
+        s.replace_current();
+        assert_eq!(s.take_edits(), vec![((0, 3), "1".to_owned())]);
+        assert!(s.take_edits().is_empty(), "taken once");
+        // The editor applied them; the session is told the new text and the caret.
+        s.set_text("1 two one");
+        s.set_selections(&[(6, 9)]);
+        assert_eq!(s.counter(), "1/1");
+        s.replace_all();
+        assert_eq!(s.take_edits(), vec![((6, 9), "1".to_owned())]);
+        assert_eq!(s.status(), Some("1 occurrence replaced"));
+    }
+
+    #[test]
+    fn matches_are_cached_until_the_text_or_the_query_changes() {
+        let mut s = FindSession::new("a a a", vec![(0, 0)]);
+        s.set_query("a");
+        assert_eq!(s.matches().len(), 3);
+        assert_eq!(s.matches().len(), 3);
+        s.set_text("a a");
+        assert_eq!(s.matches().len(), 2);
+        s.toggle("words");
+        s.set_query("a a");
+        assert_eq!(s.matches().len(), 1);
     }
 }

@@ -25,7 +25,14 @@ pub struct Project {
 
 impl Project {
     pub fn new(name: &str, files: &[(&str, &str)]) -> Self {
-        let root = std::env::temp_dir().join(format!("archipel-tui-{name}-{}", std::process::id()));
+        // Tests of one binary run in parallel and may share a name: a counter keeps their
+        // directories apart, so one test's Drop cannot remove another's project.
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let unique = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "archipel-tui-{name}-{}-{unique:04}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&root);
         for (path, text) in files {
             let target = root.join(path);

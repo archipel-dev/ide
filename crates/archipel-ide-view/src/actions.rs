@@ -21,6 +21,7 @@ pub enum UiAction {
     FindNext,
     FindPrevious,
     FindInPath,
+    ReplaceInPath,
     SaveAll,
     NewProject,
     OpenProject,
@@ -45,6 +46,7 @@ pub fn ui_action(action: &str) -> Option<UiAction> {
         "FindNext" => UiAction::FindNext,
         "FindPrevious" => UiAction::FindPrevious,
         "FindInPath" | "FindSelectionInPath" => UiAction::FindInPath,
+        "ReplaceInPath" => UiAction::ReplaceInPath,
         "SaveAll" => UiAction::SaveAll,
         "NewProject" | "WelcomeScreen.DefaultNewProjectAction" => UiAction::NewProject,
         "OpenFile" => UiAction::OpenProject,
@@ -64,7 +66,7 @@ pub fn ui_action(action: &str) -> Option<UiAction> {
 
 /// Every reference action id the window implements itself, with its action.
 pub fn ui_action_ids() -> impl Iterator<Item = (&'static str, UiAction)> {
-    const IDS: [&str; 22] = [
+    const IDS: [&str; 23] = [
         "GotoLine",
         "FileStructurePopup",
         "Find",
@@ -73,6 +75,7 @@ pub fn ui_action_ids() -> impl Iterator<Item = (&'static str, UiAction)> {
         "FindPrevious",
         "FindInPath",
         "FindSelectionInPath",
+        "ReplaceInPath",
         "SaveAll",
         "NewProject",
         "WelcomeScreen.DefaultNewProjectAction",
@@ -154,6 +157,7 @@ impl AnAction for UiActionImpl {
             UiAction::Copy => data.flag(&command_enabled("editor.copy")),
             UiAction::Cut => data.flag(&command_enabled("editor.cut")),
             UiAction::FindInPath
+            | UiAction::ReplaceInPath
             | UiAction::SaveAll
             | UiAction::NewProject
             | UiAction::OpenProject

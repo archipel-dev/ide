@@ -841,6 +841,9 @@ impl IdeApp {
                 self.dispatch("navigate.switcherCancel", Value::Null);
             } else if self.state.ai.pending_apply.is_some() {
                 self.dispatch("ai.chat.applyCancel", Value::Null);
+            } else if self.find_popup.confirm_open() {
+                // Escape answers the confirmation of Replace All first.
+                self.find_popup.cancel_confirmation();
             } else if self.palette.open || self.find_popup.open {
                 self.palette.open = false;
                 self.find_popup.open = false;
@@ -854,12 +857,11 @@ impl IdeApp {
                 self.dispatch("language.closeParameterInfo", Value::Null);
             } else if self.state.snippet.is_some() {
                 self.dispatch("snippet.exit", Value::Null);
-            } else if self.find.open {
+            } else if self.find.is_open() {
                 // One Escape closes the find bar from the query field or the
                 // editor. Do not test focus here: egui already surrendered the
                 // focused text field on this very Escape, so nothing is focused.
-                self.find.open = false;
-                ctx.memory_mut(|memory| memory.request_focus(editor::editor_id()));
+                self.close_find_bar(ctx);
             } else if self.editor_focused(ctx) && self.editor_uses_escape() {
                 // ED-CARET-090: several carets or a selection: keep the oldest caret.
                 self.dispatch("editor.action", json!({"action": "EditorEscape"}));
@@ -1288,10 +1290,43 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join(file), text).unwrap();
-        let app = IdeApp::new(Some(root.clone()), vec![root.join(file)]);
+        let mut app = IdeApp::new(Some(root.clone()), vec![root.join(file)]);
+        // Without a settings file (a fresh CI home) the first-run wizard opens and takes Escape.
+        app.state.first_run_open = false;
         let ctx = egui::Context::default();
         install_theme(&ctx);
         (app, ctx)
+    }
+
+    /// One frame with `chord` pressed, as egui-winit would deliver it (the modifiers and the key
+    /// events, and the text event of a printable key).
+    pub(crate) fn press(app: &mut IdeApp, ctx: &egui::Context, chord: &str) {
+        let (modifiers, events) = control::key_events(chord).unwrap();
+        let mut input = frame_input(events);
+        input.modifiers = modifiers;
+        let _ = ctx.run(input, |ctx| app.frame(ctx));
+    }
+
+    /// Types `text`, one character per frame.
+    pub(crate) fn type_text(app: &mut IdeApp, ctx: &egui::Context, text: &str) {
+        for letter in text.chars() {
+            let input = frame_input(vec![egui::Event::Text(letter.to_string())]);
+            let _ = ctx.run(input, |ctx| app.frame(ctx));
+        }
+    }
+
+    /// A primary click at `pos`: move, press and release, each on its own frame.
+    pub(crate) fn click(app: &mut IdeApp, ctx: &egui::Context, pos: egui::Pos2) {
+        let frames = control::click_frames(pos, archipel_ide_control::PointerButton::Primary, 1);
+        for frame in frames {
+            let mut input = frame_input(frame.events);
+            input.modifiers = frame.modifiers;
+            let _ = ctx.run(input, |ctx| app.frame(ctx));
+        }
+    }
+
+    pub(crate) fn idle(app: &mut IdeApp, ctx: &egui::Context) {
+        let _ = ctx.run(frame_input(Vec::new()), |ctx| app.frame(ctx));
     }
 
     pub(crate) fn frame_input(events: Vec<egui::Event>) -> egui::RawInput {

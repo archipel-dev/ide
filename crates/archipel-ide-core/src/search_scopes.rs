@@ -153,6 +153,15 @@ impl IdeState {
             .unwrap_or_default()
     }
 
+    /// The project-relative directory of the Directory scope.
+    pub fn search_directory(&self) -> Option<PathBuf> {
+        self.project_view.search_scope.clone()
+    }
+
+    pub fn set_search_directory(&mut self, directory: Option<PathBuf>) {
+        self.project_view.search_scope = directory;
+    }
+
     pub fn search_custom_scope(&self) -> Option<String> {
         self.find()
             .and_then(|find| find.read().custom_scope.clone())

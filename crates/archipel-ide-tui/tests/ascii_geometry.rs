@@ -34,16 +34,34 @@ fn screen_of(ascii: bool, size: (u16, u16)) -> (Project, Vec<Vec<String>>) {
     });
     app.set_ascii_glyphs(ascii);
     let mut tui = Tui::with_app(app, size.0, size.1);
+    let snapshot = |tui: &Tui| -> Vec<Vec<String>> {
+        let buffer = tui.buffer();
+        (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol().to_owned())
+                    .collect()
+            })
+            .collect()
+    };
+    // The project import fills the tree asynchronously: wait until the screen above the
+    // status bar (which animates the progress) has settled for a few frames.
     tui.advance(0.4);
-    tui.advance(0.1);
-    let buffer = tui.buffer();
-    let rows = (0..buffer.area.height)
-        .map(|y| {
-            (0..buffer.area.width)
-                .map(|x| buffer[(x, y)].symbol().to_owned())
-                .collect()
-        })
-        .collect();
+    let mut rows = snapshot(&tui);
+    let mut stable = 0;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while stable < 5 && std::time::Instant::now() < deadline {
+        tui.advance(0.1);
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let next = snapshot(&tui);
+        let height = next.len().saturating_sub(1);
+        if next[..height] == rows[..height] {
+            stable += 1;
+        } else {
+            stable = 0;
+        }
+        rows = next;
+    }
     (project, rows)
 }
 

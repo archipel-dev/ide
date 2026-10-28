@@ -897,7 +897,7 @@ impl TuiApp {
                 DialogKind::GotoLine,
                 |content| content.placeholder("12 or 12:5"),
             ),
-            UiAction::FindInPath => {
+            UiAction::FindInPath | UiAction::ReplaceInPath => {
                 let query = self.selected_text().unwrap_or_default();
                 let options = self.ide.state().search_options();
                 self.input_dialog(

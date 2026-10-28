@@ -125,21 +125,13 @@ impl IdeApp {
                 query: String::new(),
                 selected: None,
             }),
-            UiAction::Find | UiAction::Replace => {
-                let selection = self.primary_selection_text();
-                self.find.show(action == UiAction::Replace, selection);
-            }
+            UiAction::Find | UiAction::Replace => self.open_find_bar(action == UiAction::Replace),
             UiAction::FindNext | UiAction::FindPrevious => {
-                let id = if action == UiAction::FindNext {
-                    "editor.findNext"
-                } else {
-                    "editor.findPrevious"
-                };
-                self.dispatch(id, self.find.params());
+                self.find_step(action == UiAction::FindNext);
             }
-            UiAction::FindInPath => {
+            UiAction::FindInPath | UiAction::ReplaceInPath => {
                 let selection = self.primary_selection_text();
-                self.open_find_popup(selection);
+                self.open_find_popup(selection, action == UiAction::ReplaceInPath);
             }
             UiAction::SaveAll => self.autosave(),
             UiAction::NewProject => self.new_project_dialog(),

@@ -56,6 +56,7 @@ pub const CHORDS: &[(&str, &str)] = &[
     ("GotoAction", "A"),
     ("GotoFile", "N"),
     ("FindInPath", "F"),
+    ("ReplaceInPath", "R"),
     ("RecentLocations", "L"),
     ("$Redo", "Z"),
     ("CloseContent", "W"),

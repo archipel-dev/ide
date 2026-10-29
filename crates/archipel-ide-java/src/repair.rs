@@ -85,13 +85,30 @@ pub fn prepare(text: &str, tree: Option<&Tree>) -> Option<Prepared> {
         }
     };
     if tree.root_node().has_error()
-        && let Some(p) = try_repair(text, tree)
+        && let Some(p) = try_repair(text, tree, &|t| source::parse(t))
     {
         return Some(p);
     }
     Some(Prepared {
         text: text.to_string(),
         tree: tree.clone(),
+        inserts: Vec::new(),
+    })
+}
+
+/// Like [`prepare`], parsing incrementally from `base` (the text and tree of the previous
+/// version of the file): the repaired text is parsed from the tree of the broken one, so the
+/// work per keystroke is the changed span, not the file.
+pub fn prepare_incremental(text: &str, base: Option<(&str, &Tree)>) -> Option<Prepared> {
+    let tree = source::reparse(base, text)?;
+    if tree.root_node().has_error()
+        && let Some(p) = try_repair(text, &tree, &|t| source::reparse(Some((text, &tree)), t))
+    {
+        return Some(p);
+    }
+    Some(Prepared {
+        text: text.to_string(),
+        tree,
         inserts: Vec::new(),
     })
 }
@@ -115,7 +132,7 @@ fn error_score(root: Node<'_>) -> usize {
     score
 }
 
-fn try_repair(text: &str, tree: &Tree) -> Option<Prepared> {
+fn try_repair(text: &str, tree: &Tree, parse: &dyn Fn(&str) -> Option<Tree>) -> Option<Prepared> {
     let inserts = candidates(text);
     if inserts.is_empty() {
         return None;
@@ -130,7 +147,7 @@ fn try_repair(text: &str, tree: &Tree) -> Option<Prepared> {
         recorded.push((*at, add.len()));
     }
     out.push_str(&text[last..]);
-    let repaired = source::parse(&out)?;
+    let repaired = parse(&out)?;
     if error_score(repaired.root_node()) >= error_score(tree.root_node()) {
         return None;
     }

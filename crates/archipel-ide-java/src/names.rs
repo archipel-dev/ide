@@ -189,6 +189,8 @@ pub struct NameMatcher {
     pattern: Vec<char>,
     lower: Vec<char>,
     text: String,
+    /// Every pattern character is ASCII (the allocation-free path for ASCII names).
+    ascii: bool,
 }
 
 fn is_hump(chars: &[char], i: usize) -> bool {
@@ -217,9 +219,20 @@ impl NameMatcher {
         let chars: Vec<char> = pattern.chars().collect();
         Self {
             lower: chars.iter().flat_map(|c| c.to_lowercase()).collect(),
+            ascii: chars.iter().all(char::is_ascii),
             pattern: chars,
             text: pattern.to_string(),
         }
+    }
+
+    /// The first pattern character when it is ASCII: every match except a later-hump match
+    /// (`Builder` in `StringBuilder`) starts with it, ignoring case, so a scan can look at the
+    /// first byte of a name before it runs the matcher.
+    pub fn first_ascii(&self) -> Option<u8> {
+        self.pattern
+            .first()
+            .filter(|c| c.is_ascii())
+            .map(|c| *c as u8)
     }
 
     pub fn pattern(&self) -> &str {
@@ -241,7 +254,7 @@ impl NameMatcher {
         if name.starts_with(&self.text) {
             return Some(MatchClass::Prefix);
         }
-        if self.pattern.iter().all(char::is_ascii) && name.is_ascii() {
+        if self.ascii && name.is_ascii() {
             return self.classify_ascii(name.as_bytes());
         }
         // Cheap rejection: every pattern letter occurs in order (ignoring case).

@@ -578,3 +578,84 @@ fn java_res_030_ad_hoc_module_for_files_outside_every_module() {
         a.problems
     );
 }
+
+/// The scan looks at the first letter of a name before it runs the matcher and only scans the
+/// rest for later-hump matches when the first pass did not fill the limit: with no limit the
+/// answer is exactly the matcher's over every name, whatever the pattern starts with.
+#[test]
+fn the_first_letter_scan_finds_what_the_plain_matcher_finds() {
+    use archipel_ide_java::names::NameMatcher;
+    let p = junit_project();
+    let scope = p.project.scope_for(&p.path("src/test/java/p/AppTest.java"));
+    let index = &p.project.index;
+    let all = index.names_matching(&scope, "", &any, 0).unwrap();
+    for pattern in [
+        "Arr", "arr", "ArLi", "Builder", "bu", "Test", "IOE", "_", "x", "StrBu", "E",
+    ] {
+        let m = NameMatcher::new(pattern);
+        let mut want: Vec<String> = all
+            .iter()
+            .filter(|h| m.classify(h.entry.name()).is_some())
+            .map(|h| h.entry.fqn.to_string())
+            .collect();
+        let mut got = fqns(&index.names_matching(&scope, pattern, &any, 0).unwrap());
+        want.sort();
+        got.sort();
+        assert_eq!(got, want, "pattern `{pattern}`");
+    }
+    // With a limit the best matches are the same: later-hump matches only fill what is left.
+    let limited = fqns(&index.names_matching(&scope, "Arr", &any, 5).unwrap());
+    assert_eq!(limited.len(), 5);
+    let m = NameMatcher::new("Arr");
+    assert!(limited.iter().all(|f| {
+        let name = f.rsplit('.').next().unwrap();
+        m.classify(name).is_some()
+    }));
+    assert!(
+        limited
+            .iter()
+            .take(3)
+            .all(|f| f.rsplit('.').next().unwrap().starts_with("Arr")),
+        "{limited:?}"
+    );
+}
+
+/// JAVA-STUB-014: the static member name index lists non-private static methods, fields and
+/// enum constants by name; instance members and constructors are not in it.
+#[test]
+fn java_stub_014_the_static_member_name_index() {
+    use archipel_ide_java::names::NameMatcher;
+    let p = junit_project();
+    let scope = p.project.scope_for(&p.path("src/test/java/p/AppTest.java"));
+    let index = &p.project.index;
+    let hits = index
+        .static_members_matching(&scope, &NameMatcher::new("assertTr"), 10, 50)
+        .unwrap();
+    assert!(
+        hits.iter().any(|h| {
+            !h.field
+                && h.class.class().qname == "org.junit.jupiter.api.Assertions"
+                && h.class.class().methods[h.index].name == "assertTrue"
+        }),
+        "{} hits",
+        hits.len()
+    );
+    // `size` is an instance method everywhere in the JDK collections: no static `List.size`.
+    let hits = index
+        .static_members_matching(&scope, &NameMatcher::new("size"), 5, 200)
+        .unwrap();
+    assert!(
+        hits.iter()
+            .all(|h| h.field || h.class.class().methods[h.index].flags & 8 != 0),
+        "only static members are indexed"
+    );
+    // Enum constants and interface fields count as static fields.
+    let hits = index
+        .static_members_matching(&scope, &NameMatcher::new("MAX_VALUE"), 5, 50)
+        .unwrap();
+    assert!(
+        hits.iter()
+            .any(|h| h.field && h.class.class().qname == "java.lang.Integer"),
+        "Integer.MAX_VALUE"
+    );
+}

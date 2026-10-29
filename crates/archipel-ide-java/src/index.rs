@@ -17,6 +17,7 @@
 //! | `Java:SuperClass` | short name of every extends/implements type, `Enum`, `Annotation` | `ClassRef` |
 //! | `Java:Package` | package and every parent package | `u8` (1: has classes) |
 //! | `Java:Names` | package of every named class | [`NameRecord`] (FQN, kind, flags, deprecated, targets) |
+//! | `Java:StaticMember` | name of every static method, static field and enum constant that is not private (JAVA-STUB-014) | [`StaticRef`] |
 //!
 //! Queries take a [`ResolveScope`] (JAVA-STUB-017) and return [`NotReady`] while the
 //! indexes are not complete (dumb mode, JAVA-STUB-026).
@@ -49,7 +50,8 @@ pub mod ids {
     pub const SUPER_CLASS: IndexId = IndexId("Java:SuperClass");
     pub const PACKAGE: IndexId = IndexId("Java:Package");
     pub const NAMES: IndexId = IndexId("Java:Names");
-    pub const ALL: [IndexId; 9] = [
+    pub const STATIC_MEMBER: IndexId = IndexId("Java:StaticMember");
+    pub const ALL: [IndexId; 10] = [
         STUB,
         CLASS,
         SHORT_NAME,
@@ -59,11 +61,12 @@ pub mod ids {
         SUPER_CLASS,
         PACKAGE,
         NAMES,
+        STATIC_MEMBER,
     ];
 }
 
 /// Version of the stub format and of every index; a change reindexes (JAVA-STUB-028).
-pub const STUB_VERSION: &str = "java-stubs-3";
+pub const STUB_VERSION: &str = "java-stubs-4";
 
 /// The index cannot answer yet (dumb mode).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -101,6 +104,21 @@ pub struct ClassRef {
 pub struct MemberRef {
     pub class: ClassRef,
     pub index: u32,
+}
+
+/// A static member in `Java:StaticMember` (JAVA-STUB-014): the member and whether it is a field.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StaticRef {
+    pub member: MemberRef,
+    pub field: bool,
+}
+
+/// A static member found through the static member name index.
+#[derive(Debug, Clone)]
+pub struct StaticHit {
+    pub class: ClassHit,
+    pub index: usize,
+    pub field: bool,
 }
 
 /// A class found through the indexes.
@@ -217,12 +235,24 @@ pub struct Inner {
     cache: Mutex<HashMap<(u32, String), Arc<StubRecord>>>,
     /// In-memory mirror of `Java:Names` per unit (the hot path of class-name completion).
     names: RwLock<NameTable>,
+    /// The last tree parsed per file and purpose: completion parses the buffer on every
+    /// keystroke, so a new parse starts from the previous tree (`source::reparse`).
+    trees: Mutex<Vec<RememberedTree>>,
+    /// The names of every method and every field of the indexes, by index epoch: the candidate
+    /// list of static members on the second press (JAVA-CMP-022).
+    member_names: Mutex<HashMap<&'static str, EpochNames>>,
     /// Directory of the library cache shared by projects (stubs of a jar by content hash).
     shared: RwLock<Option<PathBuf>>,
     shared_hits: AtomicU64,
     persistent: bool,
     pub log: Mutex<Vec<String>>,
 }
+
+/// The text and tree last parsed for a file and a purpose.
+type RememberedTree = ((PathBuf, u8), (String, tree_sitter::Tree));
+
+/// The names of an index as of an index epoch.
+type EpochNames = (u64, Arc<Vec<String>>);
 
 /// The Java indexes of one project. Cheap to clone.
 #[derive(Clone)]
@@ -343,6 +373,17 @@ pub fn entries_for(files: &[FileStub]) -> Entries {
                         index: i as u32,
                     };
                     add(&mut out, ids::METHOD, &m.name, enc(&mref));
+                    if !m.is_ctor && m.flags & flags::STATIC != 0 && m.flags & flags::PRIVATE == 0 {
+                        add(
+                            &mut out,
+                            ids::STATIC_MEMBER,
+                            &m.name,
+                            enc(&StaticRef {
+                                member: mref,
+                                field: false,
+                            }),
+                        );
+                    }
                 }
                 for (i, fl) in c.fields.iter().enumerate() {
                     let mref = MemberRef {
@@ -350,6 +391,20 @@ pub fn entries_for(files: &[FileStub]) -> Entries {
                         index: i as u32,
                     };
                     add(&mut out, ids::FIELD, &fl.name, enc(&mref));
+                    // Interface fields and enum constants are implicitly static.
+                    let is_static =
+                        fl.flags & flags::STATIC != 0 || fl.enum_constant || c.is_interface_like();
+                    if is_static && fl.flags & flags::PRIVATE == 0 {
+                        add(
+                            &mut out,
+                            ids::STATIC_MEMBER,
+                            &fl.name,
+                            enc(&StaticRef {
+                                member: mref,
+                                field: true,
+                            }),
+                        );
+                    }
                 }
                 let mut annotations: Vec<&str> = c
                     .annotations
@@ -425,6 +480,8 @@ impl JavaIndex {
             epoch: AtomicU64::new(1),
             cache: Mutex::new(HashMap::new()),
             names: RwLock::new(NameTable::default()),
+            member_names: Mutex::new(HashMap::new()),
+            trees: Mutex::new(Vec::new()),
             shared: RwLock::new(None),
             shared_hits: AtomicU64::new(0),
             persistent,
@@ -1229,13 +1286,32 @@ impl JavaIndex {
             .iter()
             .map(|(u, _)| names.by_unit.get(u).map_or(0, Vec::len))
             .sum();
-        let scan = |chunk: &[(u32, u32)]| -> Vec<(u64, u32, u32)> {
+        // Matches other than a later-hump one start with the pattern's first letter (ignoring
+        // case): a first scan only runs the matcher on names that do, which is about one name
+        // in twenty; the rest are scanned only when that did not fill the limit (they can only
+        // rank after, as `Middle` matches).
+        let first = matcher.first_ascii();
+        // A few more than `limit` survive for the duplicate FQNs of several units.
+        let cap = limit * 4;
+        let scan = |chunk: &[(u32, u32)], rest: bool| -> Vec<(u64, u32, u32)> {
             let mut keys = Vec::new();
             for (unit, rank) in chunk {
                 let Some(entries) = names.by_unit.get(unit) else {
                     continue;
                 };
                 for (i, e) in entries.iter().enumerate() {
+                    if let Some(f) = first {
+                        let same = e
+                            .name()
+                            .as_bytes()
+                            .first()
+                            .is_some_and(|b| b.eq_ignore_ascii_case(&f));
+                        if same == rest {
+                            continue;
+                        }
+                    } else if rest {
+                        continue;
+                    }
                     if let Some(class) = matcher.classify(e.name())
                         && accept(e)
                     {
@@ -1243,6 +1319,12 @@ impl JavaIndex {
                             | (e.name().len().min(0xffff) as u64) << 32
                             | u64::from(*rank);
                         keys.push((key, *unit, i as u32));
+                        // Only the best few can survive: keep the list short instead of
+                        // collecting every match of a pattern that matches half of the table.
+                        if cap > 0 && keys.len() >= cap * 2 {
+                            keys.select_nth_unstable(cap);
+                            keys.truncate(cap);
+                        }
                     }
                 }
             }
@@ -1254,25 +1336,30 @@ impl JavaIndex {
         } else {
             1
         };
-        let mut keys: Vec<(u64, u32, u32)> = if workers > 1 {
-            let size = units.len().div_ceil(workers).max(1);
-            std::thread::scope(|s| {
-                let handles: Vec<_> = units
-                    .chunks(size)
-                    .map(|chunk| s.spawn(|| scan(chunk)))
-                    .collect();
-                handles
-                    .into_iter()
-                    .flat_map(|h| h.join().unwrap_or_default())
-                    .collect()
-            })
-        } else {
-            scan(&units)
+        let run = |rest: bool| -> Vec<(u64, u32, u32)> {
+            if workers > 1 {
+                let size = units.len().div_ceil(workers).max(1);
+                std::thread::scope(|s| {
+                    let handles: Vec<_> = units
+                        .chunks(size)
+                        .map(|chunk| s.spawn(move || scan(chunk, rest)))
+                        .collect();
+                    handles
+                        .into_iter()
+                        .flat_map(|h| h.join().unwrap_or_default())
+                        .collect()
+                })
+            } else {
+                scan(&units, rest)
+            }
         };
-        // A few more than `limit` survive for the duplicate FQNs of several units.
-        if limit > 0 && keys.len() > limit * 4 {
-            keys.select_nth_unstable(limit * 4);
-            keys.truncate(limit * 4);
+        let mut keys = run(false);
+        if first.is_some() && (limit == 0 || keys.len() < limit) {
+            keys.extend(run(true));
+        }
+        if cap > 0 && keys.len() > cap {
+            keys.select_nth_unstable(cap);
+            keys.truncate(cap);
         }
         const CLASSES: [crate::names::MatchClass; 5] = [
             crate::names::MatchClass::Exact,
@@ -1396,6 +1483,90 @@ impl JavaIndex {
             }
         }
         Ok(out)
+    }
+
+    /// Static members named like `matcher` in `scope`, nearest match first, from the static
+    /// member name index (JAVA-STUB-014, JAVA-CMP-022): at most `max_names` names and `max_hits`
+    /// members in all, so the number of decoded stubs is bounded.
+    pub fn static_members_matching(
+        &self,
+        scope: &ResolveScope,
+        matcher: &NameMatcher,
+        max_names: usize,
+        max_hits: usize,
+    ) -> Result<Vec<StaticHit>, NotReady> {
+        self.ready()?;
+        let epoch = self.epoch();
+        let all = {
+            let mut cache = self.inner.member_names.lock();
+            match cache.get(ids::STATIC_MEMBER.0) {
+                Some((e, names)) if *e == epoch => names.clone(),
+                _ => {
+                    let names: Arc<Vec<String>> = Arc::new(
+                        self.inner
+                            .store
+                            .keys(ids::STATIC_MEMBER)
+                            .into_iter()
+                            .filter_map(|k| String::from_utf8(k).ok())
+                            .collect(),
+                    );
+                    cache.insert(ids::STATIC_MEMBER.0, (epoch, names.clone()));
+                    names
+                }
+            }
+        };
+        let mut matched: Vec<(crate::names::MatchClass, usize, &String)> = all
+            .iter()
+            .filter_map(|n| matcher.classify(n).map(|c| (c, n.len(), n)))
+            .collect();
+        matched.sort();
+        let mut out = Vec::new();
+        for (_, _, name) in matched.into_iter().take(max_names) {
+            for (unit, rank, v) in self.hits(ids::STATIC_MEMBER, name, scope) {
+                if out.len() >= max_hits {
+                    return Ok(out);
+                }
+                if let Ok(r) = postcard::from_bytes::<StaticRef>(&v)
+                    && let Some(class) = self.class_hit(unit, rank, &r.member.class)
+                {
+                    out.push(StaticHit {
+                        class,
+                        index: r.member.index as usize,
+                        field: r.field,
+                    });
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    /// The text and tree last remembered for `path` and `purpose`.
+    pub fn remembered_tree(&self, path: &Path, purpose: u8) -> Option<(String, tree_sitter::Tree)> {
+        self.inner
+            .trees
+            .lock()
+            .iter()
+            .find(|((p, k), _)| p == path && *k == purpose)
+            .map(|(_, v)| v.clone())
+    }
+
+    /// Remembers the tree of `text` for the next incremental parse (the last few files only).
+    pub fn remember_tree(&self, path: &Path, purpose: u8, text: String, tree: tree_sitter::Tree) {
+        let mut trees = self.inner.trees.lock();
+        trees.retain(|((p, k), _)| !(p == path && *k == purpose));
+        trees.push(((path.to_path_buf(), purpose), (text, tree)));
+        if trees.len() > 6 {
+            trees.remove(0);
+        }
+    }
+
+    /// The tree of `text` (a version of the file at `path`), parsed from the one remembered for
+    /// the same purpose, and remembered in turn.
+    pub fn parse_cached(&self, path: &Path, purpose: u8, text: &str) -> Option<tree_sitter::Tree> {
+        let base = self.remembered_tree(path, purpose);
+        let tree = source::reparse(base.as_ref().map(|(t, tr)| (t.as_str(), tr)), text)?;
+        self.remember_tree(path, purpose, text.to_string(), tree.clone());
+        Some(tree)
     }
 
     /// Every key of a class-name index (all short names), for completion (06).

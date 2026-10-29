@@ -29,7 +29,7 @@ ProjectModel (archipel-ide-externalsystem)        buffers, watcher
         |  entries_for                      persistent: RedbStore of archipel-ide-index
         v
   Java:Stub  Java:Class  Java:ShortName  Java:Method  Java:Field  Java:Annotation
-  Java:SuperClass  Java:Package  Java:Names   (all keyed by unresolved short text; Names: per package,
+  Java:SuperClass  Java:Package  Java:Names  Java:StaticMember   (all keyed by unresolved short text; Names: per package,
         |                                      with kind, flags, deprecated and annotation targets)
         |  ClasspathSnapshot (module + scope: units in classpath order, completeness) -> ResolveScope
         v
@@ -101,6 +101,74 @@ scope and the SDK; a test file also sees its own module's test sources and the t
 file under content but outside every source root resolves only to itself. Library *sources* are not
 indexed and never part of a scope (resolution uses class files, PLAT-SCOPE-064).
 
+## Types of expressions (the M5 slice completion needs, JAVA-TYP-001..003, 013, 025)
+
+`ty::Ty` is a closed structural model: unknown, null, primitives, class types (FQN of the erasure, simple name,
+type arguments), arrays, type variables and wildcards (`? extends T`, `? super T`, `?`, only as arguments).
+The presentable form is derived from the structure, never stored, so substitution rebuilds types instead of
+editing strings (`Ty::subst` for reads, `Ty::subst_partial` for signatures that keep unbound variables).
+`analyze/types.rs` types an expression on demand, memoized per node: literals, `new` and array creation,
+`this` (with its own type parameters as arguments), `Foo.class`, casts, operators, assignments, locals and
+parameters from their declared type, `var` from its initializer, pattern variables from their pattern,
+enhanced-`for` variables from the element type of the iterated expression, fields (through the enclosing class
+that inherits them, so `class Sub extends Base<String>` sees `T` as `String`), field chains (`this.items`,
+`Type.CONSTANT`, `a.b.c`) and calls. A call's return type is the declared one seen through the receiver's type
+arguments (`List<String>.get(0)` is `String`); the candidates are the methods of that name of the right arity
+(an overridden declaration hides the inherited one) that accept the known argument types, and they must agree
+on the return type, otherwise it is unknown. Nothing is inferred (generic method type parameters, lambdas,
+diamond arguments are unknown), and an unknown type never produces a member and never an error (JAVA-TYP-032):
+M5 adds inference on the same model, subtyping and capture instead of replacing it.
+
+`analyze/members.rs` enumerates the members of a receiver (`Receiver`: the classes whose members count, the
+static type for substitution, type or value qualifier, arrays, `this`/`super`): fields, enum constants,
+methods and member types of the class and every supertype, overridden declarations collapsed by name and erased
+parameter types, static interface methods neither inherited nor callable on an instance (JLS 8.4.8, 15.12.3),
+synthetic members (`values()`, `valueOf`, record accessors, array `length` and `clone()`), accessibility by
+JLS 6.6 (a public member inherited from a package-private class stays reachable through its public subclass),
+signatures with the receiver's type arguments substituted. `analyze/caret.rs` answers what completion asks at
+the caret: the qualifier of a dot (a variable, a type or a package, in the order of JLS 6.5.2), the variables
+in scope (blocks, parameters, patterns, `for`, `try` resources, lambdas), the members of every enclosing class,
+the members reachable through static imports, the expected type (initializer, assignment, `return`, condition,
+`throw`, the parameter of a call whose candidates agree) and the statement context (loop, switch, `else`, `catch`).
+
+## Completion: member access, variants and keywords (M3, JAVA-CMP-001, 003, 008, 011, 016, 017, 022, 027, 028, 035)
+
+The caret is classified from the tokens before it (`complete/classify.rs`: annotation, `new`, type positions,
+**after a dot**, and the `Slot` of a declaration or expression: top level, class body, statement, expression,
+parameter, class header, method header, plus the words of the declaration so far and the statement a closing
+brace ended). Where the resolver is needed, `complete/probe.rs` replaces the typed prefix (and the rest of the
+identifier under the caret) by a placeholder identifier, repairs the broken statement (`repair.rs`), parses it
+and asks the resolver at the placeholder, so completion and errors share the scope walk and the typing. Then:
+
+- `q.|` (`complete/members.rs`): `expr.|` lists the instance members of the static type with the inherited ones,
+  `Type.|` the static members and member types (and `class`, `this` for an enclosing type), `pkg.|` the classes and
+  subpackages, `this.|`/`super.|` the members of the class chain. One row per method name, overloads merged
+  (the signature and the return type of the first declaration are the tails), deprecated rows struck through,
+  inaccessible members left out (offered, marked and ranked low on the second press). The members of `Object`
+  are listed after the domain members, also for interfaces. A receiver that cannot be typed (unresolved
+  symbol, incomplete classpath, an inference) offers nothing natively and the language server's rows show; a
+  primitive or a number literal before the dot offers nothing and says so (JAVA-CMP-003).
+- an unqualified identifier (`complete/variants.rs`): locals and parameters, then the fields and methods of the
+  enclosing classes nearest first (a local hides a field of the same name, a method of an inner class hides the
+  outer overloads), then static imports; instance members in a static context stay, ranked low.
+- keywords and modifiers (`complete/keywords.rs`): by slot and context, never conflicting with what is already
+  written (`abstract` removes `final`, `static`, `private`; `default` only in interfaces), `break` and `continue`
+  only in loops, `case`/`default` where a switch label starts, `else` after an `if`, `catch`/`finally` after a
+  `try`, `extends`/`implements`/`permits` in a class header, `throws` after parameters, `package`/`import` at the
+  top of a file, primitive types in declarations and after `new` (array creation).
+- static members on the second press (`complete/statics.rs`, JAVA-CMP-022): the `Java:StaticMember` index
+  (name of every non-private static method, field and enum constant, JAVA-STUB-014) gives the candidates of any
+  class in the resolve scope; one row per class and name, `Class.member` with the package as its tail; choosing
+  it writes `Class.member(` and imports the class, or just `member(` when the class is imported statically or
+  the caret is inside it.
+- ranking (`complete/weigh.rs`): a sort key per row in the order of the chain of spec 06 6.5 (kind
+  tier, discouraged, deprecated, expected-type match, statics preference, proximity, shorter) under the
+  platform's prefix quality and usage statistics. The expected type (`List<String> l = new Arr|`) puts the
+  inheritors of the expected class first (from the inheritor closure of the index): `ArrayList` before
+  `ArrayStoreException`.
+- insertion: `name()` for a method without parameters, `name(` with the caret inside otherwise (a snippet with
+  `$0`; an existing call keeps its parentheses), the simple name and the import for a class.
+
 ## Completion: class names (M3 slice, JAVA-CMP-009/018..021/025)
 
 `complete/classify.rs` classifies the caret from the *tokens before it* (a small lexer with a brace and
@@ -142,10 +210,16 @@ Left out on purpose; each is a `SHOULD` or `LATER` in the spec unless stated:
 
 - `JAVA-STUB-009/019` lambda, method-reference and local/anonymous class stubs: bodies are skipped
   entirely; local and anonymous classes are built on demand from the syntax tree of the current file.
-- `JAVA-STUB-014/015/016` static-member name/type, parameter-type, record-component and module indexes.
-- Completion is native for class names only (annotation, `new`, type positions, declaration and statement
-  starts); reference variants, member access, keywords, locals, static members on the second press, smart
-  completion and javadoc stay with the language server (plan M3 rest, M5).
+- `JAVA-STUB-014` is the static member *name* index only (`Java:StaticMember`); the static member type index and
+  `JAVA-STUB-015/016` (parameter-type, record-component and module indexes) are not built.
+- Completion is native for class names, member access, reference variants, keywords and modifiers and static
+  members on the second press; what stays with the language server: members of a receiver whose type needs
+  inference (lambda parameters, generic method results such as `stream().map(...).collect(...)`, diamond
+  arguments), smart completion and its extra items (JAVA-CMP-002, 033), lambda and method-reference items
+  (JAVA-CMP-010), annotation attributes and values (012), import positions (013), `case` labels and
+  patterns (014), javadoc (015), override and getter/setter generation (011 rest), enum constants for an
+  expected enum type, `Type::|` method references, the `Import statically` toggle of a static row, member names
+  (variable name suggestions).
 - `JAVA-RES-009` pattern-variable flow scoping (bindings anywhere in the enclosing member count as in
   scope), `JAVA-RES-008` static-context errors (018), `JAVA-RES-024/031/032` module imports,
   multi-release version selection by language level (selected by `META-INF/versions/N <= language level`

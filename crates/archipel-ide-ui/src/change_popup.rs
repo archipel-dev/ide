@@ -5,8 +5,8 @@
 use crate::icons::{self, Icon};
 use crate::{IdeApp, theme};
 use archipel_ide_git::{Hunk, HunkKind};
+use archipel_ide_view::popups::change::{self, Tool};
 use eframe::egui::{self, Color32, Pos2, Rect, Stroke, pos2, vec2};
-use serde_json::{Value, json};
 
 /// Width of the change bar; it sits between the line numbers and the text.
 const MARKER_WIDTH: f32 = 4.0;
@@ -98,9 +98,15 @@ fn tool_button(ui: &mut egui::Ui, icon: Icon, enabled: bool, tooltip: &str) -> b
     enabled && response.on_hover_text(tooltip).clicked()
 }
 
-fn text_button(ui: &mut egui::Ui, label: &str, tooltip: &str) -> bool {
-    ui.add(
-        egui::Button::new(egui::RichText::new(label).color(theme::TEXT))
+fn text_button(ui: &mut egui::Ui, label: &str, enabled: bool, tooltip: &str) -> bool {
+    let color = if enabled {
+        theme::TEXT
+    } else {
+        theme::TEXT_DISABLED
+    };
+    ui.add_enabled(
+        enabled,
+        egui::Button::new(egui::RichText::new(label).color(color))
             .fill(Color32::TRANSPARENT)
             .min_size(vec2(0.0, 24.0)),
     )
@@ -108,28 +114,26 @@ fn text_button(ui: &mut egui::Ui, label: &str, tooltip: &str) -> bool {
     .clicked()
 }
 
+/// The icon of an icon button of the model.
+fn icon_of(glyph: Option<archipel_kit_model::Glyph>) -> Icon {
+    match glyph {
+        Some(archipel_kit_model::Glyph::ChevronUp) => Icon::ChevronUp,
+        Some(archipel_kit_model::Glyph::ChevronDown) => Icon::ChevronDown,
+        _ => Icon::Close,
+    }
+}
+
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     let Some(popup) = app.change_popup.as_ref() else {
         return;
     };
-    let Some(index) = app
-        .state
-        .active_index()
-        .filter(|_| !app.state.diff_active())
-    else {
+    // The layout and the actions are the view crate's: the terminal draws the same popup.
+    let hunk = popup.hunk;
+    let Some(model) = app.with_view(|cx| change::change_popup(cx, hunk)) else {
         app.change_popup = None;
         return;
     };
-    let hunks = app.state.document_changes(index).to_vec();
-    let Some(hunk) = hunks.get(popup.hunk).cloned() else {
-        app.change_popup = None;
-        return;
-    };
-    let old_text = app.state.hunk_base_text(index, &hunk).unwrap_or_default();
-    let line_param = json!({"line": hunk.new.start});
-    let mut action: Option<(&'static str, Value)> = None;
-    let mut select = None;
-    let mut close = false;
+    let mut used: Option<Tool> = None;
     let area = egui::Area::new(egui::Id::new("vcs_change_popup"))
         .order(egui::Order::Foreground)
         .fixed_pos(popup.position + vec2(12.0, 6.0))
@@ -141,105 +145,86 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 2.0;
-                        let previous = popup.hunk.checked_sub(1);
-                        let next = (popup.hunk + 1 < hunks.len()).then_some(popup.hunk + 1);
-                        if tool_button(
-                            ui,
-                            Icon::ChevronUp,
-                            previous.is_some(),
-                            &format!("Previous Change ({})", crate::keys::display("⌃⌥⇧↑")),
-                        ) {
-                            select = previous;
-                        }
-                        if tool_button(
-                            ui,
-                            Icon::ChevronDown,
-                            next.is_some(),
-                            &format!("Next Change ({})", crate::keys::display("⌃⌥⇧↓")),
-                        ) {
-                            select = next;
-                        }
-                        ui.add_space(6.0);
-                        if text_button(
-                            ui,
-                            "Rollback",
-                            &format!("Rollback Lines ({})", crate::keys::display("⌥⌘Z")),
-                        ) {
-                            action = Some(("vcs.rollbackChange", line_param.clone()));
-                        }
-                        if text_button(ui, "Show Diff", "Show Diff") {
-                            action = Some(("vcs.showChangeDiff", line_param.clone()));
-                        }
-                        ui.add_space(6.0);
-                        if tool_button(ui, Icon::Close, true, "Close (Esc)") {
-                            close = true;
+                        let mut group = 0;
+                        for tool in &model.tools {
+                            if tool.group != group {
+                                group = tool.group;
+                                ui.add_space(6.0);
+                            }
+                            let clicked = match tool.label {
+                                Some(label) => text_button(ui, label, tool.enabled, &tool.tooltip),
+                                None => tool_button(
+                                    ui,
+                                    icon_of(tool.glyph),
+                                    tool.enabled,
+                                    &tool.tooltip,
+                                ),
+                            };
+                            if clicked {
+                                used = Some(tool.tool);
+                            }
                         }
                     });
-                    if !hunk.old.is_empty() {
-                        old_lines(ui, &old_text);
+                    if !model.old_lines.is_empty() {
+                        old_lines(ui, &model.old_lines, model.more);
                     }
                 });
         });
-    if let Some(next) = select {
-        // Follow the selected change in the editor too.
-        app.dispatch(
-            "editor.gotoLine",
-            json!({"line": hunks[next].new.start + 1}),
-        );
-        if let Some(popup) = app.change_popup.as_mut() {
+    let step = used.map(|tool| app.with_view(|cx| model.step(cx, tool)));
+    if let Some(step) = &step {
+        if let Some(next) = step.select
+            && let Some(popup) = app.change_popup.as_mut()
+        {
             popup.hunk = next;
         }
-        return;
+        if step.close {
+            app.change_popup = None;
+        }
+    } else {
+        let fresh = app
+            .change_popup
+            .as_mut()
+            .is_some_and(|popup| std::mem::take(&mut popup.fresh));
+        if !fresh && area.response.clicked_elsewhere() {
+            app.change_popup = None;
+        }
     }
-    let fresh = app
-        .change_popup
-        .as_mut()
-        .is_some_and(|popup| std::mem::take(&mut popup.fresh));
-    if action.is_some() || close || (!fresh && area.response.clicked_elsewhere()) {
-        app.change_popup = None;
-    }
-    if let Some((id, params)) = action {
-        app.dispatch(id, params);
+    if let Some(step) = step {
+        app.apply_view_effects(step.effects, ctx);
     }
 }
 
 /// The `HEAD` version of the changed lines.
-fn old_lines(ui: &mut egui::Ui, text: &str) {
-    let lines = archipel_ide_git::split_lines(text);
-    const MAX_LINES: usize = 20;
+fn old_lines(ui: &mut egui::Ui, lines: &[String], more: usize) {
     let font = egui::FontId::monospace(theme::EDITOR_FONT_SIZE);
     let width = lines
         .iter()
-        .take(MAX_LINES)
         .map(|line| line.chars().count())
         .max()
         .unwrap_or(0) as f32
         * ui.fonts_mut(|fonts| fonts.glyph_width(&font, 'm'))
         + 16.0;
-    let height = lines.len().min(MAX_LINES) as f32 * 20.0 + 6.0;
+    let height = lines.len() as f32 * 20.0 + 6.0;
     let (rect, _) = ui.allocate_exact_size(
         vec2(width.clamp(200.0, 900.0), height),
         egui::Sense::hover(),
     );
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 4.0, Color32::from_rgb(0x3E, 0x3F, 0x42));
-    for (row, line) in lines.iter().take(MAX_LINES).enumerate() {
+    for (row, line) in lines.iter().enumerate() {
         painter.text(
             pos2(
                 rect.left() + 8.0,
                 rect.top() + 3.0 + row as f32 * 20.0 + 10.0,
             ),
             egui::Align2::LEFT_CENTER,
-            line.replace('\t', "    "),
+            line,
             font.clone(),
             *theme::editor::TEXT,
         );
     }
-    if lines.len() > MAX_LINES {
-        ui.label(
-            egui::RichText::new(format!("… {} more lines", lines.len() - MAX_LINES))
-                .color(theme::TEXT_INFO),
-        );
+    if more > 0 {
+        ui.label(egui::RichText::new(format!("… {more} more lines")).color(theme::TEXT_INFO));
     }
 }
 

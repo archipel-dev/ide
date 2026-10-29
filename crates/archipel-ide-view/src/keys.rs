@@ -71,6 +71,10 @@ pub const CHORDS: &[(&str, &str)] = &[
     ("FindPrevious", "shift F"),
     ("RunClass", "X"),
     ("EditBreakpoint", "shift X"),
+    // The gutter's keys: Ctrl+F-keys are unreliable in xterm and Ctrl+Alt+Z is a menu key in
+    // some terminals.
+    ("ToggleLineBreakpoint", "P"),
+    ("Vcs.RollbackChangedLines", "alt Z"),
     ("HideAllWindows", "H"),
     // Ctrl+Alt+Shift.
     ("GotoSymbol", "S"),

@@ -83,6 +83,44 @@ widgets; closing the menu (`Esc`, a choice or a click outside) brings the toolba
 
 ![80x24](tui/img/narrow-80x24.png)
 
+## The editor gutter
+
+The gutter is the GUI's, in cells (spec `docs/specs/tui/01-gui-faithful-terminal-ui.md`, TUI-GUI-090 and
+091; `docs/tui-parity.md` Wave 1): from the left, the change bar, two reserved lanes (breakpoints in the
+first, run icons in the second, so the text never moves when an icon appears), the line number. What the
+marks and popups say comes from `archipel-ide-view` (`popups::gutter`, `popups::change`,
+`popups::breakpoint`), which the GUI draws too.
+
+![The gutter: run icons, change bars and breakpoints](tui/img/gutter.png)
+
+- **Change bars** (`▎`): green for added lines, blue for modified lines and a red `▔` on the line after
+  a deletion, computed against `HEAD` from the document text, so they follow typing.
+- **Run icons**: a play triangle on a `main` or a test, the "run all" arrow on a test module or class.
+  They are computed 0.25 s after the last key, like the GUI (`RunMarks`).
+- **Breakpoints**: a click on a line number, Ctrl+F8 or `Ctrl+\` then `P` toggles a line breakpoint (a red
+  circle; `.archipel/breakpoints.json`). Hovering a number previews the circle in grey. A breakpoint with a
+  condition or hit count is drawn in the warning color, a logpoint (a log message) in the accent color.
+  A right click on a number, Ctrl+Shift+F8 or `Ctrl+\` then `X` opens the properties.
+
+![The breakpoint properties](tui/img/gutter-breakpoint-form.png)
+
+  Condition, Log message and Hit count are the GUI's three fields; Enter or Done stores them
+  (`.archipel/debug-state.json`), Remove Breakpoint deletes the breakpoint with its options, Esc changes
+  nothing.
+- **Run popup**: a click on a run icon (a right click too) opens Run, Debug, Run with Coverage (disabled)
+  and Modify Run Configuration… with the keymap's shortcuts. Modify selects the configuration without
+  starting a run and opens the configurations list. Run and Modify are disabled while something runs;
+  Debug says that the debugger is not available in the terminal yet.
+
+![The run popup](tui/img/gutter-run-popup.png)
+
+- **Change popup**: a click on a change bar opens a toolbar row (previous and next change, Rollback,
+  Show Diff, close) and up to 20 lines of the `HEAD` text. Previous and next move the caret like
+  Ctrl+Alt+Shift+Up and Down (`Ctrl+\` then `,` and `.`), Rollback restores the `HEAD` text
+  (Ctrl+Alt+Z, `Ctrl+\` then Alt+Z). Show Diff is greyed out until the terminal has a diff viewer.
+
+![The change popup](tui/img/gutter-change-popup.png)
+
 ## Keys
 
 The shortcuts are the active keymap of the IDE (Settings | Keymap in the GUI, the default `$default`
@@ -207,9 +245,15 @@ terminal clipboard (OSC 52).
   branches and push. Use the GUI for these.
 - Editor splits are shown as one tab list. Long lines wrap; the view follows the caret by row. Documents with CRLF line endings are drawn as LF and keep CRLF in the core.
   Shift+arrows in column selection mode do not extend the block yet (the mode toggles).
-- Keys a terminal cannot send have chords behind `Ctrl+\` (see "Keys"); Ctrl+7 comments (Ctrl+/) and
+- Keys a terminal cannot send have chords behind `Ctrl+\` (see "Keys"); a legacy terminal sends `Ctrl+\`, `Ctrl+]` and `Ctrl+^` as the bytes `0x1C` to `0x1E`, which the kit maps back from crossterm's `Ctrl+4/5/6` when the kitty protocol is off; Ctrl+7 comments (Ctrl+/) and
   Ctrl+H deletes a word in a legacy terminal.
 - Quick Documentation, parameter info and inlay hints have no terminal surface yet.
+- Gutter: the kit has one fixed glyph for breakpoints, so a conditional breakpoint and a logpoint differ
+  by color (warning, accent) instead of shape; a disabled breakpoint, the execution arrow, the tint of
+  a breakpoint line and the lightbulb wait for the debugger (Wave 2) and the intention lane. Debug from
+  the run popup and Show Diff from the change popup say that they are not available yet. There is no
+  tooltip on a change bar yet and no key for the run popup of the caret line (Ctrl+Shift+F10 runs the
+  target at the caret).
 - Double Shift needs a terminal that reports modifier keys (kitty protocol); on macOS Option+digit
   types a symbol, so use `Ctrl+\` then the digit there.
 - On Windows the release binary is a GUI-subsystem program; `--tui` attaches to the console of
@@ -243,6 +287,12 @@ against a real shell. The Wave 0 tests:
   `Theme::colors`; a translucent token is blended over its surface; the Settings theme re-themes live.
 - `ascii_geometry` (TUI-GUI-131, 132), `keys_table` (TUI-GUI-194), `keyboard_notice` (TUI-GUI-159, 045),
   `unsaved_edits` (closing and quitting never lose edits; disabled commands stay silent).
+- `gutter` (Wave 1; TUI-GUI-090, 091, 140, EXE-CTX-050..053, EXE-DBG-010): change bars in the palette colors and
+  moving with inserted lines, run icons for Java and Rust fixtures without shifting the text, line number
+  clicks writing `.archipel/breakpoints.json`, the hover preview, the replay of EXE-DBG-010 cases 1 and 2, the
+  run popup (rows, shortcuts, Modify, disabled while running), the breakpoint form (condition turns the mark
+  orange, logpoint, Remove, Esc), the change popup (old lines, previous and next like the keys, Rollback,
+  the 20 line cap) and the gutter's keys and chords. In `archipel-ide-view`: `gutter_models`.
 - In `archipel-ide-view`: `reachability` (TUI-GUI-193), `keys_collisions` (TUI-GUI-170), `chrome_view`
   (composition, order, enabled state), `no_ui_deps` (neither toolkit in the dependency tree).
 

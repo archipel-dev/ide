@@ -11,6 +11,7 @@ pub mod chrome;
 pub mod conflict;
 pub mod dialogs;
 pub mod draw;
+pub mod gutter;
 pub mod ide;
 pub mod keys;
 pub mod layout;

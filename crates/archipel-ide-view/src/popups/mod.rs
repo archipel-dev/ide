@@ -4,10 +4,16 @@
 //! which part of it is secondary, which rows are groups or where an item opens
 //! (`docs/specs/tui/02-shared-component-layer.md`, M13, M15, M17, M18).
 //!
+//! The editor gutter (run icon popup, breakpoint form, change popup) is in [`gutter`],
+//! [`breakpoint`] and [`change`] (M1, M2, M4).
+//!
 //! Specs: UI-POP-011, UI-POP-012, UI-POP-030..032, TUI-GUI-135, TUI-GUI-136, TUI-GUI-138,
 //! TUI-GUI-139.
 
+pub mod breakpoint;
+pub mod change;
 pub mod chooser;
 pub mod completion;
+pub mod gutter;
 pub mod intentions;
 pub mod search;

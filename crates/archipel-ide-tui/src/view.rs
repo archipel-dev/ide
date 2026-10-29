@@ -11,11 +11,13 @@
 //! of its find bar) is turned into core commands by [`DocView::outgoing`].
 
 use archipel_ide_core::{Document, IdeState, Problem, Severity};
+use archipel_ide_git::HunkKind;
 use archipel_ide_text::Selection;
 use archipel_kit::editor::model::FoldRegion;
 use archipel_kit::editor::model::{Editor, Language};
 use archipel_kit::editor::{
-    HighlightSeverity, RangeHighlight, Span, SyntaxHighlighter, TextAttributesKey,
+    ChangeKind, ChangeMarker, GutterIcon, HighlightSeverity, RangeHighlight, Span,
+    SyntaxHighlighter, TextAttributesKey,
 };
 use archipel_kit_tui::editor::EditorState;
 use serde_json::json;
@@ -236,6 +238,11 @@ pub struct DocView {
     pub highlighter: CoreHighlighter,
     pub language: Language,
     pub highlights: Vec<RangeHighlight>,
+    /// The change bars of the gutter: the lines that differ from `HEAD` (TUI-GUI-090).
+    pub markers: Vec<ChangeMarker>,
+    /// The icons of the gutter lanes (breakpoints, run icons), set each frame by
+    /// [`crate::gutter`].
+    pub icons: Vec<GutterIcon>,
     /// The primary caret moved because of the core: keep it on screen.
     pub follow: bool,
     crlf: bool,
@@ -248,6 +255,9 @@ pub struct DocView {
     force_pull: bool,
     problems: Option<Arc<Vec<Problem>>>,
     analysis_key: Option<(u64, usize)>,
+    /// What the change bars were computed for: the text revision and the repository status
+    /// (a commit or checkout swaps the `HEAD` text the bars compare with).
+    markers_key: Option<(u64, usize)>,
 }
 
 impl DocView {
@@ -259,6 +269,8 @@ impl DocView {
             state: EditorState::new(),
             highlighter: CoreHighlighter::default(),
             highlights: Vec::new(),
+            markers: Vec::new(),
+            icons: Vec::new(),
             follow: false,
             crlf: false,
             core_revision: u64::MAX,
@@ -270,6 +282,7 @@ impl DocView {
             force_pull: true,
             problems: None,
             analysis_key: None,
+            markers_key: None,
             editor: Editor::new(""),
         };
         view.editor.settings.tab_size = 4;
@@ -531,6 +544,7 @@ impl DocView {
         if !active {
             return;
         }
+        self.refresh_markers(state, index);
         let problems = state.cached_active_problems();
         if self
             .problems
@@ -540,6 +554,32 @@ impl DocView {
             return;
         }
         self.set_problems(problems);
+    }
+
+    /// The change bars: the hunks of the document against `HEAD`, recomputed when the text
+    /// or the repository status changed.
+    fn refresh_markers(&mut self, state: &IdeState, index: usize) {
+        let Some(document) = state.document(index) else {
+            return;
+        };
+        let status = state
+            .git_status()
+            .map_or(0, |status| Arc::as_ptr(&status) as usize);
+        let key = (document.text.revision(), status);
+        if self.markers_key == Some(key) {
+            return;
+        }
+        self.markers_key = Some(key);
+        self.markers = state
+            .document_changes(index)
+            .into_iter()
+            .map(|hunk| match hunk.kind() {
+                HunkKind::Inserted => ChangeMarker::new(hunk.new, ChangeKind::Added),
+                HunkKind::Modified => ChangeMarker::new(hunk.new, ChangeKind::Modified),
+                // A deletion marks the line it happened before.
+                HunkKind::Deleted => ChangeMarker::new(hunk.new, ChangeKind::Deleted),
+            })
+            .collect();
     }
 
     /// Shows `problems` as the editor's diagnostics (hints are not drawn).

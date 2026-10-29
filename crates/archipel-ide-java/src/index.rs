@@ -1309,6 +1309,10 @@ impl JavaIndex {
                         if same == rest {
                             continue;
                         }
+                        // A later-hump match starts at a hump with the first letter.
+                        if rest && !e.hump_may_start_with(f) {
+                            continue;
+                        }
                     } else if rest {
                         continue;
                     }

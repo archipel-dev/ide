@@ -80,6 +80,27 @@ pub struct NameEntry {
     pub flags: u32,
     pub deprecated: bool,
     pub targets: Option<u16>,
+    /// The lowercase letters a hump of the name starts with, one bit per letter (all bits for a
+    /// non-ASCII name): a later-hump match needs its first pattern letter in here.
+    humps: u32,
+}
+
+/// The mask of [`NameEntry::humps`].
+fn hump_letters(name: &str) -> u32 {
+    if !name.is_ascii() {
+        return u32::MAX;
+    }
+    let n = name.as_bytes();
+    let mut mask = 0u32;
+    for i in 0..n.len() {
+        if is_hump_ascii(n, i) {
+            let c = n[i].to_ascii_lowercase();
+            if c.is_ascii_lowercase() {
+                mask |= 1 << (c - b'a');
+            }
+        }
+    }
+    mask
 }
 
 impl NameEntry {
@@ -87,6 +108,7 @@ impl NameEntry {
         let pkg_len = package.len() as u32;
         // The short name is the last segment of the FQN (nested classes included).
         let short_start = record.fqn.rfind('.').map_or(0, |i| i + 1) as u32;
+        let humps = hump_letters(&record.fqn[short_start as usize..]);
         Self {
             unit,
             fqn: record.fqn.into_boxed_str(),
@@ -96,7 +118,14 @@ impl NameEntry {
             flags: record.flags,
             deprecated: record.deprecated,
             targets: record.targets,
+            humps,
         }
+    }
+
+    /// Whether a hump of the name can start with the ASCII letter `c` (case-insensitive): a
+    /// quick reject for matches that begin at a later hump. Anything but a letter passes.
+    pub fn hump_may_start_with(&self, c: u8) -> bool {
+        !c.is_ascii_alphabetic() || self.humps & (1 << (c.to_ascii_lowercase() - b'a')) != 0
     }
 
     pub fn package(&self) -> &str {

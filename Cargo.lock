@@ -297,7 +297,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-actions"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-platform",
  "serde",
@@ -306,7 +306,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-ai"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-compat",
  "pulldown-cmark",
@@ -320,7 +320,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-analysis"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-language",
  "archipel-ide-platform",
@@ -334,7 +334,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-android"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "regex",
  "roxmltree",
@@ -347,7 +347,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-app"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-compat",
  "archipel-ide-plugin-hello",
@@ -362,7 +362,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-bazel"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-compat",
  "archipel-ide-runner",
@@ -372,7 +372,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-cli"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-command",
  "archipel-ide-compat",
@@ -383,18 +383,18 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-command"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-command",
 ]
 
 [[package]]
 name = "archipel-ide-compat"
-version = "0.3.0"
+version = "0.3.1"
 
 [[package]]
 name = "archipel-ide-control"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "interprocess",
  "png",
@@ -405,7 +405,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-actions",
  "archipel-ide-ai",
@@ -454,7 +454,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-daemon"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-analysis",
  "archipel-ide-language",
@@ -469,7 +469,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-dap"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-runner",
  "serde",
@@ -479,7 +479,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-externalsystem"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-bazel",
  "archipel-ide-compat",
@@ -495,7 +495,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-git"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "similar",
  "thiserror 2.0.21",
@@ -503,7 +503,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-gradle"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-compat",
  "archipel-ide-runner",
@@ -513,7 +513,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-index"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-analysis",
  "archipel-ide-language",
@@ -532,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-java"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-analysis",
  "archipel-ide-externalsystem",
@@ -553,7 +553,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-keymap"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -562,7 +562,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-langpacks"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-analysis",
  "archipel-ide-daemon",
@@ -580,7 +580,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-language"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-text",
  "dekobon-tree-sitter-groovy",
@@ -611,7 +611,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-lsp"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-compat",
  "archipel-ide-platform",
@@ -626,28 +626,28 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-markdown"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "pulldown-cmark",
 ]
 
 [[package]]
 name = "archipel-ide-platform"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "parking_lot",
 ]
 
 [[package]]
 name = "archipel-ide-plugin-api"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-plugin-api",
 ]
 
 [[package]]
 name = "archipel-ide-plugin-hello"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-plugin-api",
  "archipel-ide-plugin-ui",
@@ -656,7 +656,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-plugin-lua"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-plugin-api",
  "archipel-ide-plugin-ui",
@@ -669,14 +669,14 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-plugin-ui"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-plugin-ui",
 ]
 
 [[package]]
 name = "archipel-ide-plugin-wasm"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-plugin-api",
  "archipel-ide-plugin-ui",
@@ -689,7 +689,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-plugins"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-command",
  "archipel-ide-compat",
@@ -703,7 +703,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-project"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-language",
  "notify",
@@ -718,7 +718,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-projectmodel"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -726,7 +726,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-runnables"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-language",
  "tree-sitter",
@@ -734,7 +734,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-runner"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-compat",
  "libc",
@@ -748,7 +748,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-search"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "globset",
  "regex",
@@ -757,7 +757,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-settings"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-compat",
  "archipel-ide-keymap",
@@ -769,14 +769,14 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-split"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "archipel-ide-templates"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-text",
  "serde",
@@ -786,7 +786,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-terminal"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "portable-pty",
  "thiserror 2.0.21",
@@ -795,7 +795,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-text"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "proptest",
  "regex",
@@ -805,7 +805,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-toolchains"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-compat",
  "archipel-ide-platform",
@@ -825,7 +825,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-tui"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-actions",
  "archipel-ide-command",
@@ -853,7 +853,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-ui"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter)",
  "archipel-ide-actions",
@@ -898,7 +898,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-update"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-compat",
  "flate2",
@@ -913,7 +913,7 @@ dependencies = [
 
 [[package]]
 name = "archipel-ide-view"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-actions",
  "archipel-ide-ai",
@@ -4695,7 +4695,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-http"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "archipel-ide-compat",
  "archipel-ide-plugin-api",
@@ -4712,7 +4712,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-http-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "base64 0.22.1",
  "cookie",
@@ -9653,7 +9653,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "xtask"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "archipel-ide-compat",

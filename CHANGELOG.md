@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.2](https://github.com/archipel-dev/ide/compare/v0.3.1...v0.3.2) (2026-10-29)
+
+
+### Features
+
+* **java:** member completion from the native type model ([#103](https://github.com/archipel-dev/ide/issues/103)) ([c49365e](https://github.com/archipel-dev/ide/commit/c49365e400d705b371199adad1a199e0fa701274))
+* **tui:** editor gutter with run icons, breakpoints and change bars ([#100](https://github.com/archipel-dev/ide/issues/100)) ([846c9e4](https://github.com/archipel-dev/ide/commit/846c9e4d8fd85085b8a0998881588dfad498ad8a))
+
+
+### Bug Fixes
+
+* **tui:** chord leader works in legacy terminals ([#102](https://github.com/archipel-dev/ide/issues/102)) ([8fde42d](https://github.com/archipel-dev/ide/commit/8fde42dae00a87df86446288aa3e41b4318b0902))
+
 ## [0.3.1](https://github.com/archipel-dev/ide/compare/v0.3.0...v0.3.1) (2026-10-29)
 
 

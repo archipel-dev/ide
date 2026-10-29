@@ -60,6 +60,9 @@ pub enum Popup {
     ProjectNew,
     /// The stripe menu of a tool window.
     Stripe(String),
+    /// The popup of the run icon on this line (zero-based) of the active document
+    /// (`popups::gutter::run_popup`).
+    Gutter(usize),
 }
 
 /// What the frontend does.

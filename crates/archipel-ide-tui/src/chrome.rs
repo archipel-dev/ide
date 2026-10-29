@@ -312,7 +312,7 @@ impl ChromeUi {
             Popup::ProjectOptions => self.header_left.rect_of("project.options"),
             Popup::ProjectNew => self.header_left.rect_of("project.new"),
             Popup::Stripe(id) => self.left.rect_of(id).or_else(|| self.right.rect_of(id)),
-            Popup::Context(_) => None,
+            Popup::Context(_) | Popup::Gutter(_) => None,
         }
     }
 }
@@ -335,6 +335,7 @@ pub fn popup_entries(
         Popup::ProjectOptions => archipel_ide_view::header::project_options_menu(cx),
         Popup::ProjectNew => archipel_ide_view::header::project_new_menu(cx),
         Popup::Stripe(id) => archipel_ide_view::stripes::stripe_menu(cx, id),
+        Popup::Gutter(line) => archipel_ide_view::popups::gutter::run_popup(cx, *line),
         Popup::Device => Vec::new(),
     }
 }

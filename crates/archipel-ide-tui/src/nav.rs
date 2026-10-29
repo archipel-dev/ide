@@ -5,43 +5,14 @@
 use crate::app::TuiApp;
 use crate::layout::file_icon;
 use crate::picker::{PickerKind, PickerRow, Target};
-use archipel_ide_actions::{ActionPlace, Presentation};
-use archipel_ide_command::CommandSpec;
-use archipel_ide_core::TextMatch;
-use archipel_ide_core::keymap_commands::actions_for_command;
-use archipel_ide_core::quick_nav::{
-    ActionCandidate, Hit, Ranked, SearchSources, SearchTab, SymbolEntry, file_name, matches, search,
-};
-use archipel_ide_language::structure::SymbolKind;
-use archipel_ide_platform::data_keys;
+use archipel_ide_core::quick_nav::{SearchTab, file_name, matches};
+use archipel_ide_view::popups::search::{self as model, ActionExtra, SearchRow};
 use archipel_kit_tui::Glyph;
 use archipel_kit_tui::components::RowIcon;
-use serde_json::Value;
-use std::time::Duration;
 
-const INDEX_BUDGET: Duration = Duration::from_millis(15);
 const MAX_ROWS: usize = 60;
 
-/// Commands that can run without parameters (all declared fields optional).
-fn parameterless(spec: &CommandSpec) -> bool {
-    match serde_json::from_str::<Value>(&spec.params) {
-        Ok(Value::Object(fields)) => fields
-            .values()
-            .all(|value| value.as_str().is_some_and(|kind| kind.ends_with('?'))),
-        _ => true,
-    }
-}
-
 /// The actions of this frontend that no command stands for, with their menu texts.
-const TUI_ACTIONS: [(&str, &str, &str); 6] = [
-    ("GotoLine", "Go to Line:Column…", "Navigate"),
-    ("FindInPath", "Find in Files…", "Search"),
-    ("NewFile", "New File…", "File"),
-    ("OpenFile", "Open Folder…", "File"),
-    ("Exit", "Exit", "File"),
-    ("Archipel.NextTheme", "Switch Theme", "View"),
-];
-
 /// Commands whose reference action this frontend implements itself.
 const OWN_COMMANDS: [(&str, &str); 3] = [
     ("editor.saveAll", "SaveAll"),
@@ -49,22 +20,38 @@ const OWN_COMMANDS: [(&str, &str); 3] = [
     ("search.project", "FindInPath"),
 ];
 
-fn symbol_icon(symbol: &SymbolEntry) -> RowIcon {
-    use archipel_kit_tui::{Symbol, SymbolKind as Kind};
-    let kind = match symbol.kind {
-        SymbolKind::Class => Kind::Class,
-        SymbolKind::Interface => Kind::Interface,
-        SymbolKind::Enum => Kind::Enum,
-        SymbolKind::Method => Kind::Method,
-        SymbolKind::Function => Kind::Function,
-        SymbolKind::Constructor => Kind::Constructor,
-        SymbolKind::Field => Kind::Field,
-        SymbolKind::Constant => Kind::Constant,
-        SymbolKind::Module => Kind::Module,
-        _ => return RowIcon::Glyph(Glyph::File),
-    };
-    RowIcon::Symbol(Symbol::new(kind))
-}
+const TUI_ACTIONS: [ActionExtra; 6] = [
+    ActionExtra {
+        id: "GotoLine",
+        label: "Go to Line:Column…",
+        category: "Navigate",
+    },
+    ActionExtra {
+        id: "FindInPath",
+        label: "Find in Files…",
+        category: "Search",
+    },
+    ActionExtra {
+        id: "NewFile",
+        label: "New File…",
+        category: "File",
+    },
+    ActionExtra {
+        id: "OpenFile",
+        label: "Open Folder…",
+        category: "File",
+    },
+    ActionExtra {
+        id: "Exit",
+        label: "Exit",
+        category: "File",
+    },
+    ActionExtra {
+        id: "Archipel.NextTheme",
+        label: "Switch Theme",
+        category: "View",
+    },
+];
 
 impl TuiApp {
     /// Fills the open picker when its query or tab changed or a search is still running.
@@ -98,107 +85,33 @@ impl TuiApp {
         picker.set_rows(rows);
     }
 
-    /// The action candidates with their presentation in Find Action.
-    fn action_candidates(&self, include_disabled: bool) -> Vec<ActionCandidate> {
-        let ide = &self.ide;
-        ide.with_data(
-            |data| data,
-            |registry, data| {
-                let present = |id: &str| {
-                    registry
-                        .update(id, ActionPlace::FindAction, data)
-                        .unwrap_or_else(Presentation::disabled)
-                };
-                let own = TUI_ACTIONS
-                    .iter()
-                    .map(|(id, label, category)| (present(id), id, label, category))
-                    .filter(|(presentation, ..)| presentation.visible)
-                    .map(|(presentation, id, label, category)| ActionCandidate {
-                        enabled: presentation.enabled,
-                        shortcut: ide.shortcut_label(id).unwrap_or_default(),
-                        id: (*id).to_owned(),
-                        label: presentation.text.unwrap_or_else(|| (*label).to_owned()),
-                        category: (*category).to_owned(),
-                    })
-                    .filter(|candidate| include_disabled || candidate.enabled);
-                ide.specs()
-                    .into_iter()
-                    .filter(parameterless)
-                    .map(|spec| (present(&spec.id), spec))
-                    .filter(|(presentation, _)| presentation.visible)
-                    .filter(|(presentation, _)| include_disabled || presentation.enabled)
-                    .filter(|(presentation, spec)| {
-                        spec.category != "Android"
-                            || data.flag(&data_keys::ANDROID_PROJECT)
-                            || presentation.enabled
-                    })
-                    .map(|(presentation, spec)| {
-                        let own = OWN_COMMANDS
-                            .iter()
-                            .find(|(command, _)| *command == spec.id)
-                            .map(|(_, action)| *action);
-                        let shortcut = actions_for_command(&spec.id)
-                            .chain(own)
-                            .find_map(|action| ide.shortcut_label(action))
-                            .unwrap_or_default();
-                        ActionCandidate {
-                            enabled: presentation.enabled,
-                            shortcut,
-                            id: spec.id,
-                            label: presentation.text.unwrap_or(spec.label),
-                            category: spec.category,
-                        }
-                    })
-                    .chain(own)
-                    .collect()
-            },
-        )
-    }
-
     fn search_rows(&mut self, tab: SearchTab, query: &str) -> (Vec<PickerRow>, bool) {
-        let state = self.ide.state_mut();
-        if matches!(
-            tab,
-            SearchTab::All | SearchTab::Classes | SearchTab::Symbols
-        ) {
-            state.refresh_symbol_index(INDEX_BUDGET);
-            if self.se_server_query != query {
-                self.se_server_query = query.to_owned();
-                self.ide.state_mut().request_server_symbols(query);
-            }
-            self.ide.state_mut().poll_server_symbols();
-        }
-        let mut busy = false;
-        if matches!(tab, SearchTab::All | SearchTab::Text) {
-            self.ide.state_mut().request_text_search(query);
-            self.ide.state_mut().poll_text_search();
-            busy = self.ide.state().text_search_running();
-        }
-        let actions = if matches!(tab, SearchTab::All | SearchTab::Actions) {
-            let include =
-                tab == SearchTab::Actions && self.ide.state().actions().read().include_disabled;
-            self.action_candidates(include)
+        let busy = model::prepare(self.ide.state_mut(), tab, query, &mut self.se_server_query);
+        let (include_non_project, include_disabled) = self
+            .picker
+            .as_ref()
+            .map(|shared| {
+                let shared = shared.borrow();
+                (shared.include_non_project, shared.include_disabled)
+            })
+            .unwrap_or_default();
+        let cx = self.ide.cx();
+        let candidates = if model::needs_actions(tab) {
+            // The All tab never lists disabled actions; the Actions tab has the checkbox.
+            model::action_candidates(
+                &cx,
+                &TUI_ACTIONS,
+                "",
+                &OWN_COMMANDS,
+                tab == SearchTab::Actions && include_disabled,
+                &|_| String::new(),
+            )
         } else {
             Vec::new()
         };
-        let state = self.ide.state();
-        let manager = state.search_everywhere();
-        let navigation = manager.read();
-        let sources = SearchSources {
-            files: state.files(),
-            recent: state.recent_files(),
-            symbols: navigation.index.all().collect(),
-            server_symbols: &navigation.server.results,
-            actions: &actions,
-            text: &navigation.text_results,
-            include_non_project: false,
-        };
-        let mut found = search(tab, query, &sources);
-        if tab == SearchTab::All && query.is_empty() {
-            found.retain(|hit| matches!(hit.item, Hit::File { .. }));
-        }
-        found.truncate(MAX_ROWS);
-        (found.iter().map(row_of).collect(), busy)
+        let found = model::hits(&cx, tab, query, include_non_project, &candidates);
+        let rows = model::rows(tab, !query.is_empty(), &found);
+        (rows.into_iter().map(row_of).collect(), busy)
     }
 
     fn recent_rows(&self, tab: usize, query: &str) -> Vec<PickerRow> {
@@ -292,77 +205,14 @@ impl TuiApp {
     }
 }
 
-fn row_of(ranked: &Ranked<Hit>) -> PickerRow {
-    let mut row = match &ranked.item {
-        Hit::Action(action) => {
-            let mut row = PickerRow::new(action.label.clone(), Target::Action(action.id.clone()));
-            row.icon = Some(RowIcon::Glyph(Glyph::Run));
-            row.detail = action.category.clone();
-            row.trailing = action.shortcut.clone();
-            row.enabled = action.enabled;
-            row.footer = action.id.clone();
-            row
-        }
-        Hit::File { path, line, .. } => {
-            let mut row = PickerRow::new(
-                file_name(path),
-                Target::File {
-                    path: path.clone(),
-                    line: *line,
-                    column: None,
-                    length: None,
-                },
-            );
-            row.icon = Some(file_icon(path));
-            row.detail = path
-                .parent()
-                .map(|parent| parent.display().to_string())
-                .unwrap_or_default();
-            row.trailing = line.map(|line| format!(":{line}")).unwrap_or_default();
-            row.footer = path.display().to_string();
-            row
-        }
-        Hit::Symbol(symbol) => {
-            let mut row = PickerRow::new(
-                symbol.name.clone(),
-                Target::File {
-                    path: symbol.path.clone(),
-                    line: Some(symbol.line + 1),
-                    column: None,
-                    length: None,
-                },
-            );
-            row.icon = Some(symbol_icon(symbol));
-            row.detail = symbol.container.clone().unwrap_or_default();
-            row.trailing = format!("{}:{}", file_name(&symbol.path), symbol.line + 1);
-            row.footer = symbol.path.display().to_string();
-            row
-        }
-        Hit::Text(found) => text_row(found),
-    };
-    row.positions = match &ranked.item {
-        Hit::Text(found) => found
-            .highlights
-            .iter()
-            .flat_map(|range| range.clone())
-            .collect(),
-        _ => ranked.positions.clone(),
-    };
-    row
-}
-
-fn text_row(found: &TextMatch) -> PickerRow {
-    let mut row = PickerRow::new(
-        found.preview.clone(),
-        Target::File {
-            path: found.path.clone(),
-            line: Some(found.line),
-            column: Some(found.column),
-            length: Some(found.length),
-        },
-    );
-    row.icon = Some(file_icon(&found.path));
-    row.trailing = format!("{}:{}", file_name(&found.path), found.line);
-    row.footer = found.path.display().to_string();
+fn row_of(shared: SearchRow) -> PickerRow {
+    let mut row = PickerRow::new(shared.title.clone(), Target::Hit(shared.hit.clone()));
+    row.icon_key = Some(shared.icon.clone());
+    row.detail = shared.inline.clone();
+    row.trailing = shared.trailing.clone();
+    row.enabled = shared.enabled;
+    row.footer = shared.footer.clone();
+    row.positions = shared.positions.clone();
+    row.group = shared.group;
     row
 }

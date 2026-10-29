@@ -282,7 +282,7 @@ dependencies = [
 [[package]]
 name = "archipel-icons"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#f3531215823bdfe368dcdd15e252b1830dd9cbf6"
+source = "git+https://github.com/archipel-dev/kit?branch=main#b24cc47afc0ad880fb38ec726713a2d8a0eea47d"
 dependencies = [
  "egui",
 ]
@@ -912,6 +912,7 @@ dependencies = [
  "archipel-ide-analysis",
  "archipel-ide-command",
  "archipel-ide-core",
+ "archipel-ide-daemon",
  "archipel-ide-git",
  "archipel-ide-index",
  "archipel-ide-keymap",
@@ -928,7 +929,7 @@ dependencies = [
 [[package]]
 name = "archipel-kit"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#f3531215823bdfe368dcdd15e252b1830dd9cbf6"
+source = "git+https://github.com/archipel-dev/kit?branch=main#b24cc47afc0ad880fb38ec726713a2d8a0eea47d"
 dependencies = [
  "archipel-icons",
  "archipel-kit-model",
@@ -944,7 +945,7 @@ dependencies = [
 [[package]]
 name = "archipel-kit-model"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#f3531215823bdfe368dcdd15e252b1830dd9cbf6"
+source = "git+https://github.com/archipel-dev/kit?branch=main#b24cc47afc0ad880fb38ec726713a2d8a0eea47d"
 dependencies = [
  "archipel-icons",
  "serde",
@@ -953,7 +954,7 @@ dependencies = [
 [[package]]
 name = "archipel-kit-tui"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#f3531215823bdfe368dcdd15e252b1830dd9cbf6"
+source = "git+https://github.com/archipel-dev/kit?branch=main#b24cc47afc0ad880fb38ec726713a2d8a0eea47d"
 dependencies = [
  "archipel-icons",
  "archipel-kit",
@@ -5211,15 +5212,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ordered-float"
-version = "5.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c7c9e0d9b23589f26070720bac724174bfec1083e82f7854cdd0267518343c0"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
 name = "ordered-stream"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8947,7 +8939,7 @@ dependencies = [
  "ndk-sys",
  "objc",
  "once_cell",
- "ordered-float 5.5.0",
+ "ordered-float 4.6.0",
  "parking_lot",
  "portable-atomic",
  "portable-atomic-util",

@@ -98,7 +98,7 @@ mod ui_audit;
 mod welcome;
 mod widgets;
 
-use archipel_ide_command::{CommandRegistry, CommandSpec};
+use archipel_ide_command::CommandRegistry;
 use archipel_ide_core::agents::WorkbenchMode;
 use archipel_ide_core::{Anchor, IdeState, ToolWindow, built_in_commands};
 use archipel_ide_settings::ids;
@@ -692,16 +692,6 @@ impl IdeApp {
             .as_ref()
             .map(|project| Self::file_name(project.root()))
             .unwrap_or_else(|| "No project".into())
-    }
-
-    /// Commands that can run without parameters (all declared fields optional).
-    fn parameterless(spec: &CommandSpec) -> bool {
-        match serde_json::from_str::<Value>(&spec.params) {
-            Ok(Value::Object(fields)) => fields
-                .values()
-                .all(|value| value.as_str().is_some_and(|kind| kind.ends_with('?'))),
-            _ => false,
-        }
     }
 
     fn handle_shortcuts(&mut self, ctx: &egui::Context) {
@@ -1609,15 +1599,5 @@ mod tests {
         app.open_project_dialog();
         run_frames(&mut app, &ctx, |app| app.state.project.is_some());
         let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn parameterless_commands_are_detected_from_their_schema() {
-        let specs = built_in_commands().specs();
-        let find = |id: &str| specs.iter().find(|spec| spec.id == id).unwrap();
-        assert!(IdeApp::parameterless(find("editor.save")));
-        assert!(IdeApp::parameterless(find("editor.close")));
-        assert!(!IdeApp::parameterless(find("editor.openFile")));
-        assert!(!IdeApp::parameterless(find("toolwindow.toggle")));
     }
 }

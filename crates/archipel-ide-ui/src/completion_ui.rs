@@ -6,8 +6,7 @@
 //! so labels line up with the identifier being completed.
 
 use crate::{IdeApp, theme};
-use archipel_ide_lsp::completion::{self as ranking, kind_name};
-use archipel_ide_lsp::lsp_types::CompletionItem;
+use archipel_ide_view::popups::completion::{self as model, BadgeTone, CompletionRow};
 use eframe::egui::{self, Color32, FontId, Rect, Sense, Stroke, pos2, text::LayoutJob, vec2};
 use serde_json::json;
 
@@ -28,21 +27,22 @@ fn kind_glyph(kind: &str) -> Option<(char, Color32)> {
     let class = Color32::from_rgb(0x56, 0x8A, 0xF2);
     let interface = Color32::from_rgb(0x5F, 0xB8, 0x65);
     let variable = Color32::from_rgb(0xA8, 0x86, 0xD9);
-    Some(match kind {
-        "method" | "function" | "constructor" => ('m', method),
-        "field" => ('f', field),
-        "property" => ('p', field),
-        "variable" | "value" | "reference" => ('v', variable),
-        "constant" | "enumMember" => ('c', field),
-        "class" | "struct" => ('C', class),
-        "interface" => ('I', interface),
-        "enum" => ('E', class),
-        "module" | "file" => ('M', *theme::TEXT_SECONDARY),
-        "typeParameter" => ('T', interface),
-        "snippet" => ('s', *theme::TEXT_SECONDARY),
-        "event" | "operator" => ('o', *theme::TEXT_SECONDARY),
-        _ => return None,
-    })
+    let badge = model::kind_badge(kind)?;
+    // The popup has no badge for keywords.
+    if badge.letter == 'k' {
+        return None;
+    }
+    Some((
+        badge.letter,
+        match badge.tone {
+            BadgeTone::Method => method,
+            BadgeTone::Field => field,
+            BadgeTone::Class => class,
+            BadgeTone::Interface => interface,
+            BadgeTone::Variable => variable,
+            BadgeTone::Neutral => *theme::TEXT_SECONDARY,
+        },
+    ))
 }
 
 fn paint_kind_icon(painter: &egui::Painter, center: egui::Pos2, kind: &str) {
@@ -122,27 +122,7 @@ fn label_job(label: &str, matched: &[usize], deprecated: bool, selected: bool) -
     job
 }
 
-struct Row {
-    label: String,
-    matched: Vec<usize>,
-    detail: Option<String>,
-    type_text: Option<String>,
-    kind: &'static str,
-    deprecated: bool,
-}
-
-fn row_for(item: &CompletionItem, matched: &[usize]) -> Row {
-    Row {
-        label: item.label.clone(),
-        matched: matched.to_vec(),
-        detail: ranking::label_detail(item).map(str::to_owned),
-        type_text: ranking::type_text(item)
-            .filter(|_| item.label_details.is_some() || ranking::label_detail(item).is_none())
-            .map(str::to_owned),
-        kind: kind_name(item.kind),
-        deprecated: ranking::is_deprecated(item),
-    }
-}
+type Row = CompletionRow;
 
 /// Shows the popup; returns its screen rect for the documentation panel.
 pub fn show(app: &mut IdeApp, ctx: &egui::Context) -> Option<Rect> {
@@ -174,11 +154,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) -> Option<Rect> {
         // Re-query and refresh the notice when the server finishes.
         ctx.request_repaint_after(std::time::Duration::from_millis(200));
     }
-    let rows: Vec<Row> = session
-        .ranked
-        .iter()
-        .map(|ranked| row_for(&session.items[ranked.index], &ranked.label_positions))
-        .collect();
+    let rows: Vec<Row> = model::rows(session);
     let selected = session.selected;
     let prefix_chars = session.prefix.chars().count() as f32;
 
@@ -195,7 +171,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) -> Option<Rect> {
                 .detail
                 .as_ref()
                 .map_or(0.0, |d| d.chars().count() as f32 * char_width);
-            let kind = row.type_text.as_ref().map_or(0.0, |t| {
+            let kind = row.tail.as_ref().map_or(0.0, |t| {
                 t.chars().count().min(40) as f32 * char_width + 24.0
             });
             ICON_COLUMN + 8.0 + label + detail + kind + 16.0
@@ -297,9 +273,9 @@ fn paint_row(ui: &egui::Ui, rect: Rect, row: &Row, selected: bool, hovered: bool
     let grey = *theme::TEXT_INFO;
     let right_edge = rect.right() - 12.0;
     let mut type_left = right_edge;
-    if let Some(type_text) = &row.type_text {
+    if let Some(tail) = &row.tail {
         let galley = painter.layout_no_wrap(
-            type_text.clone(),
+            tail.clone(),
             FontId::monospace(theme::EDITOR_FONT_SIZE - 1.0),
             grey,
         );
@@ -339,12 +315,8 @@ fn footer(ui: &mut egui::Ui, font: &FontId, indexing: Option<&str>) {
     );
     let (hint, color) = match indexing {
         Some(status) => (indexing_notice(status), *theme::WARNING),
-        None if cfg!(target_os = "macos") => (
-            "⏎ inserts, ⇥ replaces the word at the caret, ⎋ closes".to_owned(),
-            *theme::TEXT_INFO,
-        ),
         None => (
-            "Enter inserts, Tab replaces the word at the caret, Esc closes".to_owned(),
+            model::footer_hint(cfg!(target_os = "macos")).to_owned(),
             *theme::TEXT_INFO,
         ),
     };
@@ -359,7 +331,7 @@ fn footer(ui: &mut egui::Ui, font: &FontId, indexing: Option<&str>) {
 
 /// "Indexing… results may be incomplete (jdtls: Building 0%)".
 pub(crate) fn indexing_notice(status: &str) -> String {
-    format!("Indexing… results may be incomplete ({status})")
+    model::indexing_notice(status)
 }
 
 #[cfg(test)]
@@ -396,24 +368,9 @@ mod tests {
     }
 
     #[test]
-    fn rows_use_label_details_for_signature_and_type() {
-        let item: CompletionItem = serde_json::from_value(json!({
-            "label": "greeting", "kind": 2, "detail": "App.greeting(String name) : String",
-            "labelDetails": {"detail": "(String name)", "description": "String"}
-        }))
-        .unwrap();
-        let row = row_for(&item, &[]);
-        assert_eq!(row.detail.as_deref(), Some("(String name)"));
-        assert_eq!(row.type_text.as_deref(), Some("String"));
-        assert_eq!(row.kind, "method");
-        let plain: CompletionItem =
-            serde_json::from_value(json!({"label": "len", "detail": "fn(&self) -> usize"}))
-                .unwrap();
-        assert_eq!(
-            row_for(&plain, &[]).type_text.as_deref(),
-            Some("fn(&self) -> usize")
-        );
+    fn kind_badges_follow_the_view_model() {
         assert!(kind_glyph("method").is_some());
         assert!(kind_glyph("text").is_none());
+        assert!(kind_glyph("keyword").is_none());
     }
 }

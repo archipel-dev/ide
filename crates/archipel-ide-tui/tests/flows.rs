@@ -131,8 +131,9 @@ fn find_action_lists_actions_with_their_shortcuts_and_runs_one() {
     assert!(tui.app.ide().state().documents()[0].text.is_dirty());
     shift_ctrl(&mut tui, 'a');
     tui.advance(0.1);
+    // Find Action is Search Everywhere with the Actions tab selected (TUI-GUI-136).
     assert!(
-        tui.contains("Find Action") || tui.contains("Search Everywhere"),
+        tui.contains("Include disabled actions") && tui.contains("Type / to see commands"),
         "{}",
         tui.text()
     );

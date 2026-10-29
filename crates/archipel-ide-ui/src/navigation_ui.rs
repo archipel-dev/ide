@@ -6,6 +6,7 @@ use crate::icons::{self, Icon};
 use crate::widgets::{self, list_row, row_text};
 use crate::{IdeApp, theme};
 use archipel_ide_core::{NavigationItem, ToolWindow};
+use archipel_ide_view::popups::chooser::{self, ChoiceRow};
 use eframe::egui::{self, Key, Modifiers, Rect, Sense, Stroke, vec2};
 use serde_json::{Value, json};
 
@@ -129,10 +130,9 @@ pub fn choices_popup(app: &mut IdeApp, ctx: &egui::Context) {
                                 .font(theme::semibold(theme::UI_FONT_SIZE))
                                 .color(theme::TEXT_BRIGHT),
                         );
-                        let count = widgets::pluralize(list.items.len(), "result", "results");
-                        let suffix = if list.truncated { "+" } else { "" };
                         ui.label(
-                            egui::RichText::new(format!("{count}{suffix}")).color(theme::TEXT_INFO),
+                            egui::RichText::new(chooser::header(&list).count)
+                                .color(theme::TEXT_INFO),
                         );
                     });
                     ui.add_space(2.0);
@@ -192,22 +192,12 @@ fn item_row(ui: &egui::Ui, rect: Rect, item: &NavigationItem, with_file: bool) {
         );
         x += 22.0;
     }
-    let code = item.line_text.trim_start();
-    let trimmed = item.line_text.chars().count() - code.chars().count();
-    // Highlight the symbol inside the code preview.
-    let before: String = code
-        .chars()
-        .take(item.column.saturating_sub(trimmed))
-        .collect();
-    let symbol: String = code
-        .chars()
-        .skip(item.column.saturating_sub(trimmed))
-        .take(item.end_column.saturating_sub(item.column))
-        .collect();
-    let after: String = code
-        .chars()
-        .skip(item.column.saturating_sub(trimmed) + symbol.chars().count())
-        .collect();
+    let ChoiceRow {
+        before,
+        symbol,
+        after,
+        ..
+    } = chooser::row(item);
     let line_label = format!("{}", item.line + 1);
     let gutter =
         ui.painter()
@@ -246,7 +236,7 @@ fn item_row(ui: &egui::Ui, rect: Rect, item: &NavigationItem, with_file: bool) {
     }
     x = row_text(ui, rect, x, &after, mono, theme::editor::TEXT);
     if with_file {
-        let location = format!("{} {}", name, item.line + 1);
+        let location = chooser::row(item).location;
         let galley = ui
             .painter()
             .layout_no_wrap(location, ui_font, *theme::TEXT_INFO);

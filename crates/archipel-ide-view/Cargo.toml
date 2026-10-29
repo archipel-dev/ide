@@ -24,4 +24,5 @@ archipel-kit-model.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+archipel-ide-daemon = { path = "../archipel-ide-daemon" }
 serde_json.workspace = true

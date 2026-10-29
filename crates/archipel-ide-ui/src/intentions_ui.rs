@@ -97,51 +97,18 @@ fn request_when_resting(app: &mut IdeApp, ctx: &egui::Context) {
     }
 }
 
-/// One visible row of the popup.
-#[derive(Clone)]
-enum Row {
-    /// Index into the alert set.
-    Action(usize),
-    /// A submenu header (title, expanded).
-    Submenu(String, bool),
-}
+use archipel_ide_view::popups::intentions::{self as model, Choice, IntentionRow};
 
 fn expanded_id() -> egui::Id {
     egui::Id::new("intention_expanded_submenu")
 }
 
-/// Rows in display order: the set's order, with each submenu collapsed into
-/// one header row below the actions of its inspection (expanded on demand).
-fn display_rows(set: &archipel_ide_core::intentions::AlertSet, expanded: Option<&str>) -> Vec<Row> {
-    let mut rows = Vec::new();
-    let mut titles: Vec<String> = Vec::new();
-    for (index, action) in set.actions.iter().enumerate() {
-        match &action.submenu {
-            None => rows.push(Row::Action(index)),
-            Some(title) if !titles.contains(title) => titles.push(title.clone()),
-            Some(_) => {}
-        }
-    }
-    for title in titles {
-        let open = expanded == Some(title.as_str());
-        rows.push(Row::Submenu(title.clone(), open));
-        if open {
-            for (index, action) in set.actions.iter().enumerate() {
-                if action.submenu.as_deref() == Some(title.as_str()) {
-                    rows.push(Row::Action(index));
-                }
-            }
-        }
-    }
-    rows
-}
-
-fn current_rows(app: &mut IdeApp, ctx: &egui::Context) -> Vec<Row> {
+fn current_rows(app: &mut IdeApp, ctx: &egui::Context) -> Vec<IntentionRow> {
     let Some(set) = app.state.current_alerts() else {
         return Vec::new();
     };
     let expanded: Option<String> = ctx.data(|data| data.get_temp(expanded_id()));
-    display_rows(&set, expanded.as_deref())
+    model::rows(&set, expanded.as_deref())
 }
 
 fn popup_keys(app: &mut IdeApp, ctx: &egui::Context, consume: &dyn Fn(Modifiers, Key) -> bool) {
@@ -159,19 +126,17 @@ fn popup_keys(app: &mut IdeApp, ctx: &egui::Context, consume: &dyn Fn(Modifiers,
         app.state.code_actions_mut().popup = false;
         return;
     }
-    if consume(Modifiers::NONE, Key::Enter) {
-        match rows.get(selected) {
-            Some(Row::Action(index)) => {
+    if consume(Modifiers::NONE, Key::Enter)
+        && let Some(row) = rows.get(selected)
+    {
+        match model::choose(row) {
+            Choice::Apply(index) => {
                 app.dispatch("code.applyAlert", json!({"index": index}));
             }
-            Some(Row::Submenu(title, open)) => {
-                let next = (!open).then(|| title.clone());
-                ctx.data_mut(|data| match next {
-                    Some(title) => data.insert_temp(expanded_id(), title),
-                    None => data.remove::<String>(expanded_id()),
-                });
-            }
-            None => {}
+            Choice::Expand(next) => ctx.data_mut(|data| match next {
+                Some(title) => data.insert_temp(expanded_id(), title),
+                None => data.remove::<String>(expanded_id()),
+            }),
         }
     }
 }
@@ -221,9 +186,9 @@ pub fn popup(app: &mut IdeApp, ctx: &egui::Context) {
     if !app.state.code_actions().popup {
         return;
     }
-    let Some(set) = app.state.current_alerts() else {
+    if app.state.current_alerts().is_none() {
         return;
-    };
+    }
     let rows = current_rows(app, ctx);
     let selected: usize = ctx.data(|data| data.get_temp(selected_id()).unwrap_or(0));
     let anchor = app
@@ -241,10 +206,7 @@ pub fn popup(app: &mut IdeApp, ctx: &egui::Context) {
                     ui.set_min_width(320.0);
                     ui.spacing_mut().item_spacing.y = 0.0;
                     let font = egui::FontId::proportional(theme::UI_FONT_SIZE);
-                    let label = |row: &Row| match row {
-                        Row::Action(index) => set.actions[*index].text.clone(),
-                        Row::Submenu(title, _) => title.clone(),
-                    };
+                    let label = |row: &IntentionRow| row.text().to_owned();
                     let width = rows
                         .iter()
                         .map(|row| {
@@ -266,26 +228,16 @@ pub fn popup(app: &mut IdeApp, ctx: &egui::Context) {
                             ui.painter().rect_filled(rect, 4.0, theme::HOVER);
                         }
                         let (indent, text, color) = match row {
-                            Row::Action(index) => {
-                                let action = &set.actions[*index];
-                                let error = matches!(
-                                    action.group,
-                                    archipel_ide_core::intentions::IntentionGroup::Error
-                                        | archipel_ide_core::intentions::IntentionGroup::RemoteError
-                                );
-                                (
-                                    if action.submenu.is_some() { 30.0 } else { 0.0 },
-                                    action.text.clone(),
-                                    if error { BULB_RED } else { BULB_YELLOW },
-                                )
-                            }
-                            Row::Submenu(title, open) => (
-                                0.0,
-                                format!("{} {title}", if *open { "v" } else { ">" }),
-                                BULB_YELLOW,
+                            IntentionRow::Action {
+                                text, fix, nested, ..
+                            } => (
+                                if *nested { 30.0 } else { 0.0 },
+                                text.clone(),
+                                if *fix { BULB_RED } else { BULB_YELLOW },
                             ),
+                            IntentionRow::Submenu { .. } => (0.0, row.label(), BULB_YELLOW),
                         };
-                        if matches!(row, Row::Action(_)) {
+                        if matches!(row, IntentionRow::Action { .. }) {
                             paint_bulb(
                                 ui.painter(),
                                 egui::pos2(rect.left() + 14.0 + indent, rect.center().y),
@@ -301,11 +253,9 @@ pub fn popup(app: &mut IdeApp, ctx: &egui::Context) {
                             theme::TEXT_BRIGHT,
                         );
                         if response.clicked() {
-                            match row {
-                                Row::Action(index) => apply = Some(*index),
-                                Row::Submenu(title, open) => {
-                                    toggle = Some((!open).then(|| title.clone()));
-                                }
+                            match model::choose(row) {
+                                Choice::Apply(index) => apply = Some(index),
+                                Choice::Expand(next) => toggle = Some(next),
                             }
                         }
                     }

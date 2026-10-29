@@ -5,17 +5,13 @@
 
 use crate::icons::{self, Icon, TypeKind};
 use crate::{IdeApp, theme};
-use archipel_ide_actions::{ActionPlace, Presentation};
-use archipel_ide_core::quick_nav::{
-    ActionCandidate, Hit, Ranked, SearchSources, SearchTab, SymbolEntry, file_name, search,
-};
+use archipel_ide_actions::ActionPlace;
+use archipel_ide_core::quick_nav::{ActionCandidate, Hit, Ranked, SearchTab, SymbolEntry};
 use archipel_ide_language::structure::SymbolKind;
-use archipel_ide_platform::data_keys;
+use archipel_ide_view::popups::search::{self as model, ActionExtra, SearchRow};
 use eframe::egui::{self, Rect, Sense, vec2};
 use serde_json::json;
-use std::time::Duration;
 
-const MAX_ROWS: usize = 40;
 /// Search Everywhere geometry (UI-POP-010/011).
 const POPUP_WIDTH: f32 = 705.0;
 const POPUP_HEIGHT: f32 = 700.0;
@@ -26,10 +22,6 @@ const FOOTER_HEIGHT: f32 = 29.0;
 const TAB_UNDERLINE: f32 = 3.0;
 /// Header, search row, divider, 4 px above and below the list, footer.
 const CHROME_HEIGHT: f32 = HEADER_HEIGHT + SEARCH_ROW_HEIGHT + 1.0 + 8.0 + FOOTER_HEIGHT;
-/// Time spent indexing symbols per frame while the popup is open.
-const INDEX_BUDGET: Duration = Duration::from_millis(15);
-
-pub type Tab = SearchTab;
 
 #[derive(Default)]
 pub struct Palette {
@@ -64,79 +56,48 @@ impl Palette {
 
 /// Window-level actions (keymap `UiAction`s) that are not typed commands; they are
 /// searchable alongside commands, with or without an open project.
-const UI_ACTIONS: [(&str, &str); 3] = [
-    ("NewProject", "New Project…"),
-    ("OpenFile", "Open…"),
-    ("Exit", "Exit"),
+const UI_ACTIONS: [ActionExtra; 3] = [
+    ActionExtra {
+        id: "NewProject",
+        label: "New Project…",
+        category: "File",
+    },
+    ActionExtra {
+        id: "OpenFile",
+        label: "Open…",
+        category: "File",
+    },
+    ActionExtra {
+        id: "Exit",
+        label: "Exit",
+        category: "File",
+    },
 ];
 
 /// Id prefix of a [`UI_ACTIONS`] candidate (the rest is the keymap action id).
 const UI_ACTION_PREFIX: &str = "ui:";
 
 fn actions(app: &IdeApp, include_disabled: bool) -> Vec<ActionCandidate> {
-    // One context for the whole list: every candidate asks the registry for its presentation.
-    app.with_data(|registry, data| {
-        let present = |id: &str| {
-            registry
-                .update(id, ActionPlace::FindAction, data)
-                .unwrap_or_else(Presentation::disabled)
-        };
-        let ui_actions = UI_ACTIONS
-            .iter()
-            .map(|(action, label)| (present(action), action, label))
-            .filter(|(presentation, ..)| presentation.visible)
-            .map(|(presentation, action, label)| ActionCandidate {
-                enabled: presentation.enabled,
-                shortcut: app.action_shortcut(action).unwrap_or_default(),
-                id: format!("{UI_ACTION_PREFIX}{action}"),
-                label: presentation.text.unwrap_or_else(|| (*label).into()),
-                category: "File".into(),
-            })
-            .filter(|candidate| include_disabled || candidate.enabled);
-        app.commands
-            .specs()
-            .into_iter()
-            .filter(IdeApp::parameterless)
-            .map(|spec| (present(&spec.id), spec))
-            .filter(|(presentation, _)| presentation.visible)
-            .filter(|(presentation, _)| include_disabled || presentation.enabled)
-            // Android actions only apply to Android projects; the SDK manager is global.
-            .filter(|(presentation, spec)| {
-                spec.category != "Android"
-                    || data.flag(&data_keys::ANDROID_PROJECT)
-                    || presentation.enabled
-            })
-            .map(|(presentation, spec)| ActionCandidate {
-                enabled: presentation.enabled,
-                shortcut: app.command_shortcut(&spec),
-                id: spec.id,
-                label: presentation.text.unwrap_or(spec.label),
-                category: spec.category,
-            })
-            .chain(ui_actions)
-            .collect()
+    app.with_view(|cx| {
+        model::action_candidates(
+            cx,
+            &UI_ACTIONS,
+            UI_ACTION_PREFIX,
+            &[],
+            include_disabled,
+            // A command no keymap action maps to shows its own default.
+            &|spec| crate::keys::display(spec.shortcut.as_deref().unwrap_or_default()),
+        )
     })
 }
 
 fn items(app: &mut IdeApp) -> Vec<Ranked<Hit>> {
     let query = app.palette.query.clone();
     let tab = app.palette.tab;
-    if matches!(
-        tab,
-        SearchTab::All | SearchTab::Classes | SearchTab::Symbols
-    ) {
-        app.state.refresh_symbol_index(INDEX_BUDGET);
-        if app.palette.server_query != query {
-            app.palette.server_query = query.clone();
-            app.state.request_server_symbols(&query);
-        }
-        app.state.poll_server_symbols();
-    }
-    if matches!(tab, SearchTab::All | SearchTab::Text) {
-        app.state.request_text_search(&query);
-        app.state.poll_text_search();
-    }
-    let actions = if matches!(tab, SearchTab::All | SearchTab::Actions) {
+    let mut server_query = std::mem::take(&mut app.palette.server_query);
+    model::prepare(&mut app.state, tab, &query, &mut server_query);
+    app.palette.server_query = server_query;
+    let candidates = if model::needs_actions(tab) {
         // The All tab never lists disabled actions; the Actions tab has the checkbox.
         actions(
             app,
@@ -145,24 +106,8 @@ fn items(app: &mut IdeApp) -> Vec<Ranked<Hit>> {
     } else {
         Vec::new()
     };
-    let manager = app.state.search_everywhere();
-    let navigation = manager.read();
-    let sources = SearchSources {
-        files: app.state.files(),
-        recent: app.state.recent_files(),
-        symbols: navigation.index.all().collect(),
-        server_symbols: &navigation.server.results,
-        actions: &actions,
-        text: &navigation.text_results,
-        include_non_project: app.palette.include_non_project,
-    };
-    let mut found = search(tab, &query, &sources);
-    if tab == SearchTab::All && query.is_empty() {
-        // Nothing typed: recent files only, like the reference IDE.
-        found.retain(|hit| matches!(hit.item, Hit::File { .. }));
-    }
-    found.truncate(if tab == SearchTab::All { 24 } else { MAX_ROWS });
-    found
+    let include_non_project = app.palette.include_non_project;
+    app.with_view(|cx| model::hits(cx, tab, &query, include_non_project, &candidates))
 }
 
 fn symbol_icon(symbol: &SymbolEntry) -> Icon {
@@ -213,15 +158,37 @@ fn highlighted_text(
     x + width
 }
 
+/// The icon of a hit: files by their content, symbols by their kind.
+fn hit_icon(app: &IdeApp, hit: &Hit) -> Icon {
+    match hit {
+        Hit::Action(_) => Icon::Run,
+        Hit::File { path, .. } => app.file_icon(path),
+        Hit::Symbol(symbol) => symbol_icon(symbol),
+        Hit::Text(found) => app.file_icon(&found.path),
+    }
+}
+
 /// One result row. Returns the index when the row was clicked.
 fn row(
     app: &mut IdeApp,
     ui: &mut egui::Ui,
     width: f32,
     index: usize,
-    ranked: &Ranked<Hit>,
+    model: &SearchRow,
     scroll_selected: bool,
 ) -> Option<usize> {
+    if let Some(group) = model.group {
+        // A separator row above the first row of a group (UI-POP-012).
+        let (rect, _) = ui.allocate_exact_size(vec2(width, ROW_HEIGHT), Sense::hover());
+        crate::widgets::row_text(
+            ui,
+            rect,
+            rect.left() + 16.0,
+            group,
+            egui::FontId::proportional(theme::UI_FONT_SIZE - 1.0),
+            *theme::TEXT_SECONDARY,
+        );
+    }
     let (rect, response) = ui.allocate_exact_size(vec2(width, ROW_HEIGHT), Sense::click());
     let selected = index == app.palette.selected;
     if selected && scroll_selected {
@@ -239,48 +206,13 @@ fn row(
         vec2(16.0, 16.0),
     );
     let small = egui::FontId::proportional(theme::UI_FONT_SIZE - 1.0);
-    // (title, inline detail, right-aligned text, icon, title colour, highlighted positions)
-    let mut positions = ranked.positions.clone();
-    let (title, detail, trailing, icon, color) = match &ranked.item {
-        Hit::Action(action) => (
-            action.label.clone(),
-            action.shortcut.clone(),
-            action.category.clone(),
-            Icon::Run,
-            if action.enabled {
-                *theme::TEXT_BRIGHT
-            } else {
-                *theme::TEXT_DISABLED
-            },
-        ),
-        Hit::File { path, line, .. } => (
-            file_name(path),
-            path.parent()
-                .map(|p| p.display().to_string())
-                .unwrap_or_default(),
-            line.map(|line| format!(":{line}")).unwrap_or_default(),
-            app.file_icon(path),
-            *theme::TEXT_BRIGHT,
-        ),
-        Hit::Symbol(symbol) => (
-            symbol.name.clone(),
-            symbol.container.clone().unwrap_or_default(),
-            format!("{}:{}", file_name(&symbol.path), symbol.line + 1),
-            symbol_icon(symbol),
-            *theme::TEXT_BRIGHT,
-        ),
-        Hit::Text(found) => {
-            positions = found.highlights.iter().flat_map(|r| r.clone()).collect();
-            (
-                found.preview.clone(),
-                String::new(),
-                format!("{} {}", file_name(&found.path), found.line),
-                app.file_icon(&found.path),
-                *theme::TEXT_BRIGHT,
-            )
-        }
+    let icon = hit_icon(app, &model.hit);
+    let color = if model.enabled {
+        *theme::TEXT_BRIGHT
+    } else {
+        *theme::TEXT_DISABLED
     };
-    let icon_color = if matches!(ranked.item, Hit::Action(_)) {
+    let icon_color = if matches!(model.hit, Hit::Action(_)) {
         *theme::TEXT_INFO
     } else {
         *icons::ICON
@@ -288,7 +220,7 @@ fn row(
     icons::paint(ui.painter(), icon_rect, icon, icon_color);
     // Trailing text first, so the title is clipped before it.
     let trailing_galley = ui.painter().layout_no_wrap(
-        trailing,
+        model.trailing.clone(),
         egui::FontId::proportional(theme::UI_FONT_SIZE),
         *theme::TEXT_SECONDARY,
     );
@@ -299,8 +231,22 @@ fn row(
         *theme::TEXT_SECONDARY,
     );
     let body = row.with_max_x(trailing_x - 8.0);
-    let x = highlighted_text(ui, body, row.left() + 32.0, &title, &positions, color);
-    crate::widgets::row_text(ui, body, x + 10.0, &detail, small, *theme::TEXT_SECONDARY);
+    let x = highlighted_text(
+        ui,
+        body,
+        row.left() + 32.0,
+        &model.title,
+        &model.positions,
+        color,
+    );
+    crate::widgets::row_text(
+        ui,
+        body,
+        x + 10.0,
+        &model.inline,
+        small,
+        *theme::TEXT_SECONDARY,
+    );
     if response.hovered() && ui.input(|input| input.pointer.delta() != egui::Vec2::ZERO) {
         app.palette.selected = index;
     }
@@ -308,10 +254,10 @@ fn row(
 }
 
 /// Selected item's path (or action id), the Assign Shortcut hint on the Actions tab.
-fn footer(app: &IdeApp, ui: &mut egui::Ui, width: f32, selected: Option<&Ranked<Hit>>) {
-    let (footer, _) = ui.allocate_exact_size(vec2(width, FOOTER_HEIGHT), Sense::hover());
+fn footer(ui: &mut egui::Ui, width: f32, footer: &model::Footer) {
+    let (band, _) = ui.allocate_exact_size(vec2(width, FOOTER_HEIGHT), Sense::hover());
     ui.painter().rect_filled(
-        footer,
+        band,
         egui::CornerRadius {
             nw: 0,
             ne: 0,
@@ -321,39 +267,22 @@ fn footer(app: &IdeApp, ui: &mut egui::Ui, width: f32, selected: Option<&Ranked<
         theme::BAND,
     );
     let font = egui::FontId::proportional(theme::UI_FONT_SIZE - 1.0);
-    let left = match selected.map(|ranked| &ranked.item) {
-        Some(Hit::File { path, .. }) => path.display().to_string(),
-        Some(Hit::Symbol(symbol)) => symbol.path.display().to_string(),
-        Some(Hit::Text(found)) => found.path.display().to_string(),
-        Some(Hit::Action(action)) => action.id.clone(),
-        None => {
-            "↑↓ to navigate · Enter to open · Shift+Enter to open in right split · Esc to close"
-                .to_owned()
-        }
-    };
     // The link at the right: the alternative way to open the selected item (UI-POP-011).
-    let right = if app.palette.tab == SearchTab::Actions {
-        "Assign Shortcut  Alt+Enter"
-    } else if selected.is_some() {
-        "Open In Right Split  Shift+Enter"
-    } else {
-        ""
-    };
     let galley = ui
         .painter()
-        .layout_no_wrap(right.to_owned(), font.clone(), *theme::LINK);
+        .layout_no_wrap(footer.link.to_owned(), font.clone(), *theme::LINK);
     let right_width = galley.size().x;
     ui.painter().galley(
-        footer.right_center() - vec2(14.0 + right_width, galley.size().y / 2.0),
+        band.right_center() - vec2(14.0 + right_width, galley.size().y / 2.0),
         galley,
         *theme::LINK,
     );
     ui.painter()
-        .with_clip_rect(footer.with_max_x(footer.right() - right_width - 28.0))
+        .with_clip_rect(band.with_max_x(band.right() - right_width - 28.0))
         .text(
-            footer.left_center() + vec2(14.0, 0.0),
+            band.left_center() + vec2(14.0, 0.0),
             egui::Align2::LEFT_CENTER,
-            left,
+            &footer.left,
             font,
             *theme::TEXT_INFO,
         );
@@ -373,6 +302,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
         }
     }
     let found = items(app);
+    let rows = model::rows(app.palette.tab, !app.palette.query.is_empty(), &found);
     if app.state.text_search_running() {
         ctx.request_repaint_after(std::time::Duration::from_millis(30));
     }
@@ -437,7 +367,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                             .layout(egui::Layout::left_to_right(egui::Align::Center)),
                         |ui| {
                             ui.add_space(8.0);
-                            for tab in Tab::ALL {
+                            for tab in model::tabs() {
                                 let galley = ui.painter().layout_no_wrap(
                                     tab.label().to_owned(),
                                     egui::FontId::proportional(theme::UI_FONT_SIZE),
@@ -485,23 +415,20 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
                                     ui.add_space(10.0);
-                                    match app.palette.tab {
-                                        SearchTab::Actions => {
-                                            let actions = app.state.actions();
-                                            let mut include = actions.read().include_disabled;
-                                            if ui
-                                                .checkbox(&mut include, "Include disabled actions")
-                                                .changed()
-                                            {
-                                                actions.write().include_disabled = include;
+                                    let actions = app.state.actions();
+                                    let include_disabled = actions.read().include_disabled;
+                                    if let Some(checkbox) = model::checkbox(
+                                        app.palette.tab,
+                                        app.palette.include_non_project,
+                                        include_disabled,
+                                    ) {
+                                        let mut checked = checkbox.checked;
+                                        if ui.checkbox(&mut checked, checkbox.label).changed() {
+                                            if app.palette.tab == SearchTab::Actions {
+                                                actions.write().include_disabled = checked;
+                                            } else {
+                                                app.palette.include_non_project = checked;
                                             }
-                                        }
-                                        SearchTab::Files | SearchTab::Text => {}
-                                        _ => {
-                                            ui.checkbox(
-                                                &mut app.palette.include_non_project,
-                                                "Include non-project items",
-                                            );
                                         }
                                     }
                                 },
@@ -523,9 +450,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                                     .font(egui::FontId::proportional(theme::UI_FONT_SIZE + 2.0))
                                     .desired_width(width - 60.0)
                                     .margin(egui::Margin::symmetric(4, 0))
-                                    .hint_text(
-                                        "Type to search classes, files, symbols, actions and text",
-                                    ),
+                                    .hint_text(model::PLACEHOLDER),
                             );
                             if app.palette.just_opened || !input.has_focus() {
                                 input.request_focus();
@@ -539,7 +464,7 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                                 ui.painter().text(
                                     search_row.right_center() - vec2(16.0, 0.0),
                                     egui::Align2::RIGHT_CENTER,
-                                    "Type / to see commands",
+                                    model::HINT,
                                     egui::FontId::proportional(theme::UI_FONT_SIZE),
                                     *theme::TEXT_INFO,
                                 );
@@ -557,7 +482,8 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                         ui.add_space(12.0);
                         ui.vertical_centered(|ui| {
                             ui.label(
-                                egui::RichText::new("Nothing found").color(theme::TEXT_SECONDARY),
+                                egui::RichText::new(model::empty_text(false))
+                                    .color(theme::TEXT_SECONDARY),
                             );
                         });
                         ui.add_space(12.0);
@@ -568,16 +494,17 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
                             ui.spacing_mut().item_spacing.y = 0.0;
-                            for (index, ranked) in found.iter().enumerate() {
+                            for (index, shown) in rows.iter().enumerate() {
                                 if let Some(click) =
-                                    row(app, ui, width, index, ranked, scroll_selected)
+                                    row(app, ui, width, index, shown, scroll_selected)
                                 {
                                     chosen = Some(click);
                                 }
                             }
                         });
                     ui.add_space(4.0);
-                    footer(app, ui, width, found.get(app.palette.selected));
+                    let selected = rows.get(app.palette.selected);
+                    footer(ui, width, &model::footer(app.palette.tab, selected));
                 });
         });
     if ctx.input(|input| input.pointer.any_click()) && !ctx.is_pointer_over_area() {

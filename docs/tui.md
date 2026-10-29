@@ -61,6 +61,24 @@ is shown.
 
 ![Search, menus and popups](tui/img/file-menu.png)
 
+Search Everywhere has the GUI's anatomy (TUI-GUI-135): the header band with the tabs and the
+include checkbox (`Alt+P`), the search row with its hint, group separator rows, rows with the
+match highlighted and the location at the right, and a footer with the location of the selected
+item and `Open In Right Split` (`Shift+Enter` or `Ctrl+Enter`). Go to File, Class, Symbol and Find
+Action are the same popup with another tab. The rows come from `archipel-ide-view::popups`, which
+the GUI draws too.
+
+![Search Everywhere](tui/img/search-everywhere.png)
+
+Completion rows show the signature after the name and the type or package at the right edge
+(`ArrayList  java.util`). Alt+Enter lists submenus as rows with `▸`; `Right` opens one, `Left`
+closes it. Go to Declaration with several targets shows a chooser (`Up`/`Down`, `Enter`, `Esc`).
+
+![Completion](tui/img/completion.png)
+
+`F10`, `Alt` plus a mnemonic and the hamburger show the menu bar in place of the project and VCS
+widgets; closing the menu (`Esc`, a choice or a click outside) brings the toolbar back.
+
 ![A bottom window at 100x30](tui/img/narrow-100x30.png)
 
 ![80x24](tui/img/narrow-80x24.png)

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/archipel-dev/ide/compare/v0.3.0...v0.3.1) (2026-10-29)
+
+
+### Features
+
+* **java:** cannot-resolve errors while typing from the native resolver, import class fix ([#98](https://github.com/archipel-dev/ide/issues/98)) ([e0db9dd](https://github.com/archipel-dev/ide/commit/e0db9dd060c90e48146cbb39b17248f3f1421be4))
+* **tui:** GUI-faithful popups on shared view models ([#99](https://github.com/archipel-dev/ide/issues/99)) ([888cfe1](https://github.com/archipel-dev/ide/commit/888cfe14016d95be288c41b73fffbfe1abad84fb))
+
 ## [0.3.0](https://github.com/archipel-dev/ide/compare/v0.2.6...v0.3.0) (2026-10-28)
 
 

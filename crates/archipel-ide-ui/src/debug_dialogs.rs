@@ -4,19 +4,16 @@
 use crate::popups::{popup_frame, title};
 use crate::{IdeApp, theme};
 use archipel_ide_dap::SessionState;
+use archipel_ide_view::popups::breakpoint::{self, BreakpointForm};
 use eframe::egui::{self, Color32, RichText};
 use serde_json::json;
 
-/// Edit buffers of the breakpoint properties popup.
+/// The edit buffers of the breakpoint properties popup (the view crate's form) and whether the
+/// condition field still has to take keyboard focus (first frame).
 #[derive(Clone, Default)]
-struct BreakpointForm {
-    /// `(path, line)` the buffers were loaded for.
-    key: Option<(std::path::PathBuf, usize)>,
-    /// The condition field still has to take keyboard focus (first frame).
+struct FormState {
+    form: Option<BreakpointForm>,
     focus_pending: bool,
-    condition: String,
-    log_message: String,
-    hit_condition: String,
 }
 
 fn anchor_id() -> egui::Id {
@@ -92,82 +89,61 @@ fn breakpoint_frame(ctx: &egui::Context, width: f32, add: impl FnOnce(&mut egui:
 }
 
 fn breakpoint_properties(app: &mut IdeApp, ctx: &egui::Context) {
-    let Some((path, line)) = app.state.debugger().state().editing_breakpoint.clone() else {
+    let Some((path, line)) = breakpoint::editing(&app.state) else {
         // Closed (maybe by Escape in the workbench): the next open starts fresh.
         ctx.data_mut(|data| {
-            data.remove::<BreakpointForm>(form_id());
+            data.remove::<FormState>(form_id());
             data.remove::<egui::Pos2>(anchor_id());
         });
         return;
     };
-    let mut form: BreakpointForm = ctx
+    let mut state: FormState = ctx
         .data(|data| data.get_temp(form_id()))
         .unwrap_or_default();
-    let key = Some((path.clone(), line));
-    if form.key != key {
-        let options = app.state.breakpoint_options(&path, line);
-        let options = options.unwrap_or_default();
-        form = BreakpointForm {
-            key,
+    if state
+        .form
+        .as_ref()
+        .is_none_or(|form| (form.path.as_path(), form.line) != (path.as_path(), line))
+    {
+        state = FormState {
+            form: Some(BreakpointForm::load(&app.state, &path, line)),
             focus_pending: true,
-            condition: options.condition.unwrap_or_default(),
-            log_message: options.log_message.unwrap_or_default(),
-            hit_condition: options.hit_condition.unwrap_or_default(),
         };
     }
+    let mut form = state.form.take().expect("loaded above");
     let mut done = false;
     let mut remove = false;
     breakpoint_frame(ctx, 460.0, |ui| {
-        title(
-            ui,
-            &format!(
-                "Line Breakpoint — {}:{}",
-                path.file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
-                line + 1
-            ),
-        );
+        title(ui, &form.title());
         egui::Grid::new("breakpoint_fields")
             .num_columns(2)
             .spacing([12.0, 8.0])
             .show(ui, |ui| {
-                ui.label(RichText::new("Condition").color(theme::TEXT_SECONDARY));
-                let response = ui.add(
-                    egui::TextEdit::singleline(&mut form.condition)
-                        .id(egui::Id::new("breakpoint_condition"))
-                        .hint_text("e.g. i == 3")
-                        .desired_width(320.0),
-                );
-                if std::mem::take(&mut form.focus_pending) {
-                    response.request_focus();
+                for (index, field) in breakpoint::FIELDS.iter().enumerate() {
+                    ui.label(RichText::new(field.label).color(theme::TEXT_SECONDARY));
+                    let mut value = form.value(field.id).to_owned();
+                    let response = ui.add(
+                        egui::TextEdit::singleline(&mut value)
+                            .id(egui::Id::new(("breakpoint_field", field.id)))
+                            .hint_text(field.hint)
+                            .desired_width(320.0),
+                    );
+                    form.set(field.id, value);
+                    if index == 0 && std::mem::take(&mut state.focus_pending) {
+                        response.request_focus();
+                    }
+                    ui.end_row();
                 }
-                ui.end_row();
-                ui.label(RichText::new("Log message").color(theme::TEXT_SECONDARY));
-                ui.add(
-                    egui::TextEdit::singleline(&mut form.log_message)
-                        .id(egui::Id::new("breakpoint_log_message"))
-                        .hint_text("Logpoint: print, {expr} interpolates")
-                        .desired_width(320.0),
-                );
-                ui.end_row();
-                ui.label(RichText::new("Hit count").color(theme::TEXT_SECONDARY));
-                ui.add(
-                    egui::TextEdit::singleline(&mut form.hit_condition)
-                        .id(egui::Id::new("breakpoint_hit_condition"))
-                        .hint_text("e.g. 3 or >= 2")
-                        .desired_width(320.0),
-                );
-                ui.end_row();
             });
         ui.add_space(8.0);
         ui.horizontal(|ui| {
             let done_button =
-                egui::Button::new(RichText::new("Done").color(Color32::WHITE)).fill(theme::ACCENT);
+                egui::Button::new(RichText::new(breakpoint::DONE).color(Color32::WHITE))
+                    .fill(theme::ACCENT);
             if ui.add(done_button).clicked() {
                 done = true;
             }
-            if ui.button("Remove Breakpoint").clicked() {
+            if ui.button(breakpoint::REMOVE).clicked() {
                 remove = true;
             }
         });
@@ -179,29 +155,21 @@ fn breakpoint_properties(app: &mut IdeApp, ctx: &egui::Context) {
         )
     });
     done |= enter;
-    if done {
-        let text = |value: &str| Some(value.to_owned());
-        app.dispatch(
-            "debug.setBreakpointOptions",
-            json!({
-                "path": path,
-                "line": line,
-                "condition": text(&form.condition),
-                "logMessage": text(&form.log_message),
-                "hitCondition": text(&form.hit_condition),
-            }),
-        );
+    let effects = if done {
+        form.done()
     } else if remove {
-        app.dispatch(
-            "debug.toggleBreakpoint",
-            json!({"path": path, "line": line}),
-        );
-    }
-    if done || remove || escape {
-        ctx.data_mut(|data| data.remove::<BreakpointForm>(form_id()));
-        app.dispatch("debug.closeBreakpointEditor", serde_json::Value::Null);
+        form.remove()
+    } else if escape {
+        vec![breakpoint::close()]
     } else {
-        ctx.data_mut(|data| data.insert_temp(form_id(), form));
+        Vec::new()
+    };
+    if effects.is_empty() {
+        state.form = Some(form);
+        ctx.data_mut(|data| data.insert_temp(form_id(), state));
+    } else {
+        ctx.data_mut(|data| data.remove::<FormState>(form_id()));
+        app.apply_view_effects(effects, ctx);
     }
 }
 

@@ -1,10 +1,11 @@
 //! Gutter run icons and their popup (Run / Debug / Modify Run Configuration…).
 
 use crate::icons::{self, Icon};
-use crate::{IdeApp, keys, theme};
+use crate::{IdeApp, theme};
 use archipel_ide_core::RunnableKind;
+use archipel_ide_view::popups::gutter;
+use archipel_kit_model::MenuEntry;
 use eframe::egui::{self, vec2};
-use serde_json::json;
 
 #[derive(Clone, Copy)]
 struct Open {
@@ -47,48 +48,47 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
     let Some(Some(open)) = ctx.data(|data| data.get_temp::<Option<Open>>(state_id())) else {
         return;
     };
-    let marks = app.state.gutter_marks();
-    let Some(mark) = marks.iter().find(|mark| mark.line == open.line).cloned() else {
+    // The rows are the view crate's: the terminal draws the same ones.
+    let entries = app.with_view(|cx| gutter::run_popup(cx, open.line));
+    if entries.is_empty() {
         close(ctx);
         return;
-    };
-    let target = mark.label.trim_start_matches("Run ").to_owned();
-    let mut action = None;
-    let mut debug_action = false;
+    }
+    let notation = archipel_ide_view::Caps::gui().notation();
+    let mut chosen: Option<String> = None;
     let area = egui::Area::new(egui::Id::new("gutter_run_popup_area"))
         .order(egui::Order::Foreground)
         .fixed_pos(open.position + vec2(8.0, 4.0))
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_min_width(280.0);
-                let running = app.state.execution().is_running();
-                let run = ui.add(
-                    crate::widgets::menu_item(mark.label.clone())
-                        .icon(Icon::Run)
-                        .shortcut(app.action_shortcut("RunClass").unwrap_or_default())
-                        .enabled(!running),
-                );
-                if run.clicked() {
-                    action = Some(false);
-                }
-                let debug = ui.add(
-                    crate::widgets::menu_item(format!("Debug {target}"))
-                        .icon(Icon::Debug)
-                        .shortcut(keys::display("⌃D"))
-                        .enabled(!app.state.is_debugging() && !running),
-                );
-                if debug.clicked() {
-                    debug_action = true;
-                }
-                ui.add(
-                    crate::widgets::menu_item(format!("Run {target} with Coverage")).enabled(false),
-                )
-                .on_disabled_hover_text("Code coverage is not available yet (IJ-RUN-069)");
-                if ui
-                    .add(crate::widgets::menu_item("Modify Run Configuration…"))
-                    .clicked()
-                {
-                    action = Some(true);
+                for entry in &entries {
+                    match entry {
+                        MenuEntry::Item(item) => {
+                            let mut row =
+                                crate::widgets::menu_item(item.label.clone()).enabled(item.enabled);
+                            match item.icon.as_ref().and_then(|icon| icon.glyph()) {
+                                Some(archipel_kit_model::Glyph::Run) => row = row.icon(Icon::Run),
+                                Some(archipel_kit_model::Glyph::Debug) => {
+                                    row = row.icon(Icon::Debug)
+                                }
+                                _ => {}
+                            }
+                            if let Some(shortcut) = &item.shortcut {
+                                row = row.shortcut(shortcut.label(notation));
+                            }
+                            let mut response = ui.add(row);
+                            if let Some(reason) = &item.disabled_reason {
+                                response = response.on_disabled_hover_text(reason);
+                            }
+                            if response.clicked() {
+                                chosen = Some(item.id.clone());
+                            }
+                        }
+                        MenuEntry::Separator { .. } => {
+                            ui.separator();
+                        }
+                    }
                 }
             });
         });
@@ -103,16 +103,11 @@ pub fn show(app: &mut IdeApp, ctx: &egui::Context) {
                     .press_origin()
                     .is_some_and(|origin| !area.response.rect.contains(origin))
         })
-        && action.is_none();
-    if debug_action {
+        && chosen.is_none();
+    if let Some(id) = chosen {
         close(ctx);
-        app.dispatch(
-            "run.gutter",
-            json!({"line": open.line, "edit": false, "debug": true}),
-        );
-    } else if let Some(edit) = action {
-        close(ctx);
-        app.dispatch("run.gutter", json!({"line": open.line, "edit": edit}));
+        let effects = app.with_view(|cx| archipel_ide_view::dispatch::menu_row(cx, &id));
+        app.apply_view_effects(effects, ctx);
     } else if pressed_elsewhere {
         close(ctx);
     }

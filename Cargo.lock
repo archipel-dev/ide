@@ -282,6 +282,14 @@ dependencies = [
 [[package]]
 name = "archipel-icons"
 version = "0.4.0"
+source = "git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter#bf57f3ac98083f7bbaf10b0fc581119d91a0791b"
+dependencies = [
+ "egui",
+]
+
+[[package]]
+name = "archipel-icons"
+version = "0.4.0"
 source = "git+https://github.com/archipel-dev/kit?branch=main#b24cc47afc0ad880fb38ec726713a2d8a0eea47d"
 dependencies = [
  "egui",
@@ -835,8 +843,8 @@ dependencies = [
  "archipel-ide-terminal",
  "archipel-ide-text",
  "archipel-ide-view",
- "archipel-kit",
- "archipel-kit-model",
+ "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter)",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter)",
  "archipel-kit-tui",
  "libc",
  "serde_json",
@@ -847,7 +855,7 @@ dependencies = [
 name = "archipel-ide-ui"
 version = "0.3.0"
 dependencies = [
- "archipel-icons",
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter)",
  "archipel-ide-actions",
  "archipel-ide-ai",
  "archipel-ide-analysis",
@@ -875,8 +883,8 @@ dependencies = [
  "archipel-ide-terminal",
  "archipel-ide-text",
  "archipel-ide-view",
- "archipel-kit",
- "archipel-kit-model",
+ "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter)",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter)",
  "eframe",
  "egui",
  "egui_extras",
@@ -922,8 +930,24 @@ dependencies = [
  "archipel-ide-plugins",
  "archipel-ide-settings",
  "archipel-ide-text",
- "archipel-kit-model",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter)",
  "serde_json",
+]
+
+[[package]]
+name = "archipel-kit"
+version = "0.4.0"
+source = "git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter#bf57f3ac98083f7bbaf10b0fc581119d91a0791b"
+dependencies = [
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter)",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter)",
+ "egui",
+ "egui_kittest",
+ "objc2 0.6.5",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "regex",
+ "serde",
 ]
 
 [[package]]
@@ -931,8 +955,8 @@ name = "archipel-kit"
 version = "0.4.0"
 source = "git+https://github.com/archipel-dev/kit?branch=main#b24cc47afc0ad880fb38ec726713a2d8a0eea47d"
 dependencies = [
- "archipel-icons",
- "archipel-kit-model",
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
  "egui",
  "egui_kittest",
  "objc2 0.6.5",
@@ -945,20 +969,29 @@ dependencies = [
 [[package]]
 name = "archipel-kit-model"
 version = "0.4.0"
+source = "git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter#bf57f3ac98083f7bbaf10b0fc581119d91a0791b"
+dependencies = [
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter)",
+ "serde",
+]
+
+[[package]]
+name = "archipel-kit-model"
+version = "0.4.0"
 source = "git+https://github.com/archipel-dev/kit?branch=main#b24cc47afc0ad880fb38ec726713a2d8a0eea47d"
 dependencies = [
- "archipel-icons",
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
  "serde",
 ]
 
 [[package]]
 name = "archipel-kit-tui"
 version = "0.4.0"
-source = "git+https://github.com/archipel-dev/kit?branch=main#b24cc47afc0ad880fb38ec726713a2d8a0eea47d"
+source = "git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter#bf57f3ac98083f7bbaf10b0fc581119d91a0791b"
 dependencies = [
- "archipel-icons",
- "archipel-kit",
- "archipel-kit-model",
+ "archipel-icons 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter)",
+ "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter)",
+ "archipel-kit-model 0.4.0 (git+https://github.com/archipel-dev/kit?branch=feat%2Ftui-gutter)",
  "ratatui",
  "unicode-width 0.2.2",
 ]
@@ -980,7 +1013,7 @@ name = "archipel-plugin-testing"
 version = "0.1.0"
 source = "git+https://github.com/archipel-dev/sdk?branch=main#241e7e8db542905e65892145174cd5ddb0828168"
 dependencies = [
- "archipel-kit",
+ "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
  "archipel-plugin-api",
  "archipel-plugin-ui",
  "egui",
@@ -991,7 +1024,7 @@ name = "archipel-plugin-ui"
 version = "0.1.0"
 source = "git+https://github.com/archipel-dev/sdk?branch=main#241e7e8db542905e65892145174cd5ddb0828168"
 dependencies = [
- "archipel-kit",
+ "archipel-kit 0.4.0 (git+https://github.com/archipel-dev/kit?branch=main)",
  "archipel-plugin-api",
  "egui",
 ]

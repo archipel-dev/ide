@@ -54,6 +54,11 @@ pub(crate) const WELCOME: Id = Id::new("tui.welcome");
 pub enum Msg {
     Picked(Target, bool),
     Dialog(DialogKind, ExitCode, Input),
+    /// The breakpoint properties dialog closed with this form.
+    Breakpoint(
+        ExitCode,
+        archipel_ide_view::popups::breakpoint::BreakpointForm,
+    ),
 }
 
 /// Which dialog a result belongs to.
@@ -109,6 +114,7 @@ pub struct TuiApp {
     pub(crate) se_server_query: String,
     pub(crate) panels: crate::panels::Panels,
     pub(crate) popups: crate::popups::Popups,
+    pub(crate) gutter: crate::gutter::GutterUi,
     pub(crate) now: f64,
     pub(crate) busy: bool,
     pub(crate) theme_name: String,
@@ -150,6 +156,7 @@ impl TuiApp {
             se_server_query: String::new(),
             panels: crate::panels::Panels::default(),
             popups: crate::popups::Popups::default(),
+            gutter: crate::gutter::GutterUi::default(),
             now: 0.0,
             busy: false,
             theme_name: String::new(),
@@ -330,6 +337,11 @@ impl TuiApp {
             }
             return;
         }
+        // Debug from the gutter popup starts a debug session, whose windows are Wave 2.
+        if id == "run.gutter" && params["debug"].as_bool() == Some(true) {
+            self.not_available(rt, "Debug", "not available in the terminal yet");
+            return;
+        }
         if let Some(why) = unsupported(id) {
             let label = self
                 .ide
@@ -434,6 +446,7 @@ impl TuiApp {
         self.sync_views();
         self.ide.state_mut().record_caret_location();
         self.process_requests(rt);
+        self.sync_breakpoint_form(rt);
         self.offer_conflict(rt);
         self.refresh_tree();
         self.refresh_panels();
@@ -515,17 +528,25 @@ impl TuiApp {
             highlighter,
             language,
             highlights,
+            icons,
+            markers,
             ..
         } = view;
         let out = EditorComponent::new(EDITOR, editor)
             .highlighter(highlighter)
             .language(language)
             .highlights(highlights)
+            .gutter_icons(icons)
+            .lanes(crate::gutter::LANES)
+            .change_markers(markers)
             .bracket_folding(false)
             .wrap(true)
             .handle(rt, state, event);
         if let Some(hint) = out.hint {
             self.ide.state_mut().set_status(hint);
+        }
+        if matches!(event, Event::Mouse(_)) {
+            self.gutter_events(rt, out.gutter_hover, out.gutter_clicks);
         }
         out.consumed
     }
@@ -1047,6 +1068,7 @@ impl TuiApp {
     pub(crate) fn apply(&mut self, rt: &mut Runtime, msg: Msg) {
         match msg {
             Msg::Picked(target, alternate) => self.picked(rt, target, alternate),
+            Msg::Breakpoint(code, form) => self.breakpoint_answer(rt, code, form),
             Msg::Dialog(DialogKind::Conflict { index }, code, _) => {
                 self.conflict_answer(rt, index, code);
             }
@@ -1296,6 +1318,17 @@ fn unsupported(id: &str) -> Option<&'static str> {
         "diff.",
         "settings.",
     ];
+    // The commands of the gutter: line breakpoints and their properties (Wave 1). The rest of
+    // `debug.` waits for the debugger windows (Wave 2).
+    const GUTTER: [&str; 4] = [
+        "debug.toggleBreakpoint",
+        "debug.editBreakpoint",
+        "debug.setBreakpointOptions",
+        "debug.closeBreakpointEditor",
+    ];
+    if GUTTER.contains(&id) {
+        return None;
+    }
     if NEEDS_GUI.iter().any(|prefix| id.starts_with(prefix)) {
         return Some("not available in the terminal yet");
     }
@@ -1352,6 +1385,10 @@ impl App for TuiApp {
         }
         if matches!(event, Event::FocusLost) {
             self.autosave();
+        }
+        if self.change_event(rt, event) {
+            self.after_input(rt);
+            return;
         }
         if rt.double_shift() {
             self.open_picker(rt, PickerKind::SearchEverywhere, 0);
@@ -1537,6 +1574,34 @@ impl App for TuiApp {
             document.reveal_carets();
         }
         self.sync_all();
+        self.refresh_gutter(rt);
         self.draw_all(rt, area, buf);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unsupported;
+
+    #[test]
+    fn the_gutter_commands_are_not_refused_and_the_rest_of_debug_still_is() {
+        for id in [
+            "debug.toggleBreakpoint",
+            "debug.editBreakpoint",
+            "debug.setBreakpointOptions",
+            "debug.closeBreakpointEditor",
+        ] {
+            assert_eq!(unsupported(id), None, "{id}");
+        }
+        for id in [
+            "debug.start",
+            "debug.stop",
+            "debug.stepOver",
+            "debug.evaluate",
+        ] {
+            assert!(unsupported(id).is_some(), "{id}");
+        }
+        assert_eq!(unsupported("run.gutter"), None);
+        assert_eq!(unsupported("vcs.rollbackChange"), None);
     }
 }

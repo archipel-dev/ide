@@ -158,3 +158,99 @@ impl DialogContent for InputContent {
         Some(FIELD)
     }
 }
+
+const FORM_FIELD: Id = Id::new("tui.form.field");
+
+/// A column of labeled text fields (the breakpoint properties): Tab moves between them, Enter
+/// accepts. The texts are kept in `shared`, one per field.
+pub struct FormContent {
+    fields: Vec<FormField>,
+    label_width: usize,
+    shared: Rc<RefCell<Vec<String>>>,
+}
+
+struct FormField {
+    label: String,
+    placeholder: String,
+    state: TextFieldState,
+}
+
+impl FormContent {
+    /// Fields of (label, hint, initial text); the labels are padded to one width so the
+    /// fields line up.
+    pub fn new(fields: &[(&str, &str, &str)], shared: Rc<RefCell<Vec<String>>>) -> Self {
+        let label_width = fields
+            .iter()
+            .map(|(label, _, _)| unicode_width::UnicodeWidthStr::width(*label))
+            .max()
+            .unwrap_or(0);
+        let content = Self {
+            fields: fields
+                .iter()
+                .map(|(label, hint, text)| FormField {
+                    label: (*label).to_owned(),
+                    placeholder: (*hint).to_owned(),
+                    state: TextFieldState::with_text(*text),
+                })
+                .collect(),
+            label_width,
+            shared,
+        };
+        content.publish();
+        content
+    }
+
+    fn publish(&self) {
+        *self.shared.borrow_mut() = self
+            .fields
+            .iter()
+            .map(|field| field.state.text().to_owned())
+            .collect();
+    }
+}
+
+impl DialogContent for FormContent {
+    fn height(&self, _width: u16) -> u16 {
+        (self.fields.len() * 2).saturating_sub(1) as u16
+    }
+
+    fn draw(&mut self, rt: &mut Runtime, area: Rect, buf: &mut Buffer) {
+        let p = rt.look.palette;
+        for (index, field) in self.fields.iter().enumerate() {
+            let y = area.y + 2 * index as u16;
+            if y >= area.bottom() {
+                break;
+            }
+            let label = format!("{:<width$}", field.label, width = self.label_width);
+            TextFieldControl::new(FORM_FIELD.with(index as u64))
+                .label(&label)
+                .placeholder(&field.placeholder)
+                .on(p.darker_black)
+                .show(rt, &field.state, Rect::new(area.x, y, area.width, 1), buf);
+        }
+    }
+
+    fn event(&mut self, rt: &mut Runtime, event: &Event) -> bool {
+        let mut used = false;
+        for (index, field) in self.fields.iter_mut().enumerate() {
+            used |= matches!(
+                TextFieldControl::new(FORM_FIELD.with(index as u64)).handle(
+                    rt,
+                    &mut field.state,
+                    event
+                ),
+                FieldEvent::Changed | FieldEvent::Consumed | FieldEvent::Cleared
+            );
+        }
+        self.publish();
+        used
+    }
+
+    fn revision(&self) -> u64 {
+        self.fields.iter().map(|field| field.state.revision).sum()
+    }
+
+    fn preferred_focus(&self) -> Option<Id> {
+        Some(FORM_FIELD.with(0))
+    }
+}

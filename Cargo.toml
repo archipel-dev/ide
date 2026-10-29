@@ -25,10 +25,10 @@ archipel-plugin-ui = { git = "https://github.com/archipel-dev/sdk", branch = "ma
 anyhow = "1.0"
 # Shared UI library of the Archipel suite. Pinned to the branch of kit PR #1 until it
 # merges into main (then switch `branch` to "main").
-archipel-icons = { git = "https://github.com/archipel-dev/kit", branch = "main" }
-archipel-kit = { git = "https://github.com/archipel-dev/kit", branch = "main" }
-archipel-kit-tui = { git = "https://github.com/archipel-dev/kit", branch = "main" }
-archipel-kit-model = { git = "https://github.com/archipel-dev/kit", branch = "main" }
+archipel-icons = { git = "https://github.com/archipel-dev/kit", branch = "feat/tui-gutter" }
+archipel-kit = { git = "https://github.com/archipel-dev/kit", branch = "feat/tui-gutter" }
+archipel-kit-tui = { git = "https://github.com/archipel-dev/kit", branch = "feat/tui-gutter" }
+archipel-kit-model = { git = "https://github.com/archipel-dev/kit", branch = "feat/tui-gutter" }
 eframe = { version = "0.33", features = ["wgpu"] }
 egui = "0.33"
 lsp-types = "0.95"

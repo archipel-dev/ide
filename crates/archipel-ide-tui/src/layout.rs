@@ -380,12 +380,17 @@ impl TuiApp {
                     language,
                     highlights,
                     follow,
+                    icons,
+                    markers,
                     ..
                 } = view;
                 let mut out = EditorComponent::new(EDITOR, model)
                     .highlighter(highlighter)
                     .language(language)
                     .highlights(highlights)
+                    .gutter_icons(icons)
+                    .lanes(crate::gutter::LANES)
+                    .change_markers(markers)
                     .bracket_folding(false)
                     .wrap(true)
                     .show(rt, state, body, buf);
@@ -399,6 +404,9 @@ impl TuiApp {
                             .highlighter(highlighter)
                             .language(language)
                             .highlights(highlights)
+                            .gutter_icons(icons)
+                            .lanes(crate::gutter::LANES)
+                            .change_markers(markers)
                             .bracket_folding(false)
                             .wrap(true)
                             .show(rt, state, body, buf);
@@ -418,6 +426,7 @@ impl TuiApp {
                     buf,
                 );
                 self.draw_popups(rt, buf);
+                self.draw_change_popup(rt, body, buf);
             }
         }
     }
@@ -675,6 +684,8 @@ impl TuiApp {
                     pointer.x, pointer.y,
                 ))
             && self.active_view().is_some()
+            // A right click in the gutter is the gutter's (the breakpoint properties).
+            && !pointer.over(crate::gutter::gutter_id())
         {
             self.open_chrome_popup(
                 rt,
@@ -751,8 +762,17 @@ impl TuiApp {
     pub(crate) fn autoscroll(&mut self, rt: &mut Runtime) {
         if let Some(index) = self.active_view() {
             let view = &mut self.views[index];
-            let crate::view::DocView { editor, state, .. } = view;
+            let crate::view::DocView {
+                editor,
+                state,
+                icons,
+                markers,
+                ..
+            } = view;
             let _ = EditorComponent::new(EDITOR, editor)
+                .gutter_icons(icons)
+                .lanes(crate::gutter::LANES)
+                .change_markers(markers)
                 .bracket_folding(false)
                 .wrap(true)
                 .tick(rt, state);

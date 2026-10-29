@@ -245,7 +245,7 @@ terminal clipboard (OSC 52).
   branches and push. Use the GUI for these.
 - Editor splits are shown as one tab list. Long lines wrap; the view follows the caret by row. Documents with CRLF line endings are drawn as LF and keep CRLF in the core.
   Shift+arrows in column selection mode do not extend the block yet (the mode toggles).
-- Keys a terminal cannot send have chords behind `Ctrl+\` (see "Keys"); known defect: a legacy terminal sends `Ctrl+\` as the byte `0x1C`, which crossterm reports as `Ctrl+4`, so the leader only works where the kitty protocol is on until the kit maps it back; Ctrl+7 comments (Ctrl+/) and
+- Keys a terminal cannot send have chords behind `Ctrl+\` (see "Keys"); a legacy terminal sends `Ctrl+\`, `Ctrl+]` and `Ctrl+^` as the bytes `0x1C` to `0x1E`, which the kit maps back from crossterm's `Ctrl+4/5/6` when the kitty protocol is off; Ctrl+7 comments (Ctrl+/) and
   Ctrl+H deletes a word in a legacy terminal.
 - Quick Documentation, parameter info and inlay hints have no terminal surface yet.
 - Gutter: the kit has one fixed glyph for breakpoints, so a conditional breakpoint and a logpoint differ

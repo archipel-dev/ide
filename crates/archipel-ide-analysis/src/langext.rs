@@ -500,7 +500,7 @@ pub struct SourceRequest<'a> {
     pub count: u32,
 }
 
-/// The kind of a class-name item (its icon and its sorting among kinds).
+/// The kind of an item (its icon and its sorting among kinds).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceItemKind {
     Class,
@@ -508,17 +508,28 @@ pub enum SourceItemKind {
     Enum,
     Annotation,
     Record,
+    Method,
+    Field,
+    /// An enum constant.
+    Constant,
+    /// A local variable or a pattern binding.
+    Variable,
+    Parameter,
+    Keyword,
+    Package,
 }
 
 /// One row of a native completion answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceItem {
-    /// The simple name shown in the popup.
+    /// The name shown in the popup.
     pub label: String,
     /// What the typed prefix is matched against.
     pub filter_text: String,
-    /// The grey tail (the package).
+    /// The right-aligned text: the package of a class, the type of a member or a variable.
     pub detail: Option<String>,
+    /// The grey text right after the name: the parameter list of a method.
+    pub signature: Option<String>,
     pub kind: SourceItemKind,
     pub deprecated: bool,
     /// Passed back to [`CompletionSource::insertion`] when the row is accepted.
@@ -545,6 +556,8 @@ pub struct SourceCompletion {
 pub struct SourceInsertion {
     pub text: String,
     pub edits: Vec<crate::modcommand::TextEdit>,
+    /// `text` is a snippet: `$0` marks where the caret goes (inside the parentheses of a call).
+    pub snippet: bool,
 }
 
 /// A language's own completion answer, computed synchronously from its indexes and the live

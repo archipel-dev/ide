@@ -148,6 +148,23 @@ fn write_sources(root: &Path) {
     }
 }
 
+/// A source file of about `methods * 5` lines: generic collections, streams, calls on library
+/// receivers, and a `tail` method at the end where the caret goes.
+fn big_source(methods: usize) -> String {
+    let mut t = String::from(
+        "package p;\n\nimport java.util.*;\nimport java.util.stream.*;\n\nclass Big {\n    private final List<String> names = new ArrayList<>();\n",
+    );
+    for i in 0..methods {
+        t.push_str(&format!(
+            "    int m{i}(int a) {{\n        String s = \"x{i}\";\n        List<String> l = new ArrayList<>();\n        l.add(s);\n        return a + l.size() + names.size();\n    }}\n"
+        ));
+    }
+    t.push_str(
+        "    void tail() {\n        List<String> xs = new ArrayList<>();\n        names.add(\"a\");\n        xs.stream().filter(x -> x.isEmpty()).count();\n        xs.get(0).length();\n        List<String> more = new ArrayList<>();\n        more = null;\n        String name = \"\";\n        na;\n        re;\n        ma;\n        List<String> target = new Arr;\n    }\n}\n",
+    );
+    t
+}
+
 fn main() {
     let assert = std::env::var("ARCHIPEL_PERF_ASSERT").is_ok();
     let mut failures: Vec<String> = Vec::new();
@@ -216,6 +233,22 @@ fn main() {
     let patterns = [
         "Svc1", "Svc12", "Svc00", "ArLi", "Te", "Str", "SvcH", "Han", "Hs", "NPE",
     ];
+    if std::env::var("ARCHIPEL_BENCH_VERBOSE").is_ok() {
+        for pattern in patterns {
+            let q = measure(format!("  pattern `{pattern}`"), 50, |_| {
+                let r = index
+                    .names_matching(&scope, pattern, &|_| true, 300)
+                    .unwrap();
+                std::hint::black_box(r);
+            });
+            println!(
+                "{:<30} p50 {:>7.2} ms p95 {:>7.2} ms",
+                q.name,
+                q.percentile(0.5).as_secs_f64() * 1e3,
+                q.percentile(0.95).as_secs_f64() * 1e3
+            );
+        }
+    }
     let q = measure(format!("class-name query over {table} names"), 200, |i| {
         let r = index
             .names_matching(&scope, patterns[i % patterns.len()], &|_| true, 300)
@@ -260,6 +293,63 @@ fn main() {
                 count: 1,
             };
             std::hint::black_box(complete::complete(&input).unwrap());
+        },
+    );
+    report(&c, 50.0, Some(100.0), &mut failures);
+
+    // Member access, reference variants, keywords, statics and the expected type in a file of
+    // about 2000 lines (JAVA-CMP-008, 011, 022, 027): the probe parses the buffer, builds its
+    // stub, walks the scope; p95 < 50 ms.
+    let big_text = big_source(400);
+    let spots: Vec<(&str, usize, u32)> = [
+        ("member access: names.", "names.", 1u32),
+        ("member access: chain stream().", "xs.stream().", 1),
+        ("member access: String after get(0).", "xs.get(0).", 1),
+        ("variants: unqualified identifier", "    na", 1),
+        ("keywords: statement start", "    re", 1),
+        ("statics, second press: ma", "    ma", 2),
+        ("expected type: new Arr", "new Arr", 1),
+    ]
+    .into_iter()
+    .map(|(n, marker, count)| {
+        // The last occurrence is the one in `tail()`.
+        let at = big_text.rfind(marker).expect("marker") + marker.len();
+        (n, at, count)
+    })
+    .collect();
+    for (name, offset, count) in spots {
+        let c = measure(format!("completion: {name}"), 100, |_| {
+            let input = CompletionInput {
+                project: &project,
+                settings: &settings,
+                path: &test,
+                text: &big_text,
+                offset,
+                count,
+            };
+            let r = complete::complete(&input).unwrap();
+            assert!(r.is_some_and(|r| !r.items.is_empty()), "{name}");
+        });
+        report(&c, 50.0, Some(100.0), &mut failures);
+    }
+
+    // A receiver with a deep hierarchy and about a thousand members (Swing), prefix typed.
+    let swing = "package p;\n\nclass Swing {\n    void f(javax.swing.JFrame frame) {\n        frame.set;\n    }\n}\n";
+    let offset = swing.find("frame.set").unwrap() + "frame.set".len();
+    let c = measure(
+        "completion: member access, JFrame (1000+ members)",
+        100,
+        |_| {
+            let input = CompletionInput {
+                project: &project,
+                settings: &settings,
+                path: &test,
+                text: swing,
+                offset,
+                count: 1,
+            };
+            let r = complete::complete(&input).unwrap();
+            assert!(r.is_some_and(|r| !r.items.is_empty()));
         },
     );
     report(&c, 50.0, Some(100.0), &mut failures);

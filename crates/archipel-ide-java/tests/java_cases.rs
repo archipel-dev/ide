@@ -27,7 +27,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 /// Cases that must keep passing (never lower; raise when more pass).
-const PASS_BASELINE: usize = 48;
+const PASS_BASELINE: usize = 82;
 
 include!("support/case_format.rs");
 
@@ -215,7 +215,7 @@ fn run_case(case: &Case) -> Outcome {
         let Some(item) = c.items.iter().find(|i| i.label() == choose) else {
             return Outcome::Fail(format!("no row `{choose}` in {rows:?}"));
         };
-        let ins = match complete::insertion(&input, &item.fqn) {
+        let ins = match complete::insertion(&input, &item.key) {
             Ok(Some(i)) => i,
             Ok(None) => return Outcome::Fail("the class is gone from the index".into()),
             Err(e) => return Outcome::Fail(format!("{e}")),
@@ -232,7 +232,20 @@ fn run_case(case: &Case) -> Outcome {
                 )
             })
             .collect();
-        edits.push((c.prefix_start, offset, ins.text.clone()));
+        // A snippet marks the caret with `$0` (inside the parentheses of a call).
+        let (ins_text, caret_in_text) = if ins.snippet {
+            let raw = ins.text.replace("\\$", "\u{1}");
+            match raw.find("$0") {
+                Some(i) => (
+                    format!("{}{}", &raw[..i], &raw[i + 2..]).replace('\u{1}', "$"),
+                    Some(raw[..i].replace('\u{1}', "$").len()),
+                ),
+                None => (ins.text.clone(), None),
+            }
+        } else {
+            (ins.text.clone(), None)
+        };
+        edits.push((c.prefix_start, offset, ins_text.clone()));
         edits.sort_by_key(|(s, e, _)| (*s, *e));
         let mut out = text.clone();
         for (s, e, t) in edits.iter().rev() {
@@ -245,7 +258,8 @@ fn run_case(case: &Case) -> Outcome {
                 shift += t.len() as isize - (*e - *s) as isize;
             }
         }
-        let caret = (c.prefix_start as isize + shift) as usize + ins.text.len();
+        let caret =
+            (c.prefix_start as isize + shift) as usize + caret_in_text.unwrap_or(ins_text.len());
         let actual_marked = {
             let mut o = out.clone();
             o.insert_str(caret, "<caret>");
@@ -258,7 +272,22 @@ fn run_case(case: &Case) -> Outcome {
         }
         return Outcome::Pass;
     }
-    judge_list(expected, &rows)
+    let info: Vec<RowInfo> = completion
+        .as_ref()
+        .map(|c| {
+            c.items
+                .iter()
+                .map(|i| RowInfo {
+                    label: i.label(),
+                    name: i.name.clone(),
+                    signature: i.signature.clone(),
+                    ty: i.ty.clone(),
+                    deprecated: i.deprecated,
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    judge_list_with(expected, &rows, &info)
 }
 
 struct Setup {
@@ -482,7 +511,25 @@ fn run_alt_enter(case: &Case) -> Outcome {
     }
 }
 
+/// The popup rows with their details, for the `tail:`, `type:` and `struck:` assertions.
+struct RowInfo {
+    label: String,
+    name: String,
+    signature: String,
+    ty: String,
+    deprecated: bool,
+}
+
 fn judge_list(expected: &str, rows: &[String]) -> Outcome {
+    judge_list_with(expected, rows, &[])
+}
+
+fn judge_list_with(expected: &str, rows: &[String], info: &[RowInfo]) -> Outcome {
+    let find = |name: &str| {
+        info.iter()
+            .find(|r| r.label == name.trim())
+            .or_else(|| info.iter().find(|r| r.name == name.trim()))
+    };
     let has = |label: &str| {
         rows.iter()
             .any(|r| r == label || r.split(" (").next() == Some(label))
@@ -508,6 +555,55 @@ fn judge_list(expected: &str, rows: &[String]) -> Outcome {
                         "`{a}` ({x:?}) is not ranked above `{b}` ({y:?}): {rows:?}"
                     ));
                 }
+            }
+        } else if let Some(label) = line.strip_prefix("once: ") {
+            let n = rows.iter().filter(|r| r.as_str() == label.trim()).count();
+            if n != 1 {
+                return Outcome::Fail(format!("`{label}` is offered {n} times: {rows:?}"));
+            }
+        } else if let Some(rest) = line.strip_prefix("tail: ") {
+            // `tail: <name> = <parameter list>`
+            let Some((name, want)) = rest.split_once(" = ") else {
+                return Outcome::Fail(format!("bad tail line `{line}`"));
+            };
+            match find(name) {
+                Some(r) if r.signature == want.trim() => {}
+                Some(r) => {
+                    return Outcome::Fail(format!(
+                        "`{name}` has tail `{}`, not `{}`",
+                        r.signature,
+                        want.trim()
+                    ));
+                }
+                None => return Outcome::Fail(format!("`{name}` is not offered: {rows:?}")),
+            }
+        } else if let Some(rest) = line.strip_prefix("type: ") {
+            // `type: <name> = <type>`
+            let Some((name, want)) = rest.split_once(" = ") else {
+                return Outcome::Fail(format!("bad type line `{line}`"));
+            };
+            match find(name) {
+                Some(r) if r.ty == want.trim() => {}
+                Some(r) => {
+                    return Outcome::Fail(format!(
+                        "`{name}` has type `{}`, not `{}`",
+                        r.ty,
+                        want.trim()
+                    ));
+                }
+                None => return Outcome::Fail(format!("`{name}` is not offered: {rows:?}")),
+            }
+        } else if let Some(name) = line.strip_prefix("struck: ") {
+            match find(name) {
+                Some(r) if r.deprecated => {}
+                Some(_) => return Outcome::Fail(format!("`{name}` is not struck through")),
+                None => return Outcome::Fail(format!("`{name}` is not offered: {rows:?}")),
+            }
+        } else if let Some(name) = line.strip_prefix("not struck: ") {
+            match find(name) {
+                Some(r) if !r.deprecated => {}
+                Some(_) => return Outcome::Fail(format!("`{name}` is struck through")),
+                None => return Outcome::Fail(format!("`{name}` is not offered: {rows:?}")),
             }
         } else if line == "no items" {
             if !rows.is_empty() {

@@ -2,8 +2,8 @@
 //! short-name index in the resolve scope of the file, filtered by the position, ranked by the
 //! weigher chain basics, inserted with an import through the import machinery of spec 05.
 
-use super::classify::{Position, TypeFilter, classify as classify_position, target_fits};
-use super::{Completion, CompletionInput, Insertion, Item, is_exclusive};
+use super::classify::{Classified, Position, Slot, TypeFilter, target_fits};
+use super::{CompletionInput, Insertion, Item, ItemKind, weigh};
 use crate::classpath::Completeness;
 use crate::import_edit::{add_class_import, minimal_edit};
 use crate::index::{JavaIndexState, NotReady};
@@ -13,8 +13,6 @@ use crate::source;
 use crate::stub::{ClassKind, ClassStub, FileStub, flags};
 use std::collections::{HashMap, HashSet};
 
-/// Items returned at most (after ranking).
-const MAX_ITEMS: usize = 150;
 /// Candidates taken from the index before the weigher chain.
 const MAX_CANDIDATES: usize = 600;
 
@@ -107,28 +105,108 @@ fn kind_fits(
         Position::Type(TypeFilter::Any | TypeFilter::Argument) | Position::Mixed { .. } => {
             kind != ClassKind::Annotation
         }
-        Position::None => false,
+        Position::None | Position::Qualified => false,
     }
 }
 
-pub fn complete(input: &CompletionInput<'_>) -> Result<Option<Completion>, NotReady> {
-    let classified = classify_position(input.text, input.offset);
-    let position = classified.position;
-    if position == Position::None || !input.project.applies_to(input.path) {
-        return Ok(None);
+/// The class names of one request (JAVA-CMP-018) and the note of an incomplete answer.
+pub struct ClassItems {
+    pub items: Vec<Item>,
+    pub note: Option<String>,
+}
+
+/// Classes that suit the context better than the others (the expected type and its
+/// inheritors, JAVA-CMP-027 "expected-type match"), by FQN.
+pub type Suitable = HashSet<String>;
+
+/// Whether class names are offered at `position` for this prefix (JAVA-CMP-001): the declaration
+/// and statement positions take them once the prefix can start a class name, or on the second
+/// press.
+pub fn wanted(classified: &Classified, count: u32) -> bool {
+    match classified.position {
+        Position::None | Position::Qualified => false,
+        Position::Mixed { slot, .. } => {
+            if !matches!(
+                slot,
+                Slot::ClassBody | Slot::Statement | Slot::Expression | Slot::Parameter
+            ) {
+                return false;
+            }
+            let upper = classified
+                .prefix
+                .chars()
+                .next()
+                .is_some_and(char::is_uppercase);
+            !(classified.prefix.is_empty() || !upper && count < 2)
+        }
+        _ => true,
     }
-    // Declaration and statement positions: classes join the other variants only once the
-    // prefix can start a class name (JAVA-CMP-001); every press after the first takes any.
-    if matches!(position, Position::Mixed { .. }) {
-        let upper = classified
-            .prefix
-            .chars()
-            .next()
-            .is_some_and(char::is_uppercase);
-        if classified.prefix.is_empty() || !upper && input.count < 2 {
-            return Ok(None);
+}
+
+/// Keeps the classes of `items` (best first) that `new` can call a constructor of from this file:
+/// a public constructor, or a protected or package-private one inside the package, or no
+/// declared constructor in a public class (spec 06 6.3 position 3: accessible constructors
+/// only; `Array`, `Math` and the like have only a private one). At most `limit` survive, so
+/// the stubs of only the first rows are read.
+pub(super) fn constructible(
+    input: &CompletionInput<'_>,
+    items: Vec<Item>,
+    limit: usize,
+) -> Result<Vec<Item>, NotReady> {
+    let project = input.project;
+    let scope = project.scope_for(input.path);
+    let env = crate::env::Env::new(&project.index, &scope, None);
+    let own_package = file_stub(input).package;
+    let mut out = Vec::new();
+    for item in items {
+        if out.len() >= limit {
+            break;
+        }
+        if !item.is_class() {
+            out.push(item);
+            continue;
+        }
+        let Some(hit) = env.find_class(&item.fqn)? else {
+            out.push(item);
+            continue;
+        };
+        let class = hit.class();
+        let ctors: Vec<u32> = class
+            .methods
+            .iter()
+            .filter(|m| m.is_ctor)
+            .map(|m| m.flags)
+            .collect();
+        let same_package = hit.package() == own_package;
+        let ok = ctors.is_empty() && (class.flags & flags::PUBLIC != 0 || same_package)
+            || ctors
+                .iter()
+                .any(|f| f & flags::PUBLIC != 0 || (f & flags::PRIVATE == 0 && same_package));
+        if ok {
+            out.push(item);
         }
     }
+    Ok(out)
+}
+
+/// The stub of the buffer, parsed from the previous tree of the file.
+pub(super) fn file_stub(input: &CompletionInput<'_>) -> FileStub {
+    match input
+        .project
+        .index
+        .parse_cached(input.path, super::probe::ORIGINAL, input.text)
+    {
+        Some(tree) => source::build_from_tree(&tree, input.text),
+        None => FileStub::default(),
+    }
+}
+
+pub fn collect(
+    input: &CompletionInput<'_>,
+    classified: &Classified,
+    suitable: &Suitable,
+) -> Result<ClassItems, NotReady> {
+    let position = classified.position;
     let project = input.project;
     let index = &project.index;
     let note = match index.state() {
@@ -136,7 +214,7 @@ pub fn complete(input: &CompletionInput<'_>) -> Result<Option<Completion>, NotRe
         _ => return Err(NotReady),
     };
     let scope = project.scope_for(input.path);
-    let stub = source::build_file_stub(input.text);
+    let stub = file_stub(input);
     let visible = Visible::build(index, &scope, &stub)?;
     let own_package = stub.package.clone();
     let cur_unit = index.unit_for_path(input.path);
@@ -199,6 +277,8 @@ pub fn complete(input: &CompletionInput<'_>) -> Result<Option<Completion>, NotRe
             true,
             class,
             0,
+            suitable.contains(&c.qname),
+            false,
         ));
     }
     for h in hits {
@@ -211,7 +291,7 @@ pub fn complete(input: &CompletionInput<'_>) -> Result<Option<Completion>, NotRe
         } else {
             visible.get(e.name()) == Some(&*e.fqn)
         };
-        let mut item = make_item(
+        items.push(make_item(
             e.name(),
             e.fqn.to_string(),
             e.package(),
@@ -222,30 +302,14 @@ pub fn complete(input: &CompletionInput<'_>) -> Result<Option<Completion>, NotRe
             top_visible,
             h.class,
             h.unit_rank,
-        );
-        if is_discouraged(e.package(), &e.fqn) {
-            item.sort.insert(0, '9');
-        }
-        items.push(item);
+            suitable.contains(&*e.fqn),
+            is_discouraged(e.package(), &e.fqn),
+        ));
     }
-    items.sort_by(|a, b| {
-        a.class
-            .cmp(&b.class)
-            .then_with(|| a.sort.cmp(&b.sort))
-            .then_with(|| a.fqn.cmp(&b.fqn))
-    });
-    items.truncate(MAX_ITEMS);
-    Ok(Some(Completion {
-        position,
-        prefix_start: classified.prefix_start,
-        prefix: classified.prefix,
-        items,
-        exclusive: is_exclusive(position),
-        note,
-    }))
+    Ok(ClassItems { items, note })
 }
 
-fn classpath_note(
+pub(super) fn classpath_note(
     project: &crate::api::JavaProject,
     input: &CompletionInput<'_>,
 ) -> Option<String> {
@@ -271,6 +335,8 @@ fn make_item(
     visible: bool,
     class: MatchClass,
     unit_rank: u32,
+    suitable: bool,
+    discouraged: bool,
 ) -> Item {
     let qualified = if nested {
         // `a.b.Outer.Inner` -> `Outer.Inner`
@@ -292,24 +358,19 @@ fn make_item(
     } else {
         package.to_string()
     };
-    let sort = format!(
-        "{}{}{:05}{:04}{}",
-        u8::from(deprecated),
-        u8::from(!visible),
-        unit_rank.min(99_999),
-        name.len().min(9_999),
-        name.to_lowercase()
-    );
+    let sort = weigh::class_key(suitable, discouraged, deprecated, visible, unit_rank, name);
     Item {
         name: name.to_string(),
         qualified,
+        key: fqn.clone(),
         fqn,
         tail,
-        kind,
+        kind: ItemKind::Class(kind),
         deprecated,
         visible,
         class,
         sort,
+        ..Item::blank()
     }
 }
 
@@ -320,7 +381,7 @@ pub fn insertion(input: &CompletionInput<'_>, fqn: &str) -> Result<Option<Insert
     let project = input.project;
     let index = &project.index;
     let scope = project.scope_for(input.path);
-    let stub = source::build_file_stub(input.text);
+    let stub = file_stub(input);
     let visible = Visible::build(index, &scope, &stub)?;
     // Class found in the index, or declared in the file itself.
     let (package, top_fqn) = if local_classes(&stub).iter().any(|(c, _)| c.qname == fqn) {
@@ -351,6 +412,7 @@ pub fn insertion(input: &CompletionInput<'_>, fqn: &str) -> Result<Option<Insert
             return Ok(Some(Insertion {
                 text: qualified,
                 edits: Vec::new(),
+                snippet: false,
             }));
         }
         Some(_) => {
@@ -358,6 +420,7 @@ pub fn insertion(input: &CompletionInput<'_>, fqn: &str) -> Result<Option<Insert
             return Ok(Some(Insertion {
                 text: fqn.to_string(),
                 edits: Vec::new(),
+                snippet: false,
             }));
         }
         None => {}
@@ -373,5 +436,6 @@ pub fn insertion(input: &CompletionInput<'_>, fqn: &str) -> Result<Option<Insert
     Ok(Some(Insertion {
         text: qualified,
         edits,
+        snippet: false,
     }))
 }

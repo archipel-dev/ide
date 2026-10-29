@@ -181,21 +181,22 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             return Ok(None);
         };
         let object = match p.kind() {
-            "field_access"
-                if p.child_by_field_name("field")
-                    .is_some_and(|f| f.id() == node.id()) =>
-            {
-                p.child_by_field_name("object")
-            }
-            "method_invocation"
-                if p.child_by_field_name("name")
-                    .is_some_and(|f| f.id() == node.id()) =>
+            "field_access" | "method_invocation"
+                if p.child_by_field_name(if p.kind() == "field_access" {
+                    "field"
+                } else {
+                    "name"
+                })
+                .is_some_and(|f| f.id() == node.id()) =>
             {
                 // `Iface.super.|`: the object is the interface, a `super` keyword follows it
-                // (the grammar keeps both as children of the call).
+                // (the grammar keeps both as children of the access or the call).
                 let mut c = p.walk();
                 let has_super = p.children(&mut c).any(|k| k.kind() == "super");
-                if has_super && let Some(object) = p.child_by_field_name("object") {
+                if has_super
+                    && let Some(object) = p.child_by_field_name("object")
+                    && object.kind() != "super"
+                {
                     let q = self.qualifier_of(object)?;
                     return Ok(Some(match q.qual {
                         Qual::Type(h) => {
@@ -312,6 +313,14 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 let Some(field) = obj.child_by_field_name("field") else {
                     return Ok(Self::unknown_qualifier());
                 };
+                // `Iface.super.field`: the grammar keeps the `super` as an unnamed child.
+                if obj.children(&mut obj.walk()).any(|k| k.kind() == "super")
+                    && obj
+                        .child_by_field_name("object")
+                        .is_some_and(|o| o.kind() != "super")
+                {
+                    return Ok(Self::unknown_qualifier());
+                }
                 let Some(inner) = obj.child_by_field_name("object") else {
                     return Ok(Self::unknown_qualifier());
                 };

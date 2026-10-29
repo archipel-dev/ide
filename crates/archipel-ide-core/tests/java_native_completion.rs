@@ -374,3 +374,164 @@ fn an_unknown_method_call_is_red_shortly_after_the_last_keystroke() {
         "marked only after {after:?}"
     );
 }
+
+const MEMBERS_TEXT: &str = "package p;\n\nimport java.util.ArrayList;\nimport java.util.List;\n\nclass Main {\n    void run() {\n        List<String> names = new ArrayList<>();\n        \n    }\n}\n";
+
+/// The owner's member cases, with no language server: the dot opens the popup by itself
+/// (CI-CMP-030), `names.` lists the members of `List<String>` (JAVA-CMP-008) with the signature
+/// and the type as tails, `si` narrows it to `size`, accepting writes `size()`.
+#[test]
+fn typing_a_dot_after_a_list_lists_its_members_natively() {
+    let mut p = open("dot", &[(MAIN, MEMBERS_TEXT)], &[], MAIN);
+    caret_at(&mut p.state, "new ArrayList<>();\n        ");
+    type_text(&mut p.state, "names.");
+    assert!(p.state.completion.is_some(), "the dot opens the popup");
+    let all = rows(&p.state);
+    for member in [
+        "add (boolean)",
+        "size (int)",
+        "stream (Stream<String>)",
+        "get (String)",
+    ] {
+        assert!(all.iter().any(|r| r == member), "{member} in {all:?}");
+    }
+    assert!(!all.iter().any(|r| r.starts_with("emptyList")), "{all:?}");
+    type_text(&mut p.state, "si");
+    assert_eq!(
+        rows(&p.state).first().map(String::as_str),
+        Some("size (int)")
+    );
+    p.state.accept_completion(false).unwrap();
+    assert!(
+        text(&p.state).contains("names.size()\n"),
+        "{}",
+        text(&p.state)
+    );
+}
+
+/// JAVA-TYP-013 through the editor: `names.get(0).` offers the members of `String`.
+#[test]
+fn a_call_result_is_completed_with_the_members_of_its_type() {
+    let mut p = open("chain", &[(MAIN, MEMBERS_TEXT)], &[], MAIN);
+    caret_at(&mut p.state, "new ArrayList<>();\n        ");
+    type_text(&mut p.state, "names.get(0).");
+    assert!(p.state.completion.is_some(), "the dot opens the popup");
+    let all = rows(&p.state);
+    for member in [
+        "length (int)",
+        "charAt (char)",
+        "substring (String)",
+        "isBlank (boolean)",
+    ] {
+        assert!(all.iter().any(|r| r == member), "{member} in {all:?}");
+    }
+    assert!(!all.iter().any(|r| r.starts_with("add ")), "{all:?}");
+}
+
+/// A method that takes arguments is inserted with the caret inside the parentheses (JAVA-CMP-035).
+#[test]
+fn accepting_a_method_with_arguments_puts_the_caret_inside_the_call() {
+    let mut p = open("call", &[(MAIN, MEMBERS_TEXT)], &[], MAIN);
+    caret_at(&mut p.state, "new ArrayList<>();\n        ");
+    type_text(&mut p.state, "names.ad");
+    assert_eq!(
+        rows(&p.state).first().map(String::as_str),
+        Some("add (boolean)")
+    );
+    p.state.accept_completion(false).unwrap();
+    let t = text(&p.state);
+    assert!(t.contains("names.add()\n"), "{t}");
+    let document = &p.state.documents[p.state.active_document.unwrap()];
+    let caret = document.selections.primary().head;
+    let before: String = t.chars().take(caret).collect();
+    assert!(before.ends_with("names.add("), "caret after `{before}`");
+}
+
+/// No false positives: an unknown receiver offers nothing natively (and there is no server).
+/// Only the postfix templates (`names.sout`) remain; no member, no variable, no keyword.
+#[test]
+fn an_unknown_receiver_offers_no_native_member() {
+    let text = MEMBERS_TEXT.replace(
+        "List<String> names = new ArrayList<>();",
+        "Mystery names = null;",
+    );
+    let mut p = open("unknown", &[(MAIN, &text)], &[], MAIN);
+    caret_at(&mut p.state, "Mystery names = null;\n        ");
+    type_text(&mut p.state, "names.");
+    if let Some(session) = p.state.completion.as_ref() {
+        for row in &session.ranked {
+            let item = &session.items[row.index];
+            assert_eq!(
+                item.kind,
+                Some(archipel_ide_lsp::lsp_types::CompletionItemKind::SNIPPET),
+                "`{}` is not a template",
+                item.label
+            );
+        }
+    }
+}
+
+/// JAVA-CMP-027: the expected type of the declaration ranks `ArrayList` first after `new Arr`.
+#[test]
+fn new_arr_for_a_list_target_ranks_array_list_first() {
+    let src = "package p;\n\nimport java.util.List;\n\nclass Main {\n    void run() {\n        List<String> names = \n    }\n}\n";
+    let mut p = open("expected", &[(MAIN, src)], &[], MAIN);
+    caret_at(&mut p.state, "List<String> names = ");
+    type_text(&mut p.state, "new Arr");
+    let all = rows(&p.state);
+    assert_eq!(
+        all.first().map(String::as_str),
+        Some("ArrayList (java.util)"),
+        "{all:?}"
+    );
+    assert!(
+        all.iter().any(|r| r.starts_with("ArrayStoreException")),
+        "{all:?}"
+    );
+}
+
+/// The owner's `@Te` case keeps working next to the new contributors.
+#[test]
+fn at_te_still_offers_test_with_its_import_next_to_the_members() {
+    let mut p = open("junit-again", &[(TEST, TEST_TEXT)], &["junit5"], TEST);
+    caret_at(&mut p.state, "class AppTest {\n    ");
+    type_text(&mut p.state, "@Te");
+    let all = rows(&p.state);
+    assert_eq!(
+        all.first().map(String::as_str),
+        Some("Test (org.junit.jupiter.api)"),
+        "{all:?}"
+    );
+}
+
+/// JAVA-CMP-022 through the editor: nothing for `assertTr` on the first press, the static members
+/// of the test library on the second (CI-CMP-100), the qualified insertion with the import.
+#[test]
+fn the_second_press_offers_static_members_with_their_import() {
+    let test_text = "package p;\n\nclass AppTest {\n    void greets() {\n        \n    }\n}\n";
+    let mut p = open("statics", &[(TEST, test_text)], &["junit5"], TEST);
+    caret_at(&mut p.state, "void greets() {\n        ");
+    type_text(&mut p.state, "assertTr");
+    assert!(
+        p.state
+            .completion
+            .as_ref()
+            .is_none_or(|s| s.ranked.is_empty()),
+        "nothing on the first press"
+    );
+    p.state
+        .start_completion(archipel_ide_lsp::CompletionTrigger::Invoked, true)
+        .unwrap();
+    let first = rows(&p.state);
+    p.state
+        .start_completion(archipel_ide_lsp::CompletionTrigger::Invoked, true)
+        .unwrap();
+    let second = rows(&p.state);
+    eprintln!("first explicit: {first:?}\nsecond explicit: {second:?}");
+    assert!(
+        second
+            .iter()
+            .any(|r| r.starts_with("Assertions.assertTrue")),
+        "{second:?}"
+    );
+}

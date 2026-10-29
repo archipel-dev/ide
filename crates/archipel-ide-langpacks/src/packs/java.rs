@@ -148,6 +148,43 @@ impl ImportFixProvider for JavaIntelligence {
     }
 }
 
+/// One engine item as a row of the completion session.
+fn source_item(i: &complete::Item) -> SourceItem {
+    use archipel_ide_java::stub::ClassKind;
+    let kind = match i.kind {
+        complete::ItemKind::Class(ClassKind::Class) => SourceItemKind::Class,
+        complete::ItemKind::Class(ClassKind::Interface) => SourceItemKind::Interface,
+        complete::ItemKind::Class(ClassKind::Enum) => SourceItemKind::Enum,
+        complete::ItemKind::Class(ClassKind::Annotation) => SourceItemKind::Annotation,
+        complete::ItemKind::Class(ClassKind::Record) => SourceItemKind::Record,
+        complete::ItemKind::Method => SourceItemKind::Method,
+        complete::ItemKind::Field => SourceItemKind::Field,
+        complete::ItemKind::Constant => SourceItemKind::Constant,
+        complete::ItemKind::Local => SourceItemKind::Variable,
+        complete::ItemKind::Parameter => SourceItemKind::Parameter,
+        complete::ItemKind::Keyword => SourceItemKind::Keyword,
+        complete::ItemKind::Package => SourceItemKind::Package,
+    };
+    // The package of a class or of the class a static member comes from.
+    let detail = if i.is_class() || !i.tail.is_empty() {
+        i.tail.clone()
+    } else if i.note.is_empty() {
+        i.ty.clone()
+    } else {
+        format!("{} ({})", i.ty, i.note).trim().to_string()
+    };
+    SourceItem {
+        label: i.display.clone().unwrap_or_else(|| i.name.clone()),
+        filter_text: i.filter.clone().unwrap_or_else(|| i.name.clone()),
+        detail: (!detail.is_empty()).then_some(detail),
+        signature: (!i.signature.is_empty()).then(|| i.signature.clone()),
+        kind,
+        deprecated: i.deprecated,
+        key: i.key.clone(),
+        sort_text: i.sort.clone(),
+    }
+}
+
 impl CompletionSource for JavaIntelligence {
     fn id(&self) -> &'static str {
         ID
@@ -176,29 +213,7 @@ impl CompletionSource for JavaIntelligence {
                 replace_start: c.prefix_start,
                 exclusive: c.exclusive,
                 note: c.note,
-                items: c
-                    .items
-                    .iter()
-                    .map(|i| SourceItem {
-                        label: i.name.clone(),
-                        filter_text: i.name.clone(),
-                        detail: (!i.tail.is_empty()).then(|| i.tail.clone()),
-                        kind: match i.kind {
-                            archipel_ide_java::stub::ClassKind::Class => SourceItemKind::Class,
-                            archipel_ide_java::stub::ClassKind::Interface => {
-                                SourceItemKind::Interface
-                            }
-                            archipel_ide_java::stub::ClassKind::Enum => SourceItemKind::Enum,
-                            archipel_ide_java::stub::ClassKind::Annotation => {
-                                SourceItemKind::Annotation
-                            }
-                            archipel_ide_java::stub::ClassKind::Record => SourceItemKind::Record,
-                        },
-                        deprecated: i.deprecated,
-                        key: i.fqn.clone(),
-                        sort_text: i.sort.clone(),
-                    })
-                    .collect(),
+                items: c.items.iter().map(source_item).collect(),
             }),
             Ok(None) => None,
             // The indexes are still building: say so; the server answers meanwhile.
@@ -232,6 +247,7 @@ impl CompletionSource for JavaIntelligence {
         Some(SourceInsertion {
             text: ins.text,
             edits: ins.edits,
+            snippet: ins.snippet,
         })
     }
 

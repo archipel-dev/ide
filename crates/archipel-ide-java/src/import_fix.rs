@@ -158,7 +158,7 @@ fn subtype(env: &Env<'_>, sub: &str, sup: &str) -> Res<Option<bool>> {
 /// `Some(true)` assignable, `Some(false)` not, `None` unknown (treated as applicable).
 fn assignable(env: &Env<'_>, arg: &Ty, to: &PTy) -> Res<Option<bool>> {
     Ok(match (arg, to) {
-        (Ty::Unknown | Ty::Var(_), _) | (_, PTy::Unknown) => Some(true),
+        (Ty::Unknown | Ty::Var(_) | Ty::Wildcard(_), _) | (_, PTy::Unknown) => Some(true),
         (Ty::Null, PTy::Prim(_)) => Some(false),
         (Ty::Null, _) => Some(true),
         (Ty::Prim(p), PTy::Prim(q)) => Some(ty::prim_widens(p, q)),
@@ -466,7 +466,7 @@ fn expected_fit(
         PTy::Prim(p) => Ty::Prim(p.clone()),
         PTy::Ref(f) => Ty::Ref {
             fqn: Some(f.clone()),
-            display: ty::display(f),
+            name: f.rsplit('.').next().unwrap_or(f).to_string(),
             args: Vec::new(),
         },
         PTy::Array(_) => Ty::Unknown,
@@ -495,7 +495,7 @@ fn discouraged(fqn: &str) -> bool {
         || fqn.starts_with("jdk.internal.")
 }
 
-fn known_element(fqn: &str, place: &Place, is_class: bool) -> i32 {
+pub(crate) fn known_element(fqn: &str, place: &Place, is_class: bool) -> i32 {
     let (pkg, name) = fqn.rsplit_once('.').unwrap_or(("", fqn));
     let mut v = if pkg == "java.lang"
         && matches!(

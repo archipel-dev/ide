@@ -13,15 +13,23 @@
 //! (JAVA-RES-002) for the unused-import inspection (JAVA-IMP-070..076).
 
 mod calls;
+mod caret;
+pub mod members;
 mod refs;
 mod scope;
 mod types;
+
+pub use caret::{
+    CaretFacts, DotAnswer, DotQualifier, Flow, Level, Local, PLACEHOLDER, ProbeAnswer, ProbeWants,
+    Qual, ScopeAnswer, Want, caret_facts, probe_answer,
+};
 
 use crate::env::{Ctx, CurrentFile, Env, NameRes, Res, TypeRes, Via};
 use crate::index::ClassHit;
 use crate::source;
 use crate::stub::*;
-use crate::ty::{self, Ty};
+use crate::ty::{self, Ty, Wild};
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::sync::Arc;
@@ -89,7 +97,7 @@ pub struct Analyzer<'a, 'e> {
     pub incomplete: bool,
     out: Analysis,
     local_hits: HashMap<usize, ClassHit>,
-    pattern_cache: HashMap<usize, HashSet<String>>,
+    pattern_cache: HashMap<usize, HashMap<String, Option<String>>>,
     /// Members may exist that no declaration shows (an annotation processor or an unresolved
     /// annotation could generate them): member errors are uncertain, so none is reported.
     augmented: bool,
@@ -207,6 +215,42 @@ fn parent_map(tree: &Tree) -> HashMap<usize, Node<'_>> {
             stack.pop();
         }
     }
+}
+
+/// The parents of the nodes on the way from the root to `at` and of every node of the member
+/// declaration (a direct child of a class body) that holds `at`: what a scope walk and the
+/// typing of the expressions of that member ask for. A request about one caret does not need the
+/// parents of the other members of a big file.
+fn parent_map_around<'t>(tree: &'t Tree, at: Node<'t>) -> HashMap<usize, Node<'t>> {
+    let mut out = HashMap::new();
+    // The ancestors, innermost first.
+    let mut chain: Vec<Node<'t>> = vec![at];
+    while let Some(p) = chain.last().and_then(|n| n.parent()) {
+        chain.push(p);
+    }
+    for w in chain.windows(2) {
+        out.insert(w[0].id(), w[1]);
+    }
+    // The outermost member declaration on the way: its whole subtree.
+    let focus = chain.windows(2).rev().find_map(|w| {
+        matches!(
+            w[1].kind(),
+            "class_body" | "enum_body_declarations" | "interface_body" | "annotation_type_body"
+        )
+        .then_some(w[0])
+    });
+    let Some(focus) = focus else {
+        return parent_map(tree);
+    };
+    let mut stack: Vec<Node<'t>> = vec![focus];
+    while let Some(n) = stack.pop() {
+        let mut c = n.walk();
+        for ch in n.children(&mut c) {
+            out.insert(ch.id(), n);
+            stack.push(ch);
+        }
+    }
+    out
 }
 
 fn kind_is_class(k: &str) -> bool {

@@ -13,7 +13,6 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         let parts = ty::split(text);
         let base = match self.env.resolve_type_text(&parts.base, ctx)? {
             TypeRes::Class(h) => {
-                let shown = ty::display(text.trim_end_matches("[]").trim_end_matches("..."));
                 let mut args = Vec::new();
                 if let Some(list) = &parts.args {
                     for a in ty::split_args(list) {
@@ -22,7 +21,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 }
                 Ty::Ref {
                     fqn: Some(h.class().qname.clone()),
-                    display: shown,
+                    name: h.class().name.clone(),
                     args,
                 }
             }
@@ -34,7 +33,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 }
                 Ty::Ref {
                     fqn: None,
-                    display: ty::display(&parts.base),
+                    name: ty::display(&parts.base),
                     args: Vec::new(),
                 }
             }
@@ -46,15 +45,25 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         Ok(t)
     }
 
-    /// One type argument: a wildcard with an upper bound is its bound (reads are what matters
-    /// for member lookup), any other wildcard is unknown.
+    /// One type argument: a wildcard keeps its bound (JAVA-TYP-001); a read through it is the
+    /// upper bound ([`Ty::read_type`]).
     pub(super) fn type_argument(&self, text: &str, ctx: &Ctx<'_>) -> Res<Ty> {
         let t = text.trim();
         if let Some(rest) = t.strip_prefix('?') {
-            return match rest.trim().strip_prefix("extends") {
-                Some(bound) => self.ty_from_ctx(bound.trim(), ctx),
-                None => Ok(Ty::Unknown),
-            };
+            let rest = rest.trim();
+            if let Some(bound) = rest.strip_prefix("extends") {
+                return Ok(match self.ty_from_ctx(bound.trim(), ctx)? {
+                    Ty::Unknown => Ty::Wildcard(Wild::Any),
+                    b => Ty::Wildcard(Wild::Extends(Box::new(b))),
+                });
+            }
+            if let Some(bound) = rest.strip_prefix("super") {
+                return Ok(match self.ty_from_ctx(bound.trim(), ctx)? {
+                    Ty::Unknown => Ty::Wildcard(Wild::Any),
+                    b => Ty::Wildcard(Wild::Super(Box::new(b))),
+                });
+            }
+            return Ok(Ty::Wildcard(Wild::Any));
         }
         self.ty_from_ctx(t, ctx)
     }
@@ -82,6 +91,25 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             }
         }
         Ok(t.subst(&map))
+    }
+
+    /// The type of a field `owner` declares, as the code at `at` sees it: through the enclosing
+    /// class that inherits it (`class Sub extends Base<String>` sees `T` of `Base<T>` as
+    /// `String`; inside `Base<T>` itself `T` stays the variable).
+    pub(super) fn field_ty_in_scope(
+        &mut self,
+        at: Node<'a>,
+        text: &str,
+        owner: &ClassHit,
+    ) -> Res<Ty> {
+        let chain = self.chain_at(at)?;
+        for h in chain.iter().rev() {
+            if self.env.is_subclass(h, owner.qname())?.unwrap_or(false) {
+                let recv = self.class_self_type(h);
+                return self.member_ty(text, owner, &[], Some(&recv));
+            }
+        }
+        self.ty_in_class(text, owner)
     }
 
     pub fn ty_in_class(&self, text: &str, owner: &ClassHit) -> Res<Ty> {
@@ -193,20 +221,20 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 }
                 None => Ty::Unknown,
             },
+            // An anonymous class declares members of its own that the named type does not
+            // have: its type is not `Base` (no member list is derived from it).
+            "object_creation_expression"
+                if n.children(&mut n.walk()).any(|c| c.kind() == "class_body") =>
+            {
+                Ty::Unknown
+            }
             "object_creation_expression" => match n.child_by_field_name("type") {
                 Some(t) => {
                     let text = source::Builder { src: self.text }.compact(t);
                     if text.contains("<>") {
                         let base = text.replace("<>", "");
-                        let t = self.ty_of_text(&base, n)?;
-                        match t {
-                            Ty::Ref { fqn, display, .. } => Ty::Ref {
-                                fqn,
-                                display: display.to_string(),
-                                args: Vec::new(),
-                            },
-                            o => o,
-                        }
+                        // Diamond: the arguments are inferred (M5); the raw class is what is known.
+                        self.ty_of_text(&base, n)?
                     } else {
                         self.ty_of_text(&text, n)?
                     }
@@ -284,7 +312,37 @@ impl<'a, 'e> Analyzer<'a, 'e> {
             "this" => {
                 let chain = self.chain_at(n)?;
                 match chain.last() {
-                    Some(h) if h.local.is_none() => Ty::class(&h.class().qname, &h.class().name),
+                    Some(h) if h.local.is_none() => self.class_self_type(h),
+                    _ => Ty::Unknown,
+                }
+            }
+            "class_literal" => {
+                // `Foo.class` is a `Class<Foo>` (JLS 15.8.2).
+                let target = n
+                    .named_child(0)
+                    .map(|t| source::Builder { src: self.text }.compact(t));
+                match target {
+                    Some(t) => {
+                        let arg = match self.ty_of_text(&t, n)? {
+                            Ty::Prim(p) => Ty::class(
+                                ty::boxed_name(&p),
+                                ty::boxed_name(&p).rsplit('.').next().unwrap_or(""),
+                            ),
+                            other => other,
+                        };
+                        Ty::generic("java.lang.Class", "Class", vec![arg])
+                    }
+                    None => Ty::Unknown,
+                }
+            }
+            "assignment_expression" => match n.child_by_field_name("left") {
+                Some(l) => self.expr_ty(l)?,
+                None => Ty::Unknown,
+            },
+            "field_access" => {
+                // `a.b.c`, `this.items`, `Type.CONSTANT`: the qualifier walk of completion.
+                match self.qualifier_of(n)?.qual {
+                    Qual::Value(t) => t,
                     _ => Ty::Unknown,
                 }
             }
@@ -319,11 +377,23 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                     }
                     VarRes::Field { owner, index } => {
                         let t = owner.class().fields[index].ty.clone();
-                        self.ty_in_class(&t, &owner)?
+                        self.field_ty_in_scope(n, &t, &owner)?
                     }
                     VarRes::StaticImport {
                         ty: Some(t), class, ..
                     } => self.ty_in_class(&t, &class)?,
+                    VarRes::Component { owner, .. } => {
+                        let t = owner
+                            .class()
+                            .record_components
+                            .iter()
+                            .find(|p| p.name == name)
+                            .map(|p| p.ty.clone());
+                        match t {
+                            Some(t) => self.ty_in_class(&t, &owner)?,
+                            None => Ty::Unknown,
+                        }
+                    }
                     _ => Ty::Unknown,
                 }
             }
@@ -332,9 +402,11 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         })
     }
 
-    /// The return type of a call (no inference): the candidates of the right arity that the
-    /// nearest declaring class offers must agree on the declared return type, which is then
-    /// seen from the receiver type (`List<String>.get` is `String`).
+    /// The return type of a call (no inference). The candidates are the methods of that name
+    /// the receiver offers (an overridden declaration hides the inherited one), of the right
+    /// arity, applicable to the argument types that are known; when they all declare the same
+    /// return type, that type is seen from the receiver (`List<String>.get` is `String`),
+    /// otherwise it is unknown (JAVA-TYP-032: no guess).
     pub(super) fn call_ty(&mut self, n: Node<'a>) -> Res<Ty> {
         let Some(name) = n
             .child_by_field_name("name")
@@ -342,9 +414,17 @@ impl<'a, 'e> Analyzer<'a, 'e> {
         else {
             return Ok(Ty::Unknown);
         };
-        let arity = n
-            .child_by_field_name("arguments")
-            .map_or(0, |a| a.named_child_count());
+        let mut arg_tys: Vec<Ty> = Vec::new();
+        if let Some(args) = n.child_by_field_name("arguments") {
+            let mut c = args.walk();
+            for a in args
+                .named_children(&mut c)
+                .filter(|x| !matches!(x.kind(), "line_comment" | "block_comment"))
+            {
+                arg_tys.push(self.expr_ty(a)?);
+            }
+        }
+        let arity = arg_tys.len();
         let mut recv: Option<Ty> = None;
         let hits: Vec<(ClassHit, usize)> = match n.child_by_field_name("object") {
             None => {
@@ -360,56 +440,61 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                 found
             }
             Some(obj) => {
-                let t = if obj.kind() == "identifier" {
-                    // Class or variable.
-                    let oname = self.txt(obj).to_string();
-                    match self.resolve_variable(obj, &oname)? {
-                        VarRes::NotFound { .. } => {
-                            let ctx = self.ctx_at(obj)?;
-                            match self.env.resolve_type_name(&oname, &ctx)? {
-                                NameRes::Class(h, _) => {
-                                    Ty::class(&h.class().qname, &h.class().name)
-                                }
-                                _ => Ty::Unknown,
-                            }
-                        }
-                        _ => {
-                            let t = self.expr_ty(obj)?;
-                            recv = Some(t.clone());
-                            t
-                        }
+                let q = self.qualifier_of(obj)?;
+                match q.qual {
+                    Qual::Type(h) => self.env.methods_named(&h, &name)?.0,
+                    Qual::Value(t) => {
+                        let found = match &t {
+                            Ty::Ref { fqn: Some(f), .. } => match self.env.find_class(f)? {
+                                Some(h) => self.env.methods_named(&h, &name)?.0,
+                                None => Vec::new(),
+                            },
+                            _ => Vec::new(),
+                        };
+                        recv = Some(t);
+                        found
                     }
-                } else {
-                    let t = self.expr_ty(obj)?;
-                    recv = Some(t.clone());
-                    t
-                };
-                match t {
-                    Ty::Ref { fqn: Some(f), .. } => match self.env.find_class(&f)? {
-                        Some(h) => self.env.methods_named(&h, &name)?.0,
-                        None => Vec::new(),
-                    },
                     _ => Vec::new(),
                 }
             }
         };
-        let fits: Vec<&(ClassHit, usize)> = hits
-            .iter()
-            .filter(|(h, i)| {
-                let m = &h.class().methods[*i];
-                m.params.len() == arity || (m.varargs && arity + 1 >= m.params.len())
-            })
-            .collect();
-        let Some((h0, _)) = fits.first() else {
-            return Ok(Ty::Unknown);
-        };
-        // Overriding declarations in the nearest class win over inherited ones.
-        let nearest: Vec<&&(ClassHit, usize)> = fits
-            .iter()
-            .filter(|(h, _)| h.class().qname == h0.class().qname)
-            .collect();
+        // Of the right arity, nearest declaration first; an inherited method that a nearer one
+        // overrides (same erased parameters) does not count.
+        let mut seen: HashSet<Vec<String>> = HashSet::new();
+        let mut cands: Vec<(ClassHit, usize)> = Vec::new();
+        for (h, i) in hits {
+            let m = &h.class().methods[i];
+            if !(m.params.len() == arity || (m.varargs && arity + 1 >= m.params.len())) {
+                continue;
+            }
+            let mparams: Vec<String> = m.type_params.iter().map(|t| t.name.clone()).collect();
+            let mut key = Vec::new();
+            for p in &m.params {
+                key.push(members::erased_key(&self.member_ty_keep(
+                    &p.ty,
+                    &h,
+                    &mparams,
+                    recv.as_ref(),
+                )?));
+            }
+            if seen.insert(key) {
+                cands.push((h, i));
+            }
+        }
+        // Overloads: keep those that accept the arguments (unknown argument types accept all).
+        if cands.len() > 1 {
+            let mut fit = Vec::new();
+            for (h, i) in &cands {
+                if crate::import_fix::applicable(self.env, h, &h.class().methods[*i], &arg_tys)? {
+                    fit.push((h.clone(), *i));
+                }
+            }
+            if !fit.is_empty() {
+                cands = fit;
+            }
+        }
         let mut result: Option<Ty> = None;
-        for (h, i) in nearest.iter().map(|x| **x) {
+        for (h, i) in &cands {
             let m = &h.class().methods[*i];
             let mparams: Vec<String> = m.type_params.iter().map(|t| t.name.clone()).collect();
             let Some(ret) = m.ret.as_deref() else {

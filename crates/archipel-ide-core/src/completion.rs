@@ -661,7 +661,10 @@ impl IdeState {
             return Err("the completed document is no longer active".into());
         }
         let caret = document.selections.primary().head;
-        let snippet_format = item.insert_text_format == Some(InsertTextFormat::SNIPPET);
+        let snippet_format = item.insert_text_format == Some(InsertTextFormat::SNIPPET)
+            || native_insertion
+                .as_ref()
+                .is_some_and(|(_, _, snippet)| *snippet);
         let (start, new_text) = match &item.text_edit {
             Some(CompletionTextEdit::Edit(edit)) => (
                 document.text.char_from_lsp_position(
@@ -680,7 +683,7 @@ impl IdeState {
             None => (session.anchor, ranking::insert_text(&item).to_owned()),
         };
         let new_text = match &native_insertion {
-            Some((text, _)) => text.clone(),
+            Some((text, _, _)) => text.clone(),
             None => new_text,
         };
         let start = start.min(caret);
@@ -705,7 +708,10 @@ impl IdeState {
         // A call without arguments for a method that takes parameters gets
         // one tab stop per parameter, like the reference IDE's argument
         // placeholders (`greeting()` -> `greeting(name)` with `name` selected).
-        let (new_text, snippet_format) = match parameter_snippet(&item, &new_text, snippet_format) {
+        // (A native row says itself where the caret goes: its snippet is used as it is.)
+        let (new_text, snippet_format) = match parameter_snippet(&item, &new_text, snippet_format)
+            .filter(|_| native_insertion.is_none())
+        {
             Some(snippet) => (snippet, true),
             None => (new_text, snippet_format),
         };
@@ -740,7 +746,7 @@ impl IdeState {
                 changes.push(change);
             }
         }
-        for change in native_insertion.iter().flat_map(|(_, changes)| changes) {
+        for change in native_insertion.iter().flat_map(|(_, changes, _)| changes) {
             if change.end_char <= start {
                 shift += change.inserted.chars().count() as isize
                     - (change.end_char - change.start_char) as isize;

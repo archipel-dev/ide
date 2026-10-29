@@ -46,6 +46,12 @@ fn kind_of(kind: SourceItemKind) -> CompletionItemKind {
         SourceItemKind::Interface | SourceItemKind::Annotation => CompletionItemKind::INTERFACE,
         SourceItemKind::Enum => CompletionItemKind::ENUM,
         SourceItemKind::Record => CompletionItemKind::STRUCT,
+        SourceItemKind::Method => CompletionItemKind::METHOD,
+        SourceItemKind::Field => CompletionItemKind::FIELD,
+        SourceItemKind::Constant => CompletionItemKind::ENUM_MEMBER,
+        SourceItemKind::Variable | SourceItemKind::Parameter => CompletionItemKind::VARIABLE,
+        SourceItemKind::Keyword => CompletionItemKind::KEYWORD,
+        SourceItemKind::Package => CompletionItemKind::MODULE,
     }
 }
 
@@ -55,9 +61,11 @@ fn to_item(item: &SourceItem) -> CompletionItem {
         kind: Some(kind_of(item.kind)),
         filter_text: Some(item.filter_text.clone()),
         sort_text: Some(item.sort_text.clone()),
-        label_details: item.detail.as_ref().map(|d| CompletionItemLabelDetails {
-            detail: None,
-            description: Some(d.clone()),
+        label_details: (item.detail.is_some() || item.signature.is_some()).then(|| {
+            CompletionItemLabelDetails {
+                detail: item.signature.clone(),
+                description: item.detail.clone(),
+            }
         }),
         tags: item.deprecated.then(|| vec![CompletionItemTag::DEPRECATED]),
         data: Some(json!({ KEY: item.key })),
@@ -65,36 +73,66 @@ fn to_item(item: &SourceItem) -> CompletionItem {
     }
 }
 
-fn is_type_kind(kind: Option<CompletionItemKind>) -> bool {
-    matches!(
-        kind,
-        Some(
-            CompletionItemKind::CLASS
-                | CompletionItemKind::INTERFACE
-                | CompletionItemKind::ENUM
-                | CompletionItemKind::STRUCT
-        )
-    )
+/// What kind of name a row introduces: a server row duplicates a native one only inside the
+/// same group (a method `size` and a field `size` are two rows).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Group {
+    Type,
+    Method,
+    Value,
+    Keyword,
+    Other,
 }
 
-/// Native rows first; the server's type rows with the same name are duplicates of them.
+fn group_of(kind: Option<CompletionItemKind>) -> Group {
+    match kind {
+        Some(
+            CompletionItemKind::CLASS
+            | CompletionItemKind::INTERFACE
+            | CompletionItemKind::ENUM
+            | CompletionItemKind::STRUCT,
+        ) => Group::Type,
+        Some(
+            CompletionItemKind::METHOD
+            | CompletionItemKind::FUNCTION
+            | CompletionItemKind::CONSTRUCTOR,
+        ) => Group::Method,
+        Some(
+            CompletionItemKind::FIELD
+            | CompletionItemKind::VARIABLE
+            | CompletionItemKind::CONSTANT
+            | CompletionItemKind::ENUM_MEMBER
+            | CompletionItemKind::PROPERTY,
+        ) => Group::Value,
+        Some(CompletionItemKind::KEYWORD) => Group::Keyword,
+        _ => Group::Other,
+    }
+}
+
+/// The name of a row: the identifier before a signature, a type argument list or a detail.
+fn name_of(item: &CompletionItem) -> &str {
+    let text = item.filter_text.as_deref().unwrap_or(&item.label);
+    text.split([' ', '<', '(', ':']).next().unwrap_or(text)
+}
+
+/// Native rows first; the server's rows that name the same thing (same group, same name) are
+/// duplicates of them. A method with overloads is one native row, so the server's rows for
+/// each overload go too (JAVA-CMP-016).
 pub(crate) fn merge_items(
     native: &[CompletionItem],
     server: &[CompletionItem],
 ) -> Vec<CompletionItem> {
-    let names: std::collections::HashSet<&str> = native.iter().map(|i| i.label.as_str()).collect();
+    let names: std::collections::HashSet<(Group, &str)> = native
+        .iter()
+        .map(|i| (group_of(i.kind), name_of(i)))
+        .collect();
     let mut out: Vec<CompletionItem> = native.to_vec();
     out.extend(
         server
             .iter()
             .filter(|i| {
-                !(is_type_kind(i.kind)
-                    && names.contains(
-                        i.label
-                            .split([' ', '<', '(', ':'])
-                            .next()
-                            .unwrap_or(&i.label),
-                    ))
+                let group = group_of(i.kind);
+                group == Group::Other || !names.contains(&(group, name_of(i)))
             })
             .cloned(),
     );
@@ -206,7 +244,7 @@ impl IdeState {
         &self,
         session: &CompletionSession,
         item: &CompletionItem,
-    ) -> Option<(String, Vec<TextChange>)> {
+    ) -> Option<(String, Vec<TextChange>, bool)> {
         let native = session.native.as_ref()?;
         let key = item.data.as_ref()?.get(KEY).and_then(Value::as_str)?;
         let source = self
@@ -238,7 +276,7 @@ impl IdeState {
                 inserted: edit.new_text.clone(),
             })
             .collect();
-        Some((insertion.text, changes))
+        Some((insertion.text, changes, insertion.snippet))
     }
 
     /// Whether the text typed just now opens the popup by itself (after `@`, after `new `).
@@ -283,5 +321,64 @@ mod tests {
             .map(|i| i.label)
             .collect();
         assert_eq!(labels, ["ArrayList", "arrayList", "Arrays"]);
+    }
+
+    fn member(label: &str, kind: CompletionItemKind) -> CompletionItem {
+        CompletionItem {
+            label: label.into(),
+            kind: Some(kind),
+            ..CompletionItem::default()
+        }
+    }
+
+    /// The server's rows for the same member (any overload, with its signature in the label)
+    /// are duplicates of the one native row; a field and a method of one name stay two rows.
+    #[test]
+    fn the_servers_member_rows_yield_to_the_merged_native_row() {
+        let native = vec![
+            member("add", CompletionItemKind::METHOD),
+            member("length", CompletionItemKind::FIELD),
+        ];
+        let server = vec![
+            member("add(E e) : boolean", CompletionItemKind::METHOD),
+            member(
+                "add(int index, E element) : void",
+                CompletionItemKind::METHOD,
+            ),
+            member("length() : int", CompletionItemKind::METHOD),
+            member("length : int", CompletionItemKind::FIELD),
+            member("size() : int", CompletionItemKind::METHOD),
+            member("sout", CompletionItemKind::SNIPPET),
+        ];
+        let labels: Vec<String> = merge_items(&native, &server)
+            .into_iter()
+            .map(|i| i.label)
+            .collect();
+        assert_eq!(
+            labels,
+            ["add", "length", "length() : int", "size() : int", "sout"]
+        );
+    }
+
+    /// A static row of the second press filters by the member name, not by `Class.member`.
+    #[test]
+    fn a_native_row_is_matched_by_its_filter_text() {
+        let item = to_item(&SourceItem {
+            label: "Assertions.assertThat".into(),
+            filter_text: "assertThat".into(),
+            detail: Some("org.assertj.core.api".into()),
+            signature: Some("(T actual)".into()),
+            kind: SourceItemKind::Method,
+            deprecated: false,
+            key: "k".into(),
+            sort_text: "s".into(),
+        });
+        assert_eq!(item.kind, Some(CompletionItemKind::METHOD));
+        assert_eq!(item.filter_text.as_deref(), Some("assertThat"));
+        let details = item.label_details.clone().expect("details");
+        assert_eq!(details.detail.as_deref(), Some("(T actual)"));
+        assert_eq!(details.description.as_deref(), Some("org.assertj.core.api"));
+        // The duplicate check reads the member name, not the displayed `Class.member`.
+        assert_eq!(name_of(&item), "assertThat");
     }
 }

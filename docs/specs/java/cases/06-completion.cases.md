@@ -13,7 +13,14 @@ Keys of a completion case (the executable runner, `crates/archipel-ide-java/test
   and of its package), `not item: <name or name (package)>` (it is not offered), `rank: <a> < <b>` (both are
   offered, `a` above `b`) and `no items`.
 * `keys: complete, choose "<row>"` additionally picks the row with exactly that text; `after` is then the
-  resulting file with `<caret>` behind the inserted name.
+  resulting file with `<caret>` behind the inserted name (inside the parentheses of a call that takes
+  arguments, behind them for a call that takes none).
+* Rows of members, variables and keywords are named by their bare name (`size`, `names`, `return`): a method is one
+  row per name, its overloads merged (JAVA-CMP-016). Four more statements describe a row: `once: <name>` (exactly
+  one row has that name), `tail: <name> = <parameter list>` (the grey text after a method name), `type:
+  <name> = <type>` (the right-aligned type of a method, field or variable) and `struck: <name>` / `not struck:
+  <name>` (deprecated rows are struck through, JAVA-CMP-017). `item: Class.member (package)` names a static member
+  row of the second press (JAVA-CMP-022).
 
 ### JAVA-CMP-009 case 1: Annotation position offers annotation types of the test classpath
 settings: library=junit5
@@ -383,4 +390,854 @@ class Main {
 keys: complete [count 3]
 ```after
 item: Unsafe (sun.misc)
+```
+
+### JAVA-CMP-008 case 1: A list receiver lists its members, the inherited ones and those of Object
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+import java.util.ArrayList;
+import java.util.List;
+
+class Main {
+  void run() {
+    List<String> names = new ArrayList<>();
+    names.<caret>
+  }
+}
+```
+keys: complete
+```after
+item: add
+item: get
+item: size
+item: stream
+item: forEach
+item: toString
+not item: emptyList
+not item: of
+```
+
+### JAVA-CMP-016 case 1: Overloads of a method are one row
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+import java.util.ArrayList;
+import java.util.List;
+
+class Main {
+  void run() {
+    List<String> names = new ArrayList<>();
+    names.<caret>
+  }
+}
+```
+keys: complete
+```after
+once: add
+once: remove
+once: toArray
+tail: size = ()
+type: size = int
+type: get = String
+```
+
+### JAVA-CMP-008 case 2: A call result is typed through the receiver's type arguments
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+import java.util.ArrayList;
+import java.util.List;
+
+class Main {
+  void run() {
+    List<String> names = new ArrayList<>();
+    names.get(0).<caret>
+  }
+}
+```
+keys: complete
+```after
+item: length
+item: charAt
+item: substring
+item: isBlank
+type: length = int
+not item: add
+not item: size
+```
+
+### JAVA-CMP-008 case 3: Calls chain
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+class Main {
+  StringBuilder builder() {
+    return new StringBuilder();
+  }
+
+  void run() {
+    builder().append("a").append(1).<caret>
+  }
+}
+```
+keys: complete
+```after
+item: append
+item: reverse
+item: length
+item: toString
+not item: builder
+not item: run
+```
+
+### JAVA-CMP-008 case 4: A type qualifier lists static members and member types only
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+import java.util.Collections;
+import java.util.Map;
+
+class Main {
+  void run() {
+    Collections.<caret>
+  }
+}
+```
+keys: complete
+```after
+item: emptyList
+item: sort
+item: unmodifiableList
+not item: toString
+not item: getClass
+```
+
+### JAVA-CMP-008 case 5: A member type is offered after its outer type
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+import java.util.Map;
+
+class Main {
+  void run() {
+    Map.<caret>
+  }
+}
+```
+keys: complete
+```after
+item: Entry
+item: of
+not item: size
+not item: put
+```
+
+### JAVA-CMP-008 case 6: this lists the members of the class with those it inherits
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+class Base {
+  protected int shared;
+
+  void greet() {}
+}
+
+class Main extends Base {
+  String name = "n";
+
+  void run() {
+    this.<caret>
+  }
+}
+```
+keys: complete
+```after
+item: name
+item: run
+item: greet
+item: shared
+item: toString
+```
+
+### JAVA-CMP-008 case 7: super lists the superclass members only
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+class Base {
+  protected int shared;
+
+  void greet() {}
+}
+
+class Main extends Base {
+  String name = "n";
+
+  void run() {
+    super.<caret>
+  }
+}
+```
+keys: complete
+```after
+item: greet
+item: shared
+item: toString
+not item: name
+not item: run
+```
+
+### JAVA-CMP-008 case 8: Members come from supertypes in the classpath
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+import java.util.ArrayList;
+
+class Main {
+  void run() {
+    ArrayList<String> xs = new ArrayList<>();
+    xs.<caret>
+  }
+}
+```
+keys: complete
+```after
+item: add
+item: forEach
+item: stream
+item: removeIf
+item: hashCode
+not item: removeRange
+not item: elementData
+```
+
+### JAVA-CMP-008 case 9: Members of a source class and of its source supertype
+settings: default
+language: java
+```before
+--- src/main/java/p/Animal.java
+package p;
+
+public class Animal {
+  public String name() {
+    return "";
+  }
+}
+--- src/main/java/p/Dog.java
+package p;
+
+public class Dog extends Animal {
+  public void bark() {}
+}
+--- src/main/java/p/Main.java
+package p;
+
+class Main {
+  void run() {
+    Dog dog = new Dog();
+    dog.<caret>
+  }
+}
+```
+keys: complete
+```after
+item: bark
+item: name
+item: toString
+```
+
+### JAVA-CMP-008 case 10: Private members of another class are hidden on the first press
+settings: default
+language: java
+```before
+--- src/main/java/p/Vault.java
+package p;
+
+public class Vault {
+  private int secret;
+  int shared;
+
+  public void open() {}
+
+  private void lock() {}
+}
+--- src/main/java/p/Main.java
+package p;
+
+class Main {
+  void run() {
+    Vault vault = new Vault();
+    vault.<caret>
+  }
+}
+```
+keys: complete
+```after
+item: open
+item: shared
+not item: secret
+not item: lock
+```
+
+### JAVA-CMP-008 case 11: The second press offers the inaccessible members after the others
+settings: default
+language: java
+```before
+--- src/main/java/p/Vault.java
+package p;
+
+public class Vault {
+  private int secret;
+
+  public void open() {}
+
+  private void lock() {}
+}
+--- src/main/java/p/Main.java
+package p;
+
+class Main {
+  void run() {
+    Vault vault = new Vault();
+    vault.<caret>
+  }
+}
+```
+keys: complete [count 2]
+```after
+item: secret
+item: lock
+rank: open < lock
+rank: open < secret
+```
+
+### JAVA-CMP-008 case 12: An unknown receiver offers nothing natively
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+class Main {
+  void run() {
+    Mystery mystery = null;
+    mystery.<caret>
+  }
+}
+```
+keys: complete
+```after
+no items
+```
+
+### JAVA-CMP-003 case 1: Nothing is completed after a number literal
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+class Main {
+  int one = 1.<caret>
+}
+```
+keys: complete
+```after
+no items
+```
+
+### JAVA-CMP-003 case 2: A primitive receiver has no members
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+class Main {
+  void run() {
+    int count = 3;
+    count.<caret>
+  }
+}
+```
+keys: complete
+```after
+no items
+```
+
+### JAVA-CMP-017 case 1: Deprecated members are struck through
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+import java.util.Date;
+
+class Main {
+  void run() {
+    Date date = new Date();
+    date.<caret>
+  }
+}
+```
+keys: complete
+```after
+item: getYear
+struck: getYear
+item: getTime
+not struck: getTime
+```
+
+### JAVA-CMP-035 case 1: Choosing a method that takes arguments puts the caret inside the call
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+import java.util.ArrayList;
+import java.util.List;
+
+class Main {
+  void run() {
+    List<String> names = new ArrayList<>();
+    names.ad<caret>
+  }
+}
+```
+keys: complete, choose "add"
+```after
+package p;
+
+import java.util.ArrayList;
+import java.util.List;
+
+class Main {
+  void run() {
+    List<String> names = new ArrayList<>();
+    names.add(<caret>)
+  }
+}
+```
+
+### JAVA-CMP-035 case 2: Choosing a method without arguments closes the call
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+import java.util.ArrayList;
+import java.util.List;
+
+class Main {
+  void run() {
+    List<String> names = new ArrayList<>();
+    names.siz<caret>
+  }
+}
+```
+keys: complete, choose "size"
+```after
+package p;
+
+import java.util.ArrayList;
+import java.util.List;
+
+class Main {
+  void run() {
+    List<String> names = new ArrayList<>();
+    names.size()<caret>
+  }
+}
+```
+
+### JAVA-CMP-008 case 13: Locals, parameters, fields and methods of the class are offered
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+class Main {
+  String title = "t";
+
+  String helper() {
+    return title;
+  }
+
+  void run(int count) {
+    String name = "n";
+    <caret>
+  }
+}
+```
+keys: complete
+```after
+item: name
+item: count
+item: title
+item: helper
+item: run
+item: toString
+type: name = String
+type: count = int
+type: title = String
+```
+
+### JAVA-CMP-008 case 14: A local that is declared later is not in scope
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+class Main {
+  void run() {
+    String early = "e";
+    ear<caret>
+    String late = "l";
+  }
+}
+```
+keys: complete
+```after
+item: early
+not item: late
+```
+
+### JAVA-CMP-008 case 15: Statically imported members are offered unqualified
+settings: library=junit5
+language: java
+```before
+--- src/test/java/p/AppTest.java
+package p;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class AppTest {
+  void checks() {
+    assertTr<caret>
+  }
+}
+```
+keys: complete
+```after
+item: assertTrue
+tail: assertTrue = (boolean)
+```
+
+### JAVA-CMP-008 case 16: Statically imported members of a class on demand are offered unqualified
+settings: library=junit5
+language: java
+```before
+--- src/test/java/p/AppTest.java
+package p;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class AppTest {
+  void checks() {
+    assertEq<caret>
+  }
+}
+```
+keys: complete
+```after
+item: assertEquals
+tail: assertEquals = (Object, Object)
+type: assertEquals = void
+```
+
+### JAVA-CMP-028 case 1: Variables of the expected type come first, then other variables, then methods
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+class Main {
+  String title = "t";
+
+  String helper() {
+    return title;
+  }
+
+  void run() {
+    String name = "n";
+    int n = 1;
+    String s = <caret>
+  }
+}
+```
+keys: complete
+```after
+rank: name < title
+rank: title < n
+rank: n < helper
+rank: helper < toString
+```
+
+### JAVA-CMP-027 case 1: The expected type ranks its inheritors first after new
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+import java.util.List;
+
+class Main {
+  void run() {
+    List<String> names = new Arr<caret>
+  }
+}
+```
+keys: complete
+```after
+item: ArrayList (java.util)
+item: ArrayStoreException (java.lang)
+rank: ArrayList (java.util) < ArrayStoreException (java.lang)
+```
+
+### JAVA-CMP-011 case 1: Modifiers that are legal after those already written
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+class Main {
+  public st<caret>
+}
+```
+keys: complete
+```after
+item: static
+item: strictfp
+not item: public
+not item: private
+not item: protected
+```
+
+### JAVA-CMP-011 case 2: A statement keyword where a statement starts
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+class Main {
+  int run(int n) {
+    ret<caret>
+  }
+}
+```
+keys: complete
+```after
+item: return
+not item: break
+not item: continue
+not item: else
+```
+
+### JAVA-CMP-011 case 3: break and continue inside a loop, else after an if
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+class Main {
+  void run(int n) {
+    while (n > 0) {
+      if (n == 3) {
+        n--;
+      }
+      <caret>
+    }
+  }
+}
+```
+keys: complete
+```after
+item: break
+item: continue
+item: else
+item: return
+```
+
+### JAVA-CMP-011 case 4: The clauses of a class header
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+public class Main ext<caret> {
+}
+```
+keys: complete
+```after
+item: extends
+not item: class
+```
+
+### JAVA-CMP-011 case 5: Declaration keywords and primitive types in a class body
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+class Main {
+  <caret>
+}
+```
+keys: complete
+```after
+item: public
+item: private
+item: static
+item: final
+item: class
+item: void
+item: int
+```
+
+### JAVA-CMP-022 case 1: The first press offers no static members of other classes
+settings: library=hamcrest,junit4
+language: java
+```before
+--- src/test/java/p/AppTest.java
+package p;
+
+class AppTest {
+  void checks() {
+    assertTh<caret>
+  }
+}
+```
+keys: complete
+```after
+no items
+```
+
+### JAVA-CMP-022 case 2: The second press offers static members of every class, once per class and name
+settings: library=hamcrest,junit4
+language: java
+```before
+--- src/test/java/p/AppTest.java
+package p;
+
+class AppTest {
+  void checks() {
+    assertTh<caret>
+  }
+}
+```
+keys: complete [count 2]
+```after
+item: MatcherAssert.assertThat (org.hamcrest)
+item: Assert.assertThat (org.junit)
+once: MatcherAssert.assertThat (org.hamcrest)
+struck: Assert.assertThat (org.junit)
+not struck: MatcherAssert.assertThat (org.hamcrest)
+rank: MatcherAssert.assertThat (org.hamcrest) < Assert.assertThat (org.junit)
+```
+
+### JAVA-CMP-022 case 3: Choosing a static member writes the qualified call and imports the class
+settings: library=hamcrest,junit4
+language: java
+```before
+--- src/test/java/p/AppTest.java
+package p;
+
+class AppTest {
+  void checks() {
+    assertTh<caret>
+  }
+}
+```
+keys: complete [count 2], choose "MatcherAssert.assertThat (org.hamcrest)"
+```after
+package p;
+
+import org.hamcrest.MatcherAssert;
+
+class AppTest {
+  void checks() {
+    MatcherAssert.assertThat(<caret>)
+  }
+}
+```
+
+### JAVA-CMP-022 case 4: A statically imported class needs no qualifier
+settings: library=hamcrest,junit4
+language: java
+```before
+--- src/test/java/p/AppTest.java
+package p;
+
+import static org.hamcrest.MatcherAssert.*;
+
+class AppTest {
+  void checks() {
+    assertTh<caret>
+  }
+}
+```
+keys: complete [count 2]
+```after
+item: assertThat
+not item: MatcherAssert.assertThat (org.hamcrest)
+```
+
+### JAVA-CMP-008 case 17: After new only classes with an accessible constructor are offered
+settings: default
+language: java
+```before
+--- src/main/java/p/Main.java
+package p;
+
+class Main {
+  void run() {
+    Object o = new Arr<caret>
+  }
+}
+```
+keys: complete
+```after
+item: ArrayList (java.util)
+item: ArrayDeque (java.util)
+not item: Arrays (java.util)
+not item: Array (java.lang.reflect)
 ```

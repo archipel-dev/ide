@@ -15,6 +15,59 @@ pub fn parse(text: &str) -> Option<Tree> {
     p.parse(text, None)
 }
 
+/// Parses `text` reusing the tree of a previous version of the same file (`old`: its text and
+/// tree): only the span that differs is parsed again, so a keystroke costs a fraction of a full
+/// parse (the tree of an unchanged file is the old one).
+pub fn reparse(old: Option<(&str, &Tree)>, text: &str) -> Option<Tree> {
+    let Some((old_text, old_tree)) = old else {
+        return parse(text);
+    };
+    let (a, b) = (old_text.as_bytes(), text.as_bytes());
+    let mut prefix = a.iter().zip(b).take_while(|(x, y)| x == y).count();
+    while prefix > 0 && !(old_text.is_char_boundary(prefix) && text.is_char_boundary(prefix)) {
+        prefix -= 1;
+    }
+    let room = a.len().min(b.len()) - prefix;
+    let mut suffix = a
+        .iter()
+        .rev()
+        .zip(b.iter().rev())
+        .take(room)
+        .take_while(|(x, y)| x == y)
+        .count();
+    while suffix > 0
+        && !(old_text.is_char_boundary(a.len() - suffix) && text.is_char_boundary(b.len() - suffix))
+    {
+        suffix -= 1;
+    }
+    let point = |s: &str, byte: usize| {
+        let before = &s.as_bytes()[..byte];
+        let row = before.iter().filter(|c| **c == b'\n').count();
+        let line_start = before
+            .iter()
+            .rposition(|c| *c == b'\n')
+            .map_or(0, |i| i + 1);
+        tree_sitter::Point {
+            row,
+            column: byte - line_start,
+        }
+    };
+    let (old_end, new_end) = (a.len() - suffix, b.len() - suffix);
+    let edit = tree_sitter::InputEdit {
+        start_byte: prefix,
+        old_end_byte: old_end,
+        new_end_byte: new_end,
+        start_position: point(old_text, prefix),
+        old_end_position: point(old_text, old_end),
+        new_end_position: point(text, new_end),
+    };
+    let mut tree = old_tree.clone();
+    tree.edit(&edit);
+    let mut p = Parser::new();
+    p.set_language(&tree_sitter_java::LANGUAGE.into()).ok()?;
+    p.parse(text, Some(&tree))
+}
+
 /// Builds the stub of `text`.
 pub fn build_file_stub(text: &str) -> FileStub {
     match parse(text) {
@@ -596,5 +649,40 @@ impl Builder<'_> {
                 _ => {}
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An incremental parse yields the tree of a fresh parse, for edits at the start, in the
+    /// middle, at the end, with multi-byte characters and across lines.
+    #[test]
+    fn reparse_equals_a_fresh_parse() {
+        let base = "package p;\n\nclass A {\n  String s = \"h\u{e9}llo\";\n  void f() {\n    int x = 1;\n  }\n}\n";
+        let old = parse(base).unwrap();
+        for edited in [
+            base.replace("package p;", "package pp.q;"),
+            base.replace("int x = 1;", "int x = 1;\n    x.foo();\n    x."),
+            base.replace("h\u{e9}llo", "h\u{e9}llo w\u{f6}rld"),
+            format!("{base}class B {{}}\n"),
+            format!("// c\n{base}"),
+            base.replace("void f() {", "void f() { int __c__"),
+            String::new(),
+        ] {
+            let fresh = parse(&edited).unwrap();
+            let inc = reparse(Some((base, &old)), &edited).unwrap();
+            assert_eq!(
+                inc.root_node().to_sexp(),
+                fresh.root_node().to_sexp(),
+                "{edited}"
+            );
+        }
+        // No base: a fresh parse.
+        assert_eq!(
+            reparse(None, base).unwrap().root_node().to_sexp(),
+            old.root_node().to_sexp()
+        );
     }
 }

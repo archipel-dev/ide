@@ -157,33 +157,63 @@ pub fn display(text: &str) -> String {
         .replace("?super", "? super")
 }
 
-/// The type of an expression as far as this slice computes it.
+/// The type of an expression or declaration as far as this slice computes it (spec 03 3.1,
+/// JAVA-TYP-001..003): a closed, structural model. Class types carry the FQN of their erasure
+/// and their type arguments; the presentable text is derived, never stored, so substitution
+/// (JAVA-TYP-013) rebuilds types instead of editing strings. Subtyping, inference and capture
+/// (M5) extend the operations on this type; they do not replace it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Ty {
+    /// Not known (unresolved, not inferred yet): no member, no error is derived from it
+    /// (JAVA-TYP-032).
     Unknown,
     Null,
     Prim(String),
-    /// A class type: FQN of the erasure (when resolved), the presentable text and the resolved
-    /// type arguments (empty for a raw or non-generic type, `Unknown` for a wildcard).
+    /// A class type: FQN of the erasure (`None` when the written name did not resolve), the
+    /// simple name for presentation and the type arguments (empty for a raw or non-generic type).
     Ref {
         fqn: Option<String>,
-        display: String,
+        name: String,
         args: Vec<Ty>,
     },
     Array(Box<Ty>),
-    /// A type variable in scope.
+    /// A type variable in scope; its bounds are looked up at the declaration that introduced it.
     Var(String),
+    /// A wildcard type argument; it only occurs inside [`Ty::Ref::args`].
+    Wildcard(Wild),
+}
+
+/// The bound of a wildcard type argument (JAVA-TYP-001).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Wild {
+    /// `?`
+    Any,
+    /// `? extends T`
+    Extends(Box<Ty>),
+    /// `? super T`
+    Super(Box<Ty>),
 }
 
 impl Ty {
+    /// The canonical presentable form: simple names, `, ` between arguments (JAVA-TYP-003).
     pub fn display(&self) -> String {
         match self {
             Ty::Unknown => "?".into(),
             Ty::Null => "null".into(),
             Ty::Prim(p) => p.clone(),
-            Ty::Ref { display, .. } => display.clone(),
+            Ty::Ref { name, args, .. } => {
+                if args.is_empty() {
+                    name.clone()
+                } else {
+                    let list: Vec<String> = args.iter().map(Ty::display).collect();
+                    format!("{name}<{}>", list.join(", "))
+                }
+            }
             Ty::Array(e) => format!("{}[]", e.display()),
             Ty::Var(v) => v.clone(),
+            Ty::Wildcard(Wild::Any) => "?".into(),
+            Ty::Wildcard(Wild::Extends(b)) => format!("? extends {}", b.display()),
+            Ty::Wildcard(Wild::Super(b)) => format!("? super {}", b.display()),
         }
     }
 
@@ -192,45 +222,105 @@ impl Ty {
     }
 
     /// A non-generic class type.
-    pub fn class(fqn: &str, display: &str) -> Ty {
+    pub fn class(fqn: &str, name: &str) -> Ty {
         Ty::Ref {
             fqn: Some(fqn.into()),
-            display: display.into(),
+            name: name.into(),
             args: Vec::new(),
         }
     }
 
-    /// Replaces type variables by `map` (a variable not in it, or any variable left after
-    /// `strict`, becomes `Unknown`: no inference is attempted).
+    /// A class type with arguments.
+    pub fn generic(fqn: &str, name: &str, args: Vec<Ty>) -> Ty {
+        Ty::Ref {
+            fqn: Some(fqn.into()),
+            name: name.into(),
+            args,
+        }
+    }
+
+    /// The FQN of the class type (not of arrays, primitives or variables).
+    pub fn class_fqn(&self) -> Option<&str> {
+        match self {
+            Ty::Ref { fqn: Some(f), .. } => Some(f),
+            _ => None,
+        }
+    }
+
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, Ty::Unknown)
+    }
+
+    /// The type a *read* through this type argument yields: the upper bound of a wildcard
+    /// (`? extends T` is `T`); `?` and `? super T` have no useful static bound here and are
+    /// unknown (the capture would be the declared bound of the parameter, M5).
+    pub fn read_type(&self) -> Ty {
+        match self {
+            Ty::Wildcard(Wild::Extends(b)) => (**b).clone(),
+            Ty::Wildcard(_) => Ty::Unknown,
+            t => t.clone(),
+        }
+    }
+
+    /// Replaces type variables by `map` (a variable not in it becomes `Unknown`: no inference
+    /// is attempted). A wildcard that replaces a variable in a *top-level* position is read
+    /// through its bound ([`Ty::read_type`]).
     pub fn subst(&self, map: &std::collections::HashMap<String, Ty>) -> Ty {
         match self {
-            Ty::Var(v) => map.get(v).cloned().unwrap_or(Ty::Unknown),
+            Ty::Var(v) => map.get(v).map_or(Ty::Unknown, Ty::read_type),
             Ty::Array(e) => match e.subst(map) {
                 Ty::Unknown => Ty::Unknown,
                 e => Ty::Array(Box::new(e)),
             },
-            Ty::Ref { fqn, display, args } if !args.is_empty() => {
-                let args: Vec<Ty> = args.iter().map(|a| a.subst(map)).collect();
-                let shown = match display.find('<') {
-                    Some(i) => {
-                        let list: Vec<String> = args
-                            .iter()
-                            .map(|a| match a {
-                                Ty::Unknown => "?".to_string(),
-                                a => a.display(),
-                            })
-                            .collect();
-                        format!("{}<{}>", &display[..i], list.join(", "))
-                    }
-                    None => display.clone(),
-                };
-                Ty::Ref {
-                    fqn: fqn.clone(),
-                    display: shown,
-                    args,
-                }
-            }
+            Ty::Ref { fqn, name, args } if !args.is_empty() => Ty::Ref {
+                fqn: fqn.clone(),
+                name: name.clone(),
+                args: args.iter().map(|a| a.subst_arg(map)).collect(),
+            },
             other => other.clone(),
+        }
+    }
+
+    /// Like [`Ty::subst`] for presentation: a variable that `map` does not name stays as it is
+    /// (`<T> T[] toArray(T[])` keeps its `T`).
+    pub fn subst_partial(&self, map: &std::collections::HashMap<String, Ty>) -> Ty {
+        match self {
+            Ty::Var(v) => map.get(v).map_or_else(
+                || self.clone(),
+                |t| match t {
+                    Ty::Unknown => self.clone(),
+                    t => t.clone(),
+                },
+            ),
+            Ty::Array(e) => Ty::Array(Box::new(e.subst_partial(map))),
+            Ty::Ref { fqn, name, args } => Ty::Ref {
+                fqn: fqn.clone(),
+                name: name.clone(),
+                args: args.iter().map(|a| a.subst_partial(map)).collect(),
+            },
+            Ty::Wildcard(Wild::Extends(b)) => {
+                Ty::Wildcard(Wild::Extends(Box::new(b.subst_partial(map))))
+            }
+            Ty::Wildcard(Wild::Super(b)) => {
+                Ty::Wildcard(Wild::Super(Box::new(b.subst_partial(map))))
+            }
+            t => t.clone(),
+        }
+    }
+
+    /// Substitution inside type arguments, where a wildcard stays a wildcard.
+    fn subst_arg(&self, map: &std::collections::HashMap<String, Ty>) -> Ty {
+        match self {
+            Ty::Var(v) => map.get(v).cloned().unwrap_or(Ty::Unknown),
+            Ty::Wildcard(Wild::Extends(b)) => match b.subst(map) {
+                Ty::Unknown => Ty::Wildcard(Wild::Any),
+                b => Ty::Wildcard(Wild::Extends(Box::new(b))),
+            },
+            Ty::Wildcard(Wild::Super(b)) => match b.subst(map) {
+                Ty::Unknown => Ty::Wildcard(Wild::Any),
+                b => Ty::Wildcard(Wild::Super(Box::new(b))),
+            },
+            t => t.subst(map),
         }
     }
 
@@ -240,7 +330,84 @@ impl Ty {
             Ty::Var(_) => true,
             Ty::Array(e) => e.has_var(),
             Ty::Ref { args, .. } => args.iter().any(Ty::has_var),
+            Ty::Wildcard(Wild::Extends(b) | Wild::Super(b)) => b.has_var(),
             _ => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn list_of(arg: Ty) -> Ty {
+        Ty::generic("java.util.List", "List", vec![arg])
+    }
+
+    /// JAVA-TYP-003: the presentable form is derived from the structure.
+    #[test]
+    fn display_is_canonical() {
+        let map = Ty::generic(
+            "java.util.Map",
+            "Map",
+            vec![
+                Ty::string(),
+                list_of(Ty::Wildcard(Wild::Extends(Box::new(Ty::class(
+                    "java.lang.Number",
+                    "Number",
+                ))))),
+            ],
+        );
+        assert_eq!(map.display(), "Map<String, List<? extends Number>>");
+        assert_eq!(
+            Ty::Array(Box::new(Ty::Prim("int".into()))).display(),
+            "int[]"
+        );
+        assert_eq!(list_of(Ty::Wildcard(Wild::Any)).display(), "List<?>");
+        assert_eq!(
+            list_of(Ty::Wildcard(Wild::Super(Box::new(Ty::string())))).display(),
+            "List<? super String>"
+        );
+    }
+
+    /// JAVA-TYP-013: variables are replaced through the receiver's arguments; a variable the
+    /// receiver does not bind is unknown for reads and stays for presentation.
+    #[test]
+    fn substitution_binds_variables() {
+        let mut map = HashMap::new();
+        map.insert("E".to_string(), Ty::string());
+        let ret = list_of(Ty::Var("E".into()));
+        assert_eq!(ret.subst(&map).display(), "List<String>");
+        assert_eq!(Ty::Var("E".into()).subst(&map), Ty::string());
+        assert_eq!(Ty::Var("T".into()).subst(&map), Ty::Unknown);
+        assert_eq!(Ty::Var("T".into()).subst_partial(&map), Ty::Var("T".into()));
+        assert_eq!(
+            Ty::Array(Box::new(Ty::Var("E".into()))).subst(&map),
+            Ty::Array(Box::new(Ty::string()))
+        );
+        assert!(ret.has_var());
+        assert!(!ret.subst(&map).has_var());
+    }
+
+    /// A read through a wildcard argument is its upper bound; `?` and `? super T` are unknown
+    /// (no capture yet), and a wildcard stays a wildcard inside a nested argument.
+    #[test]
+    fn reads_through_wildcards_use_the_upper_bound() {
+        let number = Ty::class("java.lang.Number", "Number");
+        let mut map = HashMap::new();
+        map.insert(
+            "E".to_string(),
+            Ty::Wildcard(Wild::Extends(Box::new(number.clone()))),
+        );
+        assert_eq!(Ty::Var("E".into()).subst(&map), number);
+        assert_eq!(
+            list_of(Ty::Var("E".into())).subst(&map).display(),
+            "List<? extends Number>"
+        );
+        map.insert("E".to_string(), Ty::Wildcard(Wild::Any));
+        assert_eq!(Ty::Var("E".into()).subst(&map), Ty::Unknown);
+        map.insert("E".to_string(), Ty::Wildcard(Wild::Super(Box::new(number))));
+        assert_eq!(Ty::Var("E".into()).subst(&map), Ty::Unknown);
     }
 }

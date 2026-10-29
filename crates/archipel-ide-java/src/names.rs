@@ -80,6 +80,27 @@ pub struct NameEntry {
     pub flags: u32,
     pub deprecated: bool,
     pub targets: Option<u16>,
+    /// The lowercase letters a hump of the name starts with, one bit per letter (all bits for a
+    /// non-ASCII name): a later-hump match needs its first pattern letter in here.
+    humps: u32,
+}
+
+/// The mask of [`NameEntry::humps`].
+fn hump_letters(name: &str) -> u32 {
+    if !name.is_ascii() {
+        return u32::MAX;
+    }
+    let n = name.as_bytes();
+    let mut mask = 0u32;
+    for i in 0..n.len() {
+        if is_hump_ascii(n, i) {
+            let c = n[i].to_ascii_lowercase();
+            if c.is_ascii_lowercase() {
+                mask |= 1 << (c - b'a');
+            }
+        }
+    }
+    mask
 }
 
 impl NameEntry {
@@ -87,6 +108,7 @@ impl NameEntry {
         let pkg_len = package.len() as u32;
         // The short name is the last segment of the FQN (nested classes included).
         let short_start = record.fqn.rfind('.').map_or(0, |i| i + 1) as u32;
+        let humps = hump_letters(&record.fqn[short_start as usize..]);
         Self {
             unit,
             fqn: record.fqn.into_boxed_str(),
@@ -96,7 +118,14 @@ impl NameEntry {
             flags: record.flags,
             deprecated: record.deprecated,
             targets: record.targets,
+            humps,
         }
+    }
+
+    /// Whether a hump of the name can start with the ASCII letter `c` (case-insensitive): a
+    /// quick reject for matches that begin at a later hump. Anything but a letter passes.
+    pub fn hump_may_start_with(&self, c: u8) -> bool {
+        !c.is_ascii_alphabetic() || self.humps & (1 << (c.to_ascii_lowercase() - b'a')) != 0
     }
 
     pub fn package(&self) -> &str {
@@ -189,6 +218,8 @@ pub struct NameMatcher {
     pattern: Vec<char>,
     lower: Vec<char>,
     text: String,
+    /// Every pattern character is ASCII (the allocation-free path for ASCII names).
+    ascii: bool,
 }
 
 fn is_hump(chars: &[char], i: usize) -> bool {
@@ -217,9 +248,20 @@ impl NameMatcher {
         let chars: Vec<char> = pattern.chars().collect();
         Self {
             lower: chars.iter().flat_map(|c| c.to_lowercase()).collect(),
+            ascii: chars.iter().all(char::is_ascii),
             pattern: chars,
             text: pattern.to_string(),
         }
+    }
+
+    /// The first pattern character when it is ASCII: every match except a later-hump match
+    /// (`Builder` in `StringBuilder`) starts with it, ignoring case, so a scan can look at the
+    /// first byte of a name before it runs the matcher.
+    pub fn first_ascii(&self) -> Option<u8> {
+        self.pattern
+            .first()
+            .filter(|c| c.is_ascii())
+            .map(|c| *c as u8)
     }
 
     pub fn pattern(&self) -> &str {
@@ -241,7 +283,7 @@ impl NameMatcher {
         if name.starts_with(&self.text) {
             return Some(MatchClass::Prefix);
         }
-        if self.pattern.iter().all(char::is_ascii) && name.is_ascii() {
+        if self.ascii && name.is_ascii() {
             return self.classify_ascii(name.as_bytes());
         }
         // Cheap rejection: every pattern letter occurs in order (ignoring case).

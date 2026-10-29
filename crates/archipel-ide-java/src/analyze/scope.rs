@@ -330,28 +330,55 @@ impl<'a, 'e> Analyzer<'a, 'e> {
 
     // ---- variables ----------------------------------------------------------------------
 
-    pub(super) fn pattern_names(&mut self, boundary: Node<'a>) -> &HashSet<String> {
+    /// The pattern variables declared anywhere inside `boundary` (`o instanceof String s`,
+    /// `case Point(int x, var y)`) with their declared type when it is unambiguous
+    /// (JAVA-RES-009: the whole member counts as the scope).
+    pub(super) fn pattern_names(&mut self, boundary: Node<'a>) -> &HashMap<String, Option<String>> {
         let id = boundary.id();
         if !self.pattern_cache.contains_key(&id) {
-            let mut set = HashSet::new();
+            let mut map: HashMap<String, Option<String>> = HashMap::new();
+            let mut put = |name: String, ty: Option<String>| {
+                map.entry(name)
+                    .and_modify(|t| {
+                        if *t != ty {
+                            *t = None;
+                        }
+                    })
+                    .or_insert(ty);
+            };
+            let b = source::Builder { src: self.text };
             let mut stack = vec![boundary];
             while let Some(n) = stack.pop() {
                 match n.kind() {
                     "type_pattern" => {
-                        if let Some(last) = n.named_child(n.named_child_count().saturating_sub(1)) {
-                            set.insert(self.txt(last).to_string());
+                        let count = n.named_child_count();
+                        if count >= 2
+                            && let (Some(t), Some(last)) =
+                                (n.named_child(0), n.named_child(count - 1))
+                        {
+                            put(self.txt(last).to_string(), Some(b.compact(t)));
+                        } else if let Some(last) =
+                            n.named_child(n.named_child_count().saturating_sub(1))
+                        {
+                            put(self.txt(last).to_string(), None);
                         }
                     }
                     "record_pattern_component" => {
-                        if let Some(last) = n.named_child(n.named_child_count().saturating_sub(1))
+                        let count = n.named_child_count();
+                        if let Some(last) = n.named_child(count.saturating_sub(1))
                             && last.kind() == "identifier"
                         {
-                            set.insert(self.txt(last).to_string());
+                            let ty = (count == 2)
+                                .then(|| n.named_child(0).map(|t| b.compact(t)))
+                                .flatten()
+                                .filter(|t| t != "var");
+                            put(self.txt(last).to_string(), ty);
                         }
                     }
                     "instanceof_expression" => {
                         if let Some(nm) = n.child_by_field_name("name") {
-                            set.insert(self.txt(nm).to_string());
+                            let ty = n.child_by_field_name("right").map(|t| b.compact(t));
+                            put(self.txt(nm).to_string(), ty);
                         }
                     }
                     _ => {}
@@ -361,7 +388,7 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                     stack.push(ch);
                 }
             }
-            self.pattern_cache.insert(id, set);
+            self.pattern_cache.insert(id, map);
         }
         &self.pattern_cache[&id]
     }
@@ -540,9 +567,9 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                             });
                         }
                     }
-                    if self.pattern_names(a).contains(name) {
+                    if let Some(t) = self.pattern_names(a).get(name).cloned() {
                         return Ok(VarRes::Local {
-                            type_text: None,
+                            type_text: t,
                             init: None,
                             node_start: a.start_byte(),
                         });
@@ -558,19 +585,20 @@ impl<'a, 'e> Analyzer<'a, 'e> {
                             node_start: a.start_byte(),
                         });
                     }
-                    if self.pattern_names(a).contains(name) {
+                    if let Some(t) = self.pattern_names(a).get(name).cloned() {
                         return Ok(VarRes::Local {
-                            type_text: None,
+                            type_text: t,
                             init: None,
                             node_start: a.start_byte(),
                         });
                     }
                 }
                 "static_initializer" | "field_declaration" | "compact_constructor_declaration"
-                    if self.pattern_names(a).contains(name) =>
+                    if self.pattern_names(a).contains_key(name) =>
                 {
+                    let t = self.pattern_names(a).get(name).cloned().flatten();
                     return Ok(VarRes::Local {
-                        type_text: None,
+                        type_text: t,
                         init: None,
                         node_start: a.start_byte(),
                     });

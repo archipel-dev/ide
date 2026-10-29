@@ -15,11 +15,32 @@ pub enum Position {
     /// A position where only these types are legal (JAVA-CMP-009).
     Type(TypeFilter),
     /// A declaration or expression position that also takes members, keywords and locals:
-    /// the class names join the other variants (the language server's, until the main
-    /// contributor is native).
-    Mixed { declaration: bool },
-    /// Nothing to complete natively (comment, string, number, qualified name, import).
+    /// the class names join the other variants (spec 06 6.3 positions 1 and 5).
+    Mixed { declaration: bool, slot: Slot },
+    /// After a dot: the members of the qualifier, or the classes of a package (6.3 position 2).
+    Qualified,
+    /// Nothing to complete natively (comment, string, number, import).
     None,
+}
+
+/// Where in the syntax an identifier is being typed (the keyword and modifier sets of spec 06
+/// 6.3 depend on it, JAVA-CMP-011).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Slot {
+    /// Outside every class: modifiers, `class`, `interface`, `enum`, `record`, `import`.
+    TopLevel,
+    /// The start of a member declaration, also after modifiers and annotations.
+    ClassBody,
+    /// The start of a statement in a block (after `;`, `{`, `}` or a `case` label).
+    Statement,
+    /// Inside an expression: an operand is expected.
+    Expression,
+    /// A formal parameter or a record component.
+    Parameter,
+    /// In the header of a class, after its name: `extends`, `implements`, `permits`.
+    ClassHeader,
+    /// After the parameter list of a method: `throws`.
+    MethodHeader,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,6 +80,26 @@ pub struct Classified {
     /// Byte offset where the identifier prefix starts.
     pub prefix_start: usize,
     pub prefix: String,
+    /// The words (identifiers and keywords) of the declaration or statement before the prefix,
+    /// at its own nesting level: the modifiers already written, the `class` keyword, ...
+    pub words: Vec<String>,
+    /// At the top level of a file: the identifiers outside every brace before the caret (the
+    /// `package` and `import` words and the class declarations so far).
+    pub file_words: Vec<String>,
+    /// What the block that ends right before the caret was (`} |`): `else`, `catch` and `finally`
+    /// continue it.
+    pub after: After,
+}
+
+/// The statement a closing brace right before the caret ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum After {
+    #[default]
+    Nothing,
+    /// The block of an `if` or `else if`: `else` may follow.
+    If,
+    /// The block of a `try` or `catch`: `catch` and `finally` may follow.
+    Try,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -365,6 +406,23 @@ impl<'a> Scan<'a> {
     }
 }
 
+/// The identifiers of `src` outside every brace and parenthesis (the package, import and class
+/// declaration words of a file's top level), comments and literals skipped.
+pub fn top_level_words(src: &str) -> Vec<String> {
+    let (toks, _) = lex(src);
+    let mut depth = 0i32;
+    let mut out = Vec::new();
+    for t in toks {
+        match t.kind {
+            Kind::Punct('{') | Kind::Punct('(') => depth += 1,
+            Kind::Punct('}') | Kind::Punct(')') => depth -= 1,
+            Kind::Ident if depth == 0 => out.push(src[t.start..t.end].to_string()),
+            _ => {}
+        }
+    }
+    out
+}
+
 /// Classifies the completion position at byte `offset` of `text`.
 pub fn classify(text: &str, offset: usize) -> Classified {
     let offset = offset.min(text.len());
@@ -377,6 +435,9 @@ pub fn classify(text: &str, offset: usize) -> Classified {
         position: Position::None,
         prefix_start,
         prefix: text[prefix_start..offset].to_string(),
+        words: Vec::new(),
+        file_words: Vec::new(),
+        after: After::Nothing,
     };
     let (toks, end) = lex(src);
     if end != End::Code {
@@ -398,17 +459,14 @@ pub fn classify(text: &str, offset: usize) -> Classified {
         }
     }
     let prefix = text[prefix_start..offset].to_string();
-    let done = |position: Position| Classified {
-        position,
-        prefix_start,
-        prefix: prefix.clone(),
-    };
     let t = &toks[..n];
     let scan = Scan { src, toks: t };
 
     // Frame stack over the tokens before the prefix.
     let mut frames: Vec<(Frame, usize)> = Vec::new();
     let mut stmt = 0usize;
+    // The statement the last `}` closed, by its header words (`try`, `catch`, `if`, `else if`).
+    let mut closed = After::Nothing;
     #[allow(clippy::needless_range_loop)]
     for i in 0..t.len() {
         let top = frames.last().map(|(f, _)| *f);
@@ -419,9 +477,17 @@ pub fn classify(text: &str, offset: usize) -> Classified {
                 stmt = i + 1;
             }
             Kind::Punct('}') => {
+                closed = After::Nothing;
                 while let Some((f, saved)) = frames.pop() {
                     if matches!(f, Frame::Brace(_)) {
-                        let _ = saved;
+                        let word = |k: usize| {
+                            (k < i && t[k].kind == Kind::Ident).then(|| &src[t[k].start..t[k].end])
+                        };
+                        closed = match (word(saved), word(saved + 1)) {
+                            (Some("if"), _) | (Some("else"), Some("if")) => After::If,
+                            (Some("try" | "catch"), _) => After::Try,
+                            _ => After::Nothing,
+                        };
                         break;
                     }
                 }
@@ -450,6 +516,34 @@ pub fn classify(text: &str, offset: usize) -> Classified {
     let top = frames.last().map(|(f, _)| *f);
     let header = &t[stmt.min(t.len())..];
     let prev = t.last();
+    // The words of the statement or declaration so far, at its own nesting level.
+    let words: Vec<String> = {
+        let mut depth = 0i32;
+        let mut out = Vec::new();
+        for tok in header {
+            match tok.kind {
+                Kind::Punct('(') | Kind::Punct('[') => depth += 1,
+                Kind::Punct(')') | Kind::Punct(']') => depth -= 1,
+                Kind::Ident if depth == 0 => out.push(src[tok.start..tok.end].to_string()),
+                _ => {}
+            }
+        }
+        out
+    };
+    // A closed block only counts right before the caret.
+    let closed = if prev.is_some_and(|p| p.kind == Kind::Punct('}')) {
+        closed
+    } else {
+        After::Nothing
+    };
+    let done = |position: Position| Classified {
+        position,
+        prefix_start,
+        prefix: prefix.clone(),
+        words: words.clone(),
+        file_words: Vec::new(),
+        after: closed,
+    };
 
     // No completion in import and package statements (the language server completes them).
     if header.first().is_some_and(|f| {
@@ -463,7 +557,18 @@ pub fn classify(text: &str, offset: usize) -> Classified {
         return done(Position::None);
     }
     let Some(prev_tok) = prev.copied() else {
-        return done(Position::None);
+        // The start of the file: a package statement, an import or a declaration.
+        return Classified {
+            position: Position::Mixed {
+                declaration: true,
+                slot: Slot::TopLevel,
+            },
+            prefix_start,
+            prefix: prefix.clone(),
+            words: Vec::new(),
+            file_words: Vec::new(),
+            after: After::Nothing,
+        };
     };
     let pi = t.len() - 1;
     let prev_text = &src[prev_tok.start..prev_tok.end];
@@ -474,8 +579,28 @@ pub fn classify(text: &str, offset: usize) -> Classified {
         let target = annotation_target(after, top);
         return done(Position::Annotation { target });
     }
-    // 2. qualified names: members and packages belong to the main contributor
+    // 2. after a dot: members of the qualifier, classes of a package (JAVA-CMP-008). Not after a
+    // number (`1.|`, JAVA-CMP-003) and not inside `...` or `..`.
     if prev_tok.kind == Kind::Punct('.') {
+        let before = pi.checked_sub(1).map(|i| t[i]);
+        if let Some(b) = before
+            && (b.kind == Kind::Punct('.') || b.kind == Kind::Number && b.end == prev_tok.start)
+        {
+            return done(Position::None);
+        }
+        return done(Position::Qualified);
+    }
+    // `Type.<T>|`: the explicit type arguments of a call, after a dot, are still member access.
+    if prev_tok.kind == Kind::Punct('>') && explicit_type_arguments_after_dot(&scan, pi) {
+        return done(Position::Qualified);
+    }
+    // `Type::|`: the methods of the type belong to the method-reference completion, not to the
+    // variables in scope.
+    if prev_tok.kind == Kind::Punct(':')
+        && pi >= 1
+        && t[pi - 1].kind == Kind::Punct(':')
+        && t[pi - 1].end == prev_tok.start
+    {
         return done(Position::None);
     }
     if prev_tok.kind == Kind::Ident {
@@ -530,6 +655,19 @@ pub fn classify(text: &str, offset: usize) -> Classified {
     }
 
     let is_modifier = prev_tok.kind == Kind::Ident && MODIFIERS.contains(&prev_text);
+    let mixed = |declaration: bool, slot: Slot| done(Position::Mixed { declaration, slot });
+    // The header of a class, interface, enum or record, after its name: `extends`, `implements`.
+    let class_header = words
+        .iter()
+        .any(|w| matches!(w.as_str(), "class" | "interface" | "enum" | "record"))
+        && !header.iter().any(|h| h.kind == Kind::Punct('='))
+        && (prev_tok.kind == Kind::Ident && !is_modifier
+            || prev_tok.kind == Kind::Punct('>')
+            || prev_tok.kind == Kind::Punct(')'))
+        && !matches!(top, Some(Frame::Paren(_)));
+    if class_header && words.len() >= 2 {
+        return mixed(true, Slot::ClassHeader);
+    }
     match top {
         Some(Frame::Brace(BraceKind::ClassBody)) => {
             let annotation_end =
@@ -541,10 +679,19 @@ pub fn classify(text: &str, offset: usize) -> Classified {
                 || annotation_end
                 || prev_tok.kind == Kind::Punct('>') && header_is_generic_start(&scan, pi);
             if boundary {
-                return done(Position::Mixed { declaration: true });
+                return mixed(true, Slot::ClassBody);
             }
-            if is_expression_start(&prev_tok, prev_text) {
-                return done(Position::Mixed { declaration: false });
+            // `void run() |`: the clauses of a method header.
+            if prev_tok.kind == Kind::Punct(')')
+                && !header.iter().any(|h| h.kind == Kind::Punct('='))
+                && header.iter().any(|h| h.kind == Kind::Punct('('))
+            {
+                return mixed(true, Slot::MethodHeader);
+            }
+            // A field initializer; a comma at this level separates declarators or enum
+            // constants, which are names, not operands.
+            if prev_tok.kind != Kind::Punct(',') && is_expression_start(&prev_tok, prev_text) {
+                return mixed(false, Slot::Expression);
             }
             done(Position::None)
         }
@@ -552,26 +699,77 @@ pub fn classify(text: &str, offset: usize) -> Classified {
             if matches!(prev_tok.kind, Kind::Punct('(') | Kind::Punct(','))
                 || prev_tok.kind == Kind::Ident && prev_text == "final"
             {
-                return done(Position::Mixed { declaration: true });
+                return mixed(true, Slot::Parameter);
             }
             done(Position::None)
         }
         Some(Frame::Paren(_)) | Some(Frame::Brace(BraceKind::Block | BraceKind::Other)) => {
+            let in_block = matches!(top, Some(Frame::Brace(BraceKind::Block)));
             if matches!(
                 prev_tok.kind,
                 Kind::Punct('{') | Kind::Punct('}') | Kind::Punct(';')
-            ) || is_expression_start(&prev_tok, prev_text)
-            {
-                return done(Position::Mixed {
-                    declaration: is_modifier,
-                });
+            ) {
+                // A `;` inside `for (;;)` or after `case x:` is not a statement start of a
+                // block unless the frame is one.
+                return mixed(
+                    is_modifier,
+                    if in_block {
+                        Slot::Statement
+                    } else {
+                        Slot::Expression
+                    },
+                );
+            }
+            // Declarators of one declaration (`int a = 1, |`) are names.
+            if in_block && prev_tok.kind == Kind::Punct(',') {
+                return done(Position::None);
+            }
+            if is_expression_start(&prev_tok, prev_text) {
+                // `case X:` and `case X ->` end in a statement position.
+                let label = in_block
+                    && (prev_tok.kind == Kind::Arrow || prev_tok.kind == Kind::Punct(':'))
+                    && words
+                        .first()
+                        .is_some_and(|w| matches!(w.as_str(), "case" | "default"));
+                let rule = in_block
+                    && prev_tok.kind == Kind::Arrow
+                    && header.iter().any(|h| {
+                        h.kind == Kind::Ident && matches!(&src[h.start..h.end], "case" | "default")
+                    });
+                let slot = if label || rule {
+                    Slot::Statement
+                } else {
+                    Slot::Expression
+                };
+                return mixed(is_modifier, slot);
             }
             if is_modifier {
-                return done(Position::Mixed { declaration: true });
+                return mixed(true, Slot::Statement);
+            }
+            // An annotation before a local declaration.
+            if prev_tok.kind == Kind::Ident
+                && pi >= 1
+                && t[pi - 1].kind == Kind::Punct('@')
+                && in_block
+            {
+                return mixed(true, Slot::Statement);
             }
             done(Position::None)
         }
-        None => done(Position::None),
+        None => {
+            // Outside every class: the start of a declaration.
+            let annotation_end =
+                prev_tok.kind == Kind::Ident && pi >= 1 && t[pi - 1].kind == Kind::Punct('@');
+            if matches!(prev_tok.kind, Kind::Punct('}') | Kind::Punct(';'))
+                || is_modifier
+                || annotation_end
+            {
+                let mut c = mixed(true, Slot::TopLevel);
+                c.file_words = top_level_words(&src[..prefix_start.min(src.len())]);
+                return c;
+            }
+            done(Position::None)
+        }
     }
 }
 
@@ -633,6 +831,35 @@ fn header_is_generic_start(scan: &Scan<'_>, i: usize) -> bool {
             | Kind::Punct('&')
             | Kind::Punct('.') => {}
             Kind::Punct('[') | Kind::Punct(']') => {}
+            _ => return false,
+        }
+        if j == 0 {
+            return false;
+        }
+        j -= 1;
+    }
+}
+
+/// Whether the `>` at `i` closes the type arguments of a call written `qualifier.<A, B>name(...)`.
+fn explicit_type_arguments_after_dot(scan: &Scan<'_>, i: usize) -> bool {
+    let mut depth = 0i32;
+    let mut j = i;
+    loop {
+        match scan.toks[j].kind {
+            Kind::Punct('>') => depth += 1,
+            Kind::Punct('<') => {
+                depth -= 1;
+                if depth == 0 {
+                    return j > 0 && scan.toks[j - 1].kind == Kind::Punct('.');
+                }
+            }
+            Kind::Ident
+            | Kind::Punct(',')
+            | Kind::Punct('?')
+            | Kind::Punct('&')
+            | Kind::Punct('.')
+            | Kind::Punct('[')
+            | Kind::Punct(']') => {}
             _ => return false,
         }
         if j == 0 {
@@ -968,38 +1195,48 @@ mod tests {
         );
         assert_eq!(
             at("class A { void f() { int i = 0; boolean b = i < Ma|; } }").position,
-            Position::Mixed { declaration: false }
+            Position::Mixed {
+                declaration: false,
+                slot: Slot::Expression
+            }
         );
     }
 
     #[test]
     fn declarations_and_statements() {
+        let mixed = |declaration, slot| Position::Mixed { declaration, slot };
         assert_eq!(
             at("class A { Str| }").position,
-            Position::Mixed { declaration: true }
+            mixed(true, Slot::ClassBody)
         );
         assert_eq!(
             at("class A { private Li| }").position,
-            Position::Mixed { declaration: true }
+            mixed(true, Slot::ClassBody)
         );
         assert_eq!(
             at("class A { void f(Str| s) {} }").position,
-            Position::Mixed { declaration: true }
+            mixed(true, Slot::Parameter)
         );
         assert_eq!(
             at("class A { void f() { Str| } }").position,
-            Position::Mixed { declaration: false }
+            mixed(false, Slot::Statement)
         );
         assert_eq!(
             at("class A { void f() { int x = Ma|; } }").position,
-            Position::Mixed { declaration: false }
+            mixed(false, Slot::Expression)
         );
     }
 
     #[test]
     fn nothing_to_complete() {
+        // JAVA-CMP-003: no completion after a number literal, in `...`.
+        assert_eq!(at("class A { int x = 1.| }").position, Position::None);
         assert_eq!(
-            at("class A { void f() { int x = 1; x.fo| } }").position,
+            at("class A { void f(String...| a) {} }").position,
+            Position::None
+        );
+        assert_eq!(
+            at("class A { void f() { foo(String::| ); } }").position,
             Position::None
         );
         assert_eq!(at("class A { // Te|\n }").position, Position::None);
@@ -1022,11 +1259,84 @@ mod tests {
     fn braces_of_methods_and_lambdas_are_blocks() {
         assert_eq!(
             at("class A { void f() { Runnable r = () -> { Str| }; } }").position,
-            Position::Mixed { declaration: false }
+            Position::Mixed {
+                declaration: false,
+                slot: Slot::Statement
+            }
         );
         assert_eq!(
             at("class A { void f() { new Thread() { void run() { } Str| }; } }").position,
-            Position::Mixed { declaration: true }
+            Position::Mixed {
+                declaration: true,
+                slot: Slot::ClassBody
+            }
+        );
+    }
+
+    #[test]
+    fn after_a_dot_the_members_of_the_qualifier() {
+        // JAVA-CMP-008
+        for src in [
+            "class A { void f() { int x = 1; x.fo| } }",
+            "class A { void f() { names.| } }",
+            "class A { void f() { foo().bar(1).| } }",
+            "class A { void f() { this.| } }",
+            "class A { void f() { \"abc\".| } }",
+            "class A { void f() { java.util.Li| x; } }",
+        ] {
+            assert_eq!(at(src).position, Position::Qualified, "{src}");
+        }
+        assert_eq!(at("class A { void f() { names.si| } }").prefix, "si");
+        // Explicit type arguments of a call keep it a member access.
+        assert_eq!(
+            at("class A { void f() { Comparator.<A, String> compar| } }").position,
+            Position::Qualified
+        );
+        assert_ne!(
+            at("class A { void f(int a, int b) { boolean c = a < b > | } }").position,
+            Position::Qualified
+        );
+    }
+
+    #[test]
+    fn slots_and_the_words_before_the_caret() {
+        let c = at("class A { public static | }");
+        assert_eq!(
+            c.position,
+            Position::Mixed {
+                declaration: true,
+                slot: Slot::ClassBody
+            }
+        );
+        assert_eq!(c.words, ["public", "static"]);
+        assert_eq!(
+            at("public class A ext| {}").position,
+            Position::Mixed {
+                declaration: true,
+                slot: Slot::ClassHeader
+            }
+        );
+        assert_eq!(
+            at("class A { void f() thr| {} }").position,
+            Position::Mixed {
+                declaration: true,
+                slot: Slot::MethodHeader
+            }
+        );
+        let c = at("pack|");
+        assert_eq!(
+            c.position,
+            Position::Mixed {
+                declaration: true,
+                slot: Slot::TopLevel
+            }
+        );
+        // Names of declarators and enum constants are not operands.
+        assert_eq!(at("class A { int a, b| }").position, Position::None);
+        assert_eq!(at("enum E { A, B| }").position, Position::None);
+        assert_eq!(
+            at("class A { void f() { int a = 1, b| ; } }").position,
+            Position::None
         );
     }
 }

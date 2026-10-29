@@ -1,6 +1,7 @@
 # Native Java engine: plan to parity and jdtls removal
 
-Status: plan. M0 (harness), M1 (classpath and index queries) and the class-name slice of M3 are
+Status: plan. M0 (harness), M1 (classpath and index queries), M3 (completion: class names, member access,
+variants, keywords, statics, weigher chain) and the slice of the M5 type model that completion needs are
 implemented, see section 6; the rest is open. Successor of the first slice described in
 [`java-intelligence.md`](java-intelligence.md); builds on [`language-packs.md`](language-packs.md),
 [`project-model.md`](project-model.md), [`platform-kernel.md`](platform-kernel.md) and Phase 4 of
@@ -748,7 +749,7 @@ increment after M1.
     jdtls fed from our model (2.10) is the accepted transition, or jdtls is switched off per feature as soon
     as that feature is native.
 
-## 6. Implementation status: M0, M1 and the class-name slice of M3
+## 6. Implementation status: M0, M1, M3 and the first slice of M5
 
 What exists (details in [`java-intelligence.md`](java-intelligence.md); numbers in
 [`../perf/java-engine.md`](../perf/java-engine.md), case results in
@@ -777,3 +778,28 @@ What exists (details in [`java-intelligence.md`](java-intelligence.md); numbers 
   `COMPLETION_SOURCE` (the `CompletionContributor` contract needs a snapshot and a syntax tree the session does not
   have yet), and the setting is the switch `java.native.completion` instead of `java.completion.source`
   (`native | both | jdtls`).
+
+- **M3, the rest.** The position classifier gained the dot position and the declaration slots; the contributors of
+  spec 06 6.2 numbered 5, 8 (partly), 9 and 10 are native: member access after a dot (instance and static members of
+  the receiver's static type with the supertypes in sources and jars, overloads merged, deprecated struck
+  through, inaccessible ones hidden then offered on the second press, signature and return type as tails),
+  reference variants (locals, parameters, fields and methods of the enclosing classes, static imports), keywords
+  and modifiers by position, static members of any class on the second press (`Java:StaticMember` index,
+  JAVA-STUB-014), and the weigher chain of 6.5 as a sort key (kind tier, discouraged, deprecated, expected type,
+  statics, proximity, shorter) with the expected type of an initializer, assignment, `return`, condition,
+  `throw` or call argument: `List<String> l = new Arr|` ranks `ArrayList` before `ArrayStoreException`. The
+  source answers at member positions without making the language server's rows disappear: duplicates (same kind
+  group and name) are dropped, native first. Cases: 41 more cases of `06-completion.cases.md` run (JAVA-CMP-003,
+  008, 011, 016, 017, 022, 027, 028, 035), see `docs/parity/java-cases.md`. Engine tests: `tests/completion.rs`.
+  Deviations from 2.7: the main contributor is split by position (members, variants, keywords, statics) instead
+  of one `javaLegacy` pass; the `Import statically` toggle of 6.4.3 has no UI yet (the static import is used when
+  the class is already imported statically or the caret is inside it); member names, annotation attributes,
+  override generation, javadoc, smart completion and lambda/method-reference items are still the language
+  server's.
+- **M5, the first slice (2.5).** `ty::Ty` is a structural model with wildcards and substitution through
+  supertypes; `analyze/types.rs` types literals, `new`, `this`, class literals, locals, parameters, `var`, pattern
+  variables, enhanced-`for` variables, fields (also through the inheriting enclosing class), field chains and
+  calls (return type through the receiver's type arguments, overload candidates filtered by arity and applicability,
+  agreement required); `analyze/members.rs` is the one member enumeration (substitution, overrides, accessibility,
+  synthetic members). Not done: bound sets and inference (generic method results, lambdas, diamond), subtyping
+  and conversions beyond erasure, capture, lub, varargs phases, the error rows 008..010.
